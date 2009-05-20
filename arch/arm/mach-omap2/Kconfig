@@ -141,6 +141,10 @@ config MACH_SHOLES_UMTS
         bool "Motorola sholes umts"
         depends on MACH_SHOLES
 
+config MACH_MAPPHONE
+        bool "Motorola Android Platform phone"
+        depends on ARCH_OMAP3 && ARCH_OMAP34XX
+
 config MACH_OVERO
 	bool "Gumstix Overo board"
 	depends on ARCH_OMAP3 && ARCH_OMAP34XX

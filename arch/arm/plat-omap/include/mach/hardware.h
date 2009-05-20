@@ -12,6 +12,8 @@
  * Reorganized for Linux-2.6 by Tony Lindgren <tony@atomide.com>
  *                          and Dirk Behme <dirk.behme@de.bosch.com>
  *
+ * Copyright (C) 2009 Motorola, Inc.
+ *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
  * Free Software Foundation; either version 2 of the License, or (at your
@@ -377,6 +379,10 @@
 
 #ifdef CONFIG_MACH_SX1
 #include "board-sx1.h"
+#endif
+
+#ifdef CONFIG_MACH_MAPPHONE
+#include "board-mapphone.h"
 #endif
 
 #endif /* !__ASSEMBLER__ */
