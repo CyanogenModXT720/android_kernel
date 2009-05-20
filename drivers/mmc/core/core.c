@@ -843,6 +843,7 @@ void mmc_rescan(struct work_struct *work)
 
 	mmc_bus_get(host);
 
+	printk(KERN_ERR "ethan: enter %s()\n", __func__);
 	if (host->bus_ops == NULL) {
 		/*
 		 * Only we can add a new handler, so it's safe to
@@ -860,10 +861,45 @@ void mmc_rescan(struct work_struct *work)
 
 		mmc_send_if_cond(host, host->ocr_avail);
 
+#include <mach/control.h>
+
+/* REVISIT: Using address directly till the control.h defines
+ * are settled.
+ */
+#define OMAP2_CONTROL_PBIAS 0x48002520
+
+		printk(KERN_ERR "\tOMAP2_CONTROL_PBIAS=0x%x\n", omap_readl(OMAP2_CONTROL_PBIAS));
+		printk(KERN_ERR "\tOMAP2_CONTROL_DEVCONF0=0x%x\n", omap_ctrl_readl(OMAP2_CONTROL_DEVCONF0));
+		printk(KERN_ERR "\t-------------------\n");
+		printk(KERN_ERR "\tMMCHS_SYSCONFIG	0x%x\n", omap_readl(0x4809c010));
+		printk(KERN_ERR "\tMMCHS_SYSSTATUS	0x%x\n", omap_readl(0x4809c014));
+		printk(KERN_ERR "\tMMCHS_CSRE	0x%x\n", omap_readl(0x4809c024));
+		printk(KERN_ERR "\tMMCHS_SYSTEST	0x%x\n", omap_readl(0x4809c028));
+		printk(KERN_ERR "\tMMCHS_CON	0x%x\n", omap_readl(0x4809c02c));
+		printk(KERN_ERR "\tMMCHS_PWCNT	0x%x\n", omap_readl(0x4809c030));
+		printk(KERN_ERR "\tMMCHS_BLK	0x%x\n", omap_readl(0x4809c104));
+		printk(KERN_ERR "\tMMCHS_ARG	0x%x\n", omap_readl(0x4809c108));
+		printk(KERN_ERR "\tMMCHS_CMD	0x%x\n", omap_readl(0x4809c10c));
+		printk(KERN_ERR "\tMMCHS_PSTATE	0x%x\n", omap_readl(0x4809c124));
+		printk(KERN_ERR "\tMMCHS_HCTL	0x%x\n", omap_readl(0x4809c128));
+		printk(KERN_ERR "\tMMCHS_SYSCTL	0x%x\n", omap_readl(0x4809c12c));
+		printk(KERN_ERR "\tMMCHS_STAT	0x%x\n", omap_readl(0x4809c130));
+		printk(KERN_ERR "\tMMCHS_IE	0x%x\n", omap_readl(0x4809c134));
+		printk(KERN_ERR "\tMMCHS_ISE	0x%x\n", omap_readl(0x4809c138));
+		printk(KERN_ERR "\tMMCHS_AC12	0x%x\n", omap_readl(0x4809c13c));
+		printk(KERN_ERR "\tMMCHS_CAPA	0x%x\n", omap_readl(0x4809c140));
+		printk(KERN_ERR "\tMMCHS_CUR_CAPA	0x%x\n", omap_readl(0x4809c148));
+		printk(KERN_ERR "\t-------------------\n");
+		printk(KERN_ERR "\tCONTROL_PADCONF_MMC1_CLK	0x%x\n", omap_readl(0x48002144));
+		printk(KERN_ERR "\tCONTROL_PADCONF_MMC1_DAT0	0x%x\n", omap_readl(0x48002148));
+		printk(KERN_ERR "\tCONTROL_PADCONF_MMC1_DAT2	0x%x\n", omap_readl(0x4800214c));
+		printk(KERN_ERR "\t-------------------\n");
+
 		/*
 		 * First we search for SDIO...
 		 */
 		err = mmc_send_io_op_cond(host, 0, &ocr);
+		printk(KERN_ERR "\tmmc_send_io_op_cond return %d\n", err);
 		if (!err) {
 			if (mmc_attach_sdio(host, ocr))
 				mmc_power_off(host);
@@ -874,6 +910,7 @@ void mmc_rescan(struct work_struct *work)
 		 * ...then normal SD...
 		 */
 		err = mmc_send_app_op_cond(host, 0, &ocr);
+		printk(KERN_ERR "\tmmc_send_app_op_cond return %d\n", err);
 		if (!err) {
 			if (mmc_attach_sd(host, ocr))
 				mmc_power_off(host);
@@ -884,6 +921,7 @@ void mmc_rescan(struct work_struct *work)
 		 * ...and finally MMC.
 		 */
 		err = mmc_send_op_cond(host, 0, &ocr);
+		printk(KERN_ERR "\tmmc_send_op_cond return %d\n", err);
 		if (!err) {
 			if (mmc_attach_mmc(host, ocr))
 				mmc_power_off(host);

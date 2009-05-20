@@ -400,6 +400,22 @@ error:
 	return retval;
 }
 
+static struct cpcap_device *ethan_cpcap;
+
+unsigned short read_vwlan2()
+{
+	unsigned short ethan_value = 0;
+
+	cpcap_regacc_read(ethan_cpcap, 70, &ethan_value);
+
+	return ethan_value;
+}
+
+int write_vwlan2(unsigned short value)
+{
+	return cpcap_regacc_write(ethan_cpcap, 70, value, 0x2cd);
+}
+
 int cpcap_regacc_init(struct cpcap_device *cpcap)
 {
 	unsigned short i;
@@ -419,6 +435,7 @@ int cpcap_regacc_init(struct cpcap_device *cpcap)
 					    data->init[i].data,
 					    mask);
 	}
+	ethan_cpcap = cpcap;
 
 	return retval;
 }

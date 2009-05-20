@@ -783,6 +783,14 @@ enum omap34xx_index {
 	AD2_3430_USB3FS_PHY_MM3_TXDAT,
 	AC1_3430_USB3FS_PHY_MM3_TXEN_N,
 
+	/* MMC */
+	G19_34XX_MMC_CLKO,
+	H18_34XX_MMC_CMD,
+	F20_34XX_MMC_DAT0,
+	H14_34XX_MMC_DAT1,
+	E19_34XX_MMC_DAT2,
+	D19_34XX_MMC_DAT3,
+
 	/* 34xx GPIO
 	 *  - normally these are bidirectional, no internal pullup/pulldown
 	 *  - "_UP" suffix (GPIO3_UP) if internal pullup is configured
