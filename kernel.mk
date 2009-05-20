@@ -39,7 +39,7 @@ PRODUCT_SPECIFIC_DEFCONFIGS := \
 TARGET_DEFCONFIG := $(KERNEL_CONF_OUT_DIR)/$(PRODUCT)_defconfig
 
 
-all: config zImage modules modules_install ext_modules
+all: config zImage modules modules_install 
 
 inst_hook:
 	@echo "Installing auto coding style hook"
