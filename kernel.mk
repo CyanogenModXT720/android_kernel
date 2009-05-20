@@ -100,15 +100,17 @@ dir:
 
 modules:
 	make -C $(KERNEL_SRC_DIR) ARCH=arm $(KERN_FLAGS) CROSS_COMPILE=$(KERNEL_CROSS_COMPILE) O=$(KERNEL_BUILD_DIR) MOT_KBUILD_GCC_WARN_FILTER=$(KERNEL_SRC_DIR)/gcc_warn_filter.cfg DEPMOD=$(DEPMOD) INSTALL_MOD_PATH=$(KERNEL_BUILD_DIR) modules 
+define modules_strip
+	$(KERNEL_CROSS_COMPILE)strip --strip-debug $(MOTO_MOD_INSTALL)/*.ko
+endef
 
 #NOTE: "strip" MUST be done for generated .ko files!!!
-modules_install: __modules_install modules_strip
+modules_install: __modules_install
+	$(modules_strip)
 __modules_install:
 	make -C $(KERNEL_SRC_DIR) ARCH=arm $(KERN_FLAGS) CROSS_COMPILE=$(KERNEL_CROSS_COMPILE)  O=$(KERNEL_BUILD_DIR) MOT_KBUILD_GCC_WARN_FILTER=$(KERNEL_SRC_DIR)/gcc_warn_filter.cfg DEPMOD=$(DEPMOD) INSTALL_MOD_PATH=$(KERNEL_BUILD_DIR) modules_install 
 	find $(KERNEL_BUILD_DIR)/lib/modules -name "*.ko" -exec cp -f {}  $(MOTO_MOD_INSTALL) \;
 
-modules_strip:
-	$(KERNEL_CROSS_COMPILE)strip --strip-debug $(MOTO_MOD_INSTALL)/*.ko
 
 clean:
 	make -C $(KERNEL_SRC_DIR) ARCH=arm $(KERN_FLAGS) CROSS_COMPILE=$(KERNEL_CROSS_COMPILE)  O=$(KERNEL_BUILD_DIR) mrproper
@@ -122,7 +124,8 @@ clean:
 #
 # NOTE: "strip" MUST be done for generated .ko files!!!
 # =============================
-ext_modules: tiwlan_drv graphics_drv modules_strip
+ext_modules: tiwlan_drv graphics_drv
+	$(modules_strip)
 
 # TODO:
 # ext_modules_clean doesn't work 
