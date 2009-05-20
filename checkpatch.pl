@@ -943,7 +943,7 @@ sub ERROR {
 }
 sub WARN {
 	if (report("WARNING: $_[0]\n")) {
-		our $clean = 1;
+		our $clean = 0;
 		our $cnt_warn++;
 	}
 }
