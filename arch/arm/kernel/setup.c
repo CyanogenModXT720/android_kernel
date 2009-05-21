@@ -727,7 +727,9 @@ void __init setup_arch(char **cmdline_p)
 	parse_cmdline(cmdline_p, from);
 	paging_init(mdesc);
 	request_standard_resources(&meminfo, mdesc);
+#if defined(CONFIG_ARM_OF)
 	unflatten_device_tree();
+#endif
 
 #ifdef CONFIG_SMP
 	smp_init_cpus();

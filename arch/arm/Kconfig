@@ -158,13 +158,19 @@ config ARCH_MTD_XIP
 config GENERIC_HARDIRQS_NO__DO_IRQ
 	def_bool y
 
+config ARM_OF
+	bool "Support for open firmware device tree (ARM port)"
+	default n
+
 config OF
-        def_bool y
+	bool "Support for open firmware device tree"
+	depends on ARM_OF
+	default n
 
 config PROC_DEVICETREE
-        bool "Support for device tree in /proc"
-        depends on PROC_FS
-        help
+	bool "Support for device tree in /proc"
+	depends on PROC_FS && OF
+	help
           This option adds a device-tree directory under /proc which contains
           an image of the device tree that the kernel copies from Open
           Firmware or other boot firmware. If unsure, say Y here.
