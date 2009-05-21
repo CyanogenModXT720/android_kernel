@@ -140,7 +140,7 @@ tiwlan_drv:
 
 tiwlan_drv_clean:
 	make -C $(TIWLAN_DIR) ARCH=arm $(KERN_FLAGS) CROSS_COMPILE=$(KERNEL_CROSS_COMPILE) KERNEL_SRC_DIR=$(KERNEL_SRC_DIR) KERNEL_BUILD_DIR=$(KERNEL_BUILD_DIR) INSTALL_DIR=$(MOTO_MOD_INSTALL) distclean
-
+#
 # graphics driver module
 #-----------------------
 GRAPHICS_DIR=$(TOPDIR)/motorola/bsp/graphics_drv
