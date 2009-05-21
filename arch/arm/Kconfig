@@ -158,6 +158,17 @@ config ARCH_MTD_XIP
 config GENERIC_HARDIRQS_NO__DO_IRQ
 	def_bool y
 
+config OF
+        def_bool y
+
+config PROC_DEVICETREE
+        bool "Support for device tree in /proc"
+        depends on PROC_FS
+        help
+          This option adds a device-tree directory under /proc which contains
+          an image of the device tree that the kernel copies from Open
+          Firmware or other boot firmware. If unsure, say Y here.
+
 if OPROFILE
 
 config OPROFILE_ARMV6
@@ -1230,6 +1241,8 @@ source "net/Kconfig"
 menu "Device Drivers"
 
 source "drivers/base/Kconfig"
+
+source "drivers/of/Kconfig"
 
 source "drivers/connector/Kconfig"
 
