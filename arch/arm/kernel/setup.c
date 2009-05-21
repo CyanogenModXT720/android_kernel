@@ -35,6 +35,7 @@
 #include <asm/cacheflush.h>
 #include <asm/cachetype.h>
 #include <asm/tlbflush.h>
+#include <asm/prom.h>
 
 #include <asm/mach/arch.h>
 #include <asm/mach/irq.h>
@@ -726,6 +727,7 @@ void __init setup_arch(char **cmdline_p)
 	parse_cmdline(cmdline_p, from);
 	paging_init(mdesc);
 	request_standard_resources(&meminfo, mdesc);
+	unflatten_device_tree();
 
 #ifdef CONFIG_SMP
 	smp_init_cpus();

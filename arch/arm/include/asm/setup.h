@@ -150,6 +150,13 @@ struct tag_memclk {
 	__u32 fmemclk;
 };
 
+/* Flat dev tree address */
+#define ATAG_FLAT_DEV_TREE_ADDRESS 0xf100040A
+struct tag_flat_dev_tree_address {
+	u32 flat_dev_tree_address;
+	u32 flat_dev_tree_size;
+};
+
 struct tag {
 	struct tag_header hdr;
 	union {
@@ -177,6 +184,7 @@ struct tag {
 		 * DC21285 specific
 		 */
 		struct tag_memclk	memclk;
+		struct tag_flat_dev_tree_address flat_dev_tree_address;
 	} u;
 };
 
