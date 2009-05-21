@@ -168,7 +168,7 @@ static int hsmmc_set_power(struct device *dev, int slot, int power_on,
 				& ~(1 << 1), OMAP343X_CONTROL_PBIAS_LITE);
 
 		/* PBIASLITEPWRDNZ1 need to be 0b0 when ramping up, now make it 0b0 */
-		omap_ctrl_writel(omap_readl(OMAP343X_CONTROL_PBIAS_LITE)
+		omap_ctrl_writel(omap_ctrl_readl(OMAP343X_CONTROL_PBIAS_LITE)
 				& ~(1 << 9), OMAP343X_CONTROL_PBIAS_LITE);
 		/* TODO: turn off CPCAP_VWLAN2 */
 	}
