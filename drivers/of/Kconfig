@@ -1,6 +1,6 @@
 config OF_DEVICE
 	def_bool y
-	depends on OF && (SPARC || PPC_OF)
+	depends on OF && (SPARC || PPC_OF || ARM)
 
 config OF_GPIO
 	def_bool y
