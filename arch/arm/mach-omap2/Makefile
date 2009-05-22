@@ -9,8 +9,6 @@ obj-y := irq.o id.o io.o sdrc.o control.o prcm.o clock.o mux.o \
 
 obj-$(CONFIG_OMAP_MCBSP) += mcbsp.o
 
-obj-$(CONFIG_MMC_OMAP_HS) += board-sholes-hsmmc.o
-
 # Functions loaded to SRAM
 obj-$(CONFIG_ARCH_OMAP2420)		+= sram242x.o
 obj-$(CONFIG_ARCH_OMAP2430)		+= sram243x.o

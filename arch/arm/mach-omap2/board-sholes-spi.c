@@ -49,7 +49,6 @@ struct cpcap_spi_init_data sholes_cpcap_spi_init[] = {
 	{CPCAP_REG_GPIO4,     0x0000},
 	{CPCAP_REG_GPIO5,     0x0000},
 	{CPCAP_REG_GPIO6,     0x0000},
-	{CPCAP_REG_VWLAN2C,   0x004D},		/* ethan: it is not helping now */
 };
 
 static struct cpcap_platform_data sholes_cpcap_data = {

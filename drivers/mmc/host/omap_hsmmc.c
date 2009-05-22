@@ -988,50 +988,22 @@ static int __init omap_mmc_probe(struct platform_device *pdev)
 		goto err1;
 	}
 
-<<<<<<< HEAD:drivers/mmc/host/omap_hsmmc.c
 #if defined(CONFIG_MACH_MAPPHONE)
-=======
-#include <mach/control.h>
-
-/* REVISIT: Using address directly till the control.h defines
- * are settled.
- */
-#define OMAP2_CONTROL_PBIAS 0x48002520
-
->>>>>>> MMC driver bring up on kernel29:drivers/mmc/host/omap_hsmmc.c
 	if (host->id == OMAP_MMC1_DEVID) {
 		/*
-<<<<<<< HEAD:drivers/mmc/host/omap_hsmmc.c
 		 * We used to set Speed Control for MMC I/O to 52MHz I/O max
 		 * speed, but to avoid power overshooting, we now set speed
 		 * control to 26MHz I/O max speed
-=======
-		 * We used to set Speed Control for MMC I/O to 52MHz I/O max speed
-		 * But to avoid power overshooting, we now set speed control to 26MHz I/O max speed
->>>>>>> MMC driver bring up on kernel29:drivers/mmc/host/omap_hsmmc.c
 		 */
-<<<<<<< HEAD:drivers/mmc/host/omap_hsmmc.c
 		omap_ctrl_writel(omap_ctrl_readl(OMAP343X_CONTROL_PBIAS_LITE) &
 				(~(1 << 2)), OMAP343X_CONTROL_PBIAS_LITE);
-=======
-		omap_writel(omap_readl(OMAP2_CONTROL_PBIAS) & (~ (1 << 2)),
-			OMAP2_CONTROL_PBIAS);
->>>>>>> MMC driver bring up on kernel29:drivers/mmc/host/omap_hsmmc.c
 
 		/* set MMC/SDI/O Module Input Clock to Internal loop-back */
-<<<<<<< HEAD:drivers/mmc/host/omap_hsmmc.c
 		omap_ctrl_writel(omap_ctrl_readl(OMAP2_CONTROL_DEVCONF0) |
 				(1 << 24), OMAP2_CONTROL_DEVCONF0);
-=======
-		omap_ctrl_writel(omap_ctrl_readl(OMAP2_CONTROL_DEVCONF0) | (1 << 24),
-		OMAP2_CONTROL_DEVCONF0);
->>>>>>> MMC driver bring up on kernel29:drivers/mmc/host/omap_hsmmc.c
 	}
-<<<<<<< HEAD:drivers/mmc/host/omap_hsmmc.c
 #endif /* CONFIG_MACH_MAPPHONE */
 
-=======
->>>>>>> MMC driver bring up on kernel29:drivers/mmc/host/omap_hsmmc.c
 
 	host->dbclk = clk_get(&pdev->dev, "mmchsdb_fck");
 	/*

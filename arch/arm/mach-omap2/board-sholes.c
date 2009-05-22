@@ -351,7 +351,6 @@ static void __init sholes_init(void)
 	usb_musb_init();
 	sholes_ehci_init();
 	sholes_sdrc_init();
-	sholes_hsmmc_init();
 }
 
 

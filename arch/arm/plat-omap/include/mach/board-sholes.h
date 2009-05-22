@@ -35,7 +35,6 @@
 extern void sholes_usb_init(void);
 extern void sholes_flash_init(void);
 extern void sholes_panel_init(void);
-extern void sholes_hsmmc_init(void);
 extern void sholes_sensors_init(void);
 
 /*
