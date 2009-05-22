@@ -16,6 +16,9 @@
 
 #include <mach/mux.h>
 #include <mach/keypad.h>
+#include <mach/dt_path.h>
+
+#include <asm/prom.h>
 
 int mapphonep0b_keymap[] = {
 	0x0000000a, 0x01000013, 0x03000072, 0x05000073, 0x060000d9, 0x07000020,
@@ -72,7 +75,35 @@ static struct platform_device *mapphone_sensors[] __initdata = {
 	&omap3430_master_sensor,
 };
 
+static int __init mapphone_dt_kp_init(void)
+{
+	struct device_node *kp_node;
+	const void *kp_prop;
+
+	if ((kp_node = of_find_node_by_path(DT_PATH_KEYPAD))) {
+		if ((kp_prop = of_get_property(kp_node, DT_PROP_KEYPAD_ROWS, NULL)))
+			omap3430_kp_data.rows = *(int *)kp_prop;
+		if ((kp_prop = of_get_property(kp_node, DT_PROP_KEYPAD_COLS, NULL)))
+			omap3430_kp_data.cols = *(int *)kp_prop;
+		if ((kp_prop = of_get_property(kp_node, DT_PROP_KEYPAD_ROWREG, NULL)))
+			omap3430_kp_data.row_gpios = (int *)kp_prop;
+		if ((kp_prop = of_get_property(kp_node, DT_PROP_KEYPAD_COLREG, NULL)))
+			omap3430_kp_data.col_gpios = (int *)kp_prop;
+		if ((kp_prop = of_get_property(kp_node, DT_PROP_KEYPAD_MAPNUM, NULL)))
+			omap3430_kp_data.keymapsize = *(int *)kp_prop;
+		if ((kp_prop = of_get_property(kp_node, DT_PROP_KEYPAD_MAPS, NULL)))
+			omap3430_kp_data.keymap = (int *)kp_prop;
+	}
+
+	of_node_put(kp_node);
+
+	return kp_node ? 0 : -ENODEV;
+}
+
 void __init mapphone_sensors_init(void)
 {
+	if (mapphone_dt_kp_init())
+		printk(KERN_INFO "Keypad: using non-dt configuration\n");
+
 	platform_add_devices(mapphone_sensors, ARRAY_SIZE(mapphone_sensors));
 }
