@@ -35,7 +35,7 @@ DEPMOD=$(PWD)/motorola/bsp/prebuilt/host/bin/depmod
 DEFCONFIGSRC        := ${KERNEL_SRC_DIR}/arch/arm/configs
 LJAPDEFCONFIGSRC    := ${DEFCONFIGSRC}/motorola
 PRODUCT_SPECIFIC_DEFCONFIGS := \
-    $(DEFCONFIGSRC)/sholes_defconfig  
+    $(DEFCONFIGSRC)/mapphone_defconfig  
 TARGET_DEFCONFIG := $(KERNEL_CONF_OUT_DIR)/$(PRODUCT)_defconfig
 
 
