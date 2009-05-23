@@ -9,7 +9,10 @@
  */
 #include <linux/spi/cpcap.h>
 #include <linux/spi/spi.h>
+#include <linux/irq.h>
 #include <mach/mcspi.h>
+#include <mach/gpio.h>
+#include <mach/mux.h>
 
 struct cpcap_spi_init_data sholes_cpcap_spi_init[] = {
 	{CPCAP_REG_ASSIGN1,   0x0101},
@@ -38,10 +41,11 @@ struct cpcap_spi_init_data sholes_cpcap_spi_init[] = {
 	{CPCAP_REG_VRFREFC,   0x000B},
 	{CPCAP_REG_VUSBINT1C, 0x0029},
 	{CPCAP_REG_VUSBINT2C, 0x0029},
-	{CPCAP_REG_USBC3,     0x3DFF},
+	{CPCAP_REG_USBC1,     0x1201},
+	{CPCAP_REG_USBC3,     0x3DFB},
 	{CPCAP_REG_UIER2,     0x001F},
 	{CPCAP_REG_UIEF2,     0x001F},
-	{CPCAP_REG_OWDC,      0x0002},
+	{CPCAP_REG_OWDC,      0x0003},
 	{CPCAP_REG_GPIO0,     0x0000},
 	{CPCAP_REG_GPIO1,     0x0000},
 	{CPCAP_REG_GPIO2,     0x0000},
@@ -51,9 +55,23 @@ struct cpcap_spi_init_data sholes_cpcap_spi_init[] = {
 	{CPCAP_REG_GPIO6,     0x0000},
 };
 
+#define CPCAP_GPIO 0
+
+static struct cpcap_adc_ato sholes_cpcap_adc_ato = {
+	.ato_in = 0x0480,
+	.atox_in = 0,
+	.adc_ps_factor_in = 0x0200,
+	.atox_ps_factor_in = 0,
+	.ato_out = 0,
+	.atox_out = 0,
+	.adc_ps_factor_out = 0,
+	.atox_ps_factor_out = 0,
+};
+
 static struct cpcap_platform_data sholes_cpcap_data = {
 	.init = sholes_cpcap_spi_init,
 	.init_len = ARRAY_SIZE(sholes_cpcap_spi_init),
+	.adc_ato = &sholes_cpcap_adc_ato,
 };
 
 static struct omap2_mcspi_device_config tsc2005_mcspi_config = {
@@ -81,6 +99,23 @@ static struct spi_board_info sholes_spi_board_info[] __initdata = {
 
 void __init sholes_spi_init(void)
 {
+	int irq;
+	int ret;
+
+	ret = gpio_request(CPCAP_GPIO, "cpcap-irq");
+	if (ret)
+		return;
+	ret = gpio_direction_input(CPCAP_GPIO);
+	if (ret) {
+		gpio_free(CPCAP_GPIO);
+		return;
+	}
+
+	irq = gpio_to_irq(CPCAP_GPIO);
+	set_irq_type(irq, IRQ_TYPE_EDGE_RISING);
+	omap_cfg_reg(AF26_34XX_GPIO0);
+
+	sholes_spi_board_info[0].irq = irq;
 	spi_register_board_info(sholes_spi_board_info,
-				ARRAY_SIZE(sholes_spi_board_info));
+			       ARRAY_SIZE(sholes_spi_board_info));
 }
