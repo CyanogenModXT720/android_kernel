@@ -84,6 +84,14 @@ static struct platform_device cpcap_usb_det_device = {
 };
 #endif
 
+#ifdef CONFIG_SOUND_CPCAP_OMAP
+static struct platform_device cpcap_audio_device = {
+	.name           = "cpcap_audio",
+	.id             = -1,
+	.dev.platform_data  = NULL,
+};
+#endif
+
 static struct platform_device *cpcap_devices[] __initdata = {
 	&cpcap_adc_device,
 	&cpcap_key_device,
@@ -91,6 +99,9 @@ static struct platform_device *cpcap_devices[] __initdata = {
 #ifdef CONFIG_CPCAP_USB
 	&cpcap_usb_device,
 	&cpcap_usb_det_device,
+#endif
+#ifdef CONFIG_SOUND_CPCAP_OMAP
+	&cpcap_audio_device,
 #endif
 };
 
@@ -128,6 +139,9 @@ static int __devinit cpcap_probe(struct spi_device *spi)
 	cpcap_usb_det_device.dev.platform_data = cpcap;
 	cpcap_key_device.dev.platform_data = cpcap;
 	cpcap_batt_device.dev.platform_data = cpcap;
+#ifdef CONFIG_SOUND_CPCAP_OMAP
+	cpcap_audio_device.dev.platform_data = cpcap;
+#endif
 
 	retval = misc_register(&cpcap_dev);
 	if (retval < 0)
