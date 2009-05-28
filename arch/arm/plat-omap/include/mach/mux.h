@@ -845,6 +845,12 @@ enum omap34xx_index {
 
 	H16_34XX_SDRC_CKE0,
 	H17_34XX_SDRC_CKE1,
+
+	/* McBSP2 */
+	OMAP34XX_MCBSP2_FSX,
+	OMAP34XX_MCBSP2_CLKX,
+	OMAP34XX_MCBSP2_DR,
+	OMAP34XX_MCBSP2_DX,
 };
 
 struct omap_mux_cfg {
