@@ -3,6 +3,8 @@
  *
  * OMAP3 Power Management Routines
  *
+ * Copyright (C) 2009 Motorola Inc.
+ *
  * Copyright (C) 2006-2008 Nokia Corporation
  * Tony Lindgren <tony@atomide.com>
  * Jouni Hogander
@@ -18,6 +20,12 @@
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
+ */
+/* Date         Author          Comment
+ * ===========  ==============  ==============================================
+ * 29-May-2009  Motorola        Remove modem reset for umts 
+ *
+ *
  */
 
 #include <linux/pm.h>
@@ -721,12 +729,13 @@ static void __init omap3_iva_idle(void)
 
 static void __init prcm_setup_regs(void)
 {
+#ifndef CONFIG_MACH_SHOLES_UMTS    
 	/* reset modem */
 	prm_write_mod_reg(OMAP3430_RM_RSTCTRL_CORE_MODEM_SW_RSTPWRON |
 			  OMAP3430_RM_RSTCTRL_CORE_MODEM_SW_RST,
 			  CORE_MOD, RM_RSTCTRL);
 	prm_write_mod_reg(0, CORE_MOD, RM_RSTCTRL);
-
+#endif
 	/* XXX Reset all wkdeps. This should be done when initializing
 	 * powerdomains */
 	prm_write_mod_reg(0, OMAP3430_IVA2_MOD, PM_WKDEP);
