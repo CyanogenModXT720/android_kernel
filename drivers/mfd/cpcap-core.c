@@ -114,6 +114,11 @@ static __init int cpcap_init(void)
 	return spi_register_driver(&cpcap_driver);
 }
 
+static struct regulator_consumer_supply cpcap_vusb_consumers = {
+	.supply = "vusb",
+	.dev = &cpcap_usb_det_device.dev,
+};
+
 static int __devinit cpcap_probe(struct spi_device *spi)
 {
 	int retval = -EINVAL;
@@ -151,8 +156,14 @@ static int __devinit cpcap_probe(struct spi_device *spi)
 	if (retval < 0)
 		return retval;
 
-	platform_add_devices(cpcap_devices, ARRAY_SIZE(cpcap_devices));
-
+	/* the cpcap usb_detection device is a consumer of the
+	 * vusb regulator */
+	data->regulator_init[CPCAP_VUSB].num_consumer_supplies = 1;
+	data->regulator_init[CPCAP_VUSB].consumer_supplies =
+		&cpcap_vusb_consumers;
+	/* loop twice becuase cpcap_regulator_probe may refer to other devices
+	 * in this list to handle dependencies between regulators.  Create them
+	 * all and then add them */
 	for (i = 0; i < CPCAP_NUM_REGULATORS; i++) {
 		struct platform_device *pdev;
 
@@ -166,9 +177,17 @@ static int __devinit cpcap_probe(struct spi_device *spi)
 		pdev->dev.platform_data = &data->regulator_init[i];
 		pdev->dev.driver_data = cpcap;
 		cpcap->regulator_pdev[i] = pdev;
-
-		platform_device_add(pdev);
 	}
+
+	for (i = 0; i < CPCAP_NUM_REGULATORS; i++) {
+		/* vusb has to be added after sw5 so skip it for now,
+		 * it will be added from probe of sw5 */
+		if (i == CPCAP_VUSB)
+			continue;
+		platform_device_add(cpcap->regulator_pdev[i]);
+	}
+
+	platform_add_devices(cpcap_devices, ARRAY_SIZE(cpcap_devices));
 
 	return retval;
 }
