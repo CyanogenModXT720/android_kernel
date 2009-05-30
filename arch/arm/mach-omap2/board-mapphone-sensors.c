@@ -59,22 +59,9 @@ static struct omap_kp_platform_data omap3430_kp_data = {
 	.col_gpios	= mapphonep1_col_gpios,
 };
 
-static void mapphone_prox_on(void)
-{
-	printk(KERN_INFO "%s:prox on (unimplemented)\n", __func__);
-	return;
-}
-
-static void mapphone_prox_off(void)
-{
-	printk(KERN_INFO "%s:prox off (unimplemented)\n", __func__);
-	return;
-}
-
 static struct sfh7743_platform_data omap3430_proximity_data = {
 	.gpio_prox_int = MAPPHONE_PROX_INT_GPIO,
-	.power_on = mapphone_prox_on,
-	.power_off = mapphone_prox_off,
+	.regulator = "vsdio",
 };
 
 static struct platform_device omap3430_kp_device = {
@@ -93,7 +80,7 @@ static struct platform_device sfh7743_platform_device = {
 	},
 };
 
-static struct platform_device omap3430_master_sensor= {
+static struct platform_device omap3430_master_sensor = {
 	.name		= "master_sensor",
 	.id		= -1,
 	.dev		= {
