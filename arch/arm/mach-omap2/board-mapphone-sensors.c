@@ -3,7 +3,7 @@
  *
  * Copyright (C) 2009 Google, Inc.
  * Copyright (C) 2009 Motorola, Inc.
- *
+ * 
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
@@ -13,19 +13,24 @@
 #include <linux/platform_device.h>
 #include <linux/init.h>
 #include <linux/input.h>
+#include <linux/sfh7743.h>
 
 #include <mach/mux.h>
-#include <mach/keypad.h>
-#include <mach/dt_path.h>
 
+#include <mach/gpio.h>
+#include <mach/keypad.h>
+#include <mach/mux.h>
+#include <mach/dt_path.h>
 #include <asm/prom.h>
 
+#define MAPPHONE_PROX_INT_GPIO     180
+
 int mapphonep0b_keymap[] = {
-	0x0000000a, 0x01000013, 0x03000072, 0x05000073, 0x060000d9, 0x07000020,
+	0x0000000a, 0x01000013, 0x03000072, 0x05000073, 0x060000d9, 0x07000020, 
 	0x10000008, 0x11000032, 0x12000026, 0x13000025, 0x14000031, 0x1500002e,
 	0x1600002c, 0x20000002, 0x21000015, 0x22000017, 0x2300006b, 0x240000e5,
-	0x25000034, 0x26000022, 0x27000012, 0x31000007, 0x32000004, 0x3300006a,
-	0x34000069, 0x3500006c, 0x36000067, 0x3700001c, 0x40000006, 0x41000024,
+	0x25000034, 0x26000022, 0x27000012, 0x31000007, 0x32000004, 0x3300006c,
+	0x34000067, 0x35000069, 0x3600006a, 0x3700001c, 0x40000006, 0x41000024,
 	0x42000030, 0x430000d4, 0x44000014, 0x4500000b, 0x46000096, 0x4700002d,
 	0x50000009, 0x51000039, 0x520000e3, 0x5300009e, 0x540000e4, 0x550000e7,
 	0x5600000e, 0x5700001e, 0x60000003, 0x6100000b, 0x62000021, 0x63000036,
@@ -54,6 +59,24 @@ static struct omap_kp_platform_data omap3430_kp_data = {
 	.col_gpios	= mapphonep1_col_gpios,
 };
 
+static void mapphone_prox_on(void)
+{
+	printk(KERN_INFO "%s:prox on (unimplemented)\n", __func__);
+	return;
+}
+
+static void mapphone_prox_off(void)
+{
+	printk(KERN_INFO "%s:prox off (unimplemented)\n", __func__);
+	return;
+}
+
+static struct sfh7743_platform_data omap3430_proximity_data = {
+	.gpio_prox_int = MAPPHONE_PROX_INT_GPIO,
+	.power_on = mapphone_prox_on,
+	.power_off = mapphone_prox_off,
+};
+
 static struct platform_device omap3430_kp_device = {
 	.name		= "omap-keypad",
 	.id		= -1,
@@ -62,7 +85,15 @@ static struct platform_device omap3430_kp_device = {
 	},
 };
 
-static struct platform_device omap3430_master_sensor = {
+static struct platform_device sfh7743_platform_device = {
+	.name = SFH7743_MODULE_NAME,
+	.id = -1,
+	.dev = {
+		.platform_data = &omap3430_proximity_data,
+	},
+};
+
+static struct platform_device omap3430_master_sensor= {
 	.name		= "master_sensor",
 	.id		= -1,
 	.dev		= {
@@ -70,9 +101,17 @@ static struct platform_device omap3430_master_sensor = {
 	},
 };
 
+static void mapphone_proximity_init(void)
+{
+	gpio_request(MAPPHONE_PROX_INT_GPIO, "Mapphone proximity sensor");
+	gpio_direction_input(MAPPHONE_PROX_INT_GPIO);
+	omap_cfg_reg(Y3_3430_GPIO180);
+}
+
 static struct platform_device *mapphone_sensors[] __initdata = {
 	&omap3430_kp_device,
 	&omap3430_master_sensor,
+	&sfh7743_platform_device,
 };
 
 static int __init mapphone_dt_kp_init(void)
@@ -104,6 +143,32 @@ void __init mapphone_sensors_init(void)
 {
 	if (mapphone_dt_kp_init())
 		printk(KERN_INFO "Keypad: using non-dt configuration\n");
+
+	/* keypad rows */
+	omap_cfg_reg(N4_34XX_GPIO34);
+	omap_cfg_reg(M4_34XX_GPIO35);
+	omap_cfg_reg(L4_34XX_GPIO36);
+	omap_cfg_reg(K4_34XX_GPIO37);
+	omap_cfg_reg(T3_34XX_GPIO38);
+	omap_cfg_reg(R3_34XX_GPIO39);
+	omap_cfg_reg(N3_34XX_GPIO40);
+	omap_cfg_reg(M3_34XX_GPIO41);
+
+	/* keypad columns */
+	omap_cfg_reg(K3_34XX_GPIO43_OUT);
+	omap_cfg_reg(V8_34XX_GPIO53_OUT);
+	omap_cfg_reg(U8_34XX_GPIO54_OUT);
+	omap_cfg_reg(T8_34XX_GPIO55_OUT);
+	omap_cfg_reg(R8_34XX_GPIO56_OUT);
+	omap_cfg_reg(P8_34XX_GPIO57_OUT);
+	omap_cfg_reg(N8_34XX_GPIO58_OUT);
+	omap_cfg_reg(L8_34XX_GPIO63_OUT);
+
+	/* switches */
+	omap_cfg_reg(AB2_34XX_GPIO177);
+	omap_cfg_reg(AH17_34XX_GPIO100);
+
+	mapphone_proximity_init();
 
 	platform_add_devices(mapphone_sensors, ARRAY_SIZE(mapphone_sensors));
 }
