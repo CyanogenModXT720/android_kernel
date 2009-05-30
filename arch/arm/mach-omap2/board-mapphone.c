@@ -298,6 +298,13 @@ static struct platform_device ohci_device = {
 
 static void __init mapphone_ehci_init(void)
 {
+	omap_cfg_reg(AF5_34XX_GPIO142);		/*  IPC_USB_SUSP      */
+	omap_cfg_reg(AA21_34XX_GPIO157);	/*  AP_TO_BP_FLASH_EN */
+	omap_cfg_reg(AD1_3430_USB3FS_PHY_MM3_RXRCV);
+	omap_cfg_reg(AD2_3430_USB3FS_PHY_MM3_TXDAT);
+	omap_cfg_reg(AC1_3430_USB3FS_PHY_MM3_TXEN_N);
+	omap_cfg_reg(AE1_3430_USB3FS_PHY_MM3_TXSE0);
+
 	if (gpio_request(MAPPHONE_AP_TO_BP_FLASH_EN_GPIO,
 			 "ap_to_bp_flash_en") != 0) {
 		printk(KERN_WARNING "Could not request GPIO %d"
@@ -317,6 +324,18 @@ static void __init mapphone_ehci_init(void)
 
 static void __init mapphone_sdrc_init(void)
 {
+	/* Ensure SDRC pins are mux'd for self-refresh */
+	omap_cfg_reg(H16_34XX_SDRC_CKE0);
+	omap_cfg_reg(H17_34XX_SDRC_CKE1);
+}
+
+static void __init mapphone_serial_init(void)
+{
+	omap_cfg_reg(AA8_3430_UART1_TX);
+	omap_cfg_reg(Y8_3430_UART1_RX);
+	omap_cfg_reg(AA9_3430_UART1_RTS);
+	omap_cfg_reg(W8_3430_UART1_CTS);
+	omap_serial_init();
 }
 
 static void __init mapphone_init(void)
@@ -326,7 +345,7 @@ static void __init mapphone_init(void)
 	mapphone_padconf_init();
 	mapphone_spi_init();
 	mapphone_flash_init();
-	omap_serial_init();
+	mapphone_serial_init();
 	mapphone_panel_init();
 	mapphone_sensors_init();
 	mapphone_touch_init();
