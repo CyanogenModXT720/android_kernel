@@ -61,6 +61,7 @@ struct cpcap_spi_init_data mapphone_cpcap_spi_init[] = {
 	{CPCAP_REG_GPIO4,     0x0000},
 	{CPCAP_REG_GPIO5,     0x0000},
 	{CPCAP_REG_GPIO6,     0x0000},
+	{CPCAP_REG_VWLAN2C,   0x004D},
 };
 
 #define CPCAP_GPIO 0
@@ -228,6 +229,7 @@ static struct regulator_init_data cpcap_regulator[CPCAP_NUM_REGULATORS] = {
 			.max_uV			= 3300000,
 			.valid_ops_mask		= (REGULATOR_CHANGE_VOLTAGE |
 						   REGULATOR_CHANGE_STATUS),
+			.always_on		= 1,
 		},
 		.num_consumer_supplies	= ARRAY_SIZE(cpcap_vwlan2_consumers),
 		.consumer_supplies	= cpcap_vwlan2_consumers,
