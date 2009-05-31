@@ -41,7 +41,7 @@
 #include <mach/common.h>
 #include <mach/gpmc.h>
 #include <mach/usb.h>
-#include <linux/delay.h>
+#include <asm/delay.h>
 #include <mach/control.h>
 
 #define MAPPHONE_IPC_USB_SUSP_GPIO	142
@@ -83,9 +83,11 @@ static void mapphone_touch_init(void)
 {
 	gpio_request(MAPPHONE_TOUCH_RESET_N_GPIO, "mapphone touch reset");
 	gpio_direction_output(MAPPHONE_TOUCH_RESET_N_GPIO, 1);
+	omap_cfg_reg(H19_34XX_GPIO164_OUT);
 
 	gpio_request(MAPPHONE_TOUCH_INT_GPIO, "mapphone touch irq");
 	gpio_direction_input(MAPPHONE_TOUCH_INT_GPIO);
+	omap_cfg_reg(AG17_34XX_GPIO99);
 }
 
 static struct qtouch_key mapphone_touch_key_list[] = {
@@ -183,6 +185,12 @@ static int __init mapphone_i2c_init(void)
 }
 
 arch_initcall(mapphone_i2c_init);
+
+extern void __init mapphone_spi_init(void);
+extern void __init mapphone_flash_init(void);
+extern void __init mapphone_gpio_iomux_init(void);
+
+
 
 #if defined(CONFIG_USB_EHCI_HCD) || defined(CONFIG_USB_EHCI_HCD_MODULE)
 
@@ -294,7 +302,6 @@ static struct platform_device ohci_device = {
 	.resource	= ohci_resources,
 };
 #endif /* OHCI specific data */
-
 
 static void __init mapphone_ehci_init(void)
 {
