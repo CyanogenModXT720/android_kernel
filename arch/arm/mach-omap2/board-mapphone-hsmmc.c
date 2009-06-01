@@ -137,7 +137,6 @@ static int hsmmc2_resume(struct device *dev, int slot)
 static int hsmmc_set_power(struct device *dev, int slot, int power_on,
 				int vdd)
 {
-	u32 vdd_sel = 0, devconf = 0, reg = 0;
 	int ret = 0;
 
 	if (power_on) {
@@ -251,6 +250,8 @@ static struct omap_mmc_platform_data *hsmmc_data[OMAP34XX_NR_MMC];
 void __init mapphone_hsmmc_init(void)
 {
 	hsmmc_data[0] = &mmc1_data;
+	mmc1_data.slots[0].card_detect_irq = gpio_to_irq(GPIO_SIGNAL_MMC_DET);
+
 #if defined(CONFIG_OMAP_HS_MMC2) || defined(CONFIG_TIWLAN_SDIO)
 	hsmmc_data[1] = &mmc2_data;
 #endif

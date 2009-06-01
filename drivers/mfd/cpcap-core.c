@@ -19,6 +19,7 @@
 #include <linux/fs.h>
 #include <linux/miscdevice.h>
 #include <linux/platform_device.h>
+#include <linux/regulator/machine.h>
 #include <linux/spi/spi.h>
 #include <linux/spi/cpcap.h>
 #include <linux/spi/cpcap-regbits.h>
@@ -65,7 +66,7 @@ static struct platform_device cpcap_key_device = {
 };
 
 static struct platform_device cpcap_batt_device = {
-	.name           = "cpcap_batt",
+	.name           = "cpcap_battery",
 	.id             = -1,
 	.dev.platform_data = NULL,
 };
@@ -113,10 +114,15 @@ static __init int cpcap_init(void)
 	return spi_register_driver(&cpcap_driver);
 }
 
+static struct regulator_consumer_supply cpcap_vusb_consumers = {
+	.supply = "vusb",
+};
+
 static int __devinit cpcap_probe(struct spi_device *spi)
 {
 	int retval = -EINVAL;
 	struct cpcap_device *cpcap;
+	struct cpcap_platform_data *data;
 	int i;
 
 	cpcap = kzalloc(sizeof(*cpcap), GFP_KERNEL);
@@ -124,6 +130,8 @@ static int __devinit cpcap_probe(struct spi_device *spi)
 		return -ENOMEM;
 
 	cpcap->spi = spi;
+	data = spi->controller_data;
+
 	misc_cpcap = cpcap;  /* kept for misc device */
 	spi_set_drvdata(spi, cpcap);
 
@@ -147,7 +155,10 @@ static int __devinit cpcap_probe(struct spi_device *spi)
 	if (retval < 0)
 		return retval;
 
-	platform_add_devices(cpcap_devices, ARRAY_SIZE(cpcap_devices));
+	cpcap_vusb_consumers.dev = &cpcap_usb_det_device.dev;
+	data->regulator_init[CPCAP_VUSB].num_consumer_supplies = 1;
+	data->regulator_init[CPCAP_VUSB].consumer_supplies =
+		&cpcap_vusb_consumers;
 
 	for (i = 0; i < CPCAP_NUM_REGULATORS; i++) {
 		struct platform_device *pdev;
@@ -159,11 +170,14 @@ static int __devinit cpcap_probe(struct spi_device *spi)
 		}
 
 		pdev->dev.parent = &(spi->dev);
+		pdev->dev.platform_data = &data->regulator_init[i];
 		pdev->dev.driver_data = cpcap;
 		cpcap->regulator_pdev[i] = pdev;
 
 		platform_device_add(pdev);
 	}
+
+	platform_add_devices(cpcap_devices, ARRAY_SIZE(cpcap_devices));
 
 	return retval;
 }
