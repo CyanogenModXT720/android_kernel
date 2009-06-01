@@ -41,7 +41,7 @@
 #include <mach/common.h>
 #include <mach/gpmc.h>
 #include <mach/usb.h>
-#include <linux/delay.h>
+#include <asm/delay.h>
 #include <mach/control.h>
 
 #define MAPPHONE_IPC_USB_SUSP_GPIO	142
@@ -83,9 +83,11 @@ static void mapphone_touch_init(void)
 {
 	gpio_request(MAPPHONE_TOUCH_RESET_N_GPIO, "mapphone touch reset");
 	gpio_direction_output(MAPPHONE_TOUCH_RESET_N_GPIO, 1);
+	omap_cfg_reg(H19_34XX_GPIO164_OUT);
 
 	gpio_request(MAPPHONE_TOUCH_INT_GPIO, "mapphone touch irq");
 	gpio_direction_input(MAPPHONE_TOUCH_INT_GPIO);
+	omap_cfg_reg(AG17_34XX_GPIO99);
 }
 
 static struct qtouch_key mapphone_touch_key_list[] = {
@@ -183,6 +185,12 @@ static int __init mapphone_i2c_init(void)
 }
 
 arch_initcall(mapphone_i2c_init);
+
+extern void __init mapphone_spi_init(void);
+extern void __init mapphone_flash_init(void);
+extern void __init mapphone_gpio_iomux_init(void);
+
+
 
 #if defined(CONFIG_USB_EHCI_HCD) || defined(CONFIG_USB_EHCI_HCD_MODULE)
 
@@ -295,9 +303,15 @@ static struct platform_device ohci_device = {
 };
 #endif /* OHCI specific data */
 
-
 static void __init mapphone_ehci_init(void)
 {
+	omap_cfg_reg(AF5_34XX_GPIO142);		/*  IPC_USB_SUSP      */
+	omap_cfg_reg(AA21_34XX_GPIO157);	/*  AP_TO_BP_FLASH_EN */
+	omap_cfg_reg(AD1_3430_USB3FS_PHY_MM3_RXRCV);
+	omap_cfg_reg(AD2_3430_USB3FS_PHY_MM3_TXDAT);
+	omap_cfg_reg(AC1_3430_USB3FS_PHY_MM3_TXEN_N);
+	omap_cfg_reg(AE1_3430_USB3FS_PHY_MM3_TXSE0);
+
 	if (gpio_request(MAPPHONE_AP_TO_BP_FLASH_EN_GPIO,
 			 "ap_to_bp_flash_en") != 0) {
 		printk(KERN_WARNING "Could not request GPIO %d"
@@ -317,6 +331,18 @@ static void __init mapphone_ehci_init(void)
 
 static void __init mapphone_sdrc_init(void)
 {
+	/* Ensure SDRC pins are mux'd for self-refresh */
+	omap_cfg_reg(H16_34XX_SDRC_CKE0);
+	omap_cfg_reg(H17_34XX_SDRC_CKE1);
+}
+
+static void __init mapphone_serial_init(void)
+{
+	omap_cfg_reg(AA8_3430_UART1_TX);
+	omap_cfg_reg(Y8_3430_UART1_RX);
+	omap_cfg_reg(AA9_3430_UART1_RTS);
+	omap_cfg_reg(W8_3430_UART1_CTS);
+	omap_serial_init();
 }
 
 static void __init mapphone_init(void)
@@ -326,7 +352,7 @@ static void __init mapphone_init(void)
 	mapphone_padconf_init();
 	mapphone_spi_init();
 	mapphone_flash_init();
-	omap_serial_init();
+	mapphone_serial_init();
 	mapphone_panel_init();
 	mapphone_sensors_init();
 	mapphone_touch_init();
