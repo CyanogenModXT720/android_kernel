@@ -44,6 +44,9 @@
 #include <asm/delay.h>
 #include <mach/control.h>
 
+#include "pm.h"
+#include "prm-regbits-34xx.h"
+
 #define MAPPHONE_IPC_USB_SUSP_GPIO	142
 #define MAPPHONE_AP_TO_BP_FLASH_EN_GPIO	157
 #define MAPPHONE_TOUCH_RESET_N_GPIO	164
@@ -93,15 +96,19 @@ static void mapphone_touch_init(void)
 static struct qtouch_key mapphone_touch_key_list[] = {
 	{
 		.channel	= 0,
+		.code		= KEY_BACK,
+	},
+	{
+		.channel	= 2,
 		.code		= KEY_MENU,
 	},
 	{
-		.channel	= 3,
+		.channel	= 4,
 		.code		= KEY_HOME,
 	},
 	{
 		.channel	= 6,
-		.code		= KEY_BACK,
+		.code		= KEY_SEARCH,
 	},
 };
 
@@ -303,8 +310,10 @@ static struct platform_device ohci_device = {
 };
 #endif /* OHCI specific data */
 
+
 static void __init mapphone_ehci_init(void)
 {
+
 	omap_cfg_reg(AF5_34XX_GPIO142);		/*  IPC_USB_SUSP      */
 	omap_cfg_reg(AA21_34XX_GPIO157);	/*  AP_TO_BP_FLASH_EN */
 	omap_cfg_reg(AD1_3430_USB3FS_PHY_MM3_RXRCV);
@@ -336,7 +345,6 @@ static void __init mapphone_sdrc_init(void)
 	omap_cfg_reg(H17_34XX_SDRC_CKE1);
 }
 
-
 static void __init mapphone_serial_init(void)
 {
 	omap_cfg_reg(AA8_3430_UART1_TX);
@@ -346,6 +354,74 @@ static void __init mapphone_serial_init(void)
 	omap_serial_init();
 }
 
+/* SMPS I2C voltage control register Address for VDD1 */
+#define MAPPHONE_R_VDD1_SR_CONTROL		0x00
+/* SMPS I2C voltage control register Address for VDD2 */
+#define MAPPHONE_R_VDD2_SR_CONTROL		0x00
+/* SMPS I2C Address for VDD1 */
+#define MAPPHONE_R_SRI2C_SLAVE_ADDR_SA0		0x1
+/* SMPS I2C Address for VDD2 */
+#define MAPPHONE_R_SRI2C_SLAVE_ADDR_SA1		0x2
+/* SMPS I2C voltage control register Address for VDD1, used for SR command */
+#define MAPPHONE_R_SMPS_VOL_CNTL_CMDRA0		0x01
+/* SMPS I2C voltage control register Address for VDD2, used for SR command */
+#define MAPPHONE_R_SMPS_VOL_CNTL_CMDRA1		0x01
+
+static struct prm_setup_vc mapphone_prm_setup = {
+	.clksetup = 0x52,
+	.voltsetup_time1 = 0x229,
+	.voltsetup_time2 = 0x229,
+	.voltoffset = 0x0,
+	.voltsetup2 = 0x0,
+	.vdd0_on = 0x65,
+	.vdd0_onlp = 0x45,
+	.vdd0_ret = 0x17,
+	.vdd0_off = 0x00,
+	.vdd1_on = 0x65,
+	.vdd1_onlp = 0x45,
+	.vdd1_ret = 0x17,
+	.vdd1_off = 0x00,
+	.i2c_slave_ra = (MAPPHONE_R_SRI2C_SLAVE_ADDR_SA1 <<
+			OMAP3430_SMPS_SA1_SHIFT) |
+			(MAPPHONE_R_SRI2C_SLAVE_ADDR_SA0 <<
+			 OMAP3430_SMPS_SA0_SHIFT),
+	.vdd_vol_ra = (MAPPHONE_R_VDD2_SR_CONTROL << OMAP3430_VOLRA1_SHIFT) |
+			(MAPPHONE_R_VDD1_SR_CONTROL << OMAP3430_VOLRA0_SHIFT),
+	/* vdd_vol_ra controls both cmd and vol, set the address equal */
+	.vdd_cmd_ra = (MAPPHONE_R_SMPS_VOL_CNTL_CMDRA1 << OMAP3430_CMDRA1_SHIFT) |
+		(MAPPHONE_R_SMPS_VOL_CNTL_CMDRA0 << OMAP3430_CMDRA0_SHIFT),
+	.vdd_ch_conf = OMAP3430_CMD1 | OMAP3430_RACEN0 |
+			OMAP3430_PRM_VC_CH_CONF_SA1 | OMAP3430_RACEN1 |
+			OMAP3430_RAV1 | OMAP3430_RAC1, OMAP3430_GR_MOD,
+	.vdd_i2c_cfg = OMAP3430_HSEN,
+};
+
+#define R_SMPS_VOL_OPP1_RA0		0x02
+#define R_SMPS_VOL_OPP1_RA1		0x02
+#define R_SMPS_VOL_OPP2_RA0		0x03
+#define R_SMPS_VOL_OPP2_RA1		0x03
+
+/* Mapphone specific PM */
+static void mapphone_pm_init(void) {
+	omap3_set_prm_setup_vc(&mapphone_prm_setup);
+
+	/* Initialize CPCAP SW1&SW2 OPP1&OPP2 registers */
+	/* SW1, OPP1 for RET Voltage --- 1.0V,
+	 * OPP2 for ON Voltge --- 1.225V(OPP3)
+	 */
+	omap3_bypass_cmd(MAPPHONE_R_SRI2C_SLAVE_ADDR_SA0,
+				R_SMPS_VOL_OPP1_RA0, 0x20);
+	omap3_bypass_cmd(MAPPHONE_R_SRI2C_SLAVE_ADDR_SA0,
+				R_SMPS_VOL_OPP2_RA0, 0x32);
+
+	/* SW2, OPP1 for RET Voltage --- 1.0V,
+	 * OPP2 for ON Voltge --- 1.175V(OPP3)
+	 */
+	omap3_bypass_cmd(MAPPHONE_R_SRI2C_SLAVE_ADDR_SA1,
+				R_SMPS_VOL_OPP1_RA1, 0x20);
+	omap3_bypass_cmd(MAPPHONE_R_SRI2C_SLAVE_ADDR_SA1,
+				R_SMPS_VOL_OPP2_RA1, 0x2E);
+}
 
 static void __init mapphone_init(void)
 {
@@ -361,9 +437,9 @@ static void __init mapphone_init(void)
 	usb_musb_init();
 	mapphone_ehci_init();
 	mapphone_sdrc_init();
+	mapphone_pm_init();
 	mapphone_hsmmc_init();
 }
-
 
 static void __init mapphone_map_io(void)
 {
