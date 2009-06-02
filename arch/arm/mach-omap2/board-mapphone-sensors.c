@@ -26,7 +26,7 @@
 #define MAPPHONE_PROX_INT_GPIO     180
 
 int mapphonep0b_keymap[] = {
-	0x0000000a, 0x01000013, 0x03000072, 0x05000073, 0x060000d9, 0x07000020, 
+	0x0000000a, 0x01000013, 0x03000072, 0x05000073, 0x060000d9, 0x07000020,
 	0x10000008, 0x11000032, 0x12000026, 0x13000025, 0x14000031, 0x1500002e,
 	0x1600002c, 0x20000002, 0x21000015, 0x22000017, 0x2300006b, 0x240000e5,
 	0x25000034, 0x26000022, 0x27000012, 0x31000007, 0x32000004, 0x3300006c,
@@ -72,7 +72,7 @@ static struct platform_device omap3430_kp_device = {
 	},
 };
 
-static struct platform_device sfh7743_platform_device = {
+struct platform_device sfh7743_platform_device = {
 	.name = SFH7743_MODULE_NAME,
 	.id = -1,
 	.dev = {
