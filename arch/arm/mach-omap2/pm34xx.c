@@ -23,7 +23,7 @@
  */
 /* Date         Author          Comment
  * ===========  ==============  ==============================================
- * 29-May-2009  Motorola        Remove modem reset for umts 
+ * 29-May-2009  Motorola        Remove modem reset during prcm init.
  *
  *
  */
@@ -729,13 +729,6 @@ static void __init omap3_iva_idle(void)
 
 static void __init prcm_setup_regs(void)
 {
-#ifndef CONFIG_MACH_SHOLES_UMTS    
-	/* reset modem */
-	prm_write_mod_reg(OMAP3430_RM_RSTCTRL_CORE_MODEM_SW_RSTPWRON |
-			  OMAP3430_RM_RSTCTRL_CORE_MODEM_SW_RST,
-			  CORE_MOD, RM_RSTCTRL);
-	prm_write_mod_reg(0, CORE_MOD, RM_RSTCTRL);
-#endif
 	/* XXX Reset all wkdeps. This should be done when initializing
 	 * powerdomains */
 	prm_write_mod_reg(0, OMAP3430_IVA2_MOD, PM_WKDEP);
