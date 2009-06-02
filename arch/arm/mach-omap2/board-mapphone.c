@@ -303,10 +303,8 @@ static struct platform_device ohci_device = {
 };
 #endif /* OHCI specific data */
 
-
 static void __init mapphone_ehci_init(void)
 {
-
 	omap_cfg_reg(AF5_34XX_GPIO142);		/*  IPC_USB_SUSP      */
 	omap_cfg_reg(AA21_34XX_GPIO157);	/*  AP_TO_BP_FLASH_EN */
 	omap_cfg_reg(AD1_3430_USB3FS_PHY_MM3_RXRCV);
@@ -337,6 +335,7 @@ static void __init mapphone_sdrc_init(void)
 	omap_cfg_reg(H16_34XX_SDRC_CKE0);
 	omap_cfg_reg(H17_34XX_SDRC_CKE1);
 }
+
 
 static void __init mapphone_serial_init(void)
 {
