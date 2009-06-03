@@ -791,6 +791,27 @@ static int c_show(struct seq_file *m, void *v)
 {
 	int i;
 
+#ifdef CONFIG_MOT_FEAT_DEVICE_TREE
+	static char baseband[HWCFG_PROP_BP_LEN_MAX] = "";
+	static char *p = NULL;
+	MOTHWCFGNODE *node = NULL;
+
+	if (!p) {
+		node = mothwcfg_get_node_by_path(HWCFG_PATH_BP);
+		mothwcfg_read_prop(node, HWCFG_PROP_BP, baseband, HWCFG_PROP_BP_LEN_MAX);
+		mothwcfg_put_node(node);
+		baseband[HWCFG_PROP_BP_LEN_MAX - 1] = '\0';
+
+		p = kmalloc(strlen(machine_name) + strlen(baseband) + 1, GFP_KERNEL);
+
+		if (p) {
+			*p = '\0';
+			strcat(p, machine_name);
+			machine_name = strcat(p, baseband);
+		}
+	}
+#endif
+
 	seq_printf(m, "Processor\t: %s rev %d (%s)\n",
 		   cpu_name, read_cpuid_id() & 15, elf_platform);
 
