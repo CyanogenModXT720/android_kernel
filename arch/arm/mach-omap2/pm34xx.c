@@ -21,12 +21,6 @@
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
  */
-/* Date         Author          Comment
- * ===========  ==============  ==============================================
- * 29-May-2009  Motorola        Remove modem reset during prcm init.
- *
- *
- */
 
 #include <linux/pm.h>
 #include <linux/suspend.h>
