@@ -2090,7 +2090,7 @@ static noinline struct module *load_module(void __user *umod,
 #endif
 
 #ifdef CONFIG_GCOV_PROFILE
-	modindex = find_sec(hdr, sechdrs, secstrings, ".ctors");
+	modindex = find_sec(hdr, sechdrs, secstrings, ".init_array");
 	mod->ctors_start = (char *)sechdrs[modindex].sh_addr;
 	mod->ctors_end   = (char *)(mod->ctors_start +
 				sechdrs[modindex].sh_size);

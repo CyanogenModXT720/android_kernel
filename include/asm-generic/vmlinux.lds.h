@@ -448,7 +448,7 @@
 		LONG((__CTOR_END__ - __CTOR_LIST__) /			\
 			(__CTOR_LIST2__ - __CTOR_LIST__) - 2)		\
 		__CTOR_LIST2__ = .;					\
-		*(SORT(.ctors))						\
+		*(SORT(.init_array))						\
 		LONG(0)							\
 		__CTOR_END__ = .;					\
 		__DTOR_LIST__ = .;					\
