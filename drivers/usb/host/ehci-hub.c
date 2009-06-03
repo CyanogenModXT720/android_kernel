@@ -30,7 +30,12 @@
 
 #define	PORT_WAKE_BITS	(PORT_WKOC_E|PORT_WKDISC_E|PORT_WKCONN_E)
 
-extern int ts27010mux_service_enable(void);
+#if defined(CONFIG_USB_OHCI_HCD) || defined(CONFIG_USB_OHCI_HCD_MODULE)
+int ts27010mux_service_enable(void)
+{
+	return 0;
+}
+#endif
 
 #ifdef	CONFIG_PM
 
@@ -445,7 +450,11 @@ static int check_reset_complete (
 		 * enumeration doesn't seem to happen, and in EHCI driver, we don't give up ownership
 		 * of the port, simply waiting for the peripheral to connect again.
 		 */
+#if defined(CONFIG_USB_OHCI_HCD) || defined(CONFIG_USB_OHCI_HCD_MODULE)
 		if((index != 2) || ts27010mux_service_enable()) {
+#else
+		if(index != 2) {
+#endif
 			// what happens if HCS_N_CC(params) == 0 ?
 			port_status |= PORT_OWNER;
 			port_status &= ~PORT_RWC_BITS;
