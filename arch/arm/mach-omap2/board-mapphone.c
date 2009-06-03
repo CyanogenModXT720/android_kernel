@@ -312,6 +312,19 @@ static void __init mapphone_ehci_init(void)
 	omap_cfg_reg(AC1_3430_USB3FS_PHY_MM3_TXEN_N);
 	omap_cfg_reg(AE1_3430_USB3FS_PHY_MM3_TXSE0);
 
+	omap_cfg_reg(AB3_3430_USB3HS_TLL_STP);
+	omap_cfg_reg(AA6_3430_USB3HS_TLL_CLK);
+	omap_cfg_reg(AA3_3430_USB3HS_TLL_DIR);
+	omap_cfg_reg(Y3_3430_USB3HS_TLL_NXT);
+	omap_cfg_reg(AA5_3430_USB3HS_TLL_DATA0);
+	omap_cfg_reg(Y4_3430_USB3HS_TLL_DATA1);
+	omap_cfg_reg(Y5_3430_USB3HS_TLL_DATA2);
+	omap_cfg_reg(W5_3430_USB3HS_TLL_DATA3);
+	omap_cfg_reg(AB12_3430_USB3HS_TLL_DATA4);
+	omap_cfg_reg(AB13_3430_USB3HS_TLL_DATA5);
+	omap_cfg_reg(AA13_3430_USB3HS_TLL_DATA6);
+	omap_cfg_reg(AA12_3430_USB3HS_TLL_DATA7);
+
 	if (gpio_request(MAPPHONE_AP_TO_BP_FLASH_EN_GPIO,
 			 "ap_to_bp_flash_en") != 0) {
 		printk(KERN_WARNING "Could not request GPIO %d"

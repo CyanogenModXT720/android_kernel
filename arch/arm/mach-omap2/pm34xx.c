@@ -740,11 +740,11 @@ static void __init omap3_iva_idle(void)
 
 static void __init prcm_setup_regs(void)
 {
-	/* reset modem */
+	/* reset modem, commented out for UMTS
 	prm_write_mod_reg(OMAP3430_RM_RSTCTRL_CORE_MODEM_SW_RSTPWRON |
 			  OMAP3430_RM_RSTCTRL_CORE_MODEM_SW_RST,
 			  CORE_MOD, RM_RSTCTRL);
-	prm_write_mod_reg(0, CORE_MOD, RM_RSTCTRL);
+	prm_write_mod_reg(0, CORE_MOD, RM_RSTCTRL); */
 
 	/* XXX Reset all wkdeps. This should be done when initializing
 	 * powerdomains */
