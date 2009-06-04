@@ -515,7 +515,7 @@ static void __init mapphone_map_io(void)
 	omap2_map_common_io();
 }
 
-MACHINE_START(MAPPHONE, "mapphone")
+MACHINE_START(MAPPHONE, "mapphone_")
 	/* Maintainer: Motorola, Inc. */
 	.phys_io	= 0x48000000,
 	.io_pg_offst	= ((0xd8000000) >> 18) & 0xfffc,

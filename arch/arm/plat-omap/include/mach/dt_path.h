@@ -22,6 +22,11 @@
 #define _MACH_DT_PATH_H
 #ifdef __KERNEL__
 
+/* Chosen */
+#define DT_PATH_CHOSEN		"/Chosen@0"
+#define DT_PROP_CHOSEN_BP	"bp_model"
+#define DT_PROP_CHOSEN_BP_LEN	16
+
 /* Keypad Node */
 #define DT_PATH_KEYPAD		"/System@0/Keypad@0"
 #define DT_PROP_KEYPAD_ROWS	"rows"

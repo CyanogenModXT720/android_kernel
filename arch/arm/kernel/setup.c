@@ -35,12 +35,16 @@
 #include <asm/cacheflush.h>
 #include <asm/cachetype.h>
 #include <asm/tlbflush.h>
-#include <asm/prom.h>
 
 #include <asm/mach/arch.h>
 #include <asm/mach/irq.h>
 #include <asm/mach/time.h>
 #include <asm/traps.h>
+
+#ifdef CONFIG_ARM_OF
+#include <mach/dt_path.h>
+#include <asm/prom.h>
+#endif
 
 #include "compat.h"
 #include "atags.h"
@@ -790,6 +794,26 @@ static const char *hwcap_str[] = {
 static int c_show(struct seq_file *m, void *v)
 {
 	int i;
+
+#ifdef CONFIG_ARM_OF
+	struct device_node *bp_node;
+	const void *bp_prop;
+	static char *p = NULL;
+	int len = 0;
+
+	if (!p && (bp_node = of_find_node_by_path(DT_PATH_CHOSEN))) {
+		bp_prop = of_get_property(bp_node, DT_PROP_CHOSEN_BP, &len);
+
+		p = len ? kmalloc(strlen(machine_name) + len + 1, GFP_KERNEL) : NULL;
+		if (p) {
+			*p = '\0';
+			strcat(p, machine_name);
+			machine_name = strncat(p, bp_prop, len);
+		}
+
+		of_node_put(bp_node);
+	}
+#endif
 
 	seq_printf(m, "Processor\t: %s rev %d (%s)\n",
 		   cpu_name, read_cpuid_id() & 15, elf_platform);

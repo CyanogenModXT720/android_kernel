@@ -21,8 +21,11 @@
 #include <mach/gpio.h>
 #include <mach/keypad.h>
 #include <mach/mux.h>
+
+#ifdef CONFIG_ARM_OF
 #include <mach/dt_path.h>
 #include <asm/prom.h>
+#endif
 
 #define MAPPHONE_PROX_INT_GPIO     180
 #define MAPPHONE_HF_NORTH_GPIO	10
@@ -134,6 +137,7 @@ static void mapphone_hall_effect_init(void)
 	omap_cfg_reg(B26_34XX_GPIO111);
 }
 
+#ifdef CONFIG_ARM_OF
 static int __init mapphone_dt_kp_init(void)
 {
 	struct device_node *kp_node;
@@ -152,17 +156,20 @@ static int __init mapphone_dt_kp_init(void)
 			omap3430_kp_data.keymapsize = *(int *)kp_prop;
 		if ((kp_prop = of_get_property(kp_node, DT_PROP_KEYPAD_MAPS, NULL)))
 			omap3430_kp_data.keymap = (int *)kp_prop;
-	}
 
-	of_node_put(kp_node);
+		of_node_put(kp_node);
+	}
 
 	return kp_node ? 0 : -ENODEV;
 }
+#endif
 
 void __init mapphone_sensors_init(void)
 {
+#ifdef CONFIG_ARM_OF
 	if (mapphone_dt_kp_init())
 		printk(KERN_INFO "Keypad: using non-dt configuration\n");
+#endif
 
 	/* keypad rows */
 	omap_cfg_reg(N4_34XX_GPIO34);
