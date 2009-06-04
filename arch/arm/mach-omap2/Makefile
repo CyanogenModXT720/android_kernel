@@ -71,14 +71,16 @@ obj-$(CONFIG_MACH_SHOLES)		+= board-sholes.o \
 					   board-sholes-flash.o \
 					   board-sholes-panel.o \
 					   board-sholes-spi.o \
-					   board-sholes-sensors.o
+					   board-sholes-sensors.o \
+					   board-sholes-wifi.o
 obj-$(CONFIG_MACH_MAPPHONE)		+= board-mapphone.o \
 					   board-mapphone-flash.o \
 					   board-mapphone-hsmmc.o \
 					   board-mapphone-padconf.o \
 					   board-mapphone-panel.o \
 					   board-mapphone-spi.o \
-					   board-mapphone-sensors.o
+					   board-mapphone-sensors.o \
+					   board-mapphone-wifi.o
 obj-$(CONFIG_MACH_OMAP_APOLLON)		+= board-apollon.o \
 					   board-apollon-mmc.o	\
 					   board-apollon-keys.o

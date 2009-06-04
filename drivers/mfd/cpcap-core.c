@@ -18,6 +18,7 @@
 
 #include <linux/fs.h>
 #include <linux/miscdevice.h>
+#include <linux/leds-ld-cpcap-disp.h>
 #include <linux/platform_device.h>
 #include <linux/regulator/machine.h>
 #include <linux/spi/spi.h>
@@ -71,6 +72,15 @@ static struct platform_device cpcap_batt_device = {
 	.dev.platform_data = NULL,
 };
 
+struct platform_device cpcap_disp_button_led = {
+	.name	= LD_BUTTON_BACKLIGHT_DEV,
+	.id		= -1,
+	.dev		= {
+		.platform_data  = NULL,
+	},
+};
+
+
 #ifdef CONFIG_CPCAP_USB
 static struct platform_device cpcap_usb_device = {
 	.name           = "cpcap_usb",
@@ -93,10 +103,29 @@ static struct platform_device cpcap_audio_device = {
 };
 #endif
 
+static struct platform_device cpcap_uc_device = {
+	.name           = "cpcap_uc",
+	.id             = -1,
+	.dev.platform_data = NULL,
+};
+
+static struct platform_device cpcap_3mm5_device = {
+	.name           = "cpcap_3mm5",
+	.id             = -1,
+	.dev.platform_data = NULL,
+};
+
+static struct platform_device cpcap_rtc_device = {
+	.name           = "cpcap_rtc",
+	.id             = -1,
+	.dev.platform_data = NULL,
+};
+
 static struct platform_device *cpcap_devices[] __initdata = {
 	&cpcap_adc_device,
 	&cpcap_key_device,
 	&cpcap_batt_device,
+	&cpcap_disp_button_led,
 #ifdef CONFIG_CPCAP_USB
 	&cpcap_usb_device,
 	&cpcap_usb_det_device,
@@ -104,12 +133,15 @@ static struct platform_device *cpcap_devices[] __initdata = {
 #ifdef CONFIG_SOUND_CPCAP_OMAP
 	&cpcap_audio_device,
 #endif
+	&cpcap_3mm5_device,
+	&cpcap_rtc_device,
+	&cpcap_uc_device,
 };
 
 static struct cpcap_device *misc_cpcap;
 
 
-static __init int cpcap_init(void)
+static int __init cpcap_init(void)
 {
 	return spi_register_driver(&cpcap_driver);
 }
@@ -118,6 +150,18 @@ static struct regulator_consumer_supply cpcap_vusb_consumers = {
 	.supply = "vusb",
 	.dev = &cpcap_usb_det_device.dev,
 };
+
+static void cpcap_vendor_read(struct cpcap_device *cpcap)
+{
+	unsigned short value;
+
+	(void)cpcap_regacc_read(cpcap, CPCAP_REG_VERSC1, &value);
+
+	cpcap->vendor = (enum cpcap_vendor)((value >> 6) & 0x0007);
+	cpcap->revision = (enum cpcap_revision)(((value >> 3) & 0x0007) |
+						((value << 3) & 0x0038));
+}
+
 
 static int __devinit cpcap_probe(struct spi_device *spi)
 {
@@ -143,14 +187,10 @@ static int __devinit cpcap_probe(struct spi_device *spi)
 	if (retval < 0)
 		return retval;
 
-	cpcap_adc_device.dev.platform_data = cpcap;
-	cpcap_usb_device.dev.platform_data = cpcap;
-	cpcap_usb_det_device.dev.platform_data = cpcap;
-	cpcap_key_device.dev.platform_data = cpcap;
-	cpcap_batt_device.dev.platform_data = cpcap;
-#ifdef CONFIG_SOUND_CPCAP_OMAP
-	cpcap_audio_device.dev.platform_data = cpcap;
-#endif
+	cpcap_vendor_read(cpcap);
+
+	for (i = 0; i < ARRAY_SIZE(cpcap_devices); i++)
+		cpcap_devices[i]->dev.platform_data = cpcap;
 
 	retval = misc_register(&cpcap_dev);
 	if (retval < 0)
@@ -197,10 +237,8 @@ static int __devexit cpcap_remove(struct spi_device *spi)
 	struct cpcap_device *cpcap = spi_get_drvdata(spi);
 	int i;
 
-	platform_device_unregister(&cpcap_key_device);
-	platform_device_unregister(&cpcap_usb_device);
-	platform_device_unregister(&cpcap_usb_det_device);
-	platform_device_unregister(&cpcap_batt_device);
+	for (i = ARRAY_SIZE(cpcap_devices); i > 0; i--)
+		platform_device_unregister(cpcap_devices[i-1]);
 
 	for (i = 0; i < CPCAP_NUM_REGULATORS; i++)
 		platform_device_unregister(cpcap->regulator_pdev[i]);
