@@ -36,6 +36,7 @@ obj-$(CONFIG_ARCH_OMAP3)		+= clock34xx.o
 obj-$(CONFIG_OMAP_PM_SRF)		+=  resource34xx.o
 
 # DSP
+obj-$(CONFIG_MPU_BRIDGE)        += dspbridge.o
 obj-$(CONFIG_OMAP_MBOX_FWK)	+= mailbox_mach.o
 mailbox_mach-objs		:= mailbox.o
 
