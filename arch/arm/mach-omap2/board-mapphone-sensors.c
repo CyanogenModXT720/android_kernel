@@ -14,6 +14,7 @@
 #include <linux/init.h>
 #include <linux/input.h>
 #include <linux/sfh7743.h>
+#include <linux/bu52014hfv.h>
 
 #include <mach/mux.h>
 
@@ -24,6 +25,8 @@
 #include <asm/prom.h>
 
 #define MAPPHONE_PROX_INT_GPIO     180
+#define MAPPHONE_HF_NORTH_GPIO	10
+#define MAPPHONE_HF_SOUTH_GPIO	111
 
 int mapphonep0b_keymap[] = {
 	0x0000000a, 0x01000013, 0x03000072, 0x05000073, 0x060000d9, 0x07000020,
@@ -32,7 +35,7 @@ int mapphonep0b_keymap[] = {
 	0x25000034, 0x26000022, 0x27000012, 0x31000007, 0x32000004, 0x3300006c,
 	0x34000067, 0x35000069, 0x3600006a, 0x3700001c, 0x40000006, 0x41000024,
 	0x42000030, 0x430000d4, 0x44000014, 0x4500000b, 0x46000096, 0x4700002d,
-	0x50000009, 0x51000039, 0x520000e3, 0x5300009e, 0x540000e4, 0x550000e7,
+	0x50000009, 0x51000039, 0x52000064, 0x5300009e, 0x540000e4, 0x550000e7,
 	0x5600000e, 0x5700001e, 0x60000003, 0x6100000b, 0x62000021, 0x63000036,
 	0x6400001c, 0x65000018, 0x66000023, 0x67000010, 0x70000005, 0x7100002f,
 	0x7200001f, 0x73000019, 0x7400009e, 0x76000016, 0x77000011
@@ -57,11 +60,17 @@ static struct omap_kp_platform_data omap3430_kp_data = {
 	.rep		= 0,
 	.row_gpios	= mapphonep1_row_gpios,
 	.col_gpios	= mapphonep1_col_gpios,
+	.input_name	= "mapphone-keypad",
+	.input_phys_device = "mapphone-keypad/input0"
 };
 
 static struct sfh7743_platform_data omap3430_proximity_data = {
 	.gpio_prox_int = MAPPHONE_PROX_INT_GPIO,
 	.regulator = "vsdio",
+};
+
+static struct bu52014hfv_platform_data bu52014hfv_platform_data = {
+	.north_is_desk = 1,
 };
 
 static struct platform_device omap3430_kp_device = {
@@ -80,7 +89,15 @@ struct platform_device sfh7743_platform_device = {
 	},
 };
 
-static struct platform_device omap3430_master_sensor = {
+static struct platform_device omap3430_hall_effect_dock = {
+	.name	= BU52014HFV_MODULE_NAME,
+	.id	= -1,
+	.dev	= {
+		.platform_data  = &bu52014hfv_platform_data,
+	},
+};
+
+static struct platform_device omap3430_master_sensor= {
 	.name		= "master_sensor",
 	.id		= -1,
 	.dev		= {
@@ -99,7 +116,23 @@ static struct platform_device *mapphone_sensors[] __initdata = {
 	&omap3430_kp_device,
 	&omap3430_master_sensor,
 	&sfh7743_platform_device,
+	&omap3430_hall_effect_dock,
 };
+
+static void mapphone_hall_effect_init(void)
+{
+	gpio_request(MAPPHONE_HF_NORTH_GPIO, "mapphone dock north");
+	gpio_direction_input(MAPPHONE_HF_NORTH_GPIO);
+	bu52014hfv_platform_data.docked_north_gpio =
+		gpio_to_irq(MAPPHONE_HF_NORTH_GPIO);
+	omap_cfg_reg(AG25_34XX_GPIO10);
+
+	gpio_request(MAPPHONE_HF_SOUTH_GPIO, "mapphone dock south");
+	gpio_direction_input(MAPPHONE_HF_SOUTH_GPIO);
+	bu52014hfv_platform_data.docked_south_gpio =
+		gpio_to_irq(MAPPHONE_HF_SOUTH_GPIO);
+	omap_cfg_reg(B26_34XX_GPIO111);
+}
 
 static int __init mapphone_dt_kp_init(void)
 {
@@ -156,6 +189,6 @@ void __init mapphone_sensors_init(void)
 	omap_cfg_reg(AH17_34XX_GPIO100);
 
 	mapphone_proximity_init();
-
+	mapphone_hall_effect_init();
 	platform_add_devices(mapphone_sensors, ARRAY_SIZE(mapphone_sensors));
 }
