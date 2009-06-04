@@ -1,0 +1,23 @@
+# Function driver for a Random Mouse
+# @(#) balden@belcarra.com|otg/functions/msc/Makefile-l26|20060419204258|01484
+#
+# Copyright (c) 2004 Belcarra
+# Copyright (c) 2005-2006 Belcarra Technologies 2005 Corp
+
+#include /vobs/linuxjava/drivers_1/usb_driver/.config
+
+msc_if-objs	:= msc-fd.o crc.o msc-linux.o msc-bo.o msc-io-l24.o
+
+
+obj-$(CONFIG_OTG_MSC) += msc_if.o
+
+
+OTG= $(CKBUILD_COMP_TOP)
+MSCD=$(CKBUILD_COMP_TOP)/functions/msc
+
+CFLAGS += -I$(OTG)
+CFLAGS += -I$(MSCD)
+
+EXTRA_CFLAGS += -I$(MSCD) -I$(OTG) -Wno-unused -Wno-format
+EXTRA_CFLAGS_nostdinc += -I$(MSCD) -I$(OTG) -Wno-unused -Wno-format
+

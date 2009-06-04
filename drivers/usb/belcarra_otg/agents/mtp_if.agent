@@ -1,0 +1,50 @@
+#!/bin/sh
+#
+# MTP hotplug policy agent
+#
+# Kernel hotplug params include:
+#	
+#	ACTION=%s [attach or detach]
+#	INTERFACE=%s
+#
+#
+# The mtp_if.agent script is called by the mtp_if function
+# when the USB Device is attached or detached from a USB Host.
+#
+# HISTORY:
+#
+# Author  Date        Comments
+# jinh    03/28/06    Initial
+#
+
+MODULE=mtp
+DEVICE=mtp
+
+cd /etc/hotplug
+. ./hotplug.functions
+
+# remove stale nodes
+rm -f /dev/${DEVICE}
+
+case $ACTION in
+attach)
+	echo "MTP Attach received"
+	MAJOR=`grep $MODULE /proc/devices | sed -e "s/ $MODULE//"`
+	mknod /dev/${DEVICE} c $MAJOR 0
+	. /etc/initservices/services/ezxenv.sh
+	/usr/local/bin/mtpcontrol > /tmp/mtpcontrol.log
+	;;
+
+detach)
+	echo "MTP Detach received"
+	. /etc/initservices/services/ezxenv.sh
+	/usr/local/bin/mtpcontrol -d >> /tmp/mtpcontrol.log
+	;;
+
+*) 
+	echo "No ACTION received"
+	;;
+esac 
+
+exit 0
+
