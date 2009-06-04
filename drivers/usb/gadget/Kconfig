@@ -729,3 +729,8 @@ config USB_CDC_COMPOSITE
 endchoice
 
 endif # USB_GADGET
+
+config MOT_FEAT_ADB_ENDEV
+        tristate "ADB Enable Device"
+        default n
+

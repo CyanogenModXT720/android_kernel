@@ -151,7 +151,12 @@ struct dma_controller {
 	int			(*start)(struct dma_controller *);
 	int			(*stop)(struct dma_controller *);
 	struct dma_channel	*(*channel_alloc)(struct dma_controller *,
-					struct musb_hw_ep *, u8 is_tx);
+#ifdef CONFIG_USB_BELCARRA_MUSB_HDRC
+                                        u8, u8 is_tx, u8, u16);
+#else /* CONFIG_USB_BELCARRA_MUSB_HDRC */
+                                        struct musb_hw_ep *, u8 is_tx);
+#endif /* CONFIG_USB_BELCARRA_MUSB_HDRC */
+
 	void			(*channel_release)(struct dma_channel *);
 	int			(*channel_program)(struct dma_channel *channel,
 							u16 maxpacket, u8 mode,
