@@ -16,11 +16,31 @@
  * 02111-1307, USA
  */
 
-#ifndef __LED_DISP_LED_H__
-#define __LED_DISP_LED_H__
+#ifndef __LED_LD_CPCAP_H__
+#define __LED_LD_CPCAP_H__
 
-#define LD_BUTTON_BACKLIGHT_DEV "button-backlight"
-#define LD_BUTTON_BACKLIGHT_SUPPLY "sw5"
+#define LD_MSG_IND_DEV "notification-led"
+#define LD_DISP_BUTTON_DEV "button-backlight"
+#define LD_KPAD_DEV "keyboard-backlight"
+#define LD_SUPPLY "sw5"
+
+#define LD_MSG_IND_ON			0x1
+#define LD_MSG_IND_CURRENT		0x4
+
+#define LD_MSG_IND_CPCAP_MASK		0x3FF
+
+#define LD_MSG_IND_LOW			0x30
+#define LD_MSG_IND_LOW_MED		0x60
+#define LD_MSG_IND_MEDIUM		0xA0
+#define LD_MSG_IND_MED_HIGH		0xC0
+#define LD_MSG_IND_HIGH			0xF0
+
+enum led_color {
+  LD_LED_RED,
+  LD_LED_GREEN,
+  LD_LED_BLUE,
+  LD_DONT_CARE,
+};
 
 #define LD_DISP_BUTTON_ON		0x1
 #define LD_DISP_BUTTON_CURRENT		0x4
@@ -33,5 +53,4 @@
 #define LD_DISP_BUTTON_MED_HIGH		0xC0
 #define LD_DISP_BUTTON_HIGH		0xF0
 
-
-#endif  /* __LED_DISP_LED_H__ */
+#endif  /* __LED_LD_CPCAP_H__ */
