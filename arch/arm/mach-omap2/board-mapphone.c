@@ -26,6 +26,7 @@
 #include <linux/clk.h>
 #include <linux/mm.h>
 #include <linux/qtouch_obp_ts.h>
+#include <linux/led-lm3530.h>
 #include <linux/usb/omap.h>
 
 #include <asm/mach-types.h>
@@ -51,6 +52,7 @@
 #define MAPPHONE_AP_TO_BP_FLASH_EN_GPIO	157
 #define MAPPHONE_TOUCH_RESET_N_GPIO	164
 #define MAPPHONE_TOUCH_INT_GPIO		99
+#define MAPPHONE_LM_3530_INT_GPIO     92
 
 static void __init mapphone_init_irq(void)
 {
@@ -91,6 +93,14 @@ static void mapphone_touch_init(void)
 	gpio_request(MAPPHONE_TOUCH_INT_GPIO, "mapphone touch irq");
 	gpio_direction_input(MAPPHONE_TOUCH_INT_GPIO);
 	omap_cfg_reg(AG17_34XX_GPIO99);
+}
+
+static void mapphone_als_init(void)
+{
+	printk(KERN_INFO "%s:Initializing\n", __func__);
+	gpio_request(MAPPHONE_LM_3530_INT_GPIO, "mapphone als int");
+	gpio_direction_input(MAPPHONE_LM_3530_INT_GPIO);
+	omap_cfg_reg(AC27_34XX_GPIO92);
 }
 
 static struct qtouch_key mapphone_touch_key_list[] = {
@@ -176,12 +186,41 @@ static struct qtouch_ts_platform_data mapphone_ts_platform_data = {
 	},
 };
 
+static struct lm3530_platform_data omap3430_als_light_data = {
+	.gen_config = 0xB3,
+	.als_config = 0x7E,
+	.brightness_ramp = 0x2F,
+	.als_zone_info = 0x00,
+	.als_resistor_sel = 0x82,
+	.brightness_control = 0x00,
+	.zone_boundary_0 = 0x14,
+	.zone_boundary_1 = 0x33,
+	.zone_boundary_2 = 0x80,
+	.zone_boundary_3 = 0xC9,
+	.zone_target_0 = 0x19,
+	.zone_target_1 = 0x33,
+	.zone_target_2 = 0x4c,
+	.zone_target_3 = 0x66,
+	.zone_target_4 = 0x7f,
+	.zone_data_0 = 0x23,
+	.zone_data_1 = 0x27,
+	.zone_data_2 = 0x2B,
+	.zone_data_3 = 0x2F,
+	.zone_data_4 = 0x33,
+};
+
 static struct i2c_board_info __initdata mapphone_i2c_bus1_board_info[] = {
 	{
 		I2C_BOARD_INFO(QTOUCH_TS_NAME, 0x11),
 		.platform_data = &mapphone_ts_platform_data,
 		.irq = OMAP_GPIO_IRQ(MAPPHONE_TOUCH_INT_GPIO),
 	},
+	{
+		I2C_BOARD_INFO(LD_LM3530_NAME, 0x38),
+		.platform_data = &omap3430_als_light_data,
+		.irq = OMAP_GPIO_IRQ(MAPPHONE_LM_3530_INT_GPIO),
+	},
+
 };
 
 static int __init mapphone_i2c_init(void)
@@ -402,7 +441,8 @@ static struct prm_setup_vc mapphone_prm_setup = {
 #define R_SMPS_VOL_OPP2_RA1		0x03
 
 /* Mapphone specific PM */
-static void mapphone_pm_init(void) {
+static void mapphone_pm_init(void)
+{
 	omap3_set_prm_setup_vc(&mapphone_prm_setup);
 
 	/* Initialize CPCAP SW1&SW2 OPP1&OPP2 registers */
@@ -423,6 +463,31 @@ static void mapphone_pm_init(void) {
 				R_SMPS_VOL_OPP2_RA1, 0x2E);
 }
 
+static void __init config_wlan_gpio(void)
+{
+	/* WLAN PE and IRQ */
+	omap_cfg_reg(AE22_3430_GPIO186_OUT);
+	omap_cfg_reg(J8_3430_GPIO65);
+}
+
+static void __init config_mmc2_init(void)
+{
+	u32 val;
+
+	/* MMC2 */
+	omap_cfg_reg(AE2_3430_MMC2_CLK);
+	omap_cfg_reg(AG5_3430_MMC2_CMD);
+	omap_cfg_reg(AH5_3430_MMC2_DAT0);
+	omap_cfg_reg(AH4_3430_MMC2_DAT1);
+	omap_cfg_reg(AG4_3430_MMC2_DAT2);
+	omap_cfg_reg(AF4_3430_MMC2_DAT3);
+
+	/* Set internal loopback clock */
+	val = omap_ctrl_readl(OMAP343X_CONTROL_DEVCONF1);
+	omap_ctrl_writel((val | OMAP2_MMCSDIO2ADPCLKISEL),
+				OMAP343X_CONTROL_DEVCONF1);
+}
+
 static void __init mapphone_init(void)
 {
 	omap_board_config = mapphone_config;
@@ -431,6 +496,7 @@ static void __init mapphone_init(void)
 	mapphone_spi_init();
 	mapphone_flash_init();
 	mapphone_serial_init();
+	mapphone_als_init();
 	mapphone_panel_init();
 	mapphone_sensors_init();
 	mapphone_touch_init();
@@ -439,6 +505,8 @@ static void __init mapphone_init(void)
 	mapphone_sdrc_init();
 	mapphone_pm_init();
 	mapphone_hsmmc_init();
+	config_mmc2_init();
+	config_wlan_gpio();
 }
 
 static void __init mapphone_map_io(void)
@@ -447,7 +515,7 @@ static void __init mapphone_map_io(void)
 	omap2_map_common_io();
 }
 
-MACHINE_START(MAPPHONE, "mapphone")
+MACHINE_START(MAPPHONE, "mapphone_")
 	/* Maintainer: Motorola, Inc. */
 	.phys_io	= 0x48000000,
 	.io_pg_offst	= ((0xd8000000) >> 18) & 0xfffc,
