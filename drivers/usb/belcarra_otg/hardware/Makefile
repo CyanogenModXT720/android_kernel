@@ -1,0 +1,65 @@
+#
+# @(#) sl@belcarra.com/whiskey.enposte.net|otg/platform/sdp2430/Makefile-sdp2430-l26|20070912224952|36898
+# Copyright (c) 2005-2007 Belcarra Technologies 2005 Corp
+#
+
+#include /vobs/linuxjava/drivers_1/usb_driver/.config
+USB_SRC_DIR = drivers/usb/belcarra_otg/
+KERNEL_USB_DIR = drivers/usb/ 
+MACH_INCLUDE_DIR = arch/arm/plat-omap/include/
+
+ifdef CONFIG_MOT_FEAT_GCC_WERR
+CFLAGS_RM_musb-dev.o = -Werror
+CFLAGS_RM_musb-pcd.o = -Werror
+endif
+
+
+OTG=$(USB_SRC_DIR)
+EXTRA_CFLAGS +=          -Wno-missing-prototypes -Wno-unused -Wno-format -I$(OTG) -I$(KERNEL_USB_DIR) -I$(MACH_INCLUDE_DIR) -DMUSB_DEBUG=1
+EXTRA_CFLAGS_nostdinc += -Wno-missing-prototypes -Wno-unused -Wno-format -I$(OTG) -I$(KERNEL_USB_DIR) -I$(MACH_INCLUDE_DIR) -DMUSB_DEBUG=1
+
+
+# #########################################################################################################
+
+#
+# USB Configurations - peripheral, host or both
+#
+# Produce zasevb_usb module.
+#
+
+#obj-$(CONFIG_OTG_OMAP_SDP2430)      += sdp2430_hs_usb.o
+#sdp2430_hs_usb-objs		:= sdp2430-l26.o \
+#				otg-dev.o pcd.o \
+#				l26-ocd.o l26-ocd-dev.o \
+#				omaphs-dev.o omaphs-pcd.o omaphs-tcd.o
+
+#obj-$(CONFIG_OTG_OMAP_MENTOR)      += sdp2430_hs_usb.o
+#sdp2430_hs_usb-objs		:= sdp2430-l26.o \
+#				otg-dev.o pcd.o \
+#				musb-ocd.o \
+#				musb-dev.o musb-pcd.o musb-tcd.o
+
+# Full Speed 1710 compatible UDC ##################################################################
+#
+ifeq ($(CONFIG_OTG_OMAP_FS_1710),y)
+obj-$(CONFIG_OTG_OMAP_SDP2430)      += sdp2430_fs_usb.o
+sdp2430_fs_usb-objs		:= sdp2430-fs-l26.o \
+				otg-dev.o pcd.o \
+				omap-dev.o omap-pcd.o omap-ocd.o omap-h2-isp1301.o
+endif
+
+# High Speed Mentor UDC ###########################################################################
+#
+
+#ifeq ($(CONFIG_OTG_OMAP_HS_MENTOR),y)
+
+obj-$(CONFIG_OTG_OMAP_SDP2430)      += sdp2430_hs_usb.o
+sdp2430_hs_usb-objs		:= sdp2430-hs-l26.o \
+				otg-dev.o pcd.o \
+				musb-dev.o musb-pcd.o 
+
+
+#endif
+
+
+

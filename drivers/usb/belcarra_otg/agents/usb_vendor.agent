@@ -1,0 +1,89 @@
+#!/bin/sh
+#
+# Kernel  hotplug params include:
+#	
+#	ACTION=%s [attach or detach]
+#   USBCONFIG=%d [USB configuration Value ] 
+
+
+cd /etc/hotplug
+. ./hotplug.functions
+
+
+if [ "$USBCONFIG" = "" ]; then
+    echo " usb_vendor.agent : USBCONFIG is not set"
+	exit 0
+fi
+
+echo " usb_vendor.agent is called "
+
+
+if [ -x /usr/local/bin/vendor_usb ]; then
+    USBVENDOR=/usr/local/bin/vendor_usb
+else
+    echo " /usr/local/bin/vendor_usb does not exit or is not executable "
+	exit 0
+fi
+
+
+case $ACTION in
+
+# the USB Device has been attached to a USB Host
+#
+attach)
+
+		
+    case $USBCONFIG in
+
+
+	1)
+	     echo " USBCONFIG  is 1 - USB modem  "
+         
+		 $USBVENDOR 1
+         ;;
+
+  
+    11)
+         echo " USBCONFIG  is 11 - ACM + BLAN  "
+
+		 $USBVENDOR 11
+         ;;
+	     
+    13)
+         echo " USBCONFIG  is 13 - BLAN  " 
+
+		 $USBVENDOR 13
+          ;;
+
+    14)
+         echo " USBCONFIG  is 14 - Mass Storage  " 
+
+		 $USBVENDOR 14
+          ;;
+
+		  
+    *) 
+         echo " USBCONFIG = $USBCONFIG  is not correct value "
+ 
+          exit 1	
+          ;;
+    esac
+
+   ;;
+
+
+# the USB Device has been dettached fram a USB Host
+#
+detach)
+
+        echo "usb_vendor Detach received "
+		;;
+
+*)
+   echo " No ACTION  recceived "
+	exit 0
+	;;
+
+esac
+exit 0
+
