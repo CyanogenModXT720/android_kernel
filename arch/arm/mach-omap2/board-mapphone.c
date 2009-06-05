@@ -53,7 +53,8 @@
 #define MAPPHONE_AP_TO_BP_FLASH_EN_GPIO	157
 #define MAPPHONE_TOUCH_RESET_N_GPIO	164
 #define MAPPHONE_TOUCH_INT_GPIO		99
-#define MAPPHONE_LM_3530_INT_GPIO     92
+#define MAPPHONE_LM_3530_INT_GPIO	92
+#define MAPPHONE_AKM8973_INT_GPIO	175
 
 static void __init mapphone_init_irq(void)
 {
@@ -104,21 +105,25 @@ static void mapphone_als_init(void)
 	omap_cfg_reg(AC27_34XX_GPIO92);
 }
 
-static struct qtouch_key mapphone_touch_key_list[] = {
+static struct vkey mapphone_touch_vkeys[] = {
 	{
-		.channel	= 0,
+		.min		= 0,
+		.max		= 255,
 		.code		= KEY_BACK,
 	},
 	{
-		.channel	= 2,
+		.min		= 256,
+		.max		= 511,
 		.code		= KEY_MENU,
 	},
 	{
-		.channel	= 4,
+		.min		= 512,
+		.max		= 767,
 		.code		= KEY_HOME,
 	},
 	{
-		.channel	= 6,
+		.min		= 768,
+		.max		= 1023,
 		.code		= KEY_SEARCH,
 	},
 };
@@ -127,12 +132,11 @@ static struct qtouch_ts_platform_data mapphone_ts_platform_data = {
 	.irqflags	= IRQF_TRIGGER_LOW,
 	.flags		= (QTOUCH_SWAP_XY |
 			   QTOUCH_USE_MULTITOUCH |
-			   QTOUCH_USE_KEYARRAY |
 			   QTOUCH_CFG_BACKUPNV),
 	.abs_min_x	= 0,
 	.abs_max_x	= 1024,
 	.abs_min_y	= 0,
-	.abs_max_y	= 1024,
+	.abs_max_y	= 960,
 	.abs_min_p	= 0,
 	.abs_max_p	= 255,
 	.abs_min_w	= 0,
@@ -158,7 +162,7 @@ static struct qtouch_ts_platform_data mapphone_ts_platform_data = {
 	.multi_touch_cfg	= {
 		.x_origin	= 0,
 		.y_origin	= 0,
-		.x_size		= 11,
+		.x_size		= 12,
 		.y_size		= 7,
 		.aks_cfg	= 1,
 		.burst_len	= 0x40,
@@ -171,19 +175,10 @@ static struct qtouch_ts_platform_data mapphone_ts_platform_data = {
 		.merge_hyst	= 0,
 		.merge_thresh	= 3,
 	},
-	.key_array		= {
-		.keys		= mapphone_touch_key_list,
-		.num_keys	= ARRAY_SIZE(mapphone_touch_key_list),
-		.cfg		= {
-			.x_origin	= 11,
-			.y_origin	= 0,
-			.x_size		= 1,
-			.y_size		= 7,
-			.aks_cfg	= 1,
-			.burst_len	= 0x40,
-			.tch_det_thr	= 0xf,
-			.tch_det_int	= 0x2,
-		},
+	.vkeys			= {
+		.keys		= mapphone_touch_vkeys,
+		.count		= ARRAY_SIZE(mapphone_touch_vkeys),
+		.start		= 961,
 	},
 };
 
@@ -221,13 +216,28 @@ static struct i2c_board_info __initdata mapphone_i2c_bus1_board_info[] = {
 		.platform_data = &omap3430_als_light_data,
 		.irq = OMAP_GPIO_IRQ(MAPPHONE_LM_3530_INT_GPIO),
 	},
+};
 
+extern struct akm8973_platform_data mapphone_akm8973_data;
+extern struct lis331dlh_platform_data mapphone_lis331dlh_data;
+static struct i2c_board_info __initdata mapphone_i2c_bus2_board_info[] = {
+	{
+		I2C_BOARD_INFO("akm8973", 0x1C),
+		.platform_data = &mapphone_akm8973_data,
+		.irq = OMAP_GPIO_IRQ(MAPPHONE_AKM8973_INT_GPIO),
+	},
+	{
+		I2C_BOARD_INFO("lis331dlh", 0x19),
+		.platform_data = &mapphone_lis331dlh_data,
+	},
 };
 
 static int __init mapphone_i2c_init(void)
 {
 	omap_register_i2c_bus(1, 400, mapphone_i2c_bus1_board_info,
 			      ARRAY_SIZE(mapphone_i2c_bus1_board_info));
+	omap_register_i2c_bus(2, 400, mapphone_i2c_bus2_board_info,
+			      ARRAY_SIZE(mapphone_i2c_bus2_board_info));
 	return 0;
 }
 
