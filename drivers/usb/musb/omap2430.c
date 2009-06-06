@@ -5,6 +5,7 @@
  * Copyright (C) 2006 Nokia Corporation
  * Jarkko Nikula <jarkko.nikula@nokia.com>
  * Tony Lindgren <tony@atomide.com>
+ * Copyright (C) 2008 Motorola, Inc
  *
  * This file is part of the Inventra Controller Driver for Linux.
  *
@@ -25,6 +26,12 @@
  * Suite 330, Boston, MA  02111-1307  USA
  *
  */
+/* Date         Author          Comment
+ * ===========  ==============  ==============================================
+ * 23-Jul-2008  Motorola        Change Copyright and Changelog
+ *
+ */
+
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/sched.h>
@@ -60,6 +67,15 @@ static void musb_do_idle(unsigned long _musb)
 
 	spin_lock_irqsave(&musb->lock, flags);
 
+	/*
+	 * If the asynch timer fires when the device is
+	 * idle, we do nothing.
+	 */
+	if (musb->clk_suspend) {
+		spin_unlock_irqrestore(&musb->lock, flags);
+		return;
+	}
+
 	devctl = musb_readb(musb->mregs, MUSB_DEVCTL);
 
 	switch (musb->xceiv.state) {
@@ -75,6 +91,10 @@ static void musb_do_idle(unsigned long _musb)
 			musb->xceiv.state = OTG_STATE_A_IDLE;
 			MUSB_HST_MODE(musb);
 		}
+#if defined(CONFIG_OMAP34XX_OFFMODE)
+		/* Keep MUSB suspended on Cable Detach */
+		musb_platform_suspend(musb);
+#endif
 		break;
 #ifdef CONFIG_USB_MUSB_HDRC_HCD
 	case OTG_STATE_A_SUSPEND:
@@ -105,6 +125,7 @@ static void musb_do_idle(unsigned long _musb)
 	default:
 		break;
 	}
+
 	spin_unlock_irqrestore(&musb->lock, flags);
 }
 
@@ -140,6 +161,35 @@ void musb_platform_try_idle(struct musb *musb, unsigned long timeout)
 		otg_state_string(musb),
 		(unsigned long)jiffies_to_msecs(timeout - jiffies));
 	mod_timer(&musb_idle_timer, timeout);
+}
+
+void musb_platform_force_idle(struct musb *musb)
+{
+	long l;
+
+	/* in any role */
+	l = omap_readl(OTG_FORCESTDBY);
+	l &= ~ENABLEFORCE;              /* disable MSTANDBY */
+	omap_writel(l, OTG_FORCESTDBY);
+
+	l = omap_readl(OTG_SYSCONFIG);
+	l &= ~(SMARTSTDBY | NOSTDBY);   /* enable force standby */
+	omap_writel(l, OTG_SYSCONFIG);
+	l &= ~AUTOIDLE;                 /* disable auto idle */
+	omap_writel(l, OTG_SYSCONFIG);
+
+	l &= ~(NOIDLE | SMARTIDLE);     /* enable force idle */
+	omap_writel(l, OTG_SYSCONFIG);
+
+	l = omap_readl(OTG_FORCESTDBY);
+	l |= ENABLEFORCE;               /* enable MSTANDBY */
+	omap_writel(l, OTG_FORCESTDBY);
+#if 0
+	/* REVISIT: SYSCONFIG.AUTOIDLE should be always kept to 0 */
+	l = omap_readl(OTG_SYSCONFIG);
+	l |= AUTOIDLE;                  /* enable auto idle */
+	omap_writel(l, OTG_SYSCONFIG);
+#endif
 }
 
 void musb_platform_enable(struct musb *musb)
@@ -194,9 +244,9 @@ static int omap_set_power(struct otg_transceiver *x, unsigned mA)
 	return 0;
 }
 
-static int musb_platform_resume(struct musb *musb);
 
-int musb_platform_set_mode(struct musb *musb, u8 musb_mode)
+
+void musb_platform_set_mode(struct musb *musb, u8 musb_mode)
 {
 	u8	devctl = musb_readb(musb->mregs, MUSB_DEVCTL);
 
@@ -204,62 +254,68 @@ int musb_platform_set_mode(struct musb *musb, u8 musb_mode)
 	musb_writeb(musb->mregs, MUSB_DEVCTL, devctl);
 
 	switch (musb_mode) {
-#ifdef CONFIG_USB_MUSB_HDRC_HCD
 	case MUSB_HOST:
 		otg_set_host(&musb->xceiv, musb->xceiv.host);
 		break;
-#endif
-#ifdef CONFIG_USB_GADGET_MUSB_HDRC
 	case MUSB_PERIPHERAL:
 		otg_set_peripheral(&musb->xceiv, musb->xceiv.gadget);
 		break;
-#endif
-#ifdef CONFIG_USB_MUSB_OTG
 	case MUSB_OTG:
 		break;
-#endif
-	default:
-		return -EINVAL;
 	}
-	return 0;
 }
 
 int __init musb_platform_init(struct musb *musb)
 {
-	struct otg_transceiver *x = otg_get_transceiver();
+	//struct otg_transceiver *xceiv = otg_get_transceiver();
 	u32 l;
 
 #if defined(CONFIG_ARCH_OMAP2430)
 	omap_cfg_reg(AE5_2430_USB0HS_STP);
 #endif
-
-	/* Reset controller */
+#ifdef CONFIG_USB_BELCARRA_MUSB_HDRC
 	if (musb->set_clock)
 		musb->set_clock(musb->clock, 1);
 	else
 		clk_enable(musb->clock);
+       
+        l = omap_readl(OTG_SYSCONFIG);
+        l |= SOFTRST;
+        omap_writel(l, OTG_SYSCONFIG);
+        while(!RESETDONE&omap_readl(OTG_SYSSTATUS)) {
+            cpu_relax();
+        }
+#endif
+	//musb->xceiv = *xceiv;
+
+	/* The i-clk is AUTO gated. Hence there is no need
+	 * to disable it until the driver is shutdown */
+
+	if (musb->set_clock)
+		musb->set_clock(musb->clock, 1);
+	else
+		clk_enable(musb->clock);
+ 
 	l = omap_readl(OTG_SYSCONFIG);
 	l |= SOFTRST;
 	omap_writel(l, OTG_SYSCONFIG);
-	while (!(RESETDONE & omap_readl(OTG_SYSSTATUS)))
+	while(!RESETDONE&omap_readl(OTG_SYSSTATUS)) {
 		cpu_relax();
+	}
 
-	musb->xceiv = *x;
 	musb_platform_resume(musb);
 
-	l = omap_readl(OTG_SYSCONFIG);
+        l = omap_readl(OTG_SYSCONFIG);
 	l &= ~ENABLEWAKEUP;	/* disable wakeup */
 	l &= ~NOSTDBY;		/* remove possible nostdby */
 	l |= SMARTSTDBY;	/* enable smart standby */
 	l &= ~AUTOIDLE;		/* disable auto idle */
 	l &= ~NOIDLE;		/* remove possible noidle */
 	l |= SMARTIDLE;		/* enable smart idle */
-	/*
-	 * MUSB AUTOIDLE don't work in 3430.
-	 * Workaround by Richard Woodruff/TI
-	 */
-	if (!cpu_is_omap3430())
-		l |= AUTOIDLE;		/* enable auto idle */
+#if 0
+	/* REVISIT: SYSCONFIG.AUTOIDLE should be always kept to 0 */
+	l |= AUTOIDLE;		/* enable auto idle */
+#endif
 	omap_writel(l, OTG_SYSCONFIG);
 
 	l = omap_readl(OTG_INTERFSEL);
@@ -276,7 +332,7 @@ int __init musb_platform_init(struct musb *musb)
 
 	if (is_host_enabled(musb))
 		musb->board_set_vbus = omap_set_vbus;
-	if (!musb->xceiv.set_power && is_peripheral_enabled(musb))
+	if (is_peripheral_enabled(musb))
 		musb->xceiv.set_power = omap_set_power;
 	musb->a_wait_bcon = MUSB_TIMEOUT_A_WAIT_BCON;
 
@@ -287,23 +343,19 @@ int __init musb_platform_init(struct musb *musb)
 
 int musb_platform_suspend(struct musb *musb)
 {
-	u32 l;
-
 	if (!musb->clock)
 		return 0;
 
-	/* in any role */
-	l = omap_readl(OTG_FORCESTDBY);
-	l |= ENABLEFORCE;	/* enable MSTANDBY */
-	omap_writel(l, OTG_FORCESTDBY);
+	musb_platform_force_idle(musb);
 
-	l = omap_readl(OTG_SYSCONFIG);
-	l |= ENABLEWAKEUP;	/* enable wakeup */
-	omap_writel(l, OTG_SYSCONFIG);
-
+#if defined(CONFIG_OMAP34XX_OFFMODE)
+		/* Do nothing */
+#else
 	if (musb->xceiv.set_suspend)
-		musb->xceiv.set_suspend(&musb->xceiv, 1);
+		musb->xceiv.set_suspend(otg_get_transceiver(), 1);
+#endif
 
+	musb->clk_suspend = 1;
 	if (musb->set_clock)
 		musb->set_clock(musb->clock, 0);
 	else
@@ -312,42 +364,285 @@ int musb_platform_suspend(struct musb *musb)
 	return 0;
 }
 
-static int musb_platform_resume(struct musb *musb)
+int musb_platform_resume(struct musb *musb)
 {
 	u32 l;
 
 	if (!musb->clock)
 		return 0;
 
+#if defined(CONFIG_OMAP34XX_OFFMODE)
+	/* Do nothing */
+#else
 	if (musb->xceiv.set_suspend)
-		musb->xceiv.set_suspend(&musb->xceiv, 0);
+		musb->xceiv.set_suspend(otg_get_transceiver(), 0);
+#endif
 
 	if (musb->set_clock)
 		musb->set_clock(musb->clock, 1);
 	else
 		clk_enable(musb->clock);
-
-	l = omap_readl(OTG_SYSCONFIG);
-	l &= ~ENABLEWAKEUP;	/* disable wakeup */
-	omap_writel(l, OTG_SYSCONFIG);
+	musb->clk_suspend = 0;
 
 	l = omap_readl(OTG_FORCESTDBY);
 	l &= ~ENABLEFORCE;	/* disable MSTANDBY */
 	omap_writel(l, OTG_FORCESTDBY);
 
+	l = omap_readl(OTG_SYSCONFIG);
+	l |= SMARTSTDBY;	/* enable smart standby */
+	l &= ~AUTOIDLE;		/* disable auto idle */
+	omap_writel(l, OTG_SYSCONFIG);
+	l |= SMARTIDLE;
+	omap_writel(l, OTG_SYSCONFIG);
+#if 0
+	/* REVISIT: SYSCONFIG.AUTOIDLE should be always kept to 0 */
+	l |= AUTOIDLE;		/* enable auto idle */
+	omap_writel(l, OTG_SYSCONFIG);
+#endif
 	return 0;
 }
 
 
 int musb_platform_exit(struct musb *musb)
 {
-
+	u32 l;
 	omap_vbus_power(musb, 0 /*off*/, 1);
 
 	musb_platform_suspend(musb);
+
+	l = omap_readl(OTG_SYSCONFIG);
+	l &= ~ENABLEWAKEUP; /* Disable Wakeup */
+	omap_writel(l, OTG_SYSCONFIG);
+
+	musb_platform_force_idle(musb);
 
 	clk_put(musb->clock);
 	musb->clock = 0;
 
 	return 0;
 }
+
+#if defined(CONFIG_OMAP34XX_OFFMODE)
+struct musb_common_regs{
+	/* common registers */
+	u8 	faddr;
+	u8	power;
+	u16 	intrtx;
+	u16 	intrrx;
+	u16 	intrtxe;
+	u16 	intrrxe;
+	u8 	intrusbe;
+	u8 	intrusb;
+	u8	devctl;
+};
+
+struct musb_index_regs{
+	/* Fifo registers */
+	u8	rxfifosz;
+	u8	txfifosz;
+	u16	txfifoadd;
+	u16	rxfifoadd;
+} musb_index_regs_t;
+
+struct musb_context{
+	/* MUSB init context */
+	struct musb_common_regs	common_regs;
+	struct musb_index_regs 	index_regs[MUSB_C_NUM_EPS];
+};
+
+
+/* Global: MUSB Context data pointer */
+struct musb_context *context_ptr = NULL;
+struct musb *musb_ptr = NULL;
+bool do_cold_plugging = 0;
+
+/* Context Save/Restore for OFF mode */
+int musb_context_store_and_suspend(struct musb *musb, int overwrite)
+{
+	u8 i;
+	u32 l;
+	DBG(3, "MUSB-Context-SAVE (Off mode support)\n");
+
+	/* Save MUSB Context only once */
+	if (!context_ptr || overwrite) {
+		if (!context_ptr) {
+			context_ptr = kzalloc(sizeof(struct musb_context),
+								GFP_KERNEL);
+			if (!context_ptr)
+				return -ENOMEM;
+		}
+
+		/* Save musb ptr */
+		musb_ptr = musb;
+
+		/* Save Common registers */
+		context_ptr->common_regs.faddr = musb_readb(musb_ptr->mregs,
+								MUSB_FADDR);
+		context_ptr->common_regs.power = musb_readb(musb_ptr->mregs,
+								MUSB_POWER);
+		context_ptr->common_regs.intrtx = musb_readw(musb_ptr->mregs,
+								MUSB_INTRTX);
+		context_ptr->common_regs.intrrx = musb_readw(musb_ptr->mregs,
+								MUSB_INTRRX);
+		context_ptr->common_regs.intrtxe = musb_readw(musb_ptr->mregs,
+								MUSB_INTRTXE);
+		context_ptr->common_regs.intrrxe = musb_readw(musb_ptr->mregs,
+								MUSB_INTRRXE);
+		context_ptr->common_regs.intrusbe = musb_readb(musb_ptr->mregs,
+								MUSB_INTRUSBE);
+		context_ptr->common_regs.intrusb = musb_readb(musb_ptr->mregs,
+								MUSB_INTRUSB);
+		context_ptr->common_regs.devctl = musb_readb(musb_ptr->mregs,
+								MUSB_DEVCTL);
+
+		DBG(4, "MUSB ContextStore: Common regs:\nfaddr(%x)\n"
+			"power(%x)\ninttx(%x)\nintrx(%x)\ninttxe(%x)\n"
+			"intrxe(%x)\nintusbe(%x)\nintusb(%x)\ndevctl(%x)\n",
+				context_ptr->common_regs.faddr,
+				context_ptr->common_regs.power,
+				context_ptr->common_regs.intrtx,
+				context_ptr->common_regs.intrrx,
+				context_ptr->common_regs.intrtxe,
+				context_ptr->common_regs.intrrxe,
+				context_ptr->common_regs.intrusbe,
+				context_ptr->common_regs.intrusb,
+				context_ptr->common_regs.devctl);
+
+		/* Save FIFO setup details */
+		for (i = 0; i < MUSB_C_NUM_EPS; i++) {
+			musb_writeb(musb_ptr->mregs, MUSB_INDEX, i);
+			context_ptr->index_regs[i].rxfifosz = musb_readb(musb_ptr->mregs, MUSB_RXFIFOSZ);
+			context_ptr->index_regs[i].txfifosz = musb_readb(musb_ptr->mregs, MUSB_TXFIFOSZ);
+			context_ptr->index_regs[i].txfifoadd = musb_readw(musb_ptr->mregs, MUSB_TXFIFOADD);
+			context_ptr->index_regs[i].rxfifoadd = musb_readw(musb_ptr->mregs, MUSB_RXFIFOADD);
+
+			DBG(4, "EP(%d) rxfifosz(%x) txfifosz(%x) "
+				"txfifoaddr(%x) rxfifoadd(%x)\n",
+					i,
+					context_ptr->index_regs[i].rxfifosz,
+					context_ptr->index_regs[i].txfifosz,
+					context_ptr->index_regs[i].txfifoadd,
+					context_ptr->index_regs[i].rxfifoadd);
+		}
+		DBG(4, "MUSB Context: FIFO END\n");
+	}
+
+	/* Keep system suspended and wakeup through T2 pres INT */
+	/* For cold plugging case: do not suspend controller */
+	/* If device is connected, do not suspend */
+
+	if (do_cold_plugging) {
+		do_cold_plugging = 0; /* For once only */
+	} else if (!twl4030_usb_device_connected()) {
+		/* Reset the controller and keep in default state on power-up */
+		l = omap_readl(OTG_SYSCONFIG);
+		l |= SOFTRST;
+		omap_writel(l, OTG_SYSCONFIG);
+
+		/* Keep USB suspended till cable is attached */
+		musb_platform_suspend(musb_ptr);
+	}
+
+	return 0;
+}
+EXPORT_SYMBOL(musb_context_store_and_suspend);
+
+void musb_context_restore_and_wakeup(void)
+{
+	u8 i;
+	u32 l;
+
+	if (!context_ptr) {
+		/* T2 called us as a device was found connected */
+		/* Its cold plugging, so remember the state when MUSB is up */
+		do_cold_plugging = 1;
+		return;
+	}
+
+#ifdef CONFIG_USB_GADGET_MUSB_HDRC
+	if ((is_otg_enabled(musb_ptr) || is_peripheral_enabled(musb_ptr)) &&
+			(musb_ptr->gadget_driver == NULL)) {
+		/* The gadget driver is not yet loaded. Treat this as a case
+		 * of cold_plugging
+		 */
+		do_cold_plugging = 1;
+		return;
+	}
+#endif
+
+	DBG(3, "MUSB Restore Context: Start\n");
+
+	/* Ensure that I-CLK is on after OFF mode */
+	musb_platform_resume(musb_ptr);
+
+	/* Set System specific registers
+	 * Init controller
+	 */
+	l = omap_readl(OTG_SYSCONFIG);
+	l |= ENABLEWAKEUP;
+	omap_writel(l, OTG_SYSCONFIG);
+
+	l = omap_readl(OTG_INTERFSEL);
+	l |= ULPI_12PIN;
+	omap_writel(l, OTG_INTERFSEL);
+
+	/* Restore MUSB specific registers */
+
+	/* Restore: MUSB Common regs */
+	musb_writeb(musb_ptr->mregs, MUSB_FADDR,
+					context_ptr->common_regs.faddr);
+	musb_writeb(musb_ptr->mregs, MUSB_POWER,
+					context_ptr->common_regs.power);
+	musb_writew(musb_ptr->mregs, MUSB_INTRTX,
+					context_ptr->common_regs.intrtx);
+	musb_writew(musb_ptr->mregs, MUSB_INTRRX,
+					context_ptr->common_regs.intrrx);
+	musb_writew(musb_ptr->mregs, MUSB_INTRTXE,
+					context_ptr->common_regs.intrtxe);
+	musb_writew(musb_ptr->mregs, MUSB_INTRRXE,
+					context_ptr->common_regs.intrrxe);
+	musb_writeb(musb_ptr->mregs, MUSB_INTRUSBE,
+					context_ptr->common_regs.intrusbe);
+	musb_writeb(musb_ptr->mregs, MUSB_INTRUSB,
+					context_ptr->common_regs.intrusb);
+	musb_writeb(musb_ptr->mregs, MUSB_DEVCTL,
+					context_ptr->common_regs.devctl);
+
+	DBG(4, "MUSB ContextStore: Common regs:\nfaddr(%x)\npower(%x)\n"
+		"inttx(%x)\nintrx(%x)\ninttxe(%x)\nintrxe(%x)\nintusbe(%x)\n"
+		"intusb(%x)\ndevctl(%x)\n",
+				context_ptr->common_regs.faddr,
+				context_ptr->common_regs.power,
+				context_ptr->common_regs.intrtx,
+				context_ptr->common_regs.intrrx,
+				context_ptr->common_regs.intrtxe,
+				context_ptr->common_regs.intrrxe,
+				context_ptr->common_regs.intrusbe,
+				context_ptr->common_regs.intrusb,
+				context_ptr->common_regs.devctl);
+
+	/* Restore: FIFO setup details */
+	for (i = 0; i < MUSB_C_NUM_EPS; i++) {
+		musb_writeb(musb_ptr->mregs, MUSB_INDEX, i);
+		musb_writeb(musb_ptr->mregs, MUSB_RXFIFOSZ,
+					context_ptr->index_regs[i].rxfifosz);
+		musb_writeb(musb_ptr->mregs, MUSB_TXFIFOSZ,
+					context_ptr->index_regs[i].txfifosz);
+		musb_writew(musb_ptr->mregs, MUSB_TXFIFOADD,
+					context_ptr->index_regs[i].txfifoadd);
+		musb_writew(musb_ptr->mregs, MUSB_RXFIFOADD,
+					context_ptr->index_regs[i].rxfifoadd);
+		DBG(4, "EP(%d) rxfifosz(%x) txfifosz(%x) txfifoaddr(%x) "
+			"rxfifoadd(%x)\n",
+					i,
+					context_ptr->index_regs[i].rxfifosz,
+					context_ptr->index_regs[i].txfifosz,
+					context_ptr->index_regs[i].txfifoadd,
+					context_ptr->index_regs[i].rxfifoadd);
+	}
+
+	DBG(3, "MUSB Restore Context: Done\n");
+	return;
+}
+EXPORT_SYMBOL(musb_context_restore_and_wakeup);
+#endif /* CONFIG_OMAP34XX_OFFMODE */

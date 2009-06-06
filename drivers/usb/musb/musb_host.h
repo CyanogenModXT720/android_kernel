@@ -53,7 +53,6 @@ struct musb_qh {
 
 	struct list_head	ring;		/* of musb_qh */
 	/* struct musb_qh		*next; */	/* for periodic tree */
-	u8			mux;		/* qh multiplexed to hw_ep */
 
 	unsigned		offset;		/* in urb->transfer_buffer */
 	unsigned		segsize;	/* current xfer fragment */

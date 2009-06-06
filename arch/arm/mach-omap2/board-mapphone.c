@@ -44,6 +44,7 @@
 #include <mach/usb.h>
 #include <asm/delay.h>
 #include <mach/control.h>
+#include <mach/hdq.h>
 
 #include "pm.h"
 #include "prm-regbits-34xx.h"
@@ -488,6 +489,19 @@ static void __init config_mmc2_init(void)
 				OMAP343X_CONTROL_DEVCONF1);
 }
 
+/* must match value in drivers/w1/w1_family.h */
+#define W1_EEPROM_DS2502        0x89
+static struct omap2_hdq_platform_config mapphone_hdq_data = {
+	.mode = OMAP_SDQ_MODE,
+	.id = W1_EEPROM_DS2502,
+};
+
+static int __init omap_hdq_init(void)
+{
+	omap_hdq_device.dev.platform_data = &mapphone_hdq_data;
+	return platform_device_register(&omap_hdq_device);
+}
+
 static void __init mapphone_init(void)
 {
 	omap_board_config = mapphone_config;
@@ -507,6 +521,7 @@ static void __init mapphone_init(void)
 	mapphone_hsmmc_init();
 	config_mmc2_init();
 	config_wlan_gpio();
+	omap_hdq_init();
 }
 
 static void __init mapphone_map_io(void)

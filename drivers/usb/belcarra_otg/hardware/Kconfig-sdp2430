@@ -1,0 +1,100 @@
+#
+# @(#) sl@belcarra.com/whiskey.enposte.net|otg/platform/sdp2430/Kconfig-sdp2430|20070912224952|30141
+# Copyright (c) 2005 Belcarra
+# Copyright (c) 2005-2006 Belcarra Technologies 2005 Corp
+#
+
+# CONFIG_OTG_PLATFORM_OTG       # Offer OTG Configuration
+
+# Platform Selection ###############################################################################
+#
+config OTG_OMAP_SDP2430
+	tristate "TI OMAP 2430 Software Development Platform"
+	depends on OTG && (MACH_OMAP_2430SDP || MACH_OMAP_3430SDP || MACH_MAPPHONE)
+        ---help---
+        This implements On-The-Go USB Support for the TI OMAP 2430 Software Development Platform.
+
+# UDC Selection - depends on Platform selected #####################################################
+#
+if ( OTG_OMAP_SDP2430 != 'n' )
+        choice
+                depends on OTG_OMAP_SDP2430
+                prompt "Which USB Device Controller do you want to use?"
+                config OTG_OMAP_FS_1710
+                        bool "Full Speed TI USB Device Controller"
+                        ---help---
+                        This selects the original TI OMAP Full Speed only Device Controller.
+
+                config OTG_OMAP_HS_MENTOR
+                        bool "High Speed TI OMAP (Mentor) USB Device Controller"
+                        ---help---
+                        This selects the TI OMAP High Speed (Mentor) Device Controller.
+
+        endchoice
+endif
+
+
+# UDC Configuration - depends on UDC selected ######################################################
+#
+if ( OTG_OMAP_FS_1710 = 'y' )
+
+	config OTG_OMAP_SDP2430_FS
+		tristate
+		default OTG_OMAP_SDP2430
+
+        config OTG_PLATFORM_OTG
+                bool
+                default n
+
+        config OTG_PLATFORM_USB
+                bool
+                default n
+
+        config OTG_PLATFORM_USBD
+                bool
+                default y
+
+        config OTG_HIGH_SPEED_CAPABLE
+                bool
+                default n
+
+        config OTG_REMOTE_WAKEUP_CAPABLE
+                bool
+                default n
+
+        config OTG_OMAP
+                bool
+                default y
+endif
+
+if ( OTG_OMAP_HS_MENTOR = 'y' )
+
+	config OTG_OMAP_SDP2430_HS
+		tristate
+		default OTG_OMAP_SDP2430
+
+        config OTG_PLATFORM_OTG
+                bool
+                default n
+
+        config OTG_PLATFORM_USB
+                bool
+                default n
+
+        config OTG_PLATFORM_USBD
+                bool
+                default y
+
+        config OTG_HIGH_SPEED_CAPABLE
+                bool
+                default y
+
+        config OTG_REMOTE_WAKEUP_CAPABLE
+                bool
+                default n
+
+        config OTG_OMAP
+                bool
+                default y
+endif
+

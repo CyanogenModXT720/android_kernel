@@ -1,0 +1,100 @@
+# @(#) balden@seth2.belcarratech.com|otg/.Makefiles/Kconfig-mxc|20051116204956|34435
+# Copyright (c) 2004 Belcarra Technologies Corp
+#
+#                      Copyright (c) 2006, 2007 Motorola, Inc. 
+#
+# Changelog:
+# Date               Author           Comment
+# -----------------------------------------------------------------------------
+# 08/09/2006         Motorola         Initial distribution
+# 10/18/2006         Motorola         Add Open Src Software language
+# 12/12/2006         Motorola         Changes for Open Src compliance.
+# 04/06/2007         Motorola         Changes to support new hardware.
+# 10/02/2007         Motorola         Changes for Open Src compliance.
+#
+# This Program is distributed in the hope that it will
+# be useful, but WITHOUT ANY WARRANTY;
+# without even the implied warranty of
+# MERCHANTIBILITY or FITNESS FOR A
+# PARTICULAR PURPOSE.  See the GNU
+# General Public License for more details.
+
+# This program is free software; you can redistribute it
+# and/or modify it under the terms of the GNU General
+# Public License as published by the Free Software
+# Foundation; either version 2 of the License, or (at
+# your option) any later version.  You should have
+# received a copy of the GNU General Public License
+# along with this program; if not, write to the Free
+# Software Foundation, Inc., 675 Mass Ave,
+# Cambridge, MA 02139, USA
+
+menu "On-The-Go and USB Peripheral Support"
+
+    config OTG
+        tristate "Support for On-The-Go and USB Peripheral Support"
+	default m
+        ---help---
+            Configure all or part of the Belcarra OTG Stack
+
+    config OTG_HIGH_SPEED
+	bool "Enable HS USB"
+	depends on OTG
+	default n
+	---help---
+		This enables HS USB in the OTG Stack.
+
+    config OTG_NFS
+	bool "Enable NFS"
+	depends on OTG
+	default n
+	---help---
+		This enables NFS in the OTG Stack.
+    comment ""
+
+    menu "On-The-Go Support Platform Selection"
+        depends on OTG 
+        source "drivers/usb/belcarra_otg/hardware/Kconfig-sdp2430"
+
+    config OTG_OMAP_MENTOR
+        tristate "SDP2430 or SDP3430 OMAP Evaluation Board HS (Mentor)"
+        depends on OTG 
+        ---help---
+        This implements On-The-Go USB Support for the OMAP SDP2430 or SDP3430 EVB
+        using the Mentor High Speed port.
+
+    if ( OTG_OMAP_MENTOR != 'n')
+	config OTG_PLATFORM_OTG 
+		bool 
+		default n
+	config OTG_PLATFORM_USB 
+		bool 
+		default n
+	config OTG_PLATFORM_USBD 
+		bool 
+		default y
+	config OTG_HIGH_SPEED
+		bool
+		default y
+    endif
+    endmenu
+
+    source "drivers/usb/belcarra_otg/Kconfig-otg"
+
+    menu "Targeted Peripherals List (USB Peripheral Function Drivers)"
+        depends on OTG_PLATFORM_OTG || OTG_PLATFORM_USBD
+        #---help---
+        #A list of USB peripheral types that this device
+        #can emulate when it is acting as a peripheral.
+        source "drivers/usb/belcarra_otg/functions/generic/Kconfig"
+        source "drivers/usb/belcarra_otg/functions/acm/Kconfig"
+        source "drivers/usb/belcarra_otg/functions/msc/Kconfig"
+        source "drivers/usb/belcarra_otg/functions/network/Kconfig"
+        source "drivers/usb/belcarra_otg/functions/mtp/Kconfig"
+        source "drivers/usb/belcarra_otg/functions/android_adb/Kconfig"
+        source "drivers/usb/belcarra_otg/functions/mouse/Kconfig"
+    endmenu
+
+
+endmenu
+

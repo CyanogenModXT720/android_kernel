@@ -1,0 +1,11 @@
+# Function Drivers
+#include /vobs/linuxjava/drivers_1/usb_driver/.config
+
+obj-$(CONFIG_OTG_GENERIC) += generic/
+obj-$(CONFIG_OTG_ACM) += acm/
+obj-$(CONFIG_OTG_MSC) += msc/
+# obj-$(CONFIG_OTG_MOUSE) += mouse/
+obj-$(CONFIG_OTG_NETWORK) += network/
+# obj-$(CONFIG_OTG_NETWORK) += isotest/
+obj-$(CONFIG_OTG_MTP) += mtp/
+

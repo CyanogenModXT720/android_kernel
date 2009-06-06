@@ -1,0 +1,35 @@
+#!/bin/sh
+ #####################################################################
+ #
+ # Filename:      usb_hstest.agent
+ # Description:   
+ #      USB HS TEST Hotplug policy for Linux 2.6 Kernel.
+ #
+ #      The usb_hstest.agent script is called by the fx2lp_pcd function
+ #      when the fx2lp chip does not function properly .
+ #
+ # Copyright:
+ #
+ #      Motorola Confidential Proprietary
+ #      Advanced Technology and Software Operations
+ #      (c) Copyright Motorola 2005-2006, All Rights Reserved
+ #
+ # History:
+ #      
+ #      Author          Date Number     Description of Changes
+ #     ------------    -------------   --------------------------
+ #      dreddy         22 August 2006  Created the initial version
+ #
+ ######################################################################
+
+cd /etc/hotplug
+. ./hotplug.functions
+
+if [ -e /usr/local/bin/usb_hstest ]; then
+    /usr/local/bin/usb_hstest
+else
+    echo " /usr/local/bin/usb_hstest does not exist or is not executable "
+	exit 0
+fi
+
+exit 0
