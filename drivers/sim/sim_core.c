@@ -311,8 +311,6 @@ static volatile SIM_MODULE_REGISTER_BANK *sim_phys_registers[NUM_SIM_MODULES] =
     (volatile SIM_MODULE_REGISTER_BANK *)SIM1_BASE_ADDR
 };
 
-/* struct constraint_handle *co_opp_sim_latency; */
-
 struct regulator *vsim_regulator;
 struct regulator *vsimcard_regulator;
 
@@ -1411,10 +1409,11 @@ IMPORTANT NOTES:
 static void sim_module_set_voltage_level (SIM_MODULE_VOLTAGE_LEVEL level)
 {
     /* power down the voltage regulator */
-	if(regulator_enabled_flag)
+    if(regulator_enabled_flag)
     {
 	regulator_disable(vsim_regulator);
 	regulator_disable(vsimcard_regulator);
+	regulator_enabled_flag = 0;
     }
 
     /* power down the pads */
@@ -1429,9 +1428,13 @@ static void sim_module_set_voltage_level (SIM_MODULE_VOLTAGE_LEVEL level)
         /* power on the voltagage regulator at 3 volts */
         regulator_set_voltage(vsim_regulator, 2900000, 2900000);
         regulator_set_voltage(vsimcard_regulator, 2900000, 2900000);
-        regulator_enable(vsim_regulator);
-        regulator_enable(vsimcard_regulator);
-	regulator_enabled_flag = 1;
+
+	if(!(regulator_enabled_flag))
+	{
+	    regulator_enable(vsim_regulator);
+            regulator_enable(vsimcard_regulator);
+	    regulator_enabled_flag = 1;
+	}
 
         /* configure the pad for 3.0V operation */
         write_reg_bits((volatile UINT32 *)PBIAS_CONTROL_LITE, PBIASVMODE1, PBIASVMODE1);
@@ -1442,9 +1445,12 @@ static void sim_module_set_voltage_level (SIM_MODULE_VOLTAGE_LEVEL level)
     {
         regulator_set_voltage(vsim_regulator, 1800000, 1800000);
         regulator_set_voltage(vsimcard_regulator, 1800000, 1800000);
-        regulator_enable(vsim_regulator);
-        regulator_enable(vsimcard_regulator);
-	regulator_enabled_flag = 1;
+	if(!(regulator_enabled_flag))
+	{
+            regulator_enable(vsim_regulator);
+	    regulator_enable(vsimcard_regulator);
+	    regulator_enabled_flag = 1;
+	}
 
         /* configure the pad for 1.8V operation */
         write_reg_bits((volatile UINT32 *)PBIAS_CONTROL_LITE, PBIASVMODE1, 0);
