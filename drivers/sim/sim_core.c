@@ -96,7 +96,6 @@ static struct clk *usim_ick;
 static struct clk *omap_96m_fck;
 static struct clk *omap_120m_fck;
 
-
 /******************************************************************************
 * Constants
 ******************************************************************************/
@@ -273,14 +272,6 @@ static struct file_operations sim_fops =
     .poll =     sim_poll,
 };
 
-/* the constraint structure */
-/*
-  //todo
-static struct constraint_id cnstr_id_latency = 
-{
-    .type = RES_LATENCY_CO,
-    .data = (void *)"latency",
-};*/
 
 /******************************************************************************
 * Local variables
@@ -912,9 +903,6 @@ static int sim_ioctl(struct inode *inode, struct file *file, unsigned int cmd, u
                 /*  if we are active ...  */
                 if ((BOOL)args_kernel[1] == FALSE) 
                 {
-		  //todo      
-                  // constraint_set(co_opp_sim_latency, CO_LATENCY_WFI);
-
                     /* enable the SIM FCLK */
                     clk_enable (usim_fck);
 
@@ -930,8 +918,6 @@ static int sim_ioctl(struct inode *inode, struct file *file, unsigned int cmd, u
 
                     /* disable the SIM FCLK */
                     clk_disable (usim_fck);
-                    //todo
-                    // constraint_remove(co_opp_sim_latency);
                 }
 
                 sim_low_power_enabled = (BOOL)args_kernel[1];
@@ -1002,9 +988,6 @@ static int sim_open(struct inode *inode, struct file *file)
         /* initialize the dma channel to 0 */
         sim_module_dma_channel = 0;
 
-        //todo
-        /* get a constraint handle */
-        // co_opp_sim_latency = constraint_get(SIM_DEV_NAME, &cnstr_id_latency);
     }
 
     tracemsg("sim : sim_open, status -> %X\n", status);
