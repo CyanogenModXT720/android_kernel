@@ -108,8 +108,3 @@ obj-$(CONFIG_MACH_OMAP3_PANDORA)	+= board-omap3pandora.o \
 obj-$(CONFIG_USB_MUSB_SOC)		+= usb-musb.o
 obj-$(CONFIG_MACH_OMAP2_TUSB6010)	+= usb-tusb6010.o
 
-ifneq ($(CONFIG_USB_EHCI_HCD),)
-	obj-y				+= usb-ehci.o
-endif
-
-
