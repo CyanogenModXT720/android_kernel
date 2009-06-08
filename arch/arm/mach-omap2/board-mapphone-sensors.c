@@ -15,9 +15,12 @@
 #include <linux/input.h>
 #include <linux/sfh7743.h>
 #include <linux/bu52014hfv.h>
+#include <linux/vib-omap-pwm.h>
+#include <linux/lis331dlh.h>
+#include <linux/akm8973.h>
+#include <linux/delay.h>
 
 #include <mach/mux.h>
-
 #include <mach/gpio.h>
 #include <mach/keypad.h>
 #include <mach/mux.h>
@@ -27,9 +30,11 @@
 #include <asm/prom.h>
 #endif
 
-#define MAPPHONE_PROX_INT_GPIO     180
-#define MAPPHONE_HF_NORTH_GPIO	10
-#define MAPPHONE_HF_SOUTH_GPIO	111
+#define MAPPHONE_PROX_INT_GPIO		180
+#define MAPPHONE_HF_NORTH_GPIO		10
+#define MAPPHONE_HF_SOUTH_GPIO		111
+#define MAPPHONE_AKM8973_INT_GPIO	175
+#define MAPPHONE_AKM8973_RESET_GPIO	28
 
 int mapphonep0b_keymap[] = {
 	0x0000000a, 0x01000013, 0x03000072, 0x05000073, 0x060000d9, 0x07000020,
@@ -86,6 +91,120 @@ static struct platform_device omap3430_kp_device = {
 	},
 };
 
+static struct regulator *mapphone_lis331dlh_regulator;
+static int mapphone_lis331dlh_init(void)
+{
+	struct regulator *reg;
+	reg = regulator_get(NULL, "vhvio");
+	if (IS_ERR(reg)) {
+		return PTR_ERR(reg);
+	}
+	mapphone_lis331dlh_regulator = reg;
+	return 0;
+}
+
+static void mapphone_lis331dlh_exit(void)
+{
+	regulator_put(mapphone_lis331dlh_regulator);
+}
+
+static int mapphone_lis331dlh_power_on(void)
+{
+	return regulator_enable(mapphone_lis331dlh_regulator);
+}
+
+static int mapphone_lis331dlh_power_off(void)
+{
+	if (mapphone_lis331dlh_regulator)
+		return regulator_disable(mapphone_lis331dlh_regulator);
+	return 0;
+}
+
+struct lis331dlh_platform_data mapphone_lis331dlh_data = {
+	.init = mapphone_lis331dlh_init,
+	.exit = mapphone_lis331dlh_exit,
+	.power_on = mapphone_lis331dlh_power_on,
+	.power_off = mapphone_lis331dlh_power_off,
+	.min_interval   = 1,
+	.g_range        = 48,
+	.fuzz           = 4,
+	.flat           = 4,
+	.interval       = 200,
+	.axis_map_x     = 0,
+	.axis_map_y     = 1,
+	.axis_map_z     = 2,
+	.negate_x       = 0,
+	.negate_y       = 0,
+	.negate_z       = 0,
+};
+
+static struct regulator *mapphone_akm8973_regulator;
+static int mapphone_akm8973_initialization(void)
+{
+	struct regulator *reg;
+	reg = regulator_get(NULL, "vhvio");
+	if (IS_ERR(reg)) {
+		return PTR_ERR(reg);
+	}
+	mapphone_akm8973_regulator = reg;
+	return 0;
+}
+
+static void mapphone_akm8973_exit(void)
+{
+	regulator_put(mapphone_akm8973_regulator);
+}
+
+static int mapphone_akm8973_power_on(void)
+{
+	int ret;
+
+	ret = regulator_enable(mapphone_akm8973_regulator);
+	gpio_set_value(MAPPHONE_AKM8973_RESET_GPIO, 0);
+	udelay(10);
+	gpio_set_value(MAPPHONE_AKM8973_RESET_GPIO, 1);
+	return ret;
+}
+
+static int mapphone_akm8973_power_off(void)
+{
+	if (mapphone_akm8973_regulator)
+		return regulator_disable(mapphone_akm8973_regulator);
+	return 0;
+}
+
+struct akm8973_platform_data mapphone_akm8973_data = {
+	.init = mapphone_akm8973_initialization,
+	.exit = mapphone_akm8973_exit,
+	.power_on = mapphone_akm8973_power_on,
+	.power_off = mapphone_akm8973_power_off,
+	.poll_interval = 27,
+	.i2c_retries = 5,
+	.i2c_retry_delay = 5,
+
+	.cal_min_threshold = 45,
+	.cal_max_threshold = 210,
+
+	.hxda = 0x81,
+	.hyda = 0x82,
+	.hzda = 0x01,
+
+	.orientation = 180,
+	.xy_swap = 180,
+	.z_flip = 0,
+};
+
+static void __init mapphone_akm8973_init(void)
+{
+	gpio_request(MAPPHONE_AKM8973_RESET_GPIO, "akm8973 reset");
+	gpio_direction_output(MAPPHONE_AKM8973_RESET_GPIO, 1);
+	omap_cfg_reg(AB10_34XX_GPIO28_OUT);
+
+	gpio_request(MAPPHONE_AKM8973_INT_GPIO, "akm8973 irq");
+	gpio_direction_input(MAPPHONE_AKM8973_INT_GPIO);
+	omap_cfg_reg(AC3_34XX_GPIO175);
+}
+
 struct platform_device sfh7743_platform_device = {
 	.name = SFH7743_MODULE_NAME,
 	.id = -1,
@@ -115,6 +234,11 @@ static void mapphone_proximity_init(void)
 	gpio_request(MAPPHONE_PROX_INT_GPIO, "Mapphone proximity sensor");
 	gpio_direction_input(MAPPHONE_PROX_INT_GPIO);
 	omap_cfg_reg(Y3_3430_GPIO180);
+}
+
+static void mapphone_vibrator_init(void)
+{
+	omap_cfg_reg(Y4_3430_GPIO181);
 }
 
 static struct platform_device *mapphone_sensors[] __initdata = {
@@ -195,5 +319,9 @@ void __init mapphone_sensors_init(void)
 
 	mapphone_proximity_init();
 	mapphone_hall_effect_init();
+	mapphone_vibrator_init();
+	/* vibrate for 500ms at startup */
+	vibrator_omap_pwm_init(500);
+	mapphone_akm8973_init();
 	platform_add_devices(mapphone_sensors, ARRAY_SIZE(mapphone_sensors));
 }
