@@ -239,6 +239,7 @@ static int sim_remove(struct platform_device *pdev);
 
 static void sim_module_dma_callback(INT32 lch, UINT16 ch_status, void *data);
 
+static int regulator_enabled_flag;
 /******************************************************************************
 * Local Structures
 ******************************************************************************/
@@ -1410,7 +1411,7 @@ IMPORTANT NOTES:
 static void sim_module_set_voltage_level (SIM_MODULE_VOLTAGE_LEVEL level)
 {
     /* power down the voltage regulator */
-    if(regulator_is_enabled)
+	if(regulator_enabled_flag)
     {
 	regulator_disable(vsim_regulator);
 	regulator_disable(vsimcard_regulator);
@@ -1430,6 +1431,7 @@ static void sim_module_set_voltage_level (SIM_MODULE_VOLTAGE_LEVEL level)
         regulator_set_voltage(vsimcard_regulator, 2900000, 2900000);
         regulator_enable(vsim_regulator);
         regulator_enable(vsimcard_regulator);
+	regulator_enabled_flag = 1;
 
         /* configure the pad for 3.0V operation */
         write_reg_bits((volatile UINT32 *)PBIAS_CONTROL_LITE, PBIASVMODE1, PBIASVMODE1);
@@ -1442,6 +1444,7 @@ static void sim_module_set_voltage_level (SIM_MODULE_VOLTAGE_LEVEL level)
         regulator_set_voltage(vsimcard_regulator, 1800000, 1800000);
         regulator_enable(vsim_regulator);
         regulator_enable(vsimcard_regulator);
+	regulator_enabled_flag = 1;
 
         /* configure the pad for 1.8V operation */
         write_reg_bits((volatile UINT32 *)PBIAS_CONTROL_LITE, PBIASVMODE1, 0);
