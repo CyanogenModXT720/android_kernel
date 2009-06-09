@@ -155,10 +155,11 @@ static struct regulator_init_data cpcap_regulator[CPCAP_NUM_REGULATORS] = {
 	},
 	[CPCAP_VDIG] = {
 		.constraints = {
-			.min_uV			= 1200000,
+			.min_uV			= 1875000,
 			.max_uV			= 1875000,
-			.valid_ops_mask		= (REGULATOR_CHANGE_VOLTAGE |
-						   REGULATOR_CHANGE_STATUS),
+			.valid_ops_mask		= REGULATOR_CHANGE_VOLTAGE,
+			.always_on		= 1,
+			.apply_uV		= 1,
 		},
 	},
 	[CPCAP_VFUSE] = {
