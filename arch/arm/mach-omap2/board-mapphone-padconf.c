@@ -117,10 +117,6 @@ inline bool is_omap343x_padconf_register(uint16_t offset)
 		OMAP343X_PADCONF_MUXMODE7)
 
 #ifdef CONFIG_ARM_OF
-#define DEFAULT_SETTINGS_BASE_ADDR	0x48002000
-#define PADCONF_BASE_ADDR	0x48002030
-#define PADCONF_WKUPS_BASE_ADDR	0x48002A00
-
 #define OMAP343X_PAD_MASK (OMAP343X_PADCONF_MUXMODE7 | \
 		OMAP343X_PADCONF_INPUT_ENABLED | \
 		OMAP343X_PADCONF_PUD_ENABLED | \
@@ -144,9 +140,8 @@ struct dt_operation {
 	const char *path;
 	const char *prop;
 	u32 prop_unit_size;
-	void (*callback) (const void *p_data, u32 addr);
+	void (*callback) (const void *p_data);
 	u32 name_size;
-	u32 base_addr;
 } __attribute__ ((__packed__));
 
 struct mux_conf_entry {
@@ -1767,15 +1762,13 @@ static __initdata struct {
 	0x0A50, OMAP343X_PADCONF_MUXMODE0},};
 
 #ifdef CONFIG_ARM_OF
-static void __init mux_pad_callback(const void *p_data, u32 addr)
+static void __init mux_pad_callback(const void *p_data)
 {
 	struct mux_conf_entry *p = (struct mux_conf_entry *)p_data;
-	u16 offset = 0;
 	int i;
 
-	offset = p->offset + addr - DEFAULT_SETTINGS_BASE_ADDR;
 	for (i = 0; i < ARRAY_SIZE(padconf_settings); i++) {
-		if (padconf_settings[i].offset == offset) {
+		if (padconf_settings[i].offset == p->offset) {
 			padconf_settings[i].setting &= (~(OMAP343X_PAD_MASK));
 
 			padconf_settings[i].setting |=
@@ -1786,19 +1779,18 @@ static void __init mux_pad_callback(const void *p_data, u32 addr)
 		}
 	}
 
-	printk(KERN_INFO "padconf override failed, offset = 0x%04x\n", offset);
+	printk(KERN_ERR "padconf override failed, offset = 0x%04x\n",
+			p->offset);
 }
 
-static void __init mux_offmode_callback(const void *p_data, u32 addr)
+static void __init mux_offmode_callback(const void *p_data)
 {
 	struct mux_offmode_conf_entry *p =
 	    (struct mux_offmode_conf_entry *)p_data;
-	u16 offset = 0;
 	int i;
 
-	offset = p->offset + addr - DEFAULT_SETTINGS_BASE_ADDR;
 	for (i = 0; i < ARRAY_SIZE(padconf_settings); i++) {
-		if (padconf_settings[i].offset == offset) {
+		if (padconf_settings[i].offset == p->offset) {
 			padconf_settings[i].setting &=
 			    (~(OMAP343X_OFFMODE_MASK));
 
@@ -1811,8 +1803,8 @@ static void __init mux_offmode_callback(const void *p_data, u32 addr)
 		}
 	}
 
-	printk(KERN_INFO "padconf offmode override failed, offset = 0x%04x\n",
-	       offset);
+	printk(KERN_ERR "padconf offmode override failed, offset = 0x%04x\n",
+	       p->offset);
 }
 
 void dt_prop_or_init(struct dt_operation *op)
@@ -1823,17 +1815,17 @@ void dt_prop_or_init(struct dt_operation *op)
 
 	node = of_find_node_by_path(op->path);
 	if (node == NULL) {
-		printk(KERN_INFO "Unable to read node %s from device tree!\n",
+		printk(KERN_ERR "Unable to read node %s from device tree!\n",
 		       op->path);
 		return;
 	}
 
 	prop = of_get_property(node, op->prop, &size);
 	if ((!prop) || (size % op->prop_unit_size)) {
-		printk(KERN_INFO "Read property %s error!\n", op->prop);
+		printk(KERN_ERR "Read property %s error!\n", op->prop);
 	} else {
 		for (i = 0; i < size / op->prop_unit_size; i++) {
-			(*op->callback) (prop, op->base_addr);
+			(*op->callback) (prop);
 			prop += op->prop_unit_size;
 		}
 	}
@@ -1852,7 +1844,6 @@ void __init mux_setting_init(void)
 	op.prop_unit_size = sizeof(struct mux_conf_entry);
 	op.callback = mux_pad_callback;
 	op.name_size = 2;
-	op.base_addr = PADCONF_BASE_ADDR;
 	dt_prop_or_init(&op);
 
 	/* Read and implement MUX pad setting for pad wakeups registers */
@@ -1861,7 +1852,6 @@ void __init mux_setting_init(void)
 	op.prop_unit_size = sizeof(struct mux_conf_entry);
 	op.callback = mux_pad_callback;
 	op.name_size = 2;
-	op.base_addr = PADCONF_WKUPS_BASE_ADDR;
 	dt_prop_or_init(&op);
 
 	/* Read and implement MUX off mode setting for pad registers */
@@ -1870,7 +1860,6 @@ void __init mux_setting_init(void)
 	op.prop_unit_size = sizeof(struct mux_offmode_conf_entry);
 	op.callback = mux_offmode_callback;
 	op.name_size = 2;
-	op.base_addr = PADCONF_BASE_ADDR;
 	dt_prop_or_init(&op);
 
 	/* Read and implement MUX off mode setting for pad wakeups registers */
@@ -1879,7 +1868,6 @@ void __init mux_setting_init(void)
 	op.prop_unit_size = sizeof(struct mux_offmode_conf_entry);
 	op.callback = mux_offmode_callback;
 	op.name_size = 2;
-	op.base_addr = PADCONF_WKUPS_BASE_ADDR;
 	dt_prop_or_init(&op);
 }
 #endif
