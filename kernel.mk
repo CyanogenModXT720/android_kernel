@@ -42,7 +42,8 @@ DEFCONFIGSRC        := ${KERNEL_SRC_DIR}/arch/arm/configs
 LJAPDEFCONFIGSRC    := ${DEFCONFIGSRC}/motorola
 PRODUCT_SPECIFIC_DEFCONFIGS := \
     $(DEFCONFIGSRC)/mapphone_defconfig  
-TARGET_DEFCONFIG := $(KERNEL_CONF_OUT_DIR)/$(PRODUCT)_defconfig
+_TARGET_DEFCONFIG := __ext_mapphone_defconfig
+TARGET_DEFCONFIG := $(DEFCONFIGSRC)/$(_TARGET_DEFCONFIG)
 
 
 all: config zImage modules modules_install 
@@ -52,6 +53,10 @@ inst_hook:
 	@-cp -f $(KERNEL_SRC_DIR)/pre-commit $(KERNEL_SRC_DIR)/.git/hooks/
 	@-cp -f $(KERNEL_SRC_DIR)/checkpatch.pl $(KERNEL_SRC_DIR)/.git/hooks/
 	@-chmod ugo+x $(KERNEL_SRC_DIR)/.git/hooks/*
+
+ifneq ($(BLD_CONF),)
+PRODUCT_SPECIFIC_DEFCONFIGS := $(DEFCONFIGSRC)/$(BLD_CONF)_defconfig
+endif
 
 ifneq ($(PRODUCT),)
 PRODUCT_SPECIFIC_DEFCONFIGS += \
@@ -97,7 +102,7 @@ config: inst_hook
 	make -C $(KERNEL_SRC_DIR) ARCH=arm $(KERN_FLAGS) \
 		CROSS_COMPILE=$(KERNEL_CROSS_COMPILE) \
 		O=$(KERNEL_BUILD_DIR) \
-		MOT_KBUILD_DEFCONFIG=$(TARGET_DEFCONFIG) \
+		KBUILD_DEFCONFIG=$(_TARGET_DEFCONFIG) \
 		defconfig modules_prepare
 
 define chk_warn
@@ -179,7 +184,7 @@ clean:
 	make -C $(KERNEL_SRC_DIR) ARCH=arm $(KERN_FLAGS) \
 		CROSS_COMPILE=$(KERNEL_CROSS_COMPILE) \
 		O=$(KERNEL_BUILD_DIR) mrproper
-	rm -f $(KERNEL_CONF_OUT_DIR)/*_defconfig
+	rm -f $(TARGET_DEFCONFIG)
 	@rm -f $(KERNEL_CONF_OUT_DIR)/.*.txt
 
 #
