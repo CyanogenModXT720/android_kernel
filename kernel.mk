@@ -39,7 +39,7 @@ MOTO_MOD_INSTALL=$(MOTO_PREBUILT_DIR)/system/lib/modules
 DEPMOD=$(PWD)/motorola/bsp/prebuilt/host/bin/depmod
 
 DEFCONFIGSRC        := ${KERNEL_SRC_DIR}/arch/arm/configs
-LJAPDEFCONFIGSRC    := ${DEFCONFIGSRC}/motorola
+LJAPDEFCONFIGSRC    := ${DEFCONFIGSRC}/ext_config
 PRODUCT_SPECIFIC_DEFCONFIGS := \
     $(DEFCONFIGSRC)/mapphone_defconfig  
 _TARGET_DEFCONFIG := __ext_mapphone_defconfig
