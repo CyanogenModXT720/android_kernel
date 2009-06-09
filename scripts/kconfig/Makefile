@@ -66,16 +66,11 @@ allmodconfig: $(obj)/conf
 	$< -m $(Kconfig)
 
 defconfig: $(obj)/conf
-ifeq ($(MOT_KBUILD_DEFCONFIG),)
 ifeq ($(KBUILD_DEFCONFIG),)
 	$< -d $(Kconfig)
 else
 	@echo "*** Default configuration is based on '$(KBUILD_DEFCONFIG)'"
 	$(Q)$< -D arch/$(SRCARCH)/configs/$(KBUILD_DEFCONFIG) $(Kconfig)
-endif
-else # use MOT_KBUILD_DEFCONFIG
-	@echo *** Default configuration is based on '$(MOT_KBUILD_DEFCONFIG)'
-	$(Q)$< -D $(MOT_KBUILD_DEFCONFIG) arch/$(ARCH)/Kconfig
 endif
 
 %_defconfig: $(obj)/conf
