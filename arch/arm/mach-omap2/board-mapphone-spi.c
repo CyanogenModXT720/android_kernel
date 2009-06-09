@@ -309,11 +309,6 @@ static struct cpcap_platform_data mapphone_cpcap_data = {
 	.adc_ato = &mapphone_cpcap_adc_ato,
 };
 
-static struct omap2_mcspi_device_config tsc2005_mcspi_config = {
-	.turbo_mode = 0,
-	.single_channel = 1,
-};
-
 static struct spi_board_info mapphone_spi_board_info[] __initdata = {
 	{
 		.modalias = "cpcap",
@@ -323,13 +318,6 @@ static struct spi_board_info mapphone_spi_board_info[] __initdata = {
 		.controller_data = &mapphone_cpcap_data,
 		.mode = SPI_CS_HIGH,
 	},
-	{
-		.modalias = "tsc2005",
-		.bus_num = 3,
-		.chip_select = 1,
-		.max_speed_hz = 1500000,
-		.controller_data = &tsc2005_mcspi_config,
-	}
 };
 
 void __init mapphone_spi_init(void)
