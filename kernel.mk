@@ -113,7 +113,7 @@ define _vmlinux
 ((make -C $(KERNEL_SRC_DIR) ARCH=arm $(KERN_FLAGS) \
 	CROSS_COMPILE=$(KERNEL_CROSS_COMPILE) \
 	O=$(KERNEL_BUILD_DIR) -j4 vmlinux) \
-	3>&1 1>&2 2>&3 && (touch $(KFLAG))) \ 
+	3>&1 1>&2 2>&3 && (touch $(KFLAG))) \
 	| tee $(KERNEL_ERR_LOG)
 rm $(KFLAG) 2> /dev/null
 endef
