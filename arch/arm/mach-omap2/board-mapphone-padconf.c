@@ -21,14 +21,17 @@
 /* Date	 Author	  Comment
  * ===========  ==============  ==============================================
  * May-05-2009  Motorola	Initial revision.
+ * Jun-08-2009  Motorola	Support of tree.
  */
 
 #include <linux/module.h>
 #include <linux/io.h>
 
 #include <mach/hardware.h>
+#ifdef CONFIG_ARM_OF
 #include <mach/dt_path.h>
 #include <asm/prom.h>
+#endif
 
 /* core control module padconf registers are at 0x48002030 - 0x480021E0 */
 #define OMAP343X_PADCONF_CORE_CTRL_BASE (OMAP343X_CTRL_BASE + 0x030)
@@ -104,6 +107,7 @@ inline bool is_omap343x_padconf_register(uint16_t offset)
 
 #define OMAP343X_PADCONF_SETTING_MASK (OMAP343X_PADCONF_OFF_WAKEUP_ENABLED | \
 		OMAP343X_PADCONF_OFF_PULL_UP | \
+		OMAP343X_PADCONF_OFF_PUD_ENABLED | \
 		OMAP343X_PADCONF_OFF_OUTPUT_HIGH | \
 		OMAP343X_PADCONF_OFF_OUTPUT_ENABLED | \
 		OMAP343X_PADCONF_OFFMODE_ENABLED | \
@@ -1760,7 +1764,7 @@ static __initdata struct {
 	0x0A4E, OMAP343X_PADCONF_MUXMODE0},
 	    /* JTAG_TDO */
 	{
-0x0A50, OMAP343X_PADCONF_MUXMODE0},};
+	0x0A50, OMAP343X_PADCONF_MUXMODE0},};
 
 #ifdef CONFIG_ARM_OF
 static void __init mux_pad_callback(const void *p_data, u32 addr)
