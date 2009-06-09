@@ -36,5 +36,12 @@
 #define DT_PROP_KEYPAD_MAPNUM	"mapnum"
 #define DT_PROP_KEYPAD_MAPS	"maps"
 
+/* MUX Node */
+#define DT_PATH_MUX             "/System@0/IOMUX@0"
+#define DT_PROP_PAD             "padinit"
+#define DT_PROP_PADWKUPS        "padwkupsinit"
+#define DT_PROP_OFFMODE         "offmodeinit"
+#define DT_PROP_OFFMODEWKUPS    "offmodewkupsinit"
+
 #endif
 #endif

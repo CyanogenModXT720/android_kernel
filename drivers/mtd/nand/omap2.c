@@ -689,6 +689,7 @@ static int __devinit omap_nand_probe(struct platform_device *pdev)
 			goto out_release_mem_region;
 		}
 	}
+	strcpy((void *)info->mtd.name, "nand0");
 
 #ifdef CONFIG_MTD_PARTITIONS
 	err = parse_mtd_partitions(&info->mtd, part_probes, &info->parts, 0);
