@@ -17,6 +17,12 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
+/* Date	 Author	  Comment
+ * ===========  ==============  ==============================================
+ * Jun-08-2009  Motorola	Add MUX node
+ */
+
+
 
 #ifndef _MACH_DT_PATH_H
 #define _MACH_DT_PATH_H
@@ -37,11 +43,11 @@
 #define DT_PROP_KEYPAD_MAPS	"maps"
 
 /* MUX Node */
-#define DT_PATH_MUX             "/System@0/IOMUX@0"
-#define DT_PROP_PAD             "padinit"
-#define DT_PROP_PADWKUPS        "padwkupsinit"
-#define DT_PROP_OFFMODE         "offmodeinit"
-#define DT_PROP_OFFMODEWKUPS    "offmodewkupsinit"
+#define DT_PATH_MUX		"/System@0/IOMUX@0"
+#define DT_PROP_MUX_PAD	"padinit"
+#define DT_PROP_MUX_PADWKUPS	"padwkupsinit"
+#define DT_PROP_MUX_OFFMODE		"offmodeinit"
+#define DT_PROP_MUX_OFFMODEWKUPS	"offmodewkupsinit"
 
 #endif
 #endif

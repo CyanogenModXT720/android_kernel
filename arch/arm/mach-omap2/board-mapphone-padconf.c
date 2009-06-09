@@ -1848,7 +1848,7 @@ void __init mux_setting_init(void)
 
 	/* Read and implement MUX pad setting for pad registers */
 	op.path = DT_PATH_MUX;
-	op.prop = DT_PROP_PAD;
+	op.prop = DT_PROP_MUX_PAD;
 	op.prop_unit_size = sizeof(struct mux_conf_entry);
 	op.callback = mux_pad_callback;
 	op.name_size = 2;
@@ -1857,7 +1857,7 @@ void __init mux_setting_init(void)
 
 	/* Read and implement MUX pad setting for pad wakeups registers */
 	op.path = DT_PATH_MUX;
-	op.prop = DT_PROP_PADWKUPS;
+	op.prop = DT_PROP_MUX_PADWKUPS;
 	op.prop_unit_size = sizeof(struct mux_conf_entry);
 	op.callback = mux_pad_callback;
 	op.name_size = 2;
@@ -1866,7 +1866,7 @@ void __init mux_setting_init(void)
 
 	/* Read and implement MUX off mode setting for pad registers */
 	op.path = DT_PATH_MUX;
-	op.prop = DT_PROP_OFFMODE;
+	op.prop = DT_PROP_MUX_OFFMODE;
 	op.prop_unit_size = sizeof(struct mux_offmode_conf_entry);
 	op.callback = mux_offmode_callback;
 	op.name_size = 2;
@@ -1875,7 +1875,7 @@ void __init mux_setting_init(void)
 
 	/* Read and implement MUX off mode setting for pad wakeups registers */
 	op.path = DT_PATH_MUX;
-	op.prop = DT_PROP_OFFMODEWKUPS;
+	op.prop = DT_PROP_MUX_OFFMODEWKUPS;
 	op.prop_unit_size = sizeof(struct mux_offmode_conf_entry);
 	op.callback = mux_offmode_callback;
 	op.name_size = 2;
