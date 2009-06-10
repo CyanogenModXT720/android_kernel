@@ -107,6 +107,14 @@ struct regulator_consumer_supply cpcap_vwlan2_consumers[] = {
 #endif
 };
 
+struct regulator_consumer_supply cpcap_vsim_consumers[] = {
+	REGULATOR_CONSUMER("vsim", NULL),
+};
+
+struct regulator_consumer_supply cpcap_vsimcard_consumers[] = {
+	REGULATOR_CONSUMER("vsimcard", NULL),
+};
+
 struct regulator_consumer_supply cpcap_vvib_consumers[] = {
 	REGULATOR_CONSUMER("vvib", NULL /* vibrator */),
 };
@@ -249,6 +257,8 @@ static struct regulator_init_data cpcap_regulator[CPCAP_NUM_REGULATORS] = {
 			.valid_ops_mask		= (REGULATOR_CHANGE_VOLTAGE |
 						   REGULATOR_CHANGE_STATUS),
 		},
+		.num_consumer_supplies	= ARRAY_SIZE(cpcap_vsim_consumers),
+		.consumer_supplies	= cpcap_vsim_consumers,
 	},
 	[CPCAP_VSIMCARD] = {
 		.constraints = {
@@ -257,6 +267,8 @@ static struct regulator_init_data cpcap_regulator[CPCAP_NUM_REGULATORS] = {
 			.valid_ops_mask		= (REGULATOR_CHANGE_VOLTAGE |
 						   REGULATOR_CHANGE_STATUS),
 		},
+		.num_consumer_supplies	= ARRAY_SIZE(cpcap_vsimcard_consumers),
+		.consumer_supplies	= cpcap_vsimcard_consumers,
 	},
 	[CPCAP_VVIB] = {
 		.constraints = {
@@ -307,11 +319,6 @@ static struct cpcap_platform_data sholes_cpcap_data = {
 	.adc_ato = &sholes_cpcap_adc_ato,
 };
 
-static struct omap2_mcspi_device_config tsc2005_mcspi_config = {
-	.turbo_mode = 0,
-	.single_channel = 1,
-};
-
 static struct spi_board_info sholes_spi_board_info[] __initdata = {
 	{
 		.modalias = "cpcap",
@@ -321,13 +328,6 @@ static struct spi_board_info sholes_spi_board_info[] __initdata = {
 		.controller_data = &sholes_cpcap_data,
 		.mode = SPI_CS_HIGH,
 	},
-	{
-		.modalias = "tsc2005",
-		.bus_num = 3,
-		.chip_select = 1,
-		.max_speed_hz = 1500000,
-		.controller_data = &tsc2005_mcspi_config,
-	}
 };
 
 void __init sholes_spi_init(void)

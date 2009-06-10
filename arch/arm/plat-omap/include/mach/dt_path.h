@@ -36,5 +36,10 @@
 #define DT_PROP_KEYPAD_MAPNUM	"mapnum"
 #define DT_PROP_KEYPAD_MAPS	"maps"
 
+/* GPIODev */
+#define DT_PATH_GPIOGEV		"/System@0/GPIODev@0"
+#define DT_PROP_GPIODEV_INIT	"init"
+#define DT_PROP_GPIODEV_NAMELEN	20
+
 #endif
 #endif

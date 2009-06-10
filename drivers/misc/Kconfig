@@ -274,5 +274,8 @@ config SENSORS_LIS331DLH
 source "drivers/misc/c2port/Kconfig"
 source "drivers/misc/eeprom/Kconfig"
 source "drivers/misc/ts27010mux/Kconfig"
+source "drivers/misc/netmux/Kconfig"
+source "drivers/misc/netmux_linkdriver/Kconfig"
+
 
 endif # MISC_DEVICES

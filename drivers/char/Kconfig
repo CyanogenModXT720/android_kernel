@@ -1118,5 +1118,18 @@ config DCC_TTY
 
 source "drivers/s390/char/Kconfig"
 
+config GPIODEV_DEVICE_TREE
+	bool "Motorola GPIODev configuration by device tree"
+	depends on ARM_OF
+	default n
+	help
+	  This feature enables configuration of GPIODev module node by device tree.
+
+config GPIODEV
+	tristate "Enable Motorola GPIODev"
+	default n
+	help
+	  This feature enables GPIODev for accessing GPIO pins in user space.
+
 endmenu
 
