@@ -46,6 +46,11 @@
 #include <mach/control.h>
 #include <mach/hdq.h>
 
+#ifdef CONFIG_ARM_OF
+#include <mach/dt_path.h>
+#include <asm/prom.h>
+#endif
+
 #include "pm.h"
 #include "prm-regbits-34xx.h"
 
@@ -86,8 +91,25 @@ static int mapphone_touch_reset(void)
 	return 0;
 }
 
+static struct qtouch_ts_platform_data mapphone_ts_platform_data;
+
 static void mapphone_touch_init(void)
 {
+#ifdef CONFIG_ARM_OF
+	struct device_node *touch_node;
+	const void *touch_prop;
+	int len = 0;
+
+	if ((touch_node = of_find_node_by_path(DT_PATH_TOUCH))) {
+		if ((touch_prop = of_get_property(touch_node, DT_PROP_TOUCH_KEYMAP, &len)) \
+			&& len && (0 == len % sizeof(struct vkey))) {
+			mapphone_ts_platform_data.vkeys.count = len / sizeof(struct vkey);
+			mapphone_ts_platform_data.vkeys.keys = (struct vkey *)touch_prop;
+		}
+		of_node_put(touch_node);
+	}
+#endif
+
 	gpio_request(MAPPHONE_TOUCH_RESET_N_GPIO, "mapphone touch reset");
 	gpio_direction_output(MAPPHONE_TOUCH_RESET_N_GPIO, 1);
 	omap_cfg_reg(H19_34XX_GPIO164_OUT);
