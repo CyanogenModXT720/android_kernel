@@ -120,6 +120,7 @@ define _vmlinux
 	O=$(KERNEL_BUILD_DIR) -j4 vmlinux) \
 	3>&1 1>&2 2>&3 && (touch $(KFLAG))) \
 	| tee $(KERNEL_ERR_LOG)
+@$(call chk_warn,  $(KERNEL_ERR_LOG))
 rm $(KFLAG) 2> /dev/null
 endef
 
@@ -130,7 +131,6 @@ endef
 zImage:
 	@-$(call chk_warn,  $(KERNEL_ERR_LOG))
 	@$(_vmlinux)  
-	@$(call chk_warn,  $(KERNEL_ERR_LOG))
 	make -C $(KERNEL_SRC_DIR) ARCH=arm $(KERN_FLAGS) \
 		CROSS_COMPILE=$(KERNEL_CROSS_COMPILE) \
 		O=$(KERNEL_BUILD_DIR) -j4 zImage
@@ -154,13 +154,13 @@ modules:
 		3>&1 1>&2 2>&3 \
 		&& (touch $(MFLAG))) \
 	| tee  $(MOD_ERR_LOG)
-	@rm $(MFLAG) 2> /dev/null
 	@(cat $(MOD_ERR_LOG) | \
 		$(KERNEL_SRC_DIR)/scripts/chk_gcc_warn.pl \
 			$(KERNEL_SRC_DIR) \
 			$(KERNEL_SRC_DIR)/scripts/gcc_warn_filter.cfg) \
 	 || (find $(KERNEL_BUILD_DIR) -name "*.ko" -exec rm -f {}  \; \
 		&& rm -f $(MOD_ERR_LOG) && false)
+	@rm $(MFLAG) 2> /dev/null
 
  
 define modules_strip
@@ -171,7 +171,7 @@ endef
 modules_install: __modules_install
 	$(modules_strip)
 __modules_install:
-	make -C $(KERNEL_SRC_DIR) ARCH=arm $(KERN_FLAGS) \ 
+	make -C $(KERNEL_SRC_DIR) ARCH=arm $(KERN_FLAGS) \
 		CROSS_COMPILE=$(KERNEL_CROSS_COMPILE) \
 		O=$(KERNEL_BUILD_DIR) \
 		DEPMOD=$(DEPMOD) \
