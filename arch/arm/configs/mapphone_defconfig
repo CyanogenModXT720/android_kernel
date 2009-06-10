@@ -620,7 +620,9 @@ CONFIG_HAVE_IDE=y
 #
 # Motorola netmux driver
 #
-CONFIG_NETMUX_DRIVER=y
+CONFIG_NETMUX_DRIVER=m
+CONFIG_MOT_NETMUX_LINKDRIVER=m
+
 
 #
 # SCSI device support
