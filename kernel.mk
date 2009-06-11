@@ -106,6 +106,7 @@ config: inst_hook
 		defconfig modules_prepare
 
 define chk_warn
+sleep 2
 if [ -f $(1) ]; then cat $(1) | \
 $(KERNEL_SRC_DIR)/scripts/chk_gcc_warn.pl $(KERNEL_SRC_DIR) \
 $(KERNEL_SRC_DIR)/scripts/gcc_warn_filter.cfg; fi
