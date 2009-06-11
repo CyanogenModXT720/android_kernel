@@ -896,6 +896,15 @@ enum omap34xx_index {
 	OMAP34XX_MCBSP2_CLKX,
 	OMAP34XX_MCBSP2_DR,
 	OMAP34XX_MCBSP2_DX,
+
+	/* UART2 for Bluetooth */
+	AD22_3430_UART2_TX,
+	AD21_3430_UART2_RX,
+	AA24_3430_UART2_RTS,
+	Y24_3430_UART2_CTS,
+
+	/* Chip-enable for Bluetooth */
+	W8_3430_MCSPI2_SIMO,
 };
 
 struct omap_mux_cfg {
