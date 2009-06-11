@@ -154,6 +154,7 @@ modules:
 		3>&1 1>&2 2>&3 \
 		&& (touch $(MFLAG))) \
 	| tee  $(MOD_ERR_LOG)
+	@sleep 2
 	@(cat $(MOD_ERR_LOG) | \
 		$(KERNEL_SRC_DIR)/scripts/chk_gcc_warn.pl \
 			$(KERNEL_SRC_DIR) \
