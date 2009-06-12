@@ -108,6 +108,14 @@ struct regulator_consumer_supply cpcap_vwlan2_consumers[] = {
 #endif
 };
 
+struct regulator_consumer_supply cpcap_vsim_consumers[] = {
+	REGULATOR_CONSUMER("vsim", NULL),
+};
+
+struct regulator_consumer_supply cpcap_vsimcard_consumers[] = {
+	REGULATOR_CONSUMER("vsimcard", NULL),
+};
+
 struct regulator_consumer_supply cpcap_vvib_consumers[] = {
 	REGULATOR_CONSUMER("vvib", NULL /* vibrator */),
 };
@@ -252,6 +260,8 @@ static struct regulator_init_data cpcap_regulator[CPCAP_NUM_REGULATORS] = {
 			.valid_ops_mask		= (REGULATOR_CHANGE_VOLTAGE |
 						   REGULATOR_CHANGE_STATUS),
 		},
+		.num_consumer_supplies	= ARRAY_SIZE(cpcap_vsim_consumers),
+		.consumer_supplies	= cpcap_vsim_consumers,
 	},
 	[CPCAP_VSIMCARD] = {
 		.constraints = {
@@ -260,6 +270,8 @@ static struct regulator_init_data cpcap_regulator[CPCAP_NUM_REGULATORS] = {
 			.valid_ops_mask		= (REGULATOR_CHANGE_VOLTAGE |
 						   REGULATOR_CHANGE_STATUS),
 		},
+		.num_consumer_supplies	= ARRAY_SIZE(cpcap_vsimcard_consumers),
+		.consumer_supplies	= cpcap_vsimcard_consumers,
 	},
 	[CPCAP_VVIB] = {
 		.constraints = {
