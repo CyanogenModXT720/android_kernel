@@ -54,10 +54,9 @@ struct cpcap_spi_init_data mapphone_cpcap_spi_init[] = {
 	{CPCAP_REG_VVIBC,     0x000D},   /* Temporary */
 	{CPCAP_REG_VUSBINT1C, 0x0029},
 	{CPCAP_REG_VUSBINT2C, 0x0029},
-	{CPCAP_REG_VAUDIOC,   0x0007},   /* Temporary */
 	{CPCAP_REG_TXI,       0x2000},
 	{CPCAP_REG_RXOA,      0x0400},
-	{CPCAP_REG_ADCC1,     0x1001},
+	{CPCAP_REG_ADCC1,     0x9000},
 	{CPCAP_REG_USBC1,     0x1201},
 	{CPCAP_REG_USBC3,     0x3DFB},
 	{CPCAP_REG_UIER2,     0x001F},
@@ -106,6 +105,14 @@ struct regulator_consumer_supply cpcap_vwlan2_consumers[] = {
 #if 0
 	REGULATOR_CONSUMER("vwlan2", NULL /* mmc in omap */),
 #endif
+};
+
+struct regulator_consumer_supply cpcap_vsim_consumers[] = {
+	REGULATOR_CONSUMER("vsim", NULL),
+};
+
+struct regulator_consumer_supply cpcap_vsimcard_consumers[] = {
+	REGULATOR_CONSUMER("vsimcard", NULL),
 };
 
 struct regulator_consumer_supply cpcap_vvib_consumers[] = {
@@ -193,10 +200,11 @@ static struct regulator_init_data cpcap_regulator[CPCAP_NUM_REGULATORS] = {
 	},
 	[CPCAP_VPLL] = {
 		.constraints = {
-			.min_uV			= 1200000,
+			.min_uV			= 1800000,
 			.max_uV			= 1800000,
 			.valid_ops_mask		= REGULATOR_CHANGE_VOLTAGE,
 			.always_on		= 1,
+			.apply_uV		= 1,
 		},
 	},
 	[CPCAP_VRF1] = {
@@ -252,6 +260,8 @@ static struct regulator_init_data cpcap_regulator[CPCAP_NUM_REGULATORS] = {
 			.valid_ops_mask		= (REGULATOR_CHANGE_VOLTAGE |
 						   REGULATOR_CHANGE_STATUS),
 		},
+		.num_consumer_supplies	= ARRAY_SIZE(cpcap_vsim_consumers),
+		.consumer_supplies	= cpcap_vsim_consumers,
 	},
 	[CPCAP_VSIMCARD] = {
 		.constraints = {
@@ -260,6 +270,8 @@ static struct regulator_init_data cpcap_regulator[CPCAP_NUM_REGULATORS] = {
 			.valid_ops_mask		= (REGULATOR_CHANGE_VOLTAGE |
 						   REGULATOR_CHANGE_STATUS),
 		},
+		.num_consumer_supplies	= ARRAY_SIZE(cpcap_vsimcard_consumers),
+		.consumer_supplies	= cpcap_vsimcard_consumers,
 	},
 	[CPCAP_VVIB] = {
 		.constraints = {
@@ -284,8 +296,9 @@ static struct regulator_init_data cpcap_regulator[CPCAP_NUM_REGULATORS] = {
 		.constraints = {
 			.min_uV			= 2775000,
 			.max_uV			= 2775000,
-			.valid_ops_mask		= (REGULATOR_CHANGE_VOLTAGE |
-						   REGULATOR_CHANGE_STATUS),
+			.valid_ops_mask		= REGULATOR_CHANGE_VOLTAGE,
+			.always_on		= 1,
+			.apply_uV		= 1,
 		},
 		.num_consumer_supplies	= ARRAY_SIZE(cpcap_vaudio_consumers),
 		.consumer_supplies	= cpcap_vaudio_consumers,
