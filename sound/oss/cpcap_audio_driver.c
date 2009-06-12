@@ -46,6 +46,7 @@
 #include "cpcap_audio_driver.h"
 #include <linux/spi/cpcap.h>
 #include <mach/resource.h>
+#include <linux/regulator/consumer.h>
 
 /*=====================================================================
 			CONSTANTS
@@ -386,6 +387,9 @@ static struct AUDIOIC_STATE_T previous_state_struct = {
 	AUDIOIC_RAT_NONE,
 	255			/* CPCAP_ACCY_EMU_INVALID */
 };
+
+/* Define regulator to turn on the audio portion of cpcap */
+struct regulator *audio_reg;
 
 /*===========================================================================
 			GLOBAL VARIABLES
@@ -2123,6 +2127,14 @@ static void audioic_configure_power(
 	AUDIOIC_DEBUG_LOG("%s() called with power = %d\n", __func__, power);
 
 	if (power != previous_power) {
+		if (power) {
+			regulator_enable(audio_reg);
+			AUDIOIC_DEBUG_LOG("Enable audio regulator\n");
+		} else {
+			regulator_disable(audio_reg);
+			AUDIOIC_DEBUG_LOG("Disable audio regulator\n");
+		}
+
 		/*
 		   if(power) {
 			res_vaudio = resource_get ("CPCAP Driver", LDO_VAUDIO);
@@ -2721,6 +2733,11 @@ void AUDIOIC_init(struct AUDIOIC_STATE_T *state)
 	cpcap_regacc_write(state->cpcap, CPCAP_REG_RXSDOA, 0, 0x1FFF);
 	cpcap_regacc_write(state->cpcap, CPCAP_REG_RXEPOA, 0, 0x7FFF);
 #endif
+	audio_reg = regulator_get(NULL, "vaudio");
+	printk(KERN_INFO "get audio regulator\n");
+	if (IS_ERR(audio_reg))
+		AUDIOIC_DEBUG_LOG("could not get regulator for cpcap audio\n");
 
+	AUDIOIC_DEBUG_LOG("%s() END called\n", __func__);
 	return;
 }
