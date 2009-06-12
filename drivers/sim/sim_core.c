@@ -182,7 +182,7 @@ static struct clk *omap_120m_fck;
 
   Do not enable logging by default. Only use this for debug purposes.
 */
-#if 0
+#if 1
 #define tracemsg(fmt,args...)  printk(fmt,##args)
 #else
 #define tracemsg(fmt,args...)
@@ -1772,6 +1772,7 @@ int __init sim_init(void)
         tracemsg("sim_init: Error getting 120M FCLK.\n");
         ret = PTR_ERR(omap_120m_fck);
     }
+    tracemsg("SIM driver done");
     return ret;    
 }
 
