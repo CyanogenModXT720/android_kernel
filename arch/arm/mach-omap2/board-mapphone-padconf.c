@@ -1945,6 +1945,10 @@ void __init gpio_mapping_init(void)
 
 		if (j == GPIO_MAP_SIZE)
 			printk(KERN_ERR "Unable to write gpio_map_table\n");
+		else
+			printk(KERN_INFO "GPIO mapping write: pin = %d, name = %s\n",
+						gpio_map_table[j].pin_num,
+						gpio_map_table[j].name);
 
 		prop += unit_size;
 	}
