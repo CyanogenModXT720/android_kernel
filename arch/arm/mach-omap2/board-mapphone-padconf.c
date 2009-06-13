@@ -22,6 +22,7 @@
  * ===========  ==============  ==============================================
  * May-05-2009  Motorola	Initial revision.
  * Jun-08-2009  Motorola	Support of tree.
+ * Jun-12-2009  Motorola	Add gpio mapping init
  */
 
 #include <linux/module.h>
@@ -31,7 +32,9 @@
 #ifdef CONFIG_ARM_OF
 #include <mach/dt_path.h>
 #include <asm/prom.h>
+#ifdef CONFIG_GPIO_MAPPING
 #include <linux/gpio.h>
+#endif
 #endif
 
 /* core control module padconf registers are at 0x48002030 - 0x480021E0 */
@@ -159,6 +162,13 @@ struct mux_offmode_conf_entry {
 	u8 offpull_type;
 	u8 offwkup_en;
 } __attribute__ ((__packed__));
+
+#ifdef CONFIG_GPIO_MAPPING
+struct omap_gpio_map_entry {
+    u32 pin_num;
+    char name[GPIO_MAP_NAME_SIZE];
+} __attribute__ ((__packed__));
+#endif
 #endif
 
 static __initdata struct {
@@ -1871,6 +1881,78 @@ void __init mux_setting_init(void)
 	op.name_size = 2;
 	dt_prop_or_init(&op);
 }
+
+#ifdef CONFIG_GPIO_MAPPING
+void trim_gpio_map_string(char *s)
+{
+	int i;
+
+	/* ignore all characters behind space key */
+	for (i = 0; i < GPIO_MAP_NAME_SIZE; i++) {
+		if (' ' == s[i]) {
+			s[i] = '\0';
+			return;
+		}
+	}
+
+    printk(KERN_ERR "Too long gpio map string name!\n");
+}
+
+void __init gpio_mapping_init(void)
+{
+	struct device_node *node;
+	const void *prop;
+	int i, j, size, unit_size;
+	char name[GPIO_MAP_NAME_SIZE];
+
+	node = of_find_node_by_path(DT_PATH_GPIO);
+	if (node == NULL) {
+		printk(KERN_ERR
+				"Unable to read node %s from device tree!\n",
+				DT_PATH_GPIO);
+		return;
+	}
+
+	unit_size = sizeof(struct omap_gpio_map_entry);
+	prop = of_get_property(node, DT_PROP_GPIO_MAP, &size);
+	if ((!prop) || (size % unit_size)) {
+		printk(KERN_ERR "Read property %s error!\n",
+				DT_PROP_GPIO_MAP);
+		of_node_put(node);
+		return;
+	}
+
+	for (i = 0; i < size / unit_size; i++) {
+		struct omap_gpio_map_entry *p =
+				(struct omap_gpio_map_entry *) prop;
+
+		memcpy((void *) name, p->name, GPIO_MAP_NAME_SIZE);
+		trim_gpio_map_string(name);
+
+		for (j = 0; j < GPIO_MAP_SIZE; j++) {
+			if (gpio_map_table[j].used == 0) {
+				gpio_map_table[j].used = 1;
+				gpio_map_table[j].pin_num = p->pin_num;
+				strncpy(gpio_map_table[j].name, name,
+						GPIO_MAP_NAME_SIZE);
+				break;
+			} else if (strncmp(gpio_map_table[j].name, name,
+					GPIO_MAP_NAME_SIZE) == 0) {
+				gpio_map_table[j].pin_num = p->pin_num;
+				break;
+			}
+		}
+
+		if (j == GPIO_MAP_SIZE)
+			printk(KERN_ERR "Unable to write gpio_map_table\n");
+
+		prop += unit_size;
+	}
+
+    of_node_put(node);
+    printk(KERN_INFO "GPIO mapping init done\n");
+}
+#endif
 #endif
 
 void __init mapphone_padconf_init(void)
@@ -1879,8 +1961,9 @@ void __init mapphone_padconf_init(void)
 
 #ifdef CONFIG_ARM_OF
 	mux_setting_init();
-	get_gpio_by_name("lcd");
-	get_gpio_by_name("atmega");
+#ifdef CONFIG_GPIO_MAPPING
+	gpio_mapping_init();
+#endif
 #endif
 
 	for (i = 0; i < ARRAY_SIZE(padconf_settings); i++) {

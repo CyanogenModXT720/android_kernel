@@ -6,18 +6,6 @@
 #ifdef CONFIG_GENERIC_GPIO
 #include <asm/gpio.h>
 
-#define GPIO_MAP_NAME_SIZE 20
-#define GPIO_MAP_SIZE 50
-
-struct gpio_mapping {
-	u32 used;
-	u32 pin_num;
-	char name[GPIO_MAP_NAME_SIZE];
-};
-
-extern struct gpio_mapping gpio_map_table[GPIO_MAP_SIZE];
-extern int get_gpio_by_name(char *name);
-
 #else
 
 #include <linux/kernel.h>
@@ -121,6 +109,20 @@ static inline int irq_to_gpio(unsigned irq)
 	return -EINVAL;
 }
 
+#endif
+
+#ifdef CONFIG_GPIO_MAPPING
+#define GPIO_MAP_NAME_SIZE 20
+#define GPIO_MAP_SIZE 50
+
+struct gpio_mapping {
+	u32 used;
+	u32 pin_num;
+	char name[GPIO_MAP_NAME_SIZE];
+};
+
+extern struct gpio_mapping gpio_map_table[GPIO_MAP_SIZE];
+extern int get_gpio_by_name(char *name);
 #endif
 
 #endif /* __LINUX_GPIO_H */
