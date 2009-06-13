@@ -6,6 +6,18 @@
 #ifdef CONFIG_GENERIC_GPIO
 #include <asm/gpio.h>
 
+#define GPIO_MAP_NAME_SIZE 20
+#define GPIO_MAP_SIZE 50
+
+struct gpio_mapping {
+	u32 used;
+	u32 pin_num;
+	char name[GPIO_MAP_NAME_SIZE];
+};
+
+extern struct gpio_mapping gpio_map_table[GPIO_MAP_SIZE];
+extern int get_gpio_by_name(char *name);
+
 #else
 
 #include <linux/kernel.h>

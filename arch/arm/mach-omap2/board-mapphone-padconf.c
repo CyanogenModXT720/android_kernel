@@ -31,6 +31,7 @@
 #ifdef CONFIG_ARM_OF
 #include <mach/dt_path.h>
 #include <asm/prom.h>
+#include <linux/gpio.h>
 #endif
 
 /* core control module padconf registers are at 0x48002030 - 0x480021E0 */
@@ -1878,6 +1879,8 @@ void __init mapphone_padconf_init(void)
 
 #ifdef CONFIG_ARM_OF
 	mux_setting_init();
+	get_gpio_by_name("lcd");
+	get_gpio_by_name("atmega");
 #endif
 
 	for (i = 0; i < ARRAY_SIZE(padconf_settings); i++) {
