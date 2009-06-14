@@ -20,15 +20,11 @@
 ######################################################################
 #set -x
 
-PWD=`pwd`
+PWD=$(shell pwd)
 
 TOPDIR=$(PWD)
 KERNEL_CONF_OUT_DIR= \
 $(PWD)/out/target/product/generic/obj/PARTITIONS/kernel_intermediates
-KERNEL_ERR_LOG=$(KERNEL_CONF_OUT_DIR)/.kbld_err_log.txt
-MOD_ERR_LOG=$(KERNEL_CONF_OUT_DIR)/.kmod_err_log.txt
-KFLAG=$(KERNEL_CONF_OUT_DIR)/.kbld_ok.txt
-MFLAG=$(KERNEL_CONF_OUT_DIR)/.mbld_ok.txt
 KERNEL_BUILD_DIR=$(KERNEL_CONF_OUT_DIR)/build
 KERNEL_SRC_DIR=$(PWD)/kernel
 #KERNEL_CROSS_COMPILE=$(PWD)/$TARGET_TOOLS_PREFIX
@@ -44,6 +40,14 @@ PRODUCT_SPECIFIC_DEFCONFIGS := \
     $(DEFCONFIGSRC)/mapphone_defconfig  
 _TARGET_DEFCONFIG := __ext_mapphone_defconfig
 TARGET_DEFCONFIG := $(DEFCONFIGSRC)/$(_TARGET_DEFCONFIG)
+
+CHK_WARN := $(KERNEL_SRC_DIR)/scripts/chk_gcc_warn.pl
+WARN_FILTER := $(KERNEL_SRC_DIR)/scripts/gcc_warn_filter.cfg
+KERNEL_ERR_LOG := $(KERNEL_CONF_OUT_DIR)/.kbld_err_log.txt
+MOD_ERR_LOG := $(KERNEL_CONF_OUT_DIR)/.kmod_err_log.txt
+KFLAG := $(KERNEL_CONF_OUT_DIR)/.kbld_ok.txt
+MFLAG := $(KERNEL_CONF_OUT_DIR)/.mbld_ok.txt
+FFLAG := $(KERNEL_CONF_OUT_DIR)/.filter_ok.txt
 
 
 all: config zImage modules modules_install 
@@ -108,8 +112,7 @@ config: inst_hook
 define chk_warn
 sleep 2
 if [ -f $(1) ]; then cat $(1) | \
-$(KERNEL_SRC_DIR)/scripts/chk_gcc_warn.pl $(KERNEL_SRC_DIR) \
-$(KERNEL_SRC_DIR)/scripts/gcc_warn_filter.cfg; fi
+$(CHK_WARN) $(KERNEL_SRC_DIR) $(WARN_FILTER); fi
 rm -f $(1) 2> /dev/null
 endef
 
@@ -124,12 +127,19 @@ define _vmlinux
 @$(call chk_warn,  $(KERNEL_ERR_LOG))
 rm $(KFLAG) 2> /dev/null
 endef
-
+$(WARN_FILTER):
+	
+$(FFLAG): $(WARN_FILTER)
+	@echo "Gcc warning filter changed, clean build will be enforced\n"
+	@make -C $(KERNEL_SRC_DIR) ARCH=arm $(KERN_FLAGS) \
+                 CROSS_COMPILE=$(KERNEL_CROSS_COMPILE) \
+                 O=$(KERNEL_BUILD_DIR) clean
+	@touch $(FFLAG)
 #
 # build kernel and internal kernel modules
 # ========================================
 # We need to check warning no matter if build passed, failed or interuptted
-zImage:
+zImage: $(FFLAG)
 	@-$(call chk_warn,  $(KERNEL_ERR_LOG))
 	@$(_vmlinux)  
 	make -C $(KERNEL_SRC_DIR) ARCH=arm $(KERN_FLAGS) \
