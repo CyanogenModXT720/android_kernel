@@ -155,7 +155,7 @@ dir:
 		CROSS_COMPILE=$(KERNEL_CROSS_COMPILE) \
 		O=$(KERNEL_BUILD_DIR) $(DIR_TO_BLD)
 
-modules:
+modules: $(FFLAG)
 	@-$(call chk_warn, $(MOD_ERR_LOG))
 	@-rm -f $(MFLAG) 2> /dev/null
 	@((make -C $(KERNEL_SRC_DIR) ARCH=arm $(KERN_FLAGS) \
