@@ -692,9 +692,10 @@ static unsigned int GPIODev_Poll(struct file *filp, poll_table * table)
 		goto end;
 	}
 
-	trace_msg("evoke wait_event_interruptible calling \n");
-	wait_event_interruptible(dev->event_queue, (dev->flags & GPIODEV_FLAG_INTERRUPTED) != 0);
-	mask |= POLLPRI;
+	trace_msg("evoke poll_wait calling \n");
+	poll_wait(filp, &dev->event_queue, table);
+	if (dev->flags & GPIODEV_FLAG_INTERRUPTED)
+		mask |= POLLPRI;
 
 end:
 	dev->flags &= ~GPIODEV_FLAG_INTERRUPTED;

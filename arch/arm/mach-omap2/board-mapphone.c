@@ -46,6 +46,11 @@
 #include <mach/control.h>
 #include <mach/hdq.h>
 
+#ifdef CONFIG_ARM_OF
+#include <mach/dt_path.h>
+#include <asm/prom.h>
+#endif
+
 #include "pm.h"
 #include "prm-regbits-34xx.h"
 
@@ -55,6 +60,8 @@
 #define MAPPHONE_TOUCH_INT_GPIO		99
 #define MAPPHONE_LM_3530_INT_GPIO	92
 #define MAPPHONE_AKM8973_INT_GPIO	175
+
+char *bp_model = "CDMA";
 
 static void __init mapphone_init_irq(void)
 {
@@ -524,6 +531,22 @@ static int __init omap_hdq_init(void)
 	return platform_device_register(&omap_hdq_device);
 }
 
+static void __init mapphone_bp_model_init(void)
+{
+#ifdef CONFIG_ARM_OF
+	struct device_node *bp_node;
+	const void *bp_prop;
+
+	if ((bp_node = of_find_node_by_path(DT_PATH_CHOSEN))) {
+		if ((bp_prop = of_get_property(bp_node, \
+			DT_PROP_CHOSEN_BP, NULL)))
+			bp_model = (char *)bp_prop;
+
+		of_node_put(bp_node);
+	}
+#endif
+}
+
 static void __init mapphone_init(void)
 {
 	omap_board_config = mapphone_config;
@@ -544,6 +567,7 @@ static void __init mapphone_init(void)
 	config_mmc2_init();
 	config_wlan_gpio();
 	omap_hdq_init();
+	mapphone_bp_model_init();
 }
 
 static void __init mapphone_map_io(void)
