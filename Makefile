@@ -1115,11 +1115,6 @@ headers_check: headers_install
 
 ifdef CONFIG_MODULES
 
-# CONFIG_MEMLEAK_BLD is only needed for built-in code
-ifeq ($(KMEMLEAK_FLAGS),1)
-KBUILD_CFLAGS += -DCONFIG_MEMLEAK_BLD
-endif
-
 # By default, build modules as well
 
 all: modules

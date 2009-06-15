@@ -1000,27 +1000,6 @@ config ALIGNMENT_TRAP
 	  correct operation of some network protocols. With an IP-only
 	  configuration it is safe to say N, otherwise say Y.
 
-menuconfig DEBUG_MEMLEAK
-	bool "Kernel memory leak detector"
-	default n
-	depends on EXPERIMENTAL && DEBUG_SLAB
-	select DEBUG_FS
-	select STACKTRACE
-	select FRAME_POINTER
-	select KALLSYMS
-	help
-	  Say Y here if you want to enable the memory leak
-	  detector. The memory allocation/freeing is traced in a way
-	  similar to the Boehm's conservative garbage collector, the
-	  difference being that the orphan objects are not freed but
-	  only shown in /sys/kernel/debug/memleak. Enabling this
-	  feature will introduce an overhead to memory
-	  allocations. See Documentation/kmemleak.txt for more
-	  details.
-
-	  In order to access the memleak file, debugfs needs to be
-	  mounted (usually at /sys/kernel/debug).
-
 endmenu
 
 menu "Boot options"
