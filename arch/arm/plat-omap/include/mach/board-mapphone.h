@@ -34,6 +34,9 @@
 
 #include <linux/init.h>
 
+#define is_cdma_phone() (!strcmp("CDMA", bp_model))
+extern char * bp_model;
+
 extern void __init mapphone_usb_init(void);
 extern void __init mapphone_flash_init(void);
 extern void __init mapphone_panel_init(void);
