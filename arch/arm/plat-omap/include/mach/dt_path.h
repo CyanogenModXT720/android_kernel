@@ -42,7 +42,7 @@
 #define DT_PROP_KEYPAD_MAPNUM	"mapnum"
 #define DT_PROP_KEYPAD_MAPS	"maps"
 
-/* GPIODev */
+/* GPIODev Node */
 #define DT_PATH_GPIOGEV		"/System@0/GPIODev@0"
 #define DT_PROP_GPIODEV_INIT	"init"
 #define DT_PROP_GPIODEV_NAMELEN	20
@@ -53,6 +53,10 @@
 #define DT_PROP_MUX_PADWKUPS	"padwkupsinit"
 #define DT_PROP_MUX_OFFMODE		"offmodeinit"
 #define DT_PROP_MUX_OFFMODEWKUPS	"offmodewkupsinit"
+
+/* Touch Node */
+#define DT_PATH_TOUCH		"/System@0/I2C@0/TouchOBP@0"
+#define DT_PROP_TOUCH_KEYMAP	"touch_key_map"
 
 #endif
 #endif
