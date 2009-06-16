@@ -343,10 +343,9 @@ AFLAGS_KERNEL	=
 
 # Use LINUXINCLUDE when you must reference the include/ directory.
 # Needed to be compatible with the O= option
-LINUXINCLUDE    := -I$(objtree)/include -I$(srctree) -I$(objtree)	\
-                   $(if $(KBUILD_SRC),-I$(objtree)/include2		\
-				      -I$(srctree)/include)		\
-                   -I$(srctree)/arch/$(hdr-arch)/include		\
+LINUXINCLUDE    := -Iinclude \
+                   $(if $(KBUILD_SRC),-Iinclude2 -I$(srctree)/include) \
+                   -I$(srctree)/arch/$(hdr-arch)/include               \
                    -include include/linux/autoconf.h
 
 KBUILD_CPPFLAGS := -D__KERNEL__
