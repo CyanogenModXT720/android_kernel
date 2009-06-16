@@ -20,24 +20,24 @@
 #include <linux/interrupt.h>
 #include <linux/delay.h>
 #include <linux/gpio.h>
-#include <mach/gpio.h>
-#include <mach/resource.h>
+#include <linux/mmc/host.h>
+#include <linux/regulator/consumer.h>
 
-#include <mach/control.h>
 #include <mach/hardware.h>
+#include <mach/control.h>
 #include <mach/mmc.h>
 #include <mach/board.h>
-#include <mach/resource.h>
+#include <mach/gpio.h>
 #include <mach/mux.h>
-#include <mach/io.h>
 
 #define GPIO_SIGNAL_MMC_DET 163
 
 static const int mmc2_cd_gpio = OMAP_MAX_GPIO_LINES + 1;
 
+
 static int hsmmc_card_detect(int irq)
 {
-	return gpio_get_value_cansleep(GPIO_SIGNAL_MMC_DET);
+	return !gpio_get_value_cansleep(GPIO_SIGNAL_MMC_DET);
 }
 
 #ifdef CONFIG_OMAP_HS_MMC2
@@ -50,24 +50,34 @@ static int hsmmc2_card_detect(int irq)
 /*
  * MMC Slot Initialization.
  */
+static struct regulator *hsmmc_regulator;
+static unsigned char hsmmc_regulator_is_on;
+DEFINE_MUTEX(regulator_lock);
+
 static int hsmmc_late_init(struct device *dev)
 {
 	int ret = 0;
 
 	/*
-	 * Configure TWL4030 GPIO parameters for MMC hotplug irq
+	 * Configure GPIO parameters for MMC hotplug irq
 	 */
-	ret = gpio_request(GPIO_SIGNAL_MMC_DET, NULL);
+	ret = gpio_request(GPIO_SIGNAL_MMC_DET, "mmc_detect");
 	if (ret < 0)
 		goto err;
 	ret = gpio_direction_input(GPIO_SIGNAL_MMC_DET);
-	if (ret < 0) {
-		gpio_free(GPIO_SIGNAL_MMC_DET);
-		goto err;
+	if (ret < 0)
+		goto err2;
+
+	hsmmc_regulator = regulator_get(NULL, "vwlan2");
+	if (IS_ERR(hsmmc_regulator)) {
+		dev_dbg(dev, "vwlan2 regulator missing\n");
+		ret = PTR_ERR(hsmmc_regulator);
+		goto err2;
 	}
 
 	return ret;
-	/* seems gpio_debounce and gpio_debounce_time are not needed here */
+err2:
+	gpio_free(GPIO_SIGNAL_MMC_DET);
 err:
 	dev_err(dev, "Failed to configure GPIO MMC_DET\n");
 	return ret;
@@ -76,20 +86,11 @@ err:
 static void hsmmc_cleanup(struct device *dev)
 {
 	gpio_free(GPIO_SIGNAL_MMC_DET);
-}
-
-static int hsmmc2_late_init(struct device *dev)
-{
-	int ret = 0;
-	return ret;
-}
-
-static void hsmmc2_cleanup(struct device *dev)
-{
+	if (hsmmc_regulator)
+		regulator_put(hsmmc_regulator);
 }
 
 #ifdef CONFIG_PM
-
 /*
  * To mask and unmask MMC Card Detect Interrupt
  * mask : 1
@@ -119,7 +120,81 @@ static int hsmmc_resume(struct device *dev, int slot)
 
 	return ret;
 }
+#endif
 
+static int hsmmc_set_power(struct device *dev, int slot, int power_on,
+				int vdd)
+{
+	u32 reg;
+	int ret = 0;
+
+	if (power_on) {
+		reg = omap_ctrl_readl(OMAP2_CONTROL_DEVCONF0);
+		reg |= OMAP2_MMCSDIO1ADPCLKISEL;
+		omap_ctrl_writel(reg, OMAP2_CONTROL_DEVCONF0);
+
+		reg = omap_ctrl_readl(OMAP343X_CONTROL_PBIAS_LITE);
+		reg &= ~OMAP2_PBIASSPEEDCTRL0;
+		reg &= ~OMAP2_PBIASLITEPWRDNZ0;
+		omap_ctrl_writel(reg, OMAP343X_CONTROL_PBIAS_LITE);
+
+		mutex_lock(&regulator_lock);
+		if (!hsmmc_regulator_is_on) {
+			hsmmc_regulator_is_on = 1;
+			regulator_enable(hsmmc_regulator);
+		}
+		mutex_unlock(&regulator_lock);
+
+		/* 100ms delay required for PBIAS configuration */
+		msleep(100);
+		reg = omap_ctrl_readl(OMAP343X_CONTROL_PBIAS_LITE);
+		reg |= OMAP2_PBIASLITEPWRDNZ0;
+		if ((1 << vdd) <= MMC_VDD_165_195)
+			reg &= ~OMAP2_PBIASLITEVMODE0;
+		else
+			reg |= OMAP2_PBIASLITEVMODE0;
+		omap_ctrl_writel(reg, OMAP343X_CONTROL_PBIAS_LITE);
+
+		return ret;
+	} else {
+		reg = omap_ctrl_readl(OMAP343X_CONTROL_PBIAS_LITE);
+		reg &= ~OMAP2_PBIASLITEPWRDNZ0;
+		omap_ctrl_writel(reg, OMAP343X_CONTROL_PBIAS_LITE);
+
+		mutex_lock(&regulator_lock);
+		if (hsmmc_regulator_is_on) {
+			hsmmc_regulator_is_on = 0;
+			regulator_disable(hsmmc_regulator);
+		}
+		mutex_unlock(&regulator_lock);
+
+		/* 100ms delay required for PBIAS configuration */
+		msleep(100);
+		reg = omap_ctrl_readl(OMAP343X_CONTROL_PBIAS_LITE);
+		reg |= (OMAP2_PBIASLITEPWRDNZ0 | OMAP2_PBIASLITEVMODE0);
+		omap_ctrl_writel(reg, OMAP343X_CONTROL_PBIAS_LITE);
+	}
+
+	return 0;
+}
+
+#if defined(CONFIG_OMAP_HS_MMC2)
+static int hsmmc2_late_init(struct device *dev)
+{
+	return 0;
+}
+
+static void hsmmc2_cleanup(struct device *dev)
+{
+}
+
+static int hsmmc2_set_power(struct device *dev, int slot, int power_on,
+				int vdd)
+{
+	return 0;
+}
+
+#ifdef CONFIG_PM
 static int hsmmc2_suspend(struct device *dev, int slot)
 {
 	int ret = 0;
@@ -131,62 +206,17 @@ static int hsmmc2_resume(struct device *dev, int slot)
 	int ret = 0;
 	return ret;
 }
-
+#endif
 #endif
 
-static int hsmmc_set_power(struct device *dev, int slot, int power_on,
-				int vdd)
-{
-	int ret = 0;
-
-	if (power_on) {
-		switch (1 << vdd) {
-		case MMC_VDD_33_34:
-		case MMC_VDD_32_33:
-			/* TODO: turn power on CPCAP_VWLAN2 */
-			break;
-		default:
-			printk(KERN_WARNING "CPCAP_VWLAN2 only support 3V!\n");
-			ret = -1;
-			break;
-		}
-
-		/* PBIASLITEPWRDNZ0 need to be 0b0 when ramping up, now make it 0b1 */
-		omap_ctrl_writel(omap_ctrl_readl(OMAP343X_CONTROL_PBIAS_LITE)
-				| (1 << 1), OMAP343X_CONTROL_PBIAS_LITE);
-
-		/* PBIASLITEPWRDNZ1 need to be 0b0 when ramping up, now make it 0b1 */
-		omap_ctrl_writel(omap_ctrl_readl(OMAP343X_CONTROL_PBIAS_LITE)
-				| (1 << 9), OMAP343X_CONTROL_PBIAS_LITE);
-
-		return ret;
-	} else {
-		/* Power OFF */
-		/* PBIASLITEPWRDNZ0 need to be 0b0 when ramping up, now make it 0b0 */
-		omap_ctrl_writel(omap_ctrl_readl(OMAP343X_CONTROL_PBIAS_LITE)
-				& ~(1 << 1), OMAP343X_CONTROL_PBIAS_LITE);
-
-		/* PBIASLITEPWRDNZ1 need to be 0b0 when ramping up, now make it 0b0 */
-		omap_ctrl_writel(omap_ctrl_readl(OMAP343X_CONTROL_PBIAS_LITE)
-				& ~(1 << 9), OMAP343X_CONTROL_PBIAS_LITE);
-		/* TODO: turn off CPCAP_VWLAN2 */
-	}
-
-	return 0;
-}
-
-static int hsmmc2_set_power(struct device *dev, int slot, int power_on,
-				int vdd)
-{
-	return 0;
-}
-
+#if defined(CONFIG_OMAP_HS_MMC3)
 static int hsmmc3_set_power(struct device *dev, int slot, int power_on,
 				int vdd)
 {
 	/* Power to the slot is hard wired */
 	return 0;
 }
+#endif
 
 static struct omap_mmc_platform_data mmc1_data = {
 	.nr_slots			= 1,
@@ -209,6 +239,7 @@ static struct omap_mmc_platform_data mmc1_data = {
 	},
 };
 
+#if defined(CONFIG_OMAP_HS_MMC2)
 static struct omap_mmc_platform_data mmc2_data = {
 	.nr_slots			= 1,
 	.init				= hsmmc2_late_init,
@@ -228,7 +259,9 @@ static struct omap_mmc_platform_data mmc2_data = {
 		.card_detect            = NULL,
 	},
 };
+#endif
 
+#if defined(CONFIG_OMAP_HS_MMC3)
 static struct omap_mmc_platform_data mmc3_data = {
 	.nr_slots			= 1,
 	.init				= NULL,
@@ -244,18 +277,20 @@ static struct omap_mmc_platform_data mmc3_data = {
 		.card_detect            = NULL,
 	},
 };
+#endif
 
 static struct omap_mmc_platform_data *hsmmc_data[OMAP34XX_NR_MMC];
 
 void __init mapphone_hsmmc_init(void)
 {
 	hsmmc_data[0] = &mmc1_data;
+
 	mmc1_data.slots[0].card_detect_irq = gpio_to_irq(GPIO_SIGNAL_MMC_DET);
 
-#if defined(CONFIG_OMAP_HS_MMC2) || defined(CONFIG_TIWLAN_SDIO)
+#if defined(CONFIG_OMAP_HS_MMC2)
 	hsmmc_data[1] = &mmc2_data;
 #endif
-#if defined(CONFIG_OMAP_HS_MMC3) || defined(CONFIG_TIWLAN_SDIO)
+#if defined(CONFIG_OMAP_HS_MMC3)
 	hsmmc_data[2] = &mmc3_data;
 #endif
 	omap2_init_mmc(hsmmc_data, OMAP34XX_NR_MMC);

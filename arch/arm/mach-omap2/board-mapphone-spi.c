@@ -102,9 +102,6 @@ struct regulator_consumer_supply cpcap_vsdio_consumers[] = {
 
 struct regulator_consumer_supply cpcap_vwlan2_consumers[] = {
 	REGULATOR_CONSUMER("vwlan2", NULL /* sd slot */),
-#if 0
-	REGULATOR_CONSUMER("vwlan2", NULL /* mmc in omap */),
-#endif
 };
 
 struct regulator_consumer_supply cpcap_vsim_consumers[] = {

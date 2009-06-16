@@ -34,6 +34,9 @@
 
 #include <linux/init.h>
 
+#define GPIO_SILENCE_KEY		100
+#define GPIO_SLIDER			177
+
 #define is_cdma_phone() (!strcmp("CDMA", bp_model))
 extern char * bp_model;
 

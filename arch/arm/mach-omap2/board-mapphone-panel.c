@@ -13,11 +13,12 @@
 #include <linux/platform_device.h>
 #include <linux/init.h>
 #include <linux/delay.h>
+#include <linux/regulator/consumer.h>
+#include <linux/err.h>
 
 #include <mach/display.h>
 #include <mach/gpio.h>
 #include <mach/mux.h>
-
 
 #define MAPPHONE_DISPLAY_RESET_GPIO	136
 
@@ -69,8 +70,20 @@ static void mapphone_panel_disable_lcd(struct omap_display *display)
 #endif
 }
 
+struct regulator *display_regulator;
+
+
 static int mapphone_edisco_ctrl_enable(struct omap_display *display)
 {
+	if (!display_regulator) {
+		display_regulator = regulator_get(NULL, "vhvio");
+		if (IS_ERR(display_regulator)) {
+			printk(KERN_ERR "failed to get regulator for display");
+			return PTR_ERR(display_regulator);
+		}
+	}
+	regulator_enable(display_regulator);
+	msleep(1);
 	gpio_request(MAPPHONE_DISPLAY_RESET_GPIO, "display reset");
 	gpio_direction_output(MAPPHONE_DISPLAY_RESET_GPIO, 1);
 	msleep(5);
@@ -78,7 +91,6 @@ static int mapphone_edisco_ctrl_enable(struct omap_display *display)
 	msleep(5);
 	gpio_set_value(MAPPHONE_DISPLAY_RESET_GPIO, 1);
 	msleep(10);
-
 	return 0;
 }
 
@@ -86,7 +98,8 @@ static void mapphone_edisco_ctrl_disable(struct omap_display *display)
 {
 	gpio_direction_output(MAPPHONE_DISPLAY_RESET_GPIO, 1);
 	gpio_set_value(MAPPHONE_DISPLAY_RESET_GPIO, 0);
-
+	msleep(1);
+	regulator_disable(display_regulator);
 	return;
 }
 
@@ -94,7 +107,7 @@ static struct omap_dss_display_config mapphone_display_data_lcd = {
 	.type = OMAP_DISPLAY_TYPE_DSI,
 	.name = "lcd",
 	.ctrl_name = "ctrl-edisco",
-	.panel_name = "panel-sholes",
+	.panel_name = "panel-mapphone",
 	.u.dsi.clk_lane = 1,
 	.u.dsi.clk_pol = 0,
 	.u.dsi.data1_lane = 2,
@@ -128,6 +141,17 @@ static struct platform_device mapphone_dss_device = {
 void __init mapphone_panel_init(void)
 {
 	int ret;
+
+	omap_cfg_reg(AG22_34XX_DSI_DX0);
+	omap_cfg_reg(AH22_34XX_DSI_DY0);
+	omap_cfg_reg(AG23_34XX_DSI_DX1);
+	omap_cfg_reg(AH23_34XX_DSI_DY1);
+	omap_cfg_reg(AG24_34XX_DSI_DX2);
+	omap_cfg_reg(AH24_34XX_DSI_DY2);
+	/* disp reset b */
+	omap_cfg_reg(AE4_34XX_GPIO136_OUT);
+
+
 
 	ret = gpio_request(MAPPHONE_DISPLAY_RESET_GPIO, "display reset");
 	if (ret) {
