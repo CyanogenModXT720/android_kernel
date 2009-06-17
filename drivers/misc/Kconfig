@@ -278,6 +278,7 @@ config UMTS_SYSPANIC
          This option enables support to detect BP panic from AP, with the syspanic IRQ.
          Only available on SAM-OMAP platform.
          say y if your BP support this feature (needed for panic daemon)
+
 config WL127X_RFKILL
 	tristate "Bluetooth power control driver for TI wl127x"
 	depends on RFKILL

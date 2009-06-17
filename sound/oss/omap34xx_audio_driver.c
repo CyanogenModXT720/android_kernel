@@ -3596,10 +3596,10 @@ static int audio_probe(struct platform_device *dev)
 {
 	AUDIO_LEVEL2_LOG("[%s] enter\n", __func__);
 
-	omap_cfg_reg(OMAP34XX_MCBSP2_FSX);
-	omap_cfg_reg(OMAP34XX_MCBSP2_CLKX);
-	omap_cfg_reg(OMAP34XX_MCBSP2_DR);
-	omap_cfg_reg(OMAP34XX_MCBSP2_DX);
+	omap_cfg_reg(P21_OMAP34XX_MCBSP2_FSX);
+	omap_cfg_reg(N21_OMAP34XX_MCBSP2_CLKX);
+	omap_cfg_reg(R21_OMAP34XX_MCBSP2_DR);
+	omap_cfg_reg(M21_OMAP34XX_MCBSP2_DX);
 
 	audioic_state.cpcap = dev->dev.platform_data;
 	AUDIOIC_init(&audioic_state);

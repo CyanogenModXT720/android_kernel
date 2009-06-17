@@ -159,7 +159,6 @@ void __init mapphone_panel_init(void)
 		goto error;
 	}
 
-
 	platform_device_register(&mapphone_dss_device);
 	return;
 
