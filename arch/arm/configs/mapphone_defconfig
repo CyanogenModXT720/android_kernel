@@ -2036,5 +2036,11 @@ CONFIG_OTG_OMAP_MENTOR=y
 CONFIG_OTG_OMAP_SDP2430=m
 CONFIG_OTG_OMAP_HS_MENTOR=y
 
-
+#
+# Motorola Features
+#
+CONFIG_UMTS_SYSPANIC=y
+#
+# End of Motorola Features
+#
 

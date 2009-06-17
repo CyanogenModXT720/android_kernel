@@ -271,6 +271,14 @@ config SENSORS_LIS331DLH
 	 Say yes here if you wish to include the STI Micro
 	 LIS331DLH accelerometer driver.
 
+config UMTS_SYSPANIC
+        tristate "Motorola UMTS phone syspanic driver"
+	default n
+        help 
+         This option enables support to detect BP panic from AP, with the syspanic IRQ.
+         Only available on SAM-OMAP platform.
+         say y if your BP support this feature (needed for panic daemon)
+
 source "drivers/misc/c2port/Kconfig"
 source "drivers/misc/eeprom/Kconfig"
 source "drivers/misc/ts27010mux/Kconfig"
