@@ -24,6 +24,11 @@
 #include <mach/keypad.h>
 #include <mach/board-mapphone.h>
 
+#ifdef CONFIG_ARM_OF
+#include <mach/dt_path.h>
+#include <asm/prom.h>
+#endif
+
 static unsigned int mapphone_col_gpios[] = { 43, 53, 54, 55, 56, 57, 58, 63 };
 static unsigned int mapphone_row_gpios[] = { 34, 35, 36, 37, 38, 39, 40, 41 };
 
@@ -149,8 +154,52 @@ static struct platform_device mapphone_keypad_device = {
 	},
 };
 
+#ifdef CONFIG_ARM_OF
+static int __init mapphone_dt_kp_init(void)
+{
+	struct device_node *kp_node;
+	const void *kp_prop;
+
+	if ((kp_node = of_find_node_by_path(DT_PATH_KEYPAD))) {
+		if ((kp_prop = of_get_property(kp_node, \
+				DT_PROP_KEYPAD_ROWS, NULL)))
+			mapphone_keypad_matrix_info.ninputs = \
+				*(int *)kp_prop;
+
+		if ((kp_prop = of_get_property(kp_node, \
+				DT_PROP_KEYPAD_COLS, NULL)))
+			mapphone_keypad_matrix_info.noutputs = \
+				*(int *)kp_prop;
+
+		if ((kp_prop = of_get_property(kp_node, \
+				DT_PROP_KEYPAD_ROWREG, NULL)))
+			mapphone_keypad_matrix_info.input_gpios = \
+				(int *)kp_prop;
+
+		if ((kp_prop = of_get_property(kp_node, \
+				DT_PROP_KEYPAD_COLREG, NULL)))
+			mapphone_keypad_matrix_info.output_gpios = \
+				(int *)kp_prop;
+
+		if ((kp_prop = of_get_property(kp_node, \
+				DT_PROP_KEYPAD_MAPS, NULL)))
+			mapphone_keypad_matrix_info.keymap = \
+				(unsigned short *)kp_prop;
+
+		of_node_put(kp_node);
+	}
+
+	return kp_node ? 0 : -ENODEV;
+}
+#endif
+
 static int __init mapphone_init_keypad(void)
 {
+#ifdef CONFIG_ARM_OF
+	if (mapphone_dt_kp_init())
+		printk(KERN_INFO "Keypad: using non-dt configuration\n");
+#endif
+
 	/* keypad rows */
 	omap_cfg_reg(N4_34XX_GPIO34);
 	omap_cfg_reg(M4_34XX_GPIO35);
