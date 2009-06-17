@@ -107,7 +107,7 @@ static struct omap_dss_display_config mapphone_display_data_lcd = {
 	.type = OMAP_DISPLAY_TYPE_DSI,
 	.name = "lcd",
 	.ctrl_name = "ctrl-edisco",
-	.panel_name = "panel-mapphone",
+	.panel_name = "panel-sholes",
 	.u.dsi.clk_lane = 1,
 	.u.dsi.clk_pol = 0,
 	.u.dsi.data1_lane = 2,
@@ -158,6 +158,7 @@ void __init mapphone_panel_init(void)
 		printk(KERN_ERR "failed to get display reset gpio\n");
 		goto error;
 	}
+
 
 	platform_device_register(&mapphone_dss_device);
 	return;
