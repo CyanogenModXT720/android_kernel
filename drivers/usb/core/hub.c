@@ -1826,6 +1826,8 @@ static int hub_port_wait_reset(struct usb_hub *hub, int port1,
 	return -EBUSY;
 }
 
+static int hub_port_debounce(struct usb_hub *hub, int port1);
+
 static int hub_port_reset(struct usb_hub *hub, int port1,
 				struct usb_device *udev, unsigned int delay)
 {
@@ -1845,6 +1847,9 @@ static int hub_port_reset(struct usb_hub *hub, int port1,
 					"cannot reset port %d (err = %d)\n",
 					port1, status);
 		else {
+			 /* port debounce */
+			status = hub_port_debounce(hub, port1);
+
 			status = hub_port_wait_reset(hub, port1, udev, delay);
 			if (status && status != -ENOTCONN)
 				dev_dbg(hub->intfdev,
