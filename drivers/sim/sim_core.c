@@ -17,6 +17,7 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  
  * 02111-1307, USA
  *
+ * Motorola 2009-Jun-17 - Adding clock framework changes
  * Motorola 2009-Jun-01 - Adding power regulator changes
  * Motorola 2009-Mar-30 - Workaround 1.8V issue
  * Motorola 2009-Mar-12 - Warning cleanup
@@ -169,8 +170,8 @@ static struct clk *omap_120m_fck;
 */
 #define USIM_FCK "usim_fck"
 #define USIM_ICK "usim_ick"
-#define OMAP_96M_FCK "cm_96m_fck"
-#define OMAP_120M_FCK "omap_120m_fck"
+#define OMAP_96M_FCK "omap_96m_fck"
+#define OMAP_120M_FCK "dpll5_m2_ck"
 
 /******************************************************************************
  * Local Macros
