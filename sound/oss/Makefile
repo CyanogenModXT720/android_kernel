@@ -29,7 +29,11 @@ obj-$(CONFIG_SOUND_MSNDPIN)	+= msnd.o msnd_pinnacle.o
 obj-$(CONFIG_SOUND_VWSND)	+= vwsnd.o
 obj-$(CONFIG_SOUND_AU1550_AC97)	+= au1550_ac97.o ac97_codec.o
 obj-$(CONFIG_SOUND_BCM_CS4297A)	+= swarm_cs4297a.o
-obj-$(CONFIG_SOUND_CPCAP_OMAP)	+= omap34xx_audio_driver.o cpcap_audio_driver.o
+ifeq ($(CONFIG_MACH_MAPPHONE),y)
+	obj-$(CONFIG_SOUND_CPCAP_OMAP)  += moto_audio/
+else
+	obj-$(CONFIG_SOUND_CPCAP_OMAP)	+= omap34xx_audio_driver.o cpcap_audio_driver.o
+endif
 obj-$(CONFIG_DMASOUND)		+= dmasound/
 
 # Declare multi-part drivers.
