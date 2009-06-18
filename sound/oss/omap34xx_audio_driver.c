@@ -1,50 +1,21 @@
-/*
- * Copyright (C) 2007 - 2009 Motorola, Inc.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
- * 02111-1307, USA
- *
- *
- * Revision History:
- *
- * Date         Author         Comment
- * ----------   --------       ---------------------------
- * 11/21/2007   Motorola       Initial Version
- * 12/03/2008   Motorola       Upmerge to align with new McBSP driver
- *                             interface
- * 10/14/2008   Motorola       Add accessory handling
- * 03/21/2009   Motorola       Call moto_accy_close in audio_mixer_close
- * 04/10/2009   Motorola       Set the primary and secondary speaker to none
- *                             in release functions
- */
-
-/*!
- * @file omap34xx_audio_driver.c
- *
- * @brief Audio Driver
- *
- * This file contains all of the functions and data structures required to
- * provide control to the Audio Manager in user space to configure hardware
- * for audio playback/capture and for voice calls. This driver interfaces with
- * the power IC driver, SSI driver and the DMA driver to setup paths for audio
- * data flow.
- */
-/* Sai Ram */
-
-/*==========================================================================
-				INCLUDE FILES
-============================================================================*/
+ /*
+  * Copyright (C)2007 - 2009 Motorola, Inc.
+  *
+  * This program is free software; you can redistribute it and/or modify
+  * it under the terms of the GNU General Public License version 2 as
+  * published by the Free Software Foundation.
+  *
+  * This program is distributed in the hope that it will be useful,
+  * but WITHOUT ANY WARRANTY; without even the implied warranty of
+  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  * GNU General Public License for more details.
+  *
+  * You should have received a copy of the GNU General Public License
+  * along with this program; if not, write to the Free Software
+  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
+  * 02111-1307, USA
+  *
+  */
 #include <linux/platform_device.h>
 #include <linux/kernel.h>
 #include <linux/proc_fs.h>
@@ -59,17 +30,14 @@
 #include "omap34xx_audio_driver.h"
 #include "cpcap_audio_driver.h"
 
-/*==========================================================================
-				CONSTANTS
-============================================================================*/
 #define AUDIO_DRIVER_NAME "cpcap_audio"
-#define AUDIO_SUCCESS  0
-#define AUDIO_FAILURE -1
+
 #define STDAC_SSI OMAP_MCBSP2
 #define CODEC_SSI OMAP_MCBSP3
 
 #define CODEC_FIFO_SIZE 256
 #define STDAC_FIFO_SIZE 8192
+#define AUDIO_CAPTURE_SIZE 800
 
 /* This is the number of total kernel buffers */
 #define AUDIO_NBFRAGS_DEFAULT 10
@@ -84,15 +52,9 @@
 
 #define AUDIO_DMA_TIMEOUT (10*HZ)
 
-#define AUDIO_SAMPLE_DATA_WIDTH 16
+#define NUMBER_OF_RATES_SUPPORTED (sizeof(valid_sample_rates)/\
+				   sizeof(struct sample_rate_info_t))
 
-#define POWERIC_MASTER
-
-/* #define AUDIO_ITP_DEBUG 1 */
-
-/*==========================================================================
-				MACROS
-============================================================================*/
 /* Log level standard used here:
  * Log level 3 all messages
  * Log level 2 all entry-exit points
@@ -123,18 +85,10 @@
 
 #define AUDIO_ERROR_LOG(args...)  printk(KERN_ERR "AUDIO_DRIVER: Error " args)
 
-#define ERROR_EXIT _err
-#define TRY(a)  if (unlikely(a)) goto ERROR_EXIT;
+#define TRY(a)  if (unlikely(a)) goto out;
+DEFINE_MUTEX(audio_lock);
 
-#define OMAP_MCBSP_FRAMELEN_1 1
-
-/*==========================================================================
-			TYPEDEFS and ENUMS
-============================================================================*/
-/*
- * Buffer Management
- */
-struct audio_buf_t {
+struct audio_buf {
 	int offset;		/* current offset */
 	char *data;		/* points to actual buffer */
 	dma_addr_t buf_addr;	/* physical buffer address */
@@ -145,9 +99,9 @@ struct audio_buf_t {
 };
 
 /* Structure describing the data stream related information */
-struct audio_stream_t {
+struct audio_stream {
 	char *id;		/* identification string */
-	struct audio_buf_t *buffers;
+	struct audio_buf *buffers;
 	/* pointer to audio buffer structures */
 	u32 usr_head;		/* user side fragment index i.e.
 				 * where app is reading/writing to */
@@ -170,37 +124,29 @@ struct audio_stream_t {
 	struct inode *inode;
 };
 
-/*==========================================================================
-			FUNCTION PROTOTYPES
-============================================================================*/
 static int audio_stdac_open(struct inode *, struct file *);
 static int audio_stdac_release(struct inode *, struct file *);
 static int audio_ioctl(struct inode *, struct file *file, unsigned int cmd,
 			unsigned long arg);
 static ssize_t audio_write(struct file *fp, const char *buf, size_t bytes,
 			loff_t *nouse);
-static ssize_t audio_stdac_read(struct file *fp, char *buf, size_t bytes,
-				loff_t *nouse);
 static int audio_codec_open(struct inode *, struct file *);
 static int audio_codec_release(struct inode *, struct file *);
 static ssize_t audio_codec_read(struct file *fp, char *buf, size_t bytes,
 				loff_t *nouse);
 static int audio_mixer_open(struct inode *, struct file *);
 static int audio_mixer_close(struct inode *, struct file *);
-static unsigned int audio_mixer_poll(struct file *file, poll_table * wait);
 static int audio_probe(struct platform_device *dev);
+static int audio_remove(struct platform_device *dev);
 static void mcbsp_dma_tx_cb(u32 ch_status, void *arg);
 static void mcbsp_dma_rx_cb(u32 ch_status, void *arg);
 static int audio_stop_ssi(struct inode *inode, struct file *file);
 static int audio_configure_ssi(struct inode *inode, struct file *file);
-static void audio_discard_buf(struct audio_stream_t *str, struct inode *inode);
-static void audio_buffer_reset(struct audio_stream_t *str, struct inode *inode);
-static int audio_process_buf(struct audio_stream_t *str, struct inode *inode);
-static int audio_setup_buf(struct audio_stream_t *str, struct inode *inode);
+static void audio_discard_buf(struct audio_stream *str, struct inode *inode);
+static void audio_buffer_reset(struct audio_stream *str, struct inode *inode);
+static int audio_process_buf(struct audio_stream *str, struct inode *inode);
+static int audio_setup_buf(struct audio_stream *str, struct inode *inode);
 
-/*==========================================================================
-			STRUCTURES
-============================================================================*/
 /* File Ops structure */
 static const struct file_operations audio_stdac_fops = {
 	.owner = THIS_MODULE,
@@ -208,7 +154,6 @@ static const struct file_operations audio_stdac_fops = {
 	.release = audio_stdac_release,
 	.ioctl = audio_ioctl,
 	.write = audio_write,
-	.read = audio_stdac_read,
 };
 
 static const struct file_operations codec_fops = {
@@ -225,16 +170,16 @@ static const struct file_operations mixer_fops = {
 	.open = audio_mixer_open,
 	.release = audio_mixer_close,
 	.ioctl = audio_ioctl,
-	.poll = audio_mixer_poll,
 };
 
 /* Driver information structure*/
 static struct platform_driver audio_driver = {
 	.probe = audio_probe,
+	.remove = audio_remove,
 	.driver = {
 		   .name = AUDIO_DRIVER_NAME,
 		   .owner = THIS_MODULE,
-		   },
+		},
 };
 
 static struct omap_mcbsp_dma_transfer_params tx_params = {
@@ -254,41 +199,27 @@ static struct omap_mcbsp_dma_transfer_params rx_params = {
 static struct omap_mcbsp_cfg_param tx_cfg_params = {
 	.fsync_src = OMAP_MCBSP_TXFSYNC_EXTERNAL,
 	.fs_polarity = OMAP_MCBSP_FS_ACTIVE_HIGH,
-	/* .fs_polarity = OMAP_MCBSP_CLKX_POLARITY_RISING, */
-	/* TI did this */
 	.clk_polarity = OMAP_MCBSP_CLKX_POLARITY_RISING,
-	/*.clk_polarity    = OMAP_MCBSP_FS_ACTIVE_HIGH, */
-	/* TI did this */
 	.clk_mode = OMAP_MCBSP_CLKTXSRC_EXTERNAL,
 	.frame_length1 = OMAP_MCBSP_FRAMELEN_N(1),
-	/* One word per frame */
 	.word_length1 = OMAP_MCBSP_WORD_16,
 	.justification = OMAP_MCBSP_RJUST_ZEROMSB,
-	/* RJUST and fill 0s */
 	.reverse_compand = OMAP_MCBSP_MSBFIRST,
 	.phase = OMAP_MCBSP_FRAME_SINGLEPHASE,
 	.data_delay = OMAP_MCBSP_DATADELAY1,
-	/* 1 bit delay expected */
 };
 
 static struct omap_mcbsp_cfg_param rx_cfg_params = {
 	.fsync_src = OMAP_MCBSP_RXFSYNC_EXTERNAL,
 	.fs_polarity = OMAP_MCBSP_FS_ACTIVE_HIGH,
-	/* .fs_polarity = OMAP_MCBSP_CLKR_POLARITY_RISING, */
-	/* TI did this */
 	.clk_polarity = OMAP_MCBSP_CLKR_POLARITY_RISING,
-	/* .clk_polarity = OMAP_MCBSP_FS_ACTIVE_HIGH, */
-	/* TI did this */
 	.clk_mode = OMAP_MCBSP_CLKRXSRC_EXTERNAL,
 	.frame_length1 = OMAP_MCBSP_FRAMELEN_N(1),
-	/* One word per frame */
 	.word_length1 = OMAP_MCBSP_WORD_16,
 	.justification = OMAP_MCBSP_RJUST_ZEROMSB,
-	/* RJUST and fill 0s */
 	.reverse_compand = OMAP_MCBSP_MSBFIRST,
 	.phase = OMAP_MCBSP_FRAME_SINGLEPHASE,
 	.data_delay = OMAP_MCBSP_DATADELAY1,
-	/* 1 bit delay expected */
 };
 
 static struct omap_mcbsp_srg_fsg_cfg srg_fsg_params = {
@@ -299,19 +230,15 @@ static struct omap_mcbsp_srg_fsg_cfg srg_fsg_params = {
 	.bits_per_sample = 16,
 	.srg_src = OMAP_MCBSP_SRGCLKSRC_CLKX,
 	.sync_mode = OMAP_MCBSP_SRG_FREERUNNING, /* SRG free running mode */
-	/* .polarity = OMAP_MCBSP_CLKX_POLARITY_FALLING, */
 	.polarity = OMAP_MCBSP_CLKX_POLARITY_RISING,
 	.dlb = 0, /* digital loopback mode */
 };
 
 struct sample_rate_info_t {
 	u16 rate;
-	int audioic_rate;
+	int cpcap_audio_rate;
 };
 
-/*==========================================================================
-				LOCAL VARIABLES
-============================================================================*/
 static struct {
 	int dev_dsp;
 	int dev_dsp1;
@@ -319,10 +246,10 @@ static struct {
 	int dev_dsp_open_count;
 	int dev_dsp1_open_count;
 	int dev_mixer_open_count;
-	struct audio_stream_t *stdac_out_stream;
-	struct audio_stream_t *stdac_in_stream;
-	struct audio_stream_t *codec_out_stream;
-	struct audio_stream_t *codec_in_stream;
+	struct audio_stream *stdac_out_stream;
+	struct audio_stream *stdac_in_stream;
+	struct audio_stream *codec_out_stream;
+	struct audio_stream *codec_in_stream;
 	unsigned int accy_client_id;
 	unsigned long int connected_accy_mask;
 	unsigned long int interested_accy_mask;
@@ -330,67 +257,52 @@ static struct {
 	wait_queue_head_t accy_wait_queue;
 } state;
 
-struct AUDIOIC_STATE_T audioic_state = {
+struct cpcap_audio_state cpcap_audio_state = {
 	NULL,
-	AUDIOIC_MODE_NORMAL,
-	AUDIOIC_CODEC_OFF,
-	AUDIOIC_CODEC_RATE_8000_HZ,
-	AUDIOIC_CODEC_MUTE,
-	AUDIOIC_STDAC_OFF,
-	AUDIOIC_STDAC_RATE_44100_HZ,
-	AUDIOIC_STDAC_MUTE,
-	AUDIOIC_ANALOG_SOURCE_OFF,
-	AUDIOIC_OUT_NONE,
-	AUDIOIC_OUT_NONE,
-	AUDIOIC_OUT_LOUDSPEAKER,
-	AUDIOIC_OUT_NONE,
-	AUDIOIC_OUT_NONE,
-	AUDIOIC_OUT_NONE,
-	AUDIOIC_BALANCE_NEUTRAL,
-	AUDIOIC_BALANCE_NEUTRAL,
-	AUDIOIC_BALANCE_NEUTRAL,
+	CPCAP_AUDIO_MODE_NORMAL,
+	CPCAP_AUDIO_CODEC_OFF,
+	CPCAP_AUDIO_CODEC_RATE_8000_HZ,
+	CPCAP_AUDIO_CODEC_MUTE,
+	CPCAP_AUDIO_STDAC_OFF,
+	CPCAP_AUDIO_STDAC_RATE_44100_HZ,
+	CPCAP_AUDIO_STDAC_MUTE,
+	CPCAP_AUDIO_ANALOG_SOURCE_OFF,
+	CPCAP_AUDIO_OUT_NONE,
+	CPCAP_AUDIO_OUT_NONE,
+	CPCAP_AUDIO_OUT_LOUDSPEAKER,
+	CPCAP_AUDIO_OUT_NONE,
+	CPCAP_AUDIO_OUT_NONE,
+	CPCAP_AUDIO_OUT_NONE,
+	CPCAP_AUDIO_BALANCE_NEUTRAL,
+	CPCAP_AUDIO_BALANCE_NEUTRAL,
+	CPCAP_AUDIO_BALANCE_NEUTRAL,
 	7,			/*default output gain */
-	AUDIOIC_IN_NONE,
+	CPCAP_AUDIO_IN_NONE,
 	31,			/*default input_gain */
-	AUDIOIC_RAT_NONE,
-	255			/* CPCAP_ACCY_EMU_INVALID */
+	CPCAP_AUDIO_RAT_NONE
 };
 
 static const struct sample_rate_info_t valid_sample_rates[] = {
-	{.rate = 8000,  .audioic_rate = AUDIOIC_STDAC_RATE_8000_HZ},
-	{.rate = 11025, .audioic_rate = AUDIOIC_STDAC_RATE_11025_HZ},
-	{.rate = 12000, .audioic_rate = AUDIOIC_STDAC_RATE_12000_HZ},
-	{.rate = 16000, .audioic_rate = AUDIOIC_STDAC_RATE_16000_HZ},
-	{.rate = 22050, .audioic_rate = AUDIOIC_STDAC_RATE_22050_HZ},
-	{.rate = 24000, .audioic_rate = AUDIOIC_STDAC_RATE_24000_HZ},
-	{.rate = 32000, .audioic_rate = AUDIOIC_STDAC_RATE_32000_HZ},
-	{.rate = 44100, .audioic_rate = AUDIOIC_STDAC_RATE_44100_HZ},
-	{.rate = 48000, .audioic_rate = AUDIOIC_STDAC_RATE_48000_HZ},
+	{.rate = 8000,  .cpcap_audio_rate = CPCAP_AUDIO_STDAC_RATE_8000_HZ},
+	{.rate = 11025, .cpcap_audio_rate = CPCAP_AUDIO_STDAC_RATE_11025_HZ},
+	{.rate = 12000, .cpcap_audio_rate = CPCAP_AUDIO_STDAC_RATE_12000_HZ},
+	{.rate = 16000, .cpcap_audio_rate = CPCAP_AUDIO_STDAC_RATE_16000_HZ},
+	{.rate = 22050, .cpcap_audio_rate = CPCAP_AUDIO_STDAC_RATE_22050_HZ},
+	{.rate = 24000, .cpcap_audio_rate = CPCAP_AUDIO_STDAC_RATE_24000_HZ},
+	{.rate = 32000, .cpcap_audio_rate = CPCAP_AUDIO_STDAC_RATE_32000_HZ},
+	{.rate = 44100, .cpcap_audio_rate = CPCAP_AUDIO_STDAC_RATE_44100_HZ},
+	{.rate = 48000, .cpcap_audio_rate = CPCAP_AUDIO_STDAC_RATE_48000_HZ},
 };
 
-#define NUMBER_OF_RATES_SUPPORTED (sizeof(valid_sample_rates)/\
-				   sizeof(struct sample_rate_info_t))
-
 static DEFINE_SPINLOCK(audio_write_lock);
-/* static DEFINE_SPINLOCK(audio_read_lock) */
-static DEFINE_SPINLOCK(audio_mixer_lock);
 static unsigned long flags;
 static int read_buf_full;
-static BOOL phone_mode_on = FALSE;
-static BOOL first_call_after_mixer_open = FALSE;
-static BOOL accy_event = FALSE;
-static int primary_spkr_setting = AUDIOIC_OUT_NONE;
-static int secondary_spkr_setting = AUDIOIC_OUT_NONE;
+static int phone_mode_on = -1;
+static int primary_spkr_setting = CPCAP_AUDIO_OUT_NONE;
+static int secondary_spkr_setting = CPCAP_AUDIO_OUT_NONE;
 static unsigned int capture_mode;
 static struct omap_mcbsp_wrapper *mcbsp_wrapper;
 
-/*==========================================================================
-				GLOBAL VARIABLES
-============================================================================*/
-
-/*==========================================================================
-			LOCAL HARDWARE DEPENDENT FUNCTIONS
-============================================================================*/
 #ifdef MCBSP_WRAPPER
 
 static void omap2_mcbsp_rx_dma_callback(int lch, unsigned short ch_status,
@@ -454,15 +366,9 @@ static void omap2_mcbsp_tx_dma_callback(int lch, u16 ch_status, void *data)
 					      mcbsp_wrapper[id].tx_cb_arg);
 }
 
-/*
- * Set McBSP recv parameters
- * id           : McBSP interface ID
- * mcbsp_cfg    : McBSP register configuration
- * rp           : McBSP recv parameters
- */
-void omap2_mcbsp_set_recv_param(unsigned int id,
-				struct omap_mcbsp_reg_cfg *mcbsp_cfg,
-				struct omap_mcbsp_cfg_param *rp)
+static void omap2_mcbsp_set_recv_param(unsigned int id,
+				       struct omap_mcbsp_reg_cfg *mcbsp_cfg,
+				       struct omap_mcbsp_cfg_param *rp)
 {
 	mcbsp_cfg->spcr1 = RJUST(rp->justification);
 	mcbsp_cfg->rcr2 = RCOMPAND(rp->reverse_compand) |
@@ -485,16 +391,9 @@ void omap2_mcbsp_set_recv_param(unsigned int id,
 	return;
 }
 
-/*
- * Set McBSP transmit parameters
- * id           : McBSP interface ID
- * mcbsp_cfg    : McBSP register configuration
- * tp           : McBSP transmit parameters
- */
-
-void omap2_mcbsp_set_trans_param(unsigned int id,
-				 struct omap_mcbsp_reg_cfg *mcbsp_cfg,
-				 struct omap_mcbsp_cfg_param *tp)
+static void omap2_mcbsp_set_trans_param(unsigned int id,
+					struct omap_mcbsp_reg_cfg *mcbsp_cfg,
+					struct omap_mcbsp_cfg_param *tp)
 {
 	mcbsp_cfg->xcr2 = XCOMPAND(tp->reverse_compand) |
 	    XDATDLY(tp->data_delay);
@@ -516,17 +415,9 @@ void omap2_mcbsp_set_trans_param(unsigned int id,
 	return;
 }
 
- /*
-  * Set McBSP SRG configuration
-  * id                  : McBSP interface ID
-  * mcbsp_cfg           : McBSP register configuration
-  * interface_mode      : Master/Slave
-  * param               : McBSP SRG and FSG configuration
-  */
-
-void omap2_mcbsp_set_srg_cfg_param(unsigned int id, int interface_mode,
-				   struct omap_mcbsp_reg_cfg *mcbsp_cfg,
-				   struct omap_mcbsp_srg_fsg_cfg *param)
+static void omap2_mcbsp_set_srg_cfg_param(unsigned int id, int interface_mode,
+					  struct omap_mcbsp_reg_cfg *mcbsp_cfg,
+					  struct omap_mcbsp_srg_fsg_cfg *param)
 {
 	struct omap_mcbsp *mcbsp;
 	void __iomem *io_base;
@@ -610,11 +501,6 @@ void omap2_mcbsp_set_srg_cfg_param(unsigned int id, int interface_mode,
 	return;
 }
 
-/*
- * mcbsp power settings
- * id		: McBSP interface number
- * level	: power settings level
- */
 static void mcbsp_power_settings(unsigned int id, int level)
 {
 	struct omap_mcbsp *mcbsp;
@@ -634,11 +520,6 @@ static void mcbsp_power_settings(unsigned int id, int level)
 				 SIDLEMODE(FORCE_IDLE));
 }
 
-/*
- * Enable/Disable the sample rate generator
- * id           : McBSP interface ID
- * state        : Enable/Disable
- */
 void omap2_mcbsp_set_srg_fsg(unsigned int id, unsigned char state)
 {
 	struct omap_mcbsp *mcbsp;
@@ -667,10 +548,6 @@ void omap2_mcbsp_set_srg_fsg(unsigned int id, unsigned char state)
 	return;
 }
 
-/*
- * Stop transmitting data on a McBSP interface
- * id           : McBSP interface ID
- */
 int omap2_mcbsp_stop_datatx(unsigned int id)
 {
 	struct omap_mcbsp *mcbsp;
@@ -694,10 +571,6 @@ int omap2_mcbsp_stop_datatx(unsigned int id)
 	return 0;
 }
 
-/*
- * Stop receving data on a McBSP interface
- * id		: McBSP interface ID
- */
 int omap2_mcbsp_stop_datarx(u32 id)
 {
 	struct omap_mcbsp *mcbsp;
@@ -721,11 +594,6 @@ int omap2_mcbsp_stop_datarx(u32 id)
 	return 0;
 }
 
-/*
- * Interface Reset
- * id	: McBSP interface ID
- * Resets the McBSP interface
- */
 int omap2_mcbsp_reset(unsigned int id)
 {
 	struct omap_mcbsp *mcbsp;
@@ -755,11 +623,6 @@ int omap2_mcbsp_reset(unsigned int id)
 	return 0;
 }
 
-/*
- * Basic Reset Transmitter
- * id		: McBSP interface number
- * state	: Disable (0)/ Enable (1) the transmitter
- */
 int omap2_mcbsp_set_xrst(unsigned int id, unsigned char state)
 {
 	struct omap_mcbsp *mcbsp;
@@ -782,11 +645,6 @@ int omap2_mcbsp_set_xrst(unsigned int id, unsigned char state)
 	return 0;
 }
 
-/*
- * Reset Receiver
- * id		: McBSP interface number
- * state	: Disable (0)/ Enable (1) the receiver
- */
 int omap2_mcbsp_set_rrst(unsigned int id, unsigned char state)
 {
 	struct omap_mcbsp *mcbsp;
@@ -808,11 +666,6 @@ int omap2_mcbsp_set_rrst(unsigned int id, unsigned char state)
 	return 0;
 }
 
-/*
- * Configure the receiver parameters
- * id		: McBSP Interface ID
- * rp		: DMA Receive parameters
- */
 int omap2_mcbsp_dma_recv_params(unsigned int id,
 				struct omap_mcbsp_dma_transfer_params *rp)
 {
@@ -912,12 +765,6 @@ int omap2_mcbsp_dma_recv_params(unsigned int id,
 
 	return 0;
 }
-
-/*
- * Configure the transmitter parameters
- * id		: McBSP Interface ID
- * tp		: DMA Transfer parameters
- */
 
 int omap2_mcbsp_dma_trans_params(unsigned int id,
 				 struct omap_mcbsp_dma_transfer_params *tp)
@@ -1020,14 +867,6 @@ int omap2_mcbsp_dma_trans_params(unsigned int id,
 
 	return 0;
 }
-
-/*
- * Start receving data on a McBSP interface
- * id			: McBSP interface ID
- * cbdata		: User data to be returned with callback
- * buf_start_addr	: The destination address [physical address]
- * buf_size		: Buffer size
- */
 
 int omap2_mcbsp_receive_data(unsigned int id, void *cbdata,
 			     dma_addr_t buf_start_addr, u32 buf_size)
@@ -1158,13 +997,6 @@ int omap2_mcbsp_receive_data(unsigned int id, void *cbdata,
 	return 0;
 }
 
-/*
- * Start transmitting data through a McBSP interface
- * id			: McBSP interface ID
- * cbdata		: User data to be returned with callback
- * buf_start_addr	: The source address [This should be physical address]
- * buf_size		: Buffer size
- */
 int omap2_mcbsp_send_data(unsigned int id, void *cbdata,
 			  dma_addr_t buf_start_addr, u32 buf_size)
 {
@@ -1240,14 +1072,6 @@ int omap2_mcbsp_send_data(unsigned int id, void *cbdata,
 	return 0;
 }
 
-/*
- * configure the McBSP registers
- * id			: McBSP interface ID
- * interface_mode	: Master/Slave
- * rp			: McBSP recv parameters
- * tp			: McBSP transmit parameters
- * param		: McBSP SRG and FSG configuration
- */
 int omap2_mcbsp_params_cfg(unsigned int id, int interface_mode,
 			   struct omap_mcbsp_cfg_param *rp,
 			   struct omap_mcbsp_cfg_param *tp,
@@ -1269,265 +1093,58 @@ int omap2_mcbsp_params_cfg(unsigned int id, int interface_mode,
 }
 #endif /* MCBSP_WRAPPER */
 
-int is_cdma_supported(void)
-{
-	return 0;
-}
-
-void audio_get_time(void)
-{
-	static struct timeval prev = { 0 };
-	struct timeval now;
-	do_gettimeofday(&now);
-	/* AUDIO_DEBUG_LOG ("TIME = %ld sec, %ld usec \n", \
-	   now.tv_sec, now.tv_usec); */
-	printk(KERN_INFO "TIME =%ld msec\n",
-	       (now.tv_sec - prev.tv_sec) * 1000 + (now.tv_usec -
-						    prev.tv_usec) / 1000);
-	prev = now;
-}
-
-/*==========================================================================
-FUNCTION: audio_accy_map_type()
-
-DESCRIPTION:
-    This function maps the moto_accy types to OSS defined types
-
-ARGUMENTS PASSED:
-    None
-
-RETURN VALUE:
-    None
-
-PRE-CONDITIONS
-    state.connected_accy_mask gets set by accessory
-
-POST-CONDITIONS
-    state.oss_accy_mask contains the connected accessory mask in OSS terms
-
-IMPORTANT NOTES:
-    None
-
-============================================================================*/
-static void audio_accy_map_type(void)
-{
-	AUDIO_LEVEL3_LOG("[%s] enter\n", __func__);
-
-	/* Reset the device mask. We will set it again in this function */
-	state.oss_accy_mask = 0;
-
-#if 0 /* comment out as accy detection not ready yet */
-	if (ACCY_BITMASK_ISSET
-	    (state.connected_accy_mask, CPCAP_ACCY_EMU_HS_MONO)) {
-		state.oss_accy_mask = AUDIOIC_OUT_EMU_MONO;
-		audioic_state.emu_accy = CPCAP_ACCY_EMU_HS_MONO;
-	} else
-	    if (ACCY_BITMASK_ISSET
-		(state.connected_accy_mask, CPCAP_ACCY_EMU_HS_STEREO)) {
-		state.oss_accy_mask = AUDIOIC_OUT_EMU_STEREO;
-		audioic_state.emu_accy = CPCAP_ACCY_EMU_HS_STEREO;
-	} else {
-		audioic_state.emu_accy = CPCAP_ACCY_EMU_INVALID;
-	}
-
-	if (ACCY_BITMASK_ISSET
-	    (state.connected_accy_mask, CPCAP_ACCY_3MM5_HS_STEREO)) {
-		state.oss_accy_mask |= AUDIOIC_OUT_STEREO_HEADSET;
-	} else
-	    if (ACCY_BITMASK_ISSET(state.connected_accy_mask,
-				   CPCAP_ACCY_3MM5_HS_STEREO_MIC)) {
-		state.oss_accy_mask |= AUDIOIC_OUT_MONO_HEADSET;
-	}
-#endif
-}
-
-#if 0 /* comment out as accy detection not ready yet */
-/*==========================================================================
-FUNCTION: audio_accy_callback()
-
-DESCRIPTION:
-    This function initializes the accessory handling mechanism for the
-    audio driver
-
-ARGUMENTS PASSED:
-    None
-
-RETURN VALUE:
-    AUDIO_FAILURE - If the function is called with an incorrect client_id
-    AUDIO_SUCCESS - Otherwise Success
-
-PRE-CONDITIONS
-    None
-
-POST-CONDITIONS
-    None
-
-IMPORTANT NOTES:
-    None
-
-============================================================================*/
-static void audio_accy_callback(unsigned int client_id)
-{
-	AUDIO_LEVEL1_LOG("[%s] called\n", __func__);
-
-	if (client_id == state.accy_client_id) {
-		cpcap_accy_read(state.accy_client_id,
-				&state.connected_accy_mask);
-		AUDIO_LEVEL2_LOG("state.connected_accy_mask = %#x\n",
-				 state.connected_accy_mask);
-
-		audio_accy_map_type();
-
-		spin_lock_irqsave(&audio_mixer_lock, flags);
-
-		accy_event = TRUE;
-
-		spin_unlock_irqrestore(&audio_mixer_lock, flags);
-
-		wake_up_interruptible(&state.accy_wait_queue);
-	} else {
-		AUDIO_ERROR_LOG("%s called with wrong client_id = %d",
-				__func__, client_id);
-	}
-}
-#endif
-
-/*==========================================================================
-FUNCTION: audio_accy_init()
-
-DESCRIPTION:
-    This function initializes the accessory handling mechanism for the
-    audio driver
-
-ARGUMENTS PASSED:
-    None
-
-RETURN VALUE:
-    return value returned by Sierra API
-
-PRE-CONDITIONS
-    None
-
-POST-CONDITIONS
-    None
-
-IMPORTANT NOTES:
-    None
-
-============================================================================*/
-static int audio_accy_init(void)
-{
-	int ret_val = 0;
-
-	AUDIO_LEVEL3_LOG("[%s] enter\n", __func__);
-
-#if 0 /* comment out as accy detection not ready yet */
-	ACCY_BITMASK_SET(state.interested_accy_mask, CPCAP_ACCY_EMU_HS_MONO);
-	ACCY_BITMASK_SET(state.interested_accy_mask, CPCAP_ACCY_EMU_HS_STEREO);
-	ACCY_BITMASK_SET(state.interested_accy_mask, CPCAP_ACCY_3MM5_HS_STEREO);
-	ACCY_BITMASK_SET(state.interested_accy_mask,
-			 CPCAP_ACCY_3MM5_HS_STEREO_MIC);
-	ret_val = cpcap_accy_open(audio_accy_callback,
-				  state.interested_accy_mask,
-				  &state.accy_client_id,
-				  &state.connected_accy_mask);
-	if (ret_val < 0)
-		AUDIO_ERROR_LOG("moto_accy_open() failed\n");
-#endif
-
-	/* set the oss_accy_mask if there are any connected accessories */
-	audio_accy_map_type();
-
-	init_waitqueue_head(&state.accy_wait_queue);
-
-	return ret_val;
-}
-
-/*==========================================================================
-FUNCTION: audio_select_speakers
-
-DESCRIPTION:
-    Set speakers depending on what is passed from the user side
-
-ARGUMENTS PASSED:
-    spkr - bit mask of the outputs to be set
-
-RETURN VALUE:
-    None
-
-PRE-CONDITIONS
-    None
-
-POST-CONDITIONS
-    None
-
-IMPORTANT NOTES:
-    None
-
-============================================================================*/
 static int audio_select_speakers(int spkr)
 {
 	int local_spkr = -1;
-	int spkr1 = AUDIOIC_OUT_NONE;
-	int spkr2 = AUDIOIC_OUT_NONE;
+	int spkr1 = CPCAP_AUDIO_OUT_NONE;
+	int spkr2 = CPCAP_AUDIO_OUT_NONE;
 
 	AUDIO_LEVEL3_LOG("[%s] enter with spkr = %d\n", __func__, spkr);
 
 	if (spkr == 0) {	/* Resetting old speaker setting */
-		audioic_state.stdac_primary_speaker = AUDIOIC_OUT_NONE;
-		audioic_state.stdac_secondary_speaker = AUDIOIC_OUT_NONE;
-		audioic_state.codec_primary_speaker = AUDIOIC_OUT_NONE;
-		audioic_state.codec_secondary_speaker = AUDIOIC_OUT_NONE;
+		cpcap_audio_state.stdac_primary_speaker =
+							CPCAP_AUDIO_OUT_NONE;
+		cpcap_audio_state.stdac_secondary_speaker =
+							CPCAP_AUDIO_OUT_NONE;
+		cpcap_audio_state.codec_primary_speaker =
+							CPCAP_AUDIO_OUT_NONE;
+		cpcap_audio_state.codec_secondary_speaker =
+							CPCAP_AUDIO_OUT_NONE;
 	} else {
 		while (spkr) {
-			if ((spkr & AUDIOIC_OUT_HANDSET) == AUDIOIC_OUT_HANDSET)
-				local_spkr = AUDIOIC_OUT_HANDSET;
+			if ((spkr & CPCAP_AUDIO_OUT_HANDSET) ==
+						CPCAP_AUDIO_OUT_HANDSET)
+				local_spkr = CPCAP_AUDIO_OUT_HANDSET;
 
-			else if ((spkr & AUDIOIC_OUT_LOUDSPEAKER) ==
-				 AUDIOIC_OUT_LOUDSPEAKER)
-				local_spkr = AUDIOIC_OUT_LOUDSPEAKER;
+			else if ((spkr & CPCAP_AUDIO_OUT_LOUDSPEAKER) ==
+				 CPCAP_AUDIO_OUT_LOUDSPEAKER)
+				local_spkr = CPCAP_AUDIO_OUT_LOUDSPEAKER;
 
-			else if ((spkr & AUDIOIC_OUT_LINEOUT) ==
-				 AUDIOIC_OUT_LINEOUT)
-				local_spkr = AUDIOIC_OUT_LINEOUT;
+			else if ((spkr & CPCAP_AUDIO_OUT_LINEOUT) ==
+				 CPCAP_AUDIO_OUT_LINEOUT)
+				local_spkr = CPCAP_AUDIO_OUT_LINEOUT;
 
-			else if ((spkr & AUDIOIC_OUT_STEREO_HEADSET) ==
-				 AUDIOIC_OUT_STEREO_HEADSET)
-				local_spkr = AUDIOIC_OUT_STEREO_HEADSET;
+			else if ((spkr & CPCAP_AUDIO_OUT_STEREO_HEADSET) ==
+				 CPCAP_AUDIO_OUT_STEREO_HEADSET)
+				local_spkr = CPCAP_AUDIO_OUT_STEREO_HEADSET;
 
-			else if ((spkr & AUDIOIC_OUT_MONO_HEADSET) ==
-				 AUDIOIC_OUT_MONO_HEADSET)
-				local_spkr = AUDIOIC_OUT_MONO_HEADSET;
+			else if ((spkr & CPCAP_AUDIO_OUT_MONO_HEADSET) ==
+				 CPCAP_AUDIO_OUT_MONO_HEADSET)
+				local_spkr = CPCAP_AUDIO_OUT_MONO_HEADSET;
 
-			else if ((spkr & AUDIOIC_OUT_EMU_MONO) ==
-				 AUDIOIC_OUT_EMU_MONO)
-				local_spkr = AUDIOIC_OUT_EMU_MONO;
+			else if ((spkr & CPCAP_AUDIO_OUT_BT_MONO) ==
+				 CPCAP_AUDIO_OUT_BT_MONO)
+				local_spkr = CPCAP_AUDIO_OUT_BT_MONO;
 
-			else if ((spkr & AUDIOIC_OUT_EXT_BUS_STEREO) ==
-				 AUDIOIC_OUT_EXT_BUS_STEREO)
-				local_spkr = AUDIOIC_OUT_EXT_BUS_STEREO;
-
-			else if ((spkr & AUDIOIC_OUT_EMU_STEREO) ==
-				 AUDIOIC_OUT_EMU_STEREO)
-				local_spkr = AUDIOIC_OUT_EMU_STEREO;
-
-			else if ((spkr & AUDIOIC_OUT_EXT_BUS_MONO) ==
-				 AUDIOIC_OUT_EXT_BUS_MONO)
-				local_spkr = AUDIOIC_OUT_EXT_BUS_MONO;
-
-			else if ((spkr & AUDIOIC_OUT_BT_MONO) ==
-				 AUDIOIC_OUT_BT_MONO)
-				local_spkr = AUDIOIC_OUT_BT_MONO;
-
-			else if (local_spkr == -1 && spkr1 == AUDIOIC_OUT_NONE)
+			else if (local_spkr == -1 &&
+					spkr1 == CPCAP_AUDIO_OUT_NONE)
 				return -EINVAL;
 
-			if (spkr1 == AUDIOIC_OUT_NONE)
+			if (spkr1 == CPCAP_AUDIO_OUT_NONE)
 				spkr1 = local_spkr;
-			else {
+			else
 				if (local_spkr != -1)
 					spkr2 = local_spkr;
-			}
 
 			spkr &= ~local_spkr;
 			local_spkr = -1;
@@ -1536,41 +1153,47 @@ static int audio_select_speakers(int spkr)
 		AUDIO_LEVEL1_LOG("spkr1 = %#x, spkr2 = %#x\n", spkr1, spkr2);
 
 		if (state.dev_dsp_open_count == 1) {
-			audioic_state.stdac_primary_speaker = spkr1;
-			audioic_state.stdac_secondary_speaker = spkr2;
+			cpcap_audio_state.stdac_primary_speaker = spkr1;
+			cpcap_audio_state.stdac_secondary_speaker = spkr2;
 		}
 
 		if (state.dev_dsp1_open_count == 1) {
-			if (is_cdma_supported() &&
-			    audioic_state.rat_type == AUDIOIC_RAT_CDMA) {
-				audioic_state.ext_primary_speaker = spkr1;
-				audioic_state.ext_secondary_speaker = spkr2;
+			if (cpcap_audio_state.rat_type ==
+						CPCAP_AUDIO_RAT_CDMA) {
+				cpcap_audio_state.ext_primary_speaker = spkr1;
+				cpcap_audio_state.ext_secondary_speaker =
+									spkr2;
 			} else {
-				audioic_state.codec_primary_speaker = spkr1;
-				audioic_state.codec_secondary_speaker = spkr2;
+				cpcap_audio_state.codec_primary_speaker =
+									spkr1;
+				cpcap_audio_state.codec_secondary_speaker =
+									spkr2;
 			}
 
 			/* If the output is just BT mono then change
 			 * the codec mode */
-			if ((spkr1 == AUDIOIC_OUT_BT_MONO)
-			    && (spkr2 == AUDIOIC_OUT_NONE)) {
-				AUDIO_LEVEL1_LOG("Setting codec in \
-					clock only/BT mode\n");
-				audioic_state.codec_mode =
-				    AUDIOIC_CODEC_CLOCK_ONLY;
-				audioic_state.codec_mute = AUDIOIC_CODEC_MUTE;
+			if ((spkr1 == CPCAP_AUDIO_OUT_BT_MONO)
+			    && (spkr2 == CPCAP_AUDIO_OUT_NONE)) {
+				AUDIO_LEVEL1_LOG("Setting codec in "
+						 "clock only/BT mode\n");
+				cpcap_audio_state.codec_mode =
+				    CPCAP_AUDIO_CODEC_CLOCK_ONLY;
+				cpcap_audio_state.codec_mute =
+						CPCAP_AUDIO_CODEC_MUTE;
 			} else {
-				AUDIO_LEVEL1_LOG("Setting codec in \
-					normal mode\n");
-				audioic_state.codec_mode = AUDIOIC_CODEC_ON;
-				audioic_state.codec_mute = AUDIOIC_CODEC_UNMUTE;
+				AUDIO_LEVEL1_LOG("Setting codec in "
+						 "normal mode\n");
+				cpcap_audio_state.codec_mode =
+							CPCAP_AUDIO_CODEC_ON;
+				cpcap_audio_state.codec_mute =
+						CPCAP_AUDIO_CODEC_UNMUTE;
 			}
 		}
 	}
 
 	if ((state.dev_dsp_open_count == 1) ||
 	    (state.dev_dsp1_open_count == 1))
-		AUDIOIC_set_audio_state(&audioic_state);
+		cpcap_audio_set_audio_state(&cpcap_audio_state);
 	else {
 		primary_spkr_setting = spkr1;
 		secondary_spkr_setting = spkr2;
@@ -1579,33 +1202,7 @@ static int audio_select_speakers(int spkr)
 	return 0;
 }
 
-/*==========================================================================
-FUNCTION: audio_hw_transfer()
-
-DESCRIPTION:
-    This function transfers data to the power ic hardware via DMA
-
-ARGUMENTS PASSED:
-    stream - Stream for which transfer needs to be done
-    buf_phy - Physical address for the buffer
-    size - number of bytes to transfer
-    inode - Kernel representation for disk file
-
-RETURN VALUE:
-    AUDIO_SUCCESS - On Success
-    EBUSY - On failure
-
-PRE-CONDITIONS
-    None
-
-POST-CONDITIONS
-    None
-
-IMPORTANT NOTES:
-    None
-
-============================================================================*/
-static int audio_hw_transfer(struct audio_stream_t *str,
+static int audio_hw_transfer(struct audio_stream *str,
 			     void *buffer_phy, u32 size, struct inode *inode)
 {
 	int ret = 0;
@@ -1621,133 +1218,64 @@ static int audio_hw_transfer(struct audio_stream_t *str,
 
 	if (str->input_output == FMODE_READ) {
 		AUDIO_LEVEL3_LOG("RX-%d", size);
-		TRY(ret =
-		    omap2_mcbsp_receive_data(ssi, str,
-					     (dma_addr_t) buffer_phy, size))
+		TRY(ret = omap2_mcbsp_receive_data(ssi, str,
+				(dma_addr_t) buffer_phy, size))
 	} else {
 		AUDIO_LEVEL3_LOG("TX-%d\n", size);
-		ret =
-		    omap2_mcbsp_send_data(ssi, str, (dma_addr_t) buffer_phy,
-					  size);
+		ret = omap2_mcbsp_send_data(ssi, str, (dma_addr_t) buffer_phy,
+					size);
 	}
 
-	AUDIO_LEVEL3_LOG("[%s] exit\n", __func__);
-	return ret;
-
-ERROR_EXIT:
-	AUDIO_ERROR_LOG("[%s] exit with ret = %d\n", __func__, ret);
+out:
 	return ret;
 }
 
-/*==========================================================================
-FUNCTION: audio_timed_get_sem()
-
-DESCRIPTION:
-    This function provides a timed wait for grabbing a semaphore.
-
-ARGUMENTS PASSED:
-    sema - Semaphore to be grabbed
-
-RETURN VALUE:
-    AUDIO_SUCCESS - On Success
-    ETIMEDOUT - On failure
-
-PRE-CONDITIONS
-    None
-
-POST-CONDITIONS
-    None
-
-IMPORTANT NOTES:
-    None
-
-============================================================================*/
 static int audio_timed_get_sem(struct semaphore *sema)
 {
 	int counter = 0;
 
-	/* AUDIO_LEVEL3_LOG ("[%s] enter\n", __func__); */
-	/* AUDIO_LEVEL3_LOG ("aCurrent Jiffies=%lu\n", jiffies); */
-
 	while (counter < MAX_WAIT_TIMEOUT) {
-		if (!down_trylock(sema)) {
-			/* AUDIO_LEVEL3_LOG("Now Jiffies=%lu\n", jiffies); */
-			/* AUDIO_LEVEL3_LOG("Got Sem\n"); */
-			/* AUDIO_LEVEL3_LOG ("[%s] exit\n", __func__); */
+		if (!down_trylock(sema))
 			return 0;
-		}
 
 		counter++;
 
-		if (signal_pending(current)) {
-			/* will not wait at all if a signal is
-			 * already pending!! */
+		if (signal_pending(current))
 			set_current_state(TASK_UNINTERRUPTIBLE);
-		} else {
+		else
 			set_current_state(TASK_INTERRUPTIBLE);
-		}
 
 		schedule_timeout(TIMEOUT_TIME);
 		set_current_state(TASK_RUNNING);
 	}
 
-	AUDIO_LEVEL3_LOG("aNow Jiffies=%lu\n", jiffies);
-	AUDIO_LEVEL3_LOG("TIMEDOUT\n");
-	AUDIO_LEVEL3_LOG("[%s] exit with ret = %d\n", __func__, -ETIMEDOUT);
 	return -ETIMEDOUT;
 }
 
-/*==========================================================================
-FUNCTION: audio_setup_buf()
-
-DESCRIPTION:
-    This function creates/allocates a buffer for the requested stream
-
-ARGUMENTS PASSED:
-    str - Stream for which buffers need to be set
-    size - size of the buffer
-    inode - Kernel representation for disk file
-
-RETURN VALUE:
-    AUDIO_SUCCESS -
-    AUDIO_FAILURE - All subsequent attempts will return FAILURE
-
-PRE-CONDITIONS
-    None
-
-POST-CONDITIONS
-    None
-
-IMPORTANT NOTES:
-    None
-
-============================================================================*/
-static int audio_setup_buf(struct audio_stream_t *str, struct inode *inode)
+static int audio_setup_buf(struct audio_stream *str, struct inode *inode)
 {
 	int frag;
 	int bufsize = 0;
 	char *bufbuf = NULL;
 	dma_addr_t bufphys = 0;
 
-	AUDIO_LEVEL2_LOG("[%s] enter\n", __func__);
-
 	if (str == NULL) {
 		AUDIO_ERROR_LOG("Stream not allocated\n");
 		return -EPERM;
 	}
 
-	str->buffers = kmalloc(sizeof(struct audio_buf_t) * str->nbfrags,
+	str->buffers = kmalloc(sizeof(struct audio_buf) * str->nbfrags,
 			       GFP_KERNEL);
 
 	if (!str->buffers) {
 		AUDIO_ERROR_LOG("Error allocating buffers\n");
-		goto ERROR_EXIT;
+		goto out;
 	}
 
-	memset(str->buffers, 0, sizeof(struct audio_buf_t) * str->nbfrags);
+	memset(str->buffers, 0, sizeof(struct audio_buf) * str->nbfrags);
 
 	for (frag = 0; frag < str->nbfrags; frag++) {
-		struct audio_buf_t *b = &str->buffers[frag];
+		struct audio_buf *b = &str->buffers[frag];
 
 		/*
 		 * Let's allocate non-cached memory for DMA buffers.
@@ -1769,7 +1297,7 @@ static int audio_setup_buf(struct audio_stream_t *str, struct inode *inode)
 			} while (!bufbuf && bufsize);
 
 			if (!bufbuf)
-				goto ERROR_EXIT;
+				goto out;
 
 			b->master = bufsize;
 			memset(bufbuf, 0, bufsize);
@@ -1785,42 +1313,15 @@ static int audio_setup_buf(struct audio_stream_t *str, struct inode *inode)
 	str->bytecount = 0;
 	str->fragcount = 0;
 	sema_init(&str->sem, str->nbfrags);
-	AUDIO_LEVEL2_LOG("Buffers allocated\n");
-	AUDIO_LEVEL3_LOG("[%s] exit\n", __func__);
 	return 0;
 
-ERROR_EXIT:
+out:
 	audio_discard_buf(str, inode);
 	return -ENOMEM;
 }
 
-/*==========================================================================
-FUNCTION: audio_discard_buf()
-
-DESCRIPTION:
-    This function deallocates buffers for the requested stream
-
-ARGUMENTS PASSED:
-    stream - Stream for which the buffers need to be deallocated
-    inode - Kernel representation for disk file
-
-RETURN VALUE:
-    None
-
-PRE-CONDITIONS
-    None
-
-POST-CONDITIONS
-    None
-
-IMPORTANT NOTES:
-    None
-
-============================================================================*/
-static void audio_discard_buf(struct audio_stream_t *str, struct inode *inode)
+static void audio_discard_buf(struct audio_stream *str, struct inode *inode)
 {
-	AUDIO_LEVEL2_LOG("[%s] enter\n", __func__);
-
 	/* ensure DMA isn't using those buffers */
 	audio_buffer_reset(str, inode);
 
@@ -1838,49 +1339,20 @@ static void audio_discard_buf(struct audio_stream_t *str, struct inode *inode)
 		kfree(str->buffers);
 		str->buffers = NULL;
 	}
-
-	AUDIO_LEVEL3_LOG("[%s] exit\n", __func__);
 }
 
-/*==========================================================================
-FUNCTION: audio_process_buf()
-
-DESCRIPTION:
-    This function sends the buffer for playback or capture
-
-ARGUMENTS PASSED:
-    stream - Stream for which buffer needs to be processed
-    inode - Kernel representation for disk file
-
-RETURN VALUE:
-    AUDIO_SUCCESS - On Success
-    Errod code on failure
-
-PRE-CONDITIONS
-    None
-
-POST-CONDITIONS
-    None
-
-IMPORTANT NOTES:
-    None
-
-============================================================================*/
-static int audio_process_buf(struct audio_stream_t *str, struct inode *inode)
+static int audio_process_buf(struct audio_stream *str, struct inode *inode)
 {
 	int ret = 0;
-	/* unsigned long flags; */
-
-	AUDIO_LEVEL3_LOG("[%s] enter\n", __func__);
 
 	if (str == NULL) {
 		AUDIO_ERROR_LOG("Invalid stream parameter\n");
 		ret = -EPERM;
-		goto ERROR_EXIT;
+		goto out;
 	}
 
 	if (str->input_output == FMODE_READ) {
-		struct audio_buf_t *b = &str->buffers[str->buf_head];
+		struct audio_buf *b = &str->buffers[str->buf_head];
 
 		if (str->fragsize) {
 			ret =
@@ -1899,7 +1371,7 @@ static int audio_process_buf(struct audio_stream_t *str, struct inode *inode)
 			str->buf_head = 0;
 	} else {
 		while (str->pending_frags) {
-			struct audio_buf_t *b = &str->buffers[str->buf_head];
+			struct audio_buf *b = &str->buffers[str->buf_head];
 			u32 buf_size = str->fragsize - b->offset;
 
 			AUDIO_LEVEL3_LOG
@@ -1907,28 +1379,19 @@ static int audio_process_buf(struct audio_stream_t *str, struct inode *inode)
 			     buf_size, str->fragsize, b->offset);
 
 			if (buf_size) {
-				ret =
-				    audio_hw_transfer(str,
-						      (void *)(b->buf_addr +
-							       b->offset),
-						      buf_size, str->inode);
+				ret = audio_hw_transfer(str,
+					(void *)(b->buf_addr + b->offset),
+						buf_size, str->inode);
 			}
 
 			/* Do not continue and move the frags forward..
 			 * the completion of the next transfer will
 			 * put it thru. */
-			if (ret == -EBUSY) {
-				/* AUDIO_DEBUG_LOG("No more space, wait
-				 * for buffer to get empty\n"); */
+			if (ret == -EBUSY)
 				return ret;
-			}
 
-			if (ret) {
-				/* AUDIO_ERROR_LOG("Transfer \
-				   Failed.[%d][%d]\n", \
-				   ret, buf_size); */
-				goto ERROR_EXIT;
-			}
+			if (ret)
+				goto out;
 
 			b->buf_ref++;
 			b->offset += buf_size;
@@ -1941,49 +1404,20 @@ static int audio_process_buf(struct audio_stream_t *str, struct inode *inode)
 		}
 	}
 
-	AUDIO_LEVEL3_LOG("[%s] exit with ret = %d\n", __func__, ret);
 	return ret;
 
-ERROR_EXIT:
+out:
 	str->in_use = 0;
-	/* AUDIO_ERROR_LOG ("[%s] exit with ret = %d\n", \
-	   __func__, ret); */
 	return ret;
 }
 
-/*==========================================================================
-FUNCTION: audio_buffer_reset()
-
-DESCRIPTION:
-    This function resets the audio buffer structures
-
-ARGUMENTS PASSED:
-    stream - Stream for which the buffers need to be deallocated
-    inode - Kernel representation for disk file
-
-RETURN VALUE:
-    None
-
-PRE-CONDITIONS
-    None
-
-POST-CONDITIONS
-    None
-
-IMPORTANT NOTES:
-    None
-
-============================================================================*/
-static void audio_buffer_reset(struct audio_stream_t *str, struct inode *inode)
+static void audio_buffer_reset(struct audio_stream *str, struct inode *inode)
 {
 	int frag;
-	AUDIO_LEVEL2_LOG("[%s] enter\n", __func__);
 
 	if (str->buffers) {
-		/* audio_stop_ssi (inode); */
-
 		for (frag = 0; frag < str->nbfrags; frag++) {
-			struct audio_buf_t *b = &str->buffers[frag];
+			struct audio_buf *b = &str->buffers[frag];
 			b->offset = 0;
 			b->buf_ref = 0;
 		}
@@ -1997,60 +1431,21 @@ static void audio_buffer_reset(struct audio_stream_t *str, struct inode *inode)
 	str->buf_head = 0;
 	str->usr_head = 0;
 	str->fragsize = 0;
-
-	AUDIO_LEVEL3_LOG("[%s] exit\n", __func__);
 }
 
-/*==========================================================================
-FUNCTION: mcbsp_dma_tx_cb()
-
-DESCRIPTION:
-    This function is the callback IRQ handler called by the MCBSP module
-    upon receiving a DMA irq
-
-ARGUMENTS PASSED:
-    ch_status - dma channel status value
-    arg - the stream_callback structure
-
-RETURN VALUE:
-    AUDIO_SUCCESS - Returns SUCCESS on the first attempt to open /dev/dsp
-    AUDIO_FAILURE - All subsequent attempts will return FAILURE
-
-PRE-CONDITIONS
-    None
-
-POST-CONDITIONS
-    None
-
-IMPORTANT NOTES:
-    @TODO: This interrupt handle is on the assumption that there will one
-	interrupt for one buffer. We need to safeguard against this.
-
-============================================================================*/
 static void mcbsp_dma_tx_cb(u32 ch_status, void *arg)
 {
-	struct audio_stream_t *str;
-	struct audio_buf_t *b;
-
-#ifdef AUDIO_ITP_DEBUG
-	printk(KERN_INFO "[%s] enter\n", __func__);
-	audio_get_time();
-#endif
+	struct audio_stream *str;
+	struct audio_buf *b;
 
 	if (unlikely(!arg)) {
 		AUDIO_ERROR_LOG("No Stream information!!\n");
 		return;
 	}
 
-	str = (struct audio_stream_t *)arg;
+	str = (struct audio_stream *)arg;
 	b = &str->buffers[str->buf_tail];
 
-	/*  if (unlikely(!str->callback))
-	   {
-	   AUDIO_ERROR_LOG("No Callback information!!\n");
-	   return;
-	   }
-	 */
 	if (ch_status) {
 		AUDIO_ERROR_LOG("Error happend[%d 0x%x]!!\n", ch_status,
 				ch_status);
@@ -2059,8 +1454,8 @@ static void mcbsp_dma_tx_cb(u32 ch_status, void *arg)
 
 	/* Try to fill again */
 	if (!str->buffers) {
-		AUDIO_ERROR_LOG("received DMA IRQ for non \
-			existent buffers!\n");
+		AUDIO_ERROR_LOG("received DMA IRQ for non "
+				"existent buffers!\n");
 		return;
 	} else if (b->buf_ref && --b->buf_ref == 0
 		   && b->offset >= str->fragsize) {
@@ -2068,8 +1463,6 @@ static void mcbsp_dma_tx_cb(u32 ch_status, void *arg)
 		b->offset = 0;
 		str->bytecount += str->fragsize;
 		str->fragcount++;
-
-		AUDIO_LEVEL2_LOG("str->buf_tail = %d done !!\n", str->buf_tail);
 
 		if (++str->buf_tail >= str->nbfrags)
 			str->buf_tail = 0;
@@ -2080,48 +1473,17 @@ static void mcbsp_dma_tx_cb(u32 ch_status, void *arg)
 	}
 }
 
-/*==========================================================================
-FUNCTION: mcbsp_dma_rx_cb()
-
-DESCRIPTION:
-    This function is the callback IRQ handler called by the MCBSP module
-    upon receiving a DMA irq for a filled up buffer
-
-ARGUMENTS PASSED:
-    ch_status - dma channel status value
-    arg - the stream_callback structure
-
-RETURN VALUE:
-    AUDIO_SUCCESS - Returns SUCCESS on the first attempt to open /dev/dsp
-    AUDIO_FAILURE - All subsequent attempts will return FAILURE
-
-PRE-CONDITIONS
-    None
-
-POST-CONDITIONS
-    None
-
-IMPORTANT NOTES:
-    @TODO: This interrupt handle is on the assumption that there will one
-	interrupt for one buffer. We need to safeguard against this.
-
-============================================================================*/
 static void mcbsp_dma_rx_cb(u32 ch_status, void *arg)
 {
-	struct audio_stream_t *str;
-	struct audio_buf_t *b;
-
-#ifdef AUDIO_ITP_DEBUG
-	printk(KERN_INFO "[%s] enter\n", __func__);
-	audio_get_time();
-#endif
+	struct audio_stream *str;
+	struct audio_buf *b;
 
 	if (unlikely(!arg)) {
 		AUDIO_ERROR_LOG("No Stream information!!\n");
 		return;
 	}
 
-	str = (struct audio_stream_t *)arg;
+	str = (struct audio_stream *)arg;
 
 	b = &str->buffers[str->buf_tail];
 
@@ -2136,8 +1498,8 @@ static void mcbsp_dma_rx_cb(u32 ch_status, void *arg)
 
 	/* Try to fill again */
 	if (!str->buffers) {
-		AUDIO_ERROR_LOG("received DMA IRQ for \
-			non existent buffers!\n");
+		AUDIO_ERROR_LOG("received DMA IRQ for "
+				"non existent buffers!\n");
 		return;
 	} else if (b->buf_ref && --b->buf_ref == 0) {
 		if (++str->buf_tail >= str->nbfrags)
@@ -2154,29 +1516,6 @@ static void mcbsp_dma_rx_cb(u32 ch_status, void *arg)
 	}
 }
 
-/*==========================================================================
-FUNCTION: audio_configure_ssi()
-
-DESCRIPTION:
-    This function configures the requested SSI (MCBSP) port
-
-ARGUMENTS PASSED:
-    inode - Kernel representation for disk file
-
-RETURN VALUE:
-    AUDIO_SUCCESS - Returns SUCCESS on the first attempt to open /dev/dsp
-    AUDIO_FAILURE - All subsequent attempts will return FAILURE
-
-PRE-CONDITIONS
-    None
-
-POST-CONDITIONS
-    None
-
-IMPORTANT NOTES:
-    None
-
-============================================================================*/
 static int audio_configure_ssi(struct inode *inode, struct file *file)
 {
 	int minor = MINOR(inode->i_rdev);
@@ -2186,16 +1525,7 @@ static int audio_configure_ssi(struct inode *inode, struct file *file)
 		tx_cfg_params.word_length1 = OMAP_MCBSP_WORD_32;
 		tx_params.word_length1 = OMAP_MCBSP_WORD_32;
 		ssi = STDAC_SSI;
-#ifdef AUDIO_I2S_MODE
-		/* tx_cfg_params.fs_polarity = OMAP_MCBSP_FS_ACTIVE_LOW; */
-		/* Low polarity for I2S mode */
-		/* tx_cfg_params.phase = OMAP_MCBSP_FRAME_DUALPHASE; */
-		/* Needed for I2S mode */
-#endif
 	} else {		/* CODEC setting */
-
-		/* TI is doing low polarity for mono mode */
-		/* tx_cfg_params.fs_polarity  = OMAP_MCBSP_FS_ACTIVE_LOW; */
 		tx_cfg_params.word_length1 = OMAP_MCBSP_WORD_16;
 		tx_params.word_length1 = OMAP_MCBSP_WORD_16;
 		ssi = CODEC_SSI;
@@ -2203,81 +1533,41 @@ static int audio_configure_ssi(struct inode *inode, struct file *file)
 		/* support for stereo capture */
 		if (file->f_mode & FMODE_READ) {
 			if (capture_mode == 0) {	/* mono capture */
-				printk(KERN_INFO "Shivank: mono capture\n");
 				rx_cfg_params.word_length1 = OMAP_MCBSP_WORD_16;
 				rx_params.word_length1 = OMAP_MCBSP_WORD_16;
 			} else {
-				printk(KERN_INFO "Shivank: stereo capture\n");
 				rx_cfg_params.word_length1 = OMAP_MCBSP_WORD_32;
 				rx_params.word_length1 = OMAP_MCBSP_WORD_32;
 			}
 		}
 	}
 
-	AUDIO_LEVEL2_LOG("[%s] enter\n", __func__);
-
 	TRY(omap_mcbsp_set_io_type(ssi, 0))
 
-	/* Request a Serial port */
 	TRY(omap_mcbsp_request(ssi))
 
-	/* Reset the port before configuring it */
 	TRY(omap2_mcbsp_reset(ssi))
 
 	TRY(omap2_mcbsp_params_cfg(ssi, OMAP_MCBSP_SLAVE, &rx_cfg_params,
 				&tx_cfg_params, &srg_fsg_params))
 
-	if (file->f_mode & FMODE_WRITE) {
-		printk(KERN_INFO "Inside_PLAYBACK SSI\n");
+	if (file->f_mode & FMODE_WRITE)
 		TRY(omap2_mcbsp_dma_trans_params(ssi, &tx_params))
-	}
 
-	if (file->f_mode & FMODE_READ) {
-		AUDIO_LEVEL3_LOG("Inside RECORD SSI\n");
+	if (file->f_mode & FMODE_READ)
 		omap2_mcbsp_dma_recv_params(ssi, &rx_params);
-	}
 
-	AUDIO_LEVEL3_LOG("[%s] exit\n", __func__);
+	return 0 ;
 
-	return AUDIO_SUCCESS;
-
-ERROR_EXIT:
-	AUDIO_ERROR_LOG("Operation failed inside %s\n", __func__);
-	/* omap_mcbsp_stop(ssi); */
+out:
 	omap_mcbsp_free(ssi);
-
-	return AUDIO_FAILURE;
+	return -EPERM ;
 }
 
-/*==========================================================================
-FUNCTION: audio_stop_ssi()
-
-DESCRIPTION:
-    This function resets the requested SSI (MCBSP) port
-
-ARGUMENTS PASSED:
-    inode - Kernel representation for disk file
-
-RETURN VALUE:
-    AUDIO_SUCCESS - Returns SUCCESS on the first attempt to open /dev/dsp
-    AUDIO_FAILURE - All subsequent attempts will return FAILURE
-
-PRE-CONDITIONS
-    None
-
-POST-CONDITIONS
-    None
-
-IMPORTANT NOTES:
-    None
-
-============================================================================*/
 int audio_stop_ssi(struct inode *inode, struct file *file)
 {
 	int minor = MINOR(inode->i_rdev);
 	int ssi;
-
-	AUDIO_LEVEL2_LOG("[%s] enter\n", __func__);
 
 	ssi = (minor == state.dev_dsp) ? STDAC_SSI : CODEC_SSI;
 
@@ -2294,307 +1584,85 @@ int audio_stop_ssi(struct inode *inode, struct file *file)
 	(void)omap2_mcbsp_reset(ssi);
 	(void)omap_mcbsp_free(ssi);
 
-	return AUDIO_SUCCESS;
-
-ERROR_EXIT:
-	AUDIO_ERROR_LOG("Operation failed inside %s\n", __func__);
-	return AUDIO_FAILURE;
-}
-
-/*==========================================================================
-FUNCTION: audio_sync()
-
-DESCRIPTION:
-    This function waits till all the buffers get played out
-
-ARGUMENTS PASSED:
-    str - Stream for which sync needs to be done
-    inode - Kernel representation for disk file
-
-RETURN VALUE:
-    AUDIO_SUCCESS - Returns SUCCESS on the first attempt to open /dev/dsp
-    AUDIO_FAILURE - All subsequent attempts will return FAILURE
-
-PRE-CONDITIONS
-    None
-
-POST-CONDITIONS
-    None
-
-IMPORTANT NOTES:
-    None
-
-============================================================================*/
-int audio_sync(struct audio_stream_t *str, struct inode *inode)
-{
-#if 0
-	int count = 0;
-	DECLARE_WAITQUEUE(wait, current);
-	init_waitqueue_head(&str->wq);
-
-	AUDIO_LEVEL2_LOG("[%s] enter\n", __func__);
-
-	/* Let's wait for all buffers to complete */
-	set_current_state(TASK_INTERRUPTIBLE);
-	add_wait_queue(&str->wq, &wait);
-
-	while ((str->pending_frags
-		|| (atomic_read(&str->sem.count) < str->nbfrags))
-	       && (!signal_pending(current))) {
-		schedule_timeout(TIMEOUT_TIME);
-
-		if (count++ > MAX_WAIT_TIMEOUT)
-			break;
-		set_current_state(TASK_INTERRUPTIBLE);
-	}
-
-	set_current_state(TASK_RUNNING);
-	remove_wait_queue(&str->wq, &wait);
-
-	if (count >= MAX_WAIT_TIMEOUT) {
-		audio_buffer_reset(str, inode);
-		return -ETIMEDOUT;
-	}
-
-	printk(KERN_INFO "audio_sync, count = %d\n", count);
-#endif
 	return 0;
+
+out:
+	return -EPERM;
 }
 
-/*==========================================================================
-				FILE OPERATION FUNCTIONS
-============================================================================*/
-/*==========================================================================
-FUNCTION: audio_stdac_open()
-
-DESCRIPTION:
-    This function is called when an open system call is made on /dev/dsp
-
-ARGUMENTS PASSED:
-    inode - Kernel representation for disk file
-    file  - opened by kernel on file open (i.e./dev/dsp) and passed by
-	kernel to every function (functions in the file_operations
-	structure) that operates on the file
-
-RETURN VALUE:
-    AUDIO_SUCCESS - Returns SUCCESS on the first attempt to open /dev/dsp
-    AUDIO_FAILURE - All subsequent attempts will return FAILURE
-
-PRE-CONDITIONS
-    None
-
-POST-CONDITIONS
-    None
-
-IMPORTANT NOTES:
-    None
-
-============================================================================*/
 static int audio_stdac_open(struct inode *inode, struct file *file)
 {
 	int error;
 
-	AUDIO_LEVEL2_LOG("[%s] enter\n", __func__);
+	mutex_lock(&audio_lock);
 
 	if (state.dev_dsp_open_count == 1) {
 		error = -EBUSY;
-		goto ERROR_EXIT;
+		goto out;
 	}
 
-	/* Set usage count */
 	state.dev_dsp_open_count = 1;
 	file->private_data = inode;
 
-	/* @TODO: Try removing this later */
-	/* audio_stop_ssi (inode, file); */
-	/* End TODO */
-
 	if (file->f_mode & FMODE_WRITE) {
-		/* 1. Create stream, reset buffers */
 		state.stdac_out_stream =
-		    kmalloc(sizeof(struct audio_stream_t), GFP_KERNEL);
+		    kmalloc(sizeof(struct audio_stream), GFP_KERNEL);
 		memset(state.stdac_out_stream, 0,
-		       sizeof(struct audio_stream_t));
+		       sizeof(struct audio_stream));
 		state.stdac_out_stream->inode = inode;
 		audio_buffer_reset(state.stdac_out_stream, inode);
 
-		/* 2. Configure SSI */
 		TRY(error = audio_configure_ssi(inode, file))
 
-		/* 3. Set Audio IC */
-		audioic_state.stdac_mode = AUDIOIC_STDAC_ON;
-		audioic_state.stdac_mute = AUDIOIC_STDAC_UNMUTE;
+		cpcap_audio_state.stdac_mode = CPCAP_AUDIO_STDAC_ON;
+		cpcap_audio_state.stdac_mute = CPCAP_AUDIO_STDAC_UNMUTE;
 
-		audioic_state.stdac_primary_speaker = primary_spkr_setting;
-		audioic_state.stdac_secondary_speaker = secondary_spkr_setting;
+		cpcap_audio_state.stdac_primary_speaker = primary_spkr_setting;
+		cpcap_audio_state.stdac_secondary_speaker =
+							secondary_spkr_setting;
 	}
 
-	AUDIOIC_set_audio_state(&audioic_state);
+	cpcap_audio_set_audio_state(&cpcap_audio_state);
 
-	AUDIO_LEVEL3_LOG("[%s] exit \n", __func__);
+	mutex_unlock(&audio_lock);
+	return 0;
 
-	return AUDIO_SUCCESS;
-
-ERROR_EXIT:
-	AUDIO_ERROR_LOG("%d, [%s] exit \n", error, __func__);
+out:
+	mutex_unlock(&audio_lock);
 	return error;
 }
 
-/*==========================================================================
-FUNCTION: audio_stdac_release()
-
-DESCRIPTION:
-    This function is called when an close system call is made on /dev/dsp
-
-ARGUMENTS PASSED:
-    inode - Kernel representation for disk file
-    file  - opened by kernel on file open (i.e./dev/dsp) and passed by
-	kernel to every function (functions in the file_operations
-	structure) that operates on the file
-
-RETURN VALUE:
-    Always SUCCESS
-
-PRE-CONDITIONS
-    None
-
-POST-CONDITIONS
-    None
-
-IMPORTANT NOTES:
-    None
-
-============================================================================*/
 static int audio_stdac_release(struct inode *inode, struct file *file)
 {
-	AUDIO_LEVEL2_LOG("[%s] enter\n", __func__);
-
+	mutex_lock(&audio_lock);
 	state.dev_dsp_open_count = 0;
 
 	if (file->f_mode & FMODE_WRITE) {
-		AUDIO_LEVEL3_LOG("Clearing write path for Stdac\n");
-
-		/* Stop SSI, DMA */
 		audio_stop_ssi(inode, file);
 
-		/* Free buffers */
 		audio_discard_buf(state.stdac_out_stream, inode);
 		kfree(state.stdac_out_stream);
 		state.stdac_out_stream = NULL;
 
-		/* Set the Audio IC */
-		audioic_state.stdac_mode = AUDIOIC_STDAC_OFF;
-		audioic_state.stdac_mute = AUDIOIC_STDAC_MUTE;
+		cpcap_audio_state.stdac_mode = CPCAP_AUDIO_STDAC_OFF;
+		cpcap_audio_state.stdac_mute = CPCAP_AUDIO_STDAC_MUTE;
 
-		audioic_state.stdac_primary_speaker = AUDIOIC_OUT_NONE;
-		audioic_state.stdac_secondary_speaker = AUDIOIC_OUT_NONE;
+		cpcap_audio_state.stdac_primary_speaker = CPCAP_AUDIO_OUT_NONE;
+		cpcap_audio_state.stdac_secondary_speaker =
+							CPCAP_AUDIO_OUT_NONE;
 	}
 
-	AUDIOIC_set_audio_state(&audioic_state);
+	cpcap_audio_set_audio_state(&cpcap_audio_state);
+	mutex_unlock(&audio_lock);
 
-	AUDIO_LEVEL3_LOG("[%s] exit \n", __func__);
-
-	return AUDIO_SUCCESS;
+	return 0;
 }
 
-/*==========================================================================
-FUNCTION: audio_mixer_poll
-
-DESCRIPTION:
-    This function is called when a poll system call is made on /dev/mixer
-
-ARGUMENTS PASSED:
-    file        file pointer
-    wait        poll table for this poll()
-
-RETURN VALUE:
-    mask of POLLIN|POLLRDNORM
-
-PRE-CONDITIONS
-    None
-
-POST-CONDITIONS
-    None
-
-IMPORTANT NOTES:
-    None
-
-============================================================================*/
-static unsigned int audio_mixer_poll(struct file *file, poll_table * wait)
-{
-	int ret_val = 0;
-	AUDIO_LEVEL2_LOG("[%s] enter\n", __func__);
-
-	/* For devices connected at power up we need to return right away if
-	 * connected_accy_mask has anything interesting */
-	if ((first_call_after_mixer_open == FALSE) &&
-	    (state.interested_accy_mask & state.connected_accy_mask)) {
-		AUDIO_LEVEL1_LOG("Accy connected at power up\n");
-		ret_val = POLLIN | POLLRDNORM;
-	} else {		/* Normal operation of poll */
-
-		/* Add our wait queue to the poll table */
-		poll_wait(file, &state.accy_wait_queue, wait);
-
-		spin_lock_irqsave(&audio_mixer_lock, flags);
-
-		if (accy_event == TRUE) {
-			ret_val = POLLIN | POLLRDNORM;
-			accy_event = FALSE;
-		}
-
-		spin_unlock_irqrestore(&audio_mixer_lock, flags);
-	}
-
-	first_call_after_mixer_open = TRUE;
-
-	AUDIO_LEVEL3_LOG("[%s] exit \n", __func__);
-
-	return ret_val;
-}
-
-/*==========================================================================
-FUNCTION: audio_ioctl()
-
-DESCRIPTION:
-    This function is called when an ioctl system call is made on /dev/audio
-
-ARGUMENTS PASSED:
-    inode - Kernel representation for disk file
-    file  - opened by kernel on file open (i.e./dev/audio) and passed by
-	kernel to every function (functions in the file_operations
-	structure) that operates on the file
-    cmd   - IOCTL command sent from the user space
-    arg   - Any argument sent with the ioctl command eg: audio_route,
-	output_device, gain etc
-
-RETURN VALUE:
-    AUDIO_SUCCESS - If the ioctl command succeeded
-    AUDIO_FAILURE - If the ioctl command failed
-
-PRE-CONDITIONS
-    None
-
-POST-CONDITIONS
-    None
-
-IMPORTANT NOTES:
-    None
-
-============================================================================*/
-static int audio_ioctl(
-	struct inode *inode,
-	struct file *file,
-	unsigned int cmd,
-	unsigned long arg)
+static int audio_ioctl(struct inode *inode, struct file *file,
+			unsigned int cmd, unsigned long arg)
 {
 	int minor = MINOR(inode->i_rdev);
 
-	AUDIO_LEVEL1_LOG("[%s] enter with audio_ioctl 0x%08x\n", __func__, cmd);
-
-	/* audio_suspend_lockout(state, file); */
-
-	/* dispatch based on command */
 	switch (cmd) {
 	case OSS_GETVERSION:
 		return put_user(SOUND_VERSION, (int *)arg);
@@ -2608,8 +1676,7 @@ static int audio_ioctl(
 			     sizeof(unsigned int)))
 
 			/* validate if rate is proper */
-			for (; count < NUMBER_OF_RATES_SUPPORTED;
-				 count++) {
+			for (; count < NUMBER_OF_RATES_SUPPORTED; count++) {
 				if (valid_sample_rates[count].rate
 					== samp_rate)
 					break;
@@ -2623,23 +1690,23 @@ static int audio_ioctl(
 			}
 
 			if (minor == state.dev_dsp) {
-				audioic_state.stdac_rate =
-				    valid_sample_rates[count].audioic_rate;
+				cpcap_audio_state.stdac_rate =
+				    valid_sample_rates[count].cpcap_audio_rate;
 			} else {
 				/* codec only supports two sampling rates */
 				if (samp_rate == 8000 || samp_rate == 16000) {
-					audioic_state.codec_rate =
+					cpcap_audio_state.codec_rate =
 					    valid_sample_rates[count].
-					    audioic_rate;
+					    cpcap_audio_rate;
 				} else {
-					AUDIO_ERROR_LOG("[%d] Unsupported \
-						Codec sample rate!!\n",
-						(u32) samp_rate);
+					AUDIO_ERROR_LOG("[%d] Unsupported "
+							"Codec sample rate!!\n",
+							(u32) samp_rate);
 					return -EPERM;
 				}
 			}
 
-			AUDIOIC_set_audio_state(&audioic_state);
+			cpcap_audio_set_audio_state(&cpcap_audio_state);
 			return 0;
 		}
 
@@ -2654,7 +1721,6 @@ static int audio_ioctl(
 				if (val != 1)
 					return -EINVAL;
 			} else {	/* Codec case */
-
 				if (file->f_mode & FMODE_WRITE) {
 					if (val != 0)
 						return -EINVAL;
@@ -2669,20 +1735,7 @@ static int audio_ioctl(
 		}
 
 	case SNDCTL_DSP_SYNC:
-		{
-			struct audio_stream_t *str;
-			if (minor == state.dev_dsp) {
-				str = (file->f_mode & FMODE_WRITE) ?
-					state.stdac_out_stream :
-					state.stdac_in_stream;
-			} else {
-				str = (file->f_mode & FMODE_WRITE) ?
-					state.codec_out_stream :
-					state.codec_in_stream;
-			}
-
-			return audio_sync(str, inode);
-		}
+		return 0;
 
 	case SNDCTL_DSP_GETBLKSIZE:
 		{
@@ -2696,7 +1749,7 @@ static int audio_ioctl(
 				/* McBSP/DMA driver returns blank data
 				 * if any other size other than
 				 * 800 is used for capture */
-				val = 800;
+				val = AUDIO_CAPTURE_SIZE;
 			}
 
 			put_user(val, (int *)arg);
@@ -2706,7 +1759,7 @@ static int audio_ioctl(
 	case SNDCTL_DSP_GETISPACE:
 		{
 			audio_buf_info inf = { 0 };
-			struct audio_stream_t *str;
+			struct audio_stream *str;
 			if (minor == state.dev_dsp) {
 				str = (file->f_mode & FMODE_WRITE) ?
 					state.stdac_out_stream :
@@ -2731,7 +1784,7 @@ static int audio_ioctl(
 
 	case SNDCTL_DSP_RESET:
 		{
-			struct audio_stream_t *str;
+			struct audio_stream *str;
 			int ssi;
 			if (minor == state.dev_dsp) {
 				str = (file->f_mode & FMODE_WRITE) ?
@@ -2745,8 +1798,6 @@ static int audio_ioctl(
 				ssi = CODEC_SSI;
 			}
 
-			/* Stop SSI, DMA */
-			/* audio_stop_ssi (inode, file); */
 			TRY(omap2_mcbsp_set_xrst(ssi, OMAP_MCBSP_XRST_DISABLE))
 
 			if (file->f_mode & FMODE_READ)
@@ -2760,7 +1811,7 @@ static int audio_ioctl(
 		{
 			int bytes_left_in_kernel = 0;
 
-			struct audio_stream_t *str = (minor == state.dev_dsp) ?
+			struct audio_stream *str = (minor == state.dev_dsp) ?
 						state.stdac_out_stream :
 						state.codec_out_stream;
 
@@ -2772,9 +1823,7 @@ static int audio_ioctl(
 			}
 
 			TRY(put_user(bytes_left_in_kernel, (int *)arg))
-			AUDIO_LEVEL2_LOG("bytes_left_in_kernel = %d\n",
-					bytes_left_in_kernel);
-			return AUDIO_SUCCESS;
+			return 0;
 		}
 
 		/* MIXER ioctls */
@@ -2782,8 +1831,8 @@ static int audio_ioctl(
 		{
 			int spkr;
 			TRY(copy_from_user(&spkr, (int *)arg, sizeof(int)))
-			    AUDIO_LEVEL2_LOG
-			    ("SOUND_MIXER_OUTSRC with spkr = %#x\n", spkr);
+			AUDIO_LEVEL2_LOG
+				("SOUND_MIXER_OUTSRC with spkr = %#x\n", spkr);
 			return audio_select_speakers(spkr);
 		}
 
@@ -2793,8 +1842,8 @@ static int audio_ioctl(
 			TRY(copy_from_user(&mic, (int *)arg, sizeof(int)))
 			AUDIO_LEVEL2_LOG(
 				"SOUND_MIXER_RECSRC with mic = %#x\n", mic);
-			audioic_state.microphone = mic;
-			AUDIOIC_set_audio_state(&audioic_state);
+			cpcap_audio_state.microphone = mic;
+			cpcap_audio_set_audio_state(&cpcap_audio_state);
 			return 0;
 		}
 
@@ -2803,25 +1852,24 @@ static int audio_ioctl(
 			unsigned int gain;
 			TRY(copy_from_user(&gain,
 				(unsigned int *)arg, sizeof(unsigned int)))
-			audioic_state.output_gain = gain;
-			AUDIOIC_set_audio_state(&audioic_state);
+			cpcap_audio_state.output_gain = gain;
+			cpcap_audio_set_audio_state(&cpcap_audio_state);
 			AUDIO_LEVEL2_LOG(
 				"SOUND_MIXER_VOLUME, output_gain = %d\n",
-				audioic_state.output_gain);
+				cpcap_audio_state.output_gain);
 			return 0;
 		}
 
 	case SOUND_MIXER_RECLEV:
 		{
 			unsigned int gain;
-			TRY(copy_from_user(&gain,
-				(unsigned int *)arg,
-				sizeof(unsigned int)))
-			audioic_state.input_gain = gain;
-			AUDIOIC_set_audio_state(&audioic_state);
+			TRY(copy_from_user(&gain, (unsigned int *)arg,
+						sizeof(unsigned int)))
+			cpcap_audio_state.input_gain = gain;
+			cpcap_audio_set_audio_state(&cpcap_audio_state);
 			AUDIO_LEVEL2_LOG(
 				"SOUND_MIXER_RECLEV, input_gain = %d\n",
-				audioic_state.input_gain);
+				cpcap_audio_state.input_gain);
 			return 0;
 		}
 
@@ -2830,94 +1878,43 @@ static int audio_ioctl(
 			put_user(state.oss_accy_mask, (int *)arg);
 			AUDIO_LEVEL2_LOG("state.oss_accy_mask = %#x\n",
 					 state.oss_accy_mask);
-			return AUDIO_SUCCESS;
-		}
-
-	case SOUND_MIXER_PRIVATE1:	/* RAT change */
-		{
 			return 0;
-		}
-
-		/* case SOUNDM_MIXER_PRIVATE2: *//* MUTE output */
-		{
-			/* break; */
 		}
 
 	default:
 		return 0;
 	}
 
-ERROR_EXIT:
-	AUDIO_ERROR_LOG("Operation failed inside %s\n", __func__);
-	return -EFAULT;
+out:
+	return -EPERM;
 }
 
-/*===========================================================================
-FUNCTION: audio_write()
-
-DESCRIPTION:
-    This function is called when a write system call is made on /dev/dsp or
-    /dev/dsp1
-
-ARGUMENTS PASSED:
-    inode     - Kernel representation for disk file
-    bufStruct - Pointer to the buffer with data
-    count     - Number of bytes to write
-    nouse     - Unused
-
-RETURN VALUE:
-    size      - Number of bytes written
-
-PRE-CONDITIONS
-    None
-
-POST-CONDITIONS
-    None
-
-IMPORTANT NOTES:
-    None
-
-=============================================================================*/
-static ssize_t audio_write(
-	struct file *file,
-	const char *buffer,
-	size_t count,
-	loff_t *nouse)
+static ssize_t audio_write(struct file *file, const char *buffer, size_t count,
+								loff_t *nouse)
 {
 	int chunksize, ret = 0;
 	const char *buffer0 = buffer;
 	struct inode *inode = (struct inode *)file->private_data;
 	int minor = MINOR(inode->i_rdev);
-	struct audio_stream_t *str = (minor == state.dev_dsp) ?
+	struct audio_stream *str = (minor == state.dev_dsp) ?
 			state.stdac_out_stream : state.codec_out_stream;
 
-	AUDIO_LEVEL3_LOG("[%s] enter\n", __func__);
-
-	/* audio_get_time(); */
-
+	mutex_lock(&audio_lock);
 	spin_lock_irqsave(&audio_write_lock, flags);
 
 	if (minor == state.dev_dsp) {
-		/* Allocate buffers first */
 		if (file->f_mode & FMODE_WRITE) {
 			if (!str->active) {
 				int temp_size = count % STDAC_FIFO_SIZE;
 				str->fragsize =
 				    (count - temp_size) + STDAC_FIFO_SIZE;
-				AUDIO_LEVEL2_LOG
-				    ("count = %d, str->fragsize = %d\n", count,
-				     str->fragsize);
-				printk(KERN_INFO "count = %d, \
-					str->fragsize = %d\n", \
-					count, str->fragsize);
-				printk(KERN_INFO \
-					"allocating bufs for stdac\n");
 				str->nbfrags = AUDIO_NBFRAGS_DEFAULT;
 				if (audio_setup_buf(str, file->private_data)) {
 					AUDIO_ERROR_LOG
 					    ("Unable to allocate memory\n");
 					spin_unlock_irqrestore
 					    (&audio_write_lock, flags);
+					mutex_unlock(&audio_lock);
 					return -ENOMEM;
 				}
 
@@ -2925,23 +1922,18 @@ static ssize_t audio_write(
 			}
 		}
 	} else {
-		/* Allocate buffers first */
 		if (file->f_mode & FMODE_WRITE) {
-			/* @TODO: also check for rd and write both flag */
 			if (!str->active) {
 				int temp_size = count % CODEC_FIFO_SIZE;
 				str->fragsize =
 				    (count - temp_size) + CODEC_FIFO_SIZE;
-				AUDIO_LEVEL2_LOG
-				    ("count = %d, str->fragsize = %d\n", count,
-				     str->fragsize);
-				printk(KERN_INFO "allocating bufs for codec\n");
 				str->nbfrags = AUDIO_NBFRAGS_DEFAULT;
 				if (audio_setup_buf(str, file->private_data)) {
 					AUDIO_ERROR_LOG
 					    ("Unable to allocate memory\n");
 					spin_unlock_irqrestore
 					    (&audio_write_lock, flags);
+					mutex_unlock(&audio_lock);
 					return -ENOMEM;
 				}
 
@@ -2951,16 +1943,14 @@ static ssize_t audio_write(
 	}
 
 	while (count > 0) {
-		struct audio_buf_t *buf = &str->buffers[str->usr_head];
+		struct audio_buf *buf = &str->buffers[str->usr_head];
 
 		/* Wait for a buffer to become free */
 		if (file->f_flags & O_NONBLOCK) {
-			AUDIO_LEVEL3_LOG("write in non-blocking mode\n");
 			ret = -EAGAIN;
 			if (down_trylock(&str->sem))
 				break;
 		} else {
-			AUDIO_LEVEL3_LOG("write in blocking mode\n");
 			ret = audio_timed_get_sem(&str->sem);
 			if (ret) {
 				AUDIO_ERROR_LOG("audio_write: timedout\n");
@@ -2968,19 +1958,17 @@ static ssize_t audio_write(
 			}
 		}
 
-		/* Feed the current buffer */
 		chunksize = str->fragsize - buf->offset;
 
 		if (chunksize > count)
 			chunksize = count;
-
-		AUDIO_LEVEL3_LOG("write %d to %d\n", chunksize, str->usr_head);
 
 		if (copy_from_user(buf->data + buf->offset,
 				buffer, chunksize)) {
 			AUDIO_ERROR_LOG("Audio: CopyFrom User failed \n");
 			up(&str->sem);
 			spin_unlock_irqrestore(&audio_write_lock, flags);
+			mutex_unlock(&audio_lock);
 			return -EFAULT;
 		}
 
@@ -2993,13 +1981,11 @@ static ssize_t audio_write(
 			break;
 		}
 
-		/* Update pointers and send current fragment to DMA */
 		buf->offset = 0;
 
 		if (++str->usr_head >= str->nbfrags)
 			str->usr_head = 0;
 
-		/* Add the num of frags pending */
 		str->pending_frags++;
 
 		ret = audio_process_buf(str, inode);
@@ -3008,306 +1994,154 @@ static ssize_t audio_write(
 	if (buffer - buffer0)
 		ret = buffer - buffer0;
 
-	AUDIO_LEVEL3_LOG("[%s] exit, ret = %d\n", __func__, ret);
-
 	spin_unlock_irqrestore(&audio_write_lock, flags);
+	mutex_unlock(&audio_lock);
 
 	return ret;
 }
 
-/*===========================================================================
-FUNCTION: audio_stdac_read()
-
-DESCRIPTION:
-    This function is called when a read system call is made on /dev/dsp
-
-ARGUMENTS PASSED:
-    inode       - Kernel representation for disk file
-    bufStruct   - Buffer in which read samples should be returned
-    size        - NUmber of bytes to read
-    nouse       - unused
-
-RETURN VALUE:
-    size - Number of bytes read
-
-PRE-CONDITIONS
-    None
-
-POST-CONDITIONS
-    None
-
-IMPORTANT NOTES:
-    None
-
-=============================================================================*/
-static ssize_t audio_stdac_read(
-	struct file *file,
-	char *bufStruct,
-	size_t size,
-	loff_t *nouse)
-{
-	AUDIO_LEVEL2_LOG("[%s] enter\n", __func__);
-
-	AUDIO_LEVEL3_LOG("[%s] exit \n", __func__);
-
-	return 0;
-}
-
-/*===========================================================================
-FUNCTION: audio_codec_open()
-
-DESCRIPTION:
-    This function is called when an open system call is made on /dev/dsp1
-
-ARGUMENTS PASSED:
-    inode - Kernel representation for disk file
-    file  - opened by kernel on file open (i.e./dev/dsp) and passed by
-	kernel to every function (functions in the file_operations
-	structure) that operates on the file
-
-RETURN VALUE:
-    AUDIO_SUCCESS - Returns SUCCESS on the first attempt to open /dev/dsp
-    AUDIO_FAILURE - All subsequent attempts will return FAILURE
-
-PRE-CONDITIONS
-    None
-
-POST-CONDITIONS
-    None
-
-IMPORTANT NOTES:
-    None
-
-=============================================================================*/
 static int audio_codec_open(struct inode *inode, struct file *file)
 {
-	int error;
+	mutex_lock(&audio_lock);
+	if (state.dev_dsp1_open_count == 1)
+		goto err;
 
-	AUDIO_LEVEL2_LOG("[%s] enter\n", __func__);
-
-	if (state.dev_dsp1_open_count == 1) {
-		error = -EBUSY;
-		goto ERROR_EXIT;
-	}
-
-	/* Set usage count */
 	state.dev_dsp1_open_count = 1;
 	file->private_data = inode;
 
 	if (file->f_flags & O_TRUNC) {
-		AUDIO_LEVEL1_LOG("CODEC in phone mode called \n");
-
-		/* First check for Mono BT */
-		if ((primary_spkr_setting == AUDIOIC_OUT_BT_MONO) ||
-		    (secondary_spkr_setting == AUDIOIC_OUT_BT_MONO)) {
-			audioic_state.codec_mode = AUDIOIC_CODEC_CLOCK_ONLY;
-			audioic_state.codec_mute = AUDIOIC_CODEC_MUTE;
+		if ((primary_spkr_setting == CPCAP_AUDIO_OUT_BT_MONO) ||
+		    (secondary_spkr_setting == CPCAP_AUDIO_OUT_BT_MONO)) {
+			cpcap_audio_state.codec_mode =
+						CPCAP_AUDIO_CODEC_CLOCK_ONLY;
+			cpcap_audio_state.codec_mute = CPCAP_AUDIO_CODEC_MUTE;
 		} else {
-			audioic_state.codec_mode = AUDIOIC_CODEC_ON;
-			audioic_state.codec_mute = AUDIOIC_CODEC_UNMUTE;
+			cpcap_audio_state.codec_mode = CPCAP_AUDIO_CODEC_ON;
+			cpcap_audio_state.codec_mute =
+						CPCAP_AUDIO_CODEC_UNMUTE;
 		}
 
-		if (is_cdma_supported()) {
-			AUDIO_LEVEL2_LOG("Codec Open for CDMA");
-			audioic_state.ext_primary_speaker =
-			    primary_spkr_setting;
-			audioic_state.ext_secondary_speaker =
-			    secondary_spkr_setting;
-			audioic_state.analog_source =
-			    AUDIOIC_ANALOG_SOURCE_STEREO;
-			audioic_state.rat_type = AUDIOIC_RAT_CDMA;
-		} else {
-			AUDIO_LEVEL2_LOG("Codec Open for UMTS");
-			audioic_state.codec_primary_speaker =
-			    primary_spkr_setting;
-			audioic_state.codec_secondary_speaker =
-			    secondary_spkr_setting;
-			audioic_state.rat_type = AUDIOIC_RAT_2G;
-		}
+		cpcap_audio_state.ext_primary_speaker = primary_spkr_setting;
+		cpcap_audio_state.ext_secondary_speaker =
+						secondary_spkr_setting;
+		cpcap_audio_state.analog_source =
+					CPCAP_AUDIO_ANALOG_SOURCE_STEREO;
+		cpcap_audio_state.rat_type = CPCAP_AUDIO_RAT_CDMA;
 
-		phone_mode_on = TRUE;
+		phone_mode_on = 1;
 	} else {
 		if (file->f_mode & FMODE_WRITE) {
-			/* 1. Create stream, reset buffers */
 			state.codec_out_stream =
-			    kmalloc(sizeof(struct audio_stream_t), GFP_KERNEL);
+			    kmalloc(sizeof(struct audio_stream), GFP_KERNEL);
 			memset(state.codec_out_stream, 0,
-			       sizeof(struct audio_stream_t));
+			       sizeof(struct audio_stream));
 			state.codec_out_stream->inode = inode;
 			audio_buffer_reset(state.codec_out_stream, inode);
 
-			/* 2. Configure SSI */
 			TRY(audio_configure_ssi(inode, file))
 
-			    /* 3. Set Audio IC */
-			    audioic_state.codec_mode = AUDIOIC_CODEC_ON;
-			audioic_state.codec_mute = AUDIOIC_CODEC_UNMUTE;
-
-			audioic_state.codec_primary_speaker =
-			    primary_spkr_setting;
-			audioic_state.codec_secondary_speaker =
-			    secondary_spkr_setting;
+			cpcap_audio_state.codec_mode = CPCAP_AUDIO_CODEC_ON;
+			cpcap_audio_state.codec_mute = CPCAP_AUDIO_CODEC_UNMUTE;
+			cpcap_audio_state.codec_primary_speaker =
+							primary_spkr_setting;
+			cpcap_audio_state.codec_secondary_speaker =
+							secondary_spkr_setting;
 		}
 
 		if (file->f_mode & FMODE_READ) {
-			printk(KERN_INFO "CODEC in RECORD mode called \n");
-			/* 1. Create stream, reset buffers */
 			state.codec_in_stream =
-			    kmalloc(sizeof(struct audio_stream_t), GFP_KERNEL);
+			    kmalloc(sizeof(struct audio_stream), GFP_KERNEL);
 			memset(state.codec_in_stream, 0,
-			       sizeof(struct audio_stream_t));
+			       sizeof(struct audio_stream));
 			state.codec_in_stream->inode = inode;
 
-			/* 2. Configure SSI */
 			TRY(audio_configure_ssi(inode, file))
 
-			    /* 3. Set Audio IC */
-			    audioic_state.codec_mode = AUDIOIC_CODEC_ON;
+			cpcap_audio_state.codec_mode = CPCAP_AUDIO_CODEC_ON;
 		}
 
-		audioic_state.rat_type = AUDIOIC_RAT_NONE;
+		cpcap_audio_state.rat_type = CPCAP_AUDIO_RAT_NONE;
 	}
 
-	AUDIOIC_set_audio_state(&audioic_state);
+	cpcap_audio_set_audio_state(&cpcap_audio_state);
+	mutex_unlock(&audio_lock);
 
-	AUDIO_LEVEL3_LOG("[%s] exit \n", __func__);
+	return 0;
 
-	return AUDIO_SUCCESS;
-
-ERROR_EXIT:
-	AUDIO_ERROR_LOG("Operation failed inside %s\n", __func__);
-	return AUDIO_FAILURE;
+out:
+	mutex_unlock(&audio_lock);
+	return -EPERM;
+err:
+	mutex_unlock(&audio_lock);
+	return -EBUSY;
 }
 
-/*===========================================================================
-FUNCTION: audio_codec_release()
-
-DESCRIPTION:
-    This function is called when an close system call is made on /dev/dsp1
-
-ARGUMENTS PASSED:
-    inode - Kernel representation for disk file
-    file  - opened by kernel on file open (i.e./dev/dsp) and passed by
-	kernel to every function (functions in the file_operations
-	structure) that operates on the file
-
-RETURN VALUE:
-    Always SUCCESS
-
-PRE-CONDITIONS
-    None
-
-POST-CONDITIONS
-    None
-
-IMPORTANT NOTES:
-    None
-
-=============================================================================*/
 static int audio_codec_release(struct inode *inode, struct file *file)
 {
-	AUDIO_LEVEL2_LOG("[%s] enter\n", __func__);
-
+	mutex_lock(&audio_lock);
 	state.dev_dsp1_open_count = 0;
 
-	if (phone_mode_on == TRUE) {
-		audioic_state.codec_mode = AUDIOIC_CODEC_OFF;
-		audioic_state.codec_mute = AUDIOIC_CODEC_MUTE;
-		phone_mode_on = FALSE;
-		audioic_state.codec_primary_speaker = AUDIOIC_OUT_NONE;
-		audioic_state.codec_secondary_speaker = AUDIOIC_OUT_NONE;
+	if (phone_mode_on == 1) {
+		cpcap_audio_state.codec_mode = CPCAP_AUDIO_CODEC_OFF;
+		cpcap_audio_state.codec_mute = CPCAP_AUDIO_CODEC_MUTE;
+		phone_mode_on = 0;
+		cpcap_audio_state.codec_primary_speaker =
+							CPCAP_AUDIO_OUT_NONE;
+		cpcap_audio_state.codec_secondary_speaker =
+							CPCAP_AUDIO_OUT_NONE;
 	} else {
 		if (file->f_mode & FMODE_WRITE) {
-			printk(KERN_INFO "inside \
-				(file->f_mode & FMODE_WRITE)\n");
-			/* Stop SSI, DMA */
 			audio_stop_ssi(inode, file);
 
-			/* Free buffers */
 			audio_discard_buf(state.codec_out_stream, inode);
 			kfree(state.codec_out_stream);
 			state.codec_out_stream = NULL;
 
-			/* Clear Audio IC setting */
-			audioic_state.codec_mode = AUDIOIC_CODEC_OFF;
-			audioic_state.codec_mute = AUDIOIC_CODEC_MUTE;
+			cpcap_audio_state.codec_mode = CPCAP_AUDIO_CODEC_OFF;
+			cpcap_audio_state.codec_mute = CPCAP_AUDIO_CODEC_MUTE;
 
-			audioic_state.codec_primary_speaker = AUDIOIC_OUT_NONE;
-			audioic_state.codec_secondary_speaker =
-			    AUDIOIC_OUT_NONE;
+			cpcap_audio_state.codec_primary_speaker =
+			  CPCAP_AUDIO_OUT_NONE;
+			cpcap_audio_state.codec_secondary_speaker =
+							CPCAP_AUDIO_OUT_NONE;
 		}
 
 		if (file->f_mode & FMODE_READ) {
-			/* Stop SSI, DMA */
 			audio_stop_ssi(inode, file);
 
-			/* Free buffers */
 			audio_discard_buf(state.codec_in_stream, inode);
 			kfree(state.codec_in_stream);
 			state.codec_in_stream = NULL;
 
-			/* Clear Audio IC Settings */
-			audioic_state.codec_mode = AUDIOIC_CODEC_OFF;
+			cpcap_audio_state.codec_mode = CPCAP_AUDIO_CODEC_OFF;
 		}
 	}
 
-	AUDIOIC_set_audio_state(&audioic_state);
+	cpcap_audio_set_audio_state(&cpcap_audio_state);
+	mutex_unlock(&audio_lock);
 
-	AUDIO_LEVEL3_LOG("[%s] exit \n", __func__);
-
-	return AUDIO_SUCCESS;
+	return 0;
 }
 
-/*===========================================================================
-FUNCTION: audio_codec_read()
-
-DESCRIPTION:
-    This function is called when a read system call is made on /dev/dsp1
-
-ARGUMENTS PASSED:
-    inode       - Kernel representation for disk file
-    bufStruct   - Buffer in which read samples should be returned
-    size        - NUmber of bytes to read
-    nouse       - unused
-
-RETURN VALUE:
-    size - Number of bytes read
-
-PRE-CONDITIONS
-    None
-
-POST-CONDITIONS
-    None
-
-IMPORTANT NOTES:
-    @TODO: Investigate whether read_buf_full needs to be a count or BOOL
-
-=============================================================================*/
-static ssize_t audio_codec_read(
-	struct file *file,
-	char *buffer,
-	size_t size,
-	loff_t *nouse)
+static ssize_t audio_codec_read(struct file *file, char *buffer, size_t size,
+								loff_t *nouse)
 {
-	struct audio_stream_t *str = state.codec_in_stream;
+	struct audio_stream *str = state.codec_in_stream;
 	int local_size = size, ret = 0;
 
-	AUDIO_LEVEL3_LOG("[%s] enter\n", __func__);
+	mutex_lock(&audio_lock);
 
-	if (size <= 0)
-		return size;
-	/* audio_get_time(); */
-
-	/* spin_lock_irqsave(&audio_write_lock, flags); */
-
-	if (str == NULL) {
-		AUDIO_ERROR_LOG("Stream not allocated\n");
-		return -EPERM;
+	if (size <= 0) {
+		ret = size;
+		goto err;
 	}
 
-	/* Allocate buffers first */
+	if (str == NULL) {
+		ret = -EPERM;
+		goto err;
+	}
+
 	if (file->f_mode & FMODE_READ) {
-		/* @TODO: Also check for read and write both flag */
 		if (str->fragsize != size) {
 			str->fragsize = size;
 			str->nbfrags = AUDIO_NBFRAGS_DEFAULT;
@@ -3315,15 +2149,14 @@ static ssize_t audio_codec_read(
 			init_waitqueue_head(&str->wq);
 			if (audio_setup_buf(str, file->private_data)) {
 				AUDIO_ERROR_LOG("Unable to allocate memory\n");
-				/* spin_unlock_irqrestore(&audio_write_lock,
-				   flags); */
-				return -ENOMEM;
+				ret = -ENOMEM;
+				goto err;
 			}
 		}
 	}
 
 	while (size > 0) {
-		struct audio_buf_t *buf = &str->buffers[str->usr_head];
+		struct audio_buf *buf = &str->buffers[str->usr_head];
 
 		/* Start the stream if has not already been started. The first
 		 * time around we call process_buf back to back to start both
@@ -3334,15 +2167,14 @@ static ssize_t audio_codec_read(
 			if (ret == -EBUSY) {
 				AUDIO_ERROR_LOG(
 					"buffer processing failed to start\n");
-				return ret;
+				goto err;
 			} else {
 				ret = audio_process_buf(str,
 					((struct inode *)file->private_data));
 				if (ret == -EBUSY) {
-					AUDIO_ERROR_LOG( \
-						"buffer processing failed to \
-						start for second buf\n");
-					return ret;
+					AUDIO_ERROR_LOG("buffer processing "
+					"failed to start for second buf\n");
+					goto err;
 				} else {
 					str->active = 1;
 				}
@@ -3357,12 +2189,10 @@ static ssize_t audio_codec_read(
 		if (read_buf_full < 0)
 			read_buf_full = 0;
 
-		AUDIO_LEVEL2_LOG("read %d from %d\n", str->fragsize,
-				 str->usr_head);
-
 		if (copy_to_user(buffer, buf->data, str->fragsize)) {
 			AUDIO_ERROR_LOG("Audio: CopyTo User failed \n");
-			return -EFAULT;
+			ret = -EFAULT;
+			goto err;
 		}
 
 		if (++str->usr_head >= str->nbfrags)
@@ -3371,141 +2201,55 @@ static ssize_t audio_codec_read(
 		size -= str->fragsize;
 	}
 
-	AUDIO_LEVEL3_LOG("t [%s] exit, size = %d\n", __func__, size);
-
-	/* spin_unlock_irqrestore(&audio_write_lock, flags); */
-
+	mutex_unlock(&audio_lock);
 	return local_size;
+err:
+	mutex_unlock(&audio_lock);
+	return ret;
 }
 
-/*===========================================================================
-FUNCTION: audio_mixer_open()
-
-DESCRIPTION:
-    This function is called when an open system call is made on /dev/mixer
-
-ARGUMENTS PASSED:
-    inode - Kernel representation for disk file
-    file  - opened by kernel on file open (i.e./dev/dsp) and passed by
-	kernel to every function (functions in the file_operations
-	structure) that operates on the file
-
-RETURN VALUE:
-    AUDIO_SUCCESS - Returns SUCCESS on the first attempt to open /dev/mixer
-    All subsequent attempts will return -EBUSY
-
-PRE-CONDITIONS
-    None
-
-POST-CONDITIONS
-    None
-
-IMPORTANT NOTES:
-    None
-
-=============================================================================*/
 static int audio_mixer_open(struct inode *inode, struct file *file)
 {
-	int ret_val = 0;
-
-	AUDIO_LEVEL2_LOG("[%s] enter\n", __func__);
-
+	mutex_lock(&audio_lock);
 	if (state.dev_mixer_open_count == 1)
-		return -EBUSY;
+		goto err;
 
-	/* Set usage count */
 	state.dev_mixer_open_count = 1;
-
-	/* Initialize accessory handling */
-	ret_val = audio_accy_init();
-	if (ret_val != 0)
-		AUDIO_ERROR_LOG("Accy init failed inside %s\n", __func__);
-
-	return ret_val;
+	mutex_unlock(&audio_lock);
+	return 0;
+err:
+	mutex_unlock(&audio_lock);
+	return -EBUSY;
 }
 
-/*===========================================================================
-FUNCTION: audio_mixer_close()
-
-DESCRIPTION:
-    This function is called when a close system call is made on /dev/mixer
-
-ARGUMENTS PASSED:
-    inode - Kernel representation for disk file
-    file  - opened by kernel on file open (i.e./dev/dsp) and passed by
-	kernel to every function (functions in the file_operations
-	structure) that operates on the file
-
-RETURN VALUE:
-    AUDIO_SUCCESS - Returns SUCCESS on the first attempt to open /dev/mixer
-    AUDIO_FAILURE - All subsequent attempts will return FAILURE
-
-PRE-CONDITIONS
-    None
-
-POST-CONDITIONS
-    None
-
-IMPORTANT NOTES:
-    None
-
-=============================================================================*/
 static int audio_mixer_close(struct inode *inode, struct file *file)
 {
-	int ret_val = AUDIO_SUCCESS;
-
-	AUDIO_LEVEL2_LOG("[%s] enter\n", __func__);
-#if 0 /* comment out as accy detection not ready yet */
-	ret_val = cpcap_accy_close(state.accy_client_id, audio_accy_callback);
-	if (ret_val < 0)
-		AUDIO_ERROR_LOG("moto_accy_close() failed\n");
-#endif
-	/* Set usage count */
+	mutex_lock(&audio_lock);
 	state.dev_mixer_open_count = 0;
-
-	return ret_val;
+	mutex_unlock(&audio_lock);
+	return 0;
 }
 
-/*===========================================================================
-			REGISTER/ UNREGISTER FUNCTIONS
-=============================================================================*/
-/*===========================================================================
-FUNCTION: audio_init()
-
-DESCRIPTION:
-    This function is called when a module is installed by the kernel either
-    externally or internally
-
-ARGUMENTS PASSED:
-    None
-
-RETURN VALUE:
-    AUDIO_SUCCESS - Returns SUCCESS if audio driver is successfully
-			registered with the kernel
-    AUDIO_FAILURE - If the Audio driver could not be registered
-
-PRE-CONDITIONS
-    None
-
-POST-CONDITIONS
-    None
-
-IMPORTANT NOTES:
-    None
-
-=============================================================================*/
 static int __init audio_init(void)
 {
-	int err = 0;
+	int err = platform_driver_register(&audio_driver);
 
-	AUDIO_LEVEL2_LOG("[%s] enter\n", __func__);
-
-	mcbsp_wrapper =
-	    kzalloc(omap_mcbsp_count * sizeof(struct omap_mcbsp_wrapper),
-		    GFP_KERNEL);
-	err = platform_driver_register(&audio_driver);
 	if (err)
 		return err;
+
+	return 0;
+}
+
+static void __exit audio_exit(void)
+{
+	platform_driver_unregister(&audio_driver);
+}
+
+static int audio_probe(struct platform_device *dev)
+{
+	mcbsp_wrapper =
+		kzalloc(omap_mcbsp_count * sizeof(struct omap_mcbsp_wrapper),
+		    GFP_KERNEL);
 
 	/* /dev/dsp - stdac */
 	state.dev_dsp = register_sound_dsp(&audio_stdac_fops, -1);
@@ -3522,38 +2266,14 @@ static int __init audio_init(void)
 	state.codec_out_stream = NULL;
 	state.codec_in_stream = NULL;
 
-	AUDIO_LEVEL3_LOG("[%s] exit \n", __func__);
-	return err;
+	cpcap_audio_state.cpcap = dev->dev.platform_data;
+	cpcap_audio_init(&cpcap_audio_state);
+
+	return 0;
 }
 
-/*===========================================================================
-FUNCTION: audio_exit()
-
-DESCRIPTION:
-    This function is called when a module is removed by rmmod command
-
-ARGUMENTS PASSED:
-    None
-
-RETURN VALUE:
-    None
-
-PRE-CONDITIONS
-    None
-
-POST-CONDITIONS
-    None
-
-IMPORTANT NOTES:
-    None
-
-=============================================================================*/
-static void __exit audio_exit(void)
+static int audio_remove(struct platform_device *dev)
 {
-	AUDIO_LEVEL2_LOG("[%s] enter\n", __func__);
-
-	platform_driver_unregister(&audio_driver);
-
 	unregister_sound_dsp(state.dev_dsp);
 	unregister_sound_dsp(state.dev_dsp1);
 	unregister_sound_mixer(state.dev_mixer);
@@ -3566,49 +2286,8 @@ static void __exit audio_exit(void)
 	state.codec_out_stream = NULL;
 	state.codec_in_stream = NULL;
 
-	AUDIO_LEVEL3_LOG("[%s] exit \n", __func__);
-}
-
-/*===========================================================================
-FUNCTION: audio_probe()
-
-DESCRIPTION:
-    This function is callback function called from the power management module
-
-ARGUMENTS PASSED:
-    dev - the device structure used to store device specific information
-	that is used by the suspexit, resume and remove functions
-
-RETURN VALUE:
-    Always return 0
-
-PRE-CONDITIONS
-    None
-
-POST-CONDITIONS
-    None
-
-IMPORTANT NOTES:
-    None
-
-=============================================================================*/
-static int audio_probe(struct platform_device *dev)
-{
-	AUDIO_LEVEL2_LOG("[%s] enter\n", __func__);
-
-	omap_cfg_reg(P21_OMAP34XX_MCBSP2_FSX);
-	omap_cfg_reg(N21_OMAP34XX_MCBSP2_CLKX);
-	omap_cfg_reg(R21_OMAP34XX_MCBSP2_DR);
-	omap_cfg_reg(M21_OMAP34XX_MCBSP2_DX);
-
-	audioic_state.cpcap = dev->dev.platform_data;
-	AUDIOIC_init(&audioic_state);
-
-	AUDIO_LEVEL3_LOG("[%s] exit \n", __func__);
 	return 0;
 }
-
-/*===========================================================================*/
 
 module_init(audio_init);
 module_exit(audio_exit);
