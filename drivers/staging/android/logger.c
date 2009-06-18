@@ -26,7 +26,10 @@
 #include "logger.h"
 
 #include <asm/ioctls.h>
-
+#define KERNEL_LOG
+#ifdef KERNEL_LOG
+#include <linux/console.h>
+#endif
 /*
  * struct logger_log - represents a specific log, such as 'main' or 'radio'
  *
@@ -56,6 +59,17 @@ struct logger_reader {
 	struct list_head	list;	/* entry in logger_log's list */
 	size_t			r_off;	/* current read head offset */
 };
+
+#ifdef KERNEL_LOG
+static void logger_kernel_write(struct console *co, const char *s, unsigned count);
+static struct console loggercons = {
+    name:	"logger",
+    write:	logger_kernel_write,
+    flags:	CON_ENABLED,
+    index:	-1,
+};
+
+#endif
 
 /* logger_offset - returns index 'n' into the log via (optimized) modulus */
 #define logger_offset(n)	((n) & (log->size - 1))
@@ -285,7 +299,7 @@ static void do_write_log(struct logger_log *log, const void *buf, size_t count)
 		memcpy(log->buffer, buf + len, count - len);
 
 	log->w_off = logger_offset(log->w_off + count);
-
+	
 }
 
 /*
@@ -464,7 +478,7 @@ static unsigned int logger_poll(struct file *file, poll_table *wait)
 	if (log->w_off != reader->r_off)
 		ret |= POLLIN | POLLRDNORM;
 	mutex_unlock(&log->mutex);
-
+	
 	return ret;
 }
 
@@ -557,6 +571,110 @@ DEFINE_LOGGER_DEVICE(log_main, LOGGER_LOG_MAIN, 64*1024)
 DEFINE_LOGGER_DEVICE(log_events, LOGGER_LOG_EVENTS, 256*1024)
 DEFINE_LOGGER_DEVICE(log_radio, LOGGER_LOG_RADIO, 64*1024)
 
+#ifdef KERNEL_LOG
+static struct file_operations kernel_logger_fops = {
+        .owner = THIS_MODULE,
+        .read = logger_read,
+//      	.aio_write = logger_kernel_write,
+        .poll = logger_poll,
+        .unlocked_ioctl = logger_ioctl,
+        .compat_ioctl = logger_ioctl,
+        .open = logger_open,
+        .release = logger_release,
+};
+
+
+static unsigned char _buf_log_kernel[64*1024];
+
+static struct logger_log log_kernel = {
+        .buffer = _buf_log_kernel,
+        .misc ={
+                .minor =MISC_DYNAMIC_MINOR,
+                .name = "log_kernel",
+                .fops = & kernel_logger_fops,
+                .parent = NULL,
+        },
+        .wq = __WAIT_QUEUE_HEAD_INITIALIZER(log_kernel.wq),
+        .readers = LIST_HEAD_INIT(log_kernel.readers),
+        .mutex = __MUTEX_INITIALIZER(log_kernel.mutex),
+        .w_off = 0,
+        .head = 0,
+        .size = 64*1024,
+};
+
+
+static void logger_kernel_write(struct console *co, const char *s, unsigned count)
+{
+        struct logger_entry header;
+        struct timespec now;
+        struct logger_log *log= &log_kernel;
+        unsigned int msg_len;
+        int prio=3;
+        struct iovec vec[3];
+        struct iovec *iov;
+        int vec_count=3;
+        ssize_t ret = 0;
+        const char tag[7] ="kernel\0";
+	iov=&vec[0];
+	/* since s is a pointer to LOG_BUF and we know LOG_BUF is continuous, s[-3]='<', s[-2] is the log level and s[-1]='>'.If not, we set loglevel as default value 0*/
+	/*switch (s[-2]) {
+		case '0': prio=3;break;
+		case '1': prio=3;break;
+		case '2': prio=3;break;
+		case '3': prio=6;break;
+		case '4': prio=5;break;
+		case '5': prio=4;break;
+		case '6': prio=4;break;
+		case '7': prio=3;break;
+		default:  prio=3;	
+	}*/
+        vec[0].iov_base = (unsigned char *) &prio;
+        vec[0].iov_len  = 1;
+        vec[1].iov_base = (void *)tag;
+        vec[1].iov_len = strlen(tag) + 1;
+        vec[2].iov_base = (void *)s;
+        vec[2].iov_len  = count;
+        msg_len= vec[0].iov_len+vec[1].iov_len+vec[2].iov_len;
+        now = current_kernel_time();
+
+        header.pid = 0;
+        header.tid = 0;
+        header.sec = now.tv_sec;
+        header.nsec= now.tv_nsec;
+        header.len = min_t(size_t, msg_len, LOGGER_ENTRY_MAX_PAYLOAD);
+
+        //mutex_lock(&log->mutex);
+
+        do_write_log(log, &header, sizeof(struct logger_entry));
+
+        fix_up_readers(log, sizeof(struct logger_entry) + header.len);
+
+        while (vec_count-- > 0) {
+                size_t len;
+
+                /* figure out how much of this vector we can keep */
+                len = min_t(size_t, iov->iov_len, header.len - ret);
+
+                /* write out this segment's payload */
+                do_write_log(log, iov->iov_base, len);
+
+                iov++;
+        }
+
+        //mutex_unlock(&log->mutex);
+
+        /* wake up any blocked readers */
+        wake_up_interruptible(&log->wq);
+
+        return ;
+
+}
+
+
+
+
+#endif
+
 static struct logger_log * get_log_from_minor(int minor)
 {
 	if (log_main.misc.minor == minor)
@@ -565,6 +683,10 @@ static struct logger_log * get_log_from_minor(int minor)
 		return &log_events;
 	if (log_radio.misc.minor == minor)
 		return &log_radio;
+#ifdef KERNEL_LOG
+	if (log_kernel.misc.minor == minor)
+		return &log_kernel;
+#endif
 	return NULL;
 }
 
@@ -600,8 +722,15 @@ static int __init logger_init(void)
 	ret = init_log(&log_radio);
 	if (unlikely(ret))
 		goto out;
-
+#ifdef KERNEL_LOG
+	ret = init_log(&log_kernel);
+        if (unlikely(ret))
+                goto out;
+	register_console(&loggercons);
+#endif
 out:
 	return ret;
 }
 device_initcall(logger_init);
+
+
