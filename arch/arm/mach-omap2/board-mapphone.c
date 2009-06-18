@@ -62,6 +62,7 @@
 #define MAPPHONE_LM_3530_INT_GPIO	92
 #define MAPPHONE_AKM8973_INT_GPIO	175
 #define MAPPHONE_WL1271_NSHUTDOWN_GPIO	179
+#define MAPPHONE_AUDIO_PATH_GPIO	143
 
 char *bp_model = "CDMA";
 
@@ -73,6 +74,23 @@ static void __init mapphone_init_irq(void)
 	scm_clk_init();
 #endif
 	omap_gpio_init();
+}
+
+static void mapphone_audio_init(void)
+{
+	gpio_request(MAPPHONE_AUDIO_PATH_GPIO, "mapphone audio path");
+
+	omap_cfg_reg(P21_OMAP34XX_MCBSP2_FSX);
+	omap_cfg_reg(N21_OMAP34XX_MCBSP2_CLKX);
+	omap_cfg_reg(R21_OMAP34XX_MCBSP2_DR);
+	omap_cfg_reg(M21_OMAP34XX_MCBSP2_DX);
+	omap_cfg_reg(K26_OMAP34XX_MCBSP3_FSX);
+	omap_cfg_reg(W21_OMAP34XX_MCBSP3_CLKX);
+	omap_cfg_reg(U21_OMAP34XX_MCBSP3_DR);
+	omap_cfg_reg(V21_OMAP34XX_MCBSP3_DX);
+
+	gpio_direction_output(MAPPHONE_AUDIO_PATH_GPIO, 1);
+	omap_cfg_reg(AE5_34XX_GPIO143);
 }
 
 static struct omap_uart_config mapphone_uart_config __initdata = {
@@ -611,6 +629,7 @@ static void __init mapphone_init(void)
 	mapphone_panel_init();
 	mapphone_sensors_init();
 	mapphone_touch_init();
+	mapphone_audio_init();
 	usb_musb_init();
 	mapphone_ehci_init();
 	mapphone_sdrc_init();
