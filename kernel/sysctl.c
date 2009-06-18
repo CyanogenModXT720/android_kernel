@@ -58,6 +58,10 @@
 #include <asm/io.h>
 #endif
 
+#ifdef CONFIG_DEBUG_MEMLEAK
+#include <linux/memleak.h>
+#endif
+
 static int deprecated_sysctl_warning(struct __sysctl_args *args);
 
 #if defined(CONFIG_SYSCTL)
@@ -1449,6 +1453,16 @@ static struct ctl_table debug_table[] = {
 		.ctl_name	= CTL_UNNUMBERED,
 		.procname	= "exception-trace",
 		.data		= &show_unhandled_signals,
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.proc_handler	= proc_dointvec
+	},
+#endif
+#ifdef CONFIG_DEBUG_MEMLEAK
+	{
+		.ctl_name	= CTL_UNNUMBERED,
+		.procname	= "kmemleak_module",
+		.data		= &kmemleak_module,
 		.maxlen		= sizeof(int),
 		.mode		= 0644,
 		.proc_handler	= proc_dointvec

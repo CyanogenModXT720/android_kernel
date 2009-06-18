@@ -644,6 +644,10 @@ asmlinkage void __init start_kernel(void)
 	kmem_cache_init();
 	debug_objects_mem_init();
 	idr_init_cache();
+#ifdef CONFIG_DEBUG_MEMLEAK
+	radix_tree_init();
+	memleak_init();
+#endif
 	setup_per_cpu_pageset();
 	numa_policy_init();
 	if (late_time_init)
@@ -665,7 +669,9 @@ asmlinkage void __init start_kernel(void)
 	key_init();
 	security_init();
 	vfs_caches_init(num_physpages);
+#ifndef CONFIG_DEBUG_MEMLEAK
 	radix_tree_init();
+#endif
 	signals_init();
 	/* rootfs populating might need page-writeback */
 	page_writeback_init();
