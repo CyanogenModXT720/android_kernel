@@ -3669,7 +3669,7 @@ __memleak_cache_alloc(struct kmem_cache *cachep, gfp_t flags, void *caller)
 	unsigned long save_flags;
 	void *objp;
 
-	if (should_failslab(cachep, flags))
+	if (should_failslab(obj_size(cachep), flags))
 		return NULL;
 
 	cache_alloc_debugcheck_before(cachep, flags);
@@ -3728,7 +3728,7 @@ static inline void __memleak_cache_free(struct kmem_cache *cachep, void *objp)
 	}
 }
 
-void memleak_kfree(const void *objp)
+void memleak_kfree(void *objp)
 {
 	struct kmem_cache *c;
 	unsigned long flags;
@@ -3739,7 +3739,7 @@ void memleak_kfree(const void *objp)
 	kfree_debugcheck(objp);
 	c = virt_to_cache(objp);
 	debug_check_no_locks_freed(objp, obj_size(c));
-	__memleak_cache_free(c, (void *)objp);
+	__memleak_cache_free(c, objp);
 	local_irq_restore(flags);
 }
 EXPORT_SYMBOL(memleak_kfree);
