@@ -32,4 +32,4 @@ obj-$(CONFIG_VIB_OMAP_PWM)	+= vib-omap-pwm.o
 obj-$(CONFIG_NETMUX_DRIVER)	+= netmux/
 obj-$(CONFIG_NETMUX_LINKDRIVER)	+= netmux_linkdriver/
 obj-$(CONFIG_UMTS_SYSPANIC)     += syspanic.o
-
+obj-$(CONFIG_WL127X_RFKILL)	+= wl127x-rfkill.o

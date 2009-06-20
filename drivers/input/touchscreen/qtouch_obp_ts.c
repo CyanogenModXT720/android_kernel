@@ -395,6 +395,19 @@ static int qtouch_hw_init(struct qtouch_ts_data *ts)
 			return ret;
 		}
 	}
+	/* configure the grip suppression table */
+	obj = find_obj(ts, QTM_OBJ_PROCI_GRIPFACESUPPRESSION);
+	if (obj && obj->entry.num_inst > 0) {
+		ret = qtouch_write_addr(ts, obj->entry.addr,
+					&ts->pdata->grip_suppression_cfg,
+					min(sizeof(ts->pdata->grip_suppression_cfg),
+					    obj->entry.size));
+		if (ret != 0) {
+			pr_err("%s: Can't write the grip suppression config\n",
+			       __func__);
+			return ret;
+		}
+	}
 
 	/* Write the settings into nvram, if needed */
 	if (ts->pdata->flags & QTOUCH_CFG_BACKUPNV) {
@@ -825,6 +838,8 @@ static int qtouch_ts_probe(struct i2c_client *client,
 	ts->input_dev->name = "qtouch-touchscreen";
 	input_set_drvdata(ts->input_dev, ts);
 
+	qtouch_force_reset(ts, 0);
+
 	err = qtouch_process_info_block(ts);
 	if (err != 0)
 		goto err_process_info_block;
@@ -897,8 +912,6 @@ static int qtouch_ts_probe(struct i2c_client *client,
 		goto err_request_irq;
 	}
 
-	qtouch_force_reset(ts, 0);
-
 #ifdef CONFIG_HAS_EARLYSUSPEND
 	ts->early_suspend.level = EARLY_SUSPEND_LEVEL_BLANK_SCREEN + 1;
 	ts->early_suspend.suspend = qtouch_ts_early_suspend;
@@ -948,11 +961,18 @@ static int qtouch_ts_suspend(struct i2c_client *client, pm_message_t mesg)
 
 	if (qtouch_tsdebug & 4)
 		pr_info("%s: Suspending\n", __func__);
-	disable_irq(ts->client->irq);
+
+	disable_irq_nosync(ts->client->irq);
 	ret = cancel_work_sync(&ts->work);
-	if (ret)
+	if (ret) {
+		pr_info("%s: Not Suspending\n", __func__);
 		enable_irq(ts->client->irq);
-	qtouch_power_config(ts, 0);
+		return -EBUSY;
+	}
+
+	ret = qtouch_power_config(ts, 0);
+	if (ret < 0)
+		pr_err("%s: Cannot write power config\n", __func__);
 
 	return 0;
 }
@@ -960,12 +980,19 @@ static int qtouch_ts_suspend(struct i2c_client *client, pm_message_t mesg)
 static int qtouch_ts_resume(struct i2c_client *client)
 {
 	struct qtouch_ts_data *ts = i2c_get_clientdata(client);
+	int ret;
 
 	if (qtouch_tsdebug & 4)
 		pr_info("%s: Resuming\n", __func__);
-	qtouch_power_config(ts, 1);
-	enable_irq(ts->client->irq);
 
+	ret = qtouch_power_config(ts, 1);
+	if (ret < 0) {
+		pr_err("%s: Cannot write power config\n", __func__);
+		return -EIO;
+	}
+	qtouch_force_reset(ts, 0);
+
+	enable_irq(ts->client->irq);
 	return 0;
 }
 

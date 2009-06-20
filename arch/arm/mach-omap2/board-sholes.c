@@ -28,6 +28,7 @@
 #include <linux/qtouch_obp_ts.h>
 #include <linux/led-lm3530.h>
 #include <linux/usb/omap.h>
+#include <linux/wl127x-rfkill.h>
 
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
@@ -55,6 +56,7 @@
 #define SHOLES_TOUCH_INT_GPIO		99
 #define SHOLES_LM_3530_INT_GPIO		92
 #define SHOLES_AKM8973_INT_GPIO		175
+#define SHOLES_WL1271_NSHUTDOWN_GPIO	179
 
 static void __init sholes_init_irq(void)
 {
@@ -141,7 +143,7 @@ static struct qtouch_ts_platform_data sholes_ts_platform_data = {
 	.abs_max_p	= 255,
 	.abs_min_w	= 0,
 	.abs_max_w	= 15,
-	.nv_checksum	= 0xbbaf,
+	.nv_checksum	= 0xf429,
 	.fuzz_x		= 0,
 	.fuzz_y		= 0,
 	.fuzz_p		= 2,
@@ -157,17 +159,18 @@ static struct qtouch_ts_platform_data sholes_ts_platform_data = {
 		.atouch_drift	= 5,
 		.touch_drift	= 20,
 		.drift_susp	= 20,
-		.touch_autocal	= 0,
+		.touch_autocal	= 0x96,
 		.sync		= 0,
 	},
 	.multi_touch_cfg	= {
+		.ctrl		= 0x03,
 		.x_origin	= 0,
 		.y_origin	= 0,
 		.x_size		= 12,
 		.y_size		= 7,
-		.aks_cfg	= 1,
+		.aks_cfg	= 0,
 		.burst_len	= 0x40,
-		.tch_det_thr	= 0xf,
+		.tch_det_thr	= 0x14,
 		.tch_det_int	= 0x2,
 		.mov_hyst_init	= 5,
 		.mov_hyst_next	= 5,
@@ -175,6 +178,31 @@ static struct qtouch_ts_platform_data sholes_ts_platform_data = {
 		.num_touch	= 4,
 		.merge_hyst	= 0,
 		.merge_thresh	= 3,
+	},
+	.linear_tbl_cfg = {
+		.ctrl = 0x01,
+		.x_offset = 0x0000,
+		.x_segment = {0x5f,0x3b,0x3f,0x38,
+					  0x46,0x3c,0x39,0x3f,
+					  0x3a,0x3c,0x3e,0x3c,
+					  0x3e,0x3f,0x3e,0x3f},
+		.y_offset = 0x0000,
+		.y_segment = {0x5e,0x4c,0x3e,0x3d,
+					  0x3d,0x3b,0x3d,0x3e,
+					  0x3e,0x3c,0x38,0x3d,
+					  0x3c,0x3e,0x3c,0x3c},
+	},
+	.grip_suppression_cfg = {
+		.ctrl		= 0x00,
+		.xlogrip	= 0x00,
+		.xhigrip	= 0x00,
+		.ylogrip	= 0x00,
+		.yhigrip	= 0x00,
+		.maxtchs	= 0x00,
+		.szthr1	= 0x00,
+		.szthr2	= 0x00,
+		.shpthr1	= 0x00,
+		.shpthr2	= 0x00,
 	},
 	.vkeys			= {
 		.keys		= sholes_touch_vkeys,
@@ -289,6 +317,7 @@ static struct omap_usb_port_data usb_port_data[] = {
 	[1] = { .flags = 0x0, }, /* disabled */
 	[2] = {
 		.flags = OMAP_USB_PORT_FLAG_ENABLED |
+			OMAP_USB_PORT_FLAG_AUTOIDLE |
 			OMAP_USB_PORT_FLAG_NOBITSTUFF,
 		.mode = OMAP_USB_PORT_MODE_UTMI_PHY_4PIN,
 		.startup = sholes_usb_port_startup,
@@ -400,6 +429,10 @@ static void __init sholes_serial_init(void)
 	omap_cfg_reg(Y8_3430_UART1_RX);
 	omap_cfg_reg(AA9_3430_UART1_RTS);
 	omap_cfg_reg(W8_3430_UART1_CTS);
+	omap_cfg_reg(AA25_34XX_UART2_TX);
+	omap_cfg_reg(AD25_34XX_UART2_RX);
+	omap_cfg_reg(AB25_34XX_UART2_RTS);
+	omap_cfg_reg(AB26_34XX_UART2_CTS);
 	omap_serial_init();
 }
 
@@ -476,7 +509,7 @@ static void sholes_pm_init(void)
 static void __init config_wlan_gpio(void)
 {
 	/* WLAN PE and IRQ */
-	omap_cfg_reg(AE22_3430_GPIO186_OUT);
+	omap_cfg_reg(AE22_34XX_GPIO186_OUT);
 	omap_cfg_reg(J8_3430_GPIO65);
 }
 
@@ -507,8 +540,27 @@ static struct omap2_hdq_platform_config sholes_hdq_data = {
 
 static int __init omap_hdq_init(void)
 {
+	omap_cfg_reg(J25_34XX_HDQ_SIO);
 	omap_hdq_device.dev.platform_data = &sholes_hdq_data;
 	return platform_device_register(&omap_hdq_device);
+}
+
+static struct wl127x_rfkill_platform_data sholes_wl1271_pdata = {
+	.nshutdown_gpio = SHOLES_WL1271_NSHUTDOWN_GPIO,
+};
+
+static struct platform_device sholes_wl1271_device = {
+	.name = "wl127x-rfkill",
+	.id = 0,
+	.dev.platform_data = &sholes_wl1271_pdata,
+};
+
+static void __init sholes_bt_init(void)
+{
+	/* Mux setup for Bluetooth chip-enable */
+	omap_cfg_reg(T3_34XX_GPIO_179);
+
+	platform_device_register(&sholes_wl1271_device);
 }
 
 static void __init sholes_init(void)
@@ -529,6 +581,8 @@ static void __init sholes_init(void)
 	config_mmc2_init();
 	config_wlan_gpio();
 	omap_hdq_init();
+	sholes_bt_init();
+	sholes_hsmmc_init();
 }
 
 static void __init sholes_map_io(void)
@@ -550,4 +604,4 @@ MACHINE_START(SHOLES, "sholes")
 	.init_irq	= sholes_init_irq,
 	.init_machine	= sholes_init,
 	.timer		= &omap_timer,
-MACHINE_END
+	MACHINE_END

@@ -3,7 +3,7 @@
  *
  * Copyright (C) 2009 Google, Inc.
  * Copyright (C) 2009 Motorola, Inc.
- * 
+ *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
@@ -23,54 +23,12 @@
 #include <mach/mux.h>
 #include <mach/gpio.h>
 #include <mach/keypad.h>
-#include <mach/mux.h>
-
-#ifdef CONFIG_ARM_OF
-#include <mach/dt_path.h>
-#include <asm/prom.h>
-#endif
 
 #define MAPPHONE_PROX_INT_GPIO		180
 #define MAPPHONE_HF_NORTH_GPIO		10
 #define MAPPHONE_HF_SOUTH_GPIO		111
 #define MAPPHONE_AKM8973_INT_GPIO	175
 #define MAPPHONE_AKM8973_RESET_GPIO	28
-
-int mapphonep0b_keymap[] = {
-	0x0000000a, 0x01000013, 0x03000072, 0x05000073, 0x060000d9, 0x07000020,
-	0x10000008, 0x11000032, 0x12000026, 0x13000025, 0x14000031, 0x1500002e,
-	0x1600002c, 0x20000002, 0x21000015, 0x22000017, 0x2300006b, 0x240000e5,
-	0x25000034, 0x26000022, 0x27000012, 0x31000007, 0x32000004, 0x3300006c,
-	0x34000067, 0x35000069, 0x3600006a, 0x3700001c, 0x40000006, 0x41000024,
-	0x42000030, 0x430000d4, 0x44000014, 0x4500000b, 0x46000096, 0x4700002d,
-	0x50000009, 0x51000039, 0x52000064, 0x5300009e, 0x540000e4, 0x550000e7,
-	0x5600000e, 0x5700001e, 0x60000003, 0x6100000b, 0x62000021, 0x63000036,
-	0x6400001c, 0x65000018, 0x66000023, 0x67000010, 0x70000005, 0x7100002f,
-	0x7200001f, 0x73000019, 0x7400009e, 0x76000016, 0x77000011
-};
-
-static struct omap_kp_switchmap mapphonep1_switchmap[] = {
-	{.gpio = 100, .key = SW_HEADPHONE_INSERT},  /* silence */
-	{.gpio = 177, .key = SW_LID}                /* slider */
-};
-
-int mapphonep1_row_gpios[] = { 34, 35, 36, 37, 38, 39, 40, 41, };
-int mapphonep1_col_gpios[] = { 43, 53, 54, 55, 56, 57, 58, 63, };
-
-static struct omap_kp_platform_data omap3430_kp_data = {
-	.rows		= 8,
-	.cols		= 8,
-	.keymap		= mapphonep0b_keymap,
-	.keymapsize	= 59,
-	.switchmap	= mapphonep1_switchmap,
-	.switchmapsize  = 2,
-	.delay		= 200,
-	.rep		= 0,
-	.row_gpios	= mapphonep1_row_gpios,
-	.col_gpios	= mapphonep1_col_gpios,
-	.input_name	= "mapphone-keypad",
-	.input_phys_device = "mapphone-keypad/input0"
-};
 
 static struct sfh7743_platform_data omap3430_proximity_data = {
 	.gpio_prox_int = MAPPHONE_PROX_INT_GPIO,
@@ -81,14 +39,6 @@ static struct bu52014hfv_platform_data bu52014hfv_platform_data = {
 	.docked_north_gpio = MAPPHONE_HF_NORTH_GPIO,
 	.docked_south_gpio = MAPPHONE_HF_SOUTH_GPIO,
 	.north_is_desk = 1,
-};
-
-static struct platform_device omap3430_kp_device = {
-	.name		= "omap-keypad",
-	.id		= -1,
-	.dev		= {
-		.platform_data  = &omap3430_kp_data,
-	},
 };
 
 static struct regulator *mapphone_lis331dlh_regulator;
@@ -233,16 +183,15 @@ static void mapphone_proximity_init(void)
 {
 	gpio_request(MAPPHONE_PROX_INT_GPIO, "Mapphone proximity sensor");
 	gpio_direction_input(MAPPHONE_PROX_INT_GPIO);
-	omap_cfg_reg(Y3_3430_GPIO180);
+	omap_cfg_reg(Y3_34XX_GPIO180);
 }
 
 static void mapphone_vibrator_init(void)
 {
-	omap_cfg_reg(Y4_3430_GPIO181);
+	omap_cfg_reg(Y4_34XX_GPIO181);
 }
 
 static struct platform_device *mapphone_sensors[] __initdata = {
-	&omap3430_kp_device,
 	&omap3430_master_sensor,
 	&sfh7743_platform_device,
 	&omap3430_hall_effect_dock,
@@ -259,64 +208,8 @@ static void mapphone_hall_effect_init(void)
 	omap_cfg_reg(B26_34XX_GPIO111);
 }
 
-#ifdef CONFIG_ARM_OF
-static int __init mapphone_dt_kp_init(void)
-{
-	struct device_node *kp_node;
-	const void *kp_prop;
-
-	if ((kp_node = of_find_node_by_path(DT_PATH_KEYPAD))) {
-		if ((kp_prop = of_get_property(kp_node, DT_PROP_KEYPAD_ROWS, NULL)))
-			omap3430_kp_data.rows = *(int *)kp_prop;
-		if ((kp_prop = of_get_property(kp_node, DT_PROP_KEYPAD_COLS, NULL)))
-			omap3430_kp_data.cols = *(int *)kp_prop;
-		if ((kp_prop = of_get_property(kp_node, DT_PROP_KEYPAD_ROWREG, NULL)))
-			omap3430_kp_data.row_gpios = (int *)kp_prop;
-		if ((kp_prop = of_get_property(kp_node, DT_PROP_KEYPAD_COLREG, NULL)))
-			omap3430_kp_data.col_gpios = (int *)kp_prop;
-		if ((kp_prop = of_get_property(kp_node, DT_PROP_KEYPAD_MAPNUM, NULL)))
-			omap3430_kp_data.keymapsize = *(int *)kp_prop;
-		if ((kp_prop = of_get_property(kp_node, DT_PROP_KEYPAD_MAPS, NULL)))
-			omap3430_kp_data.keymap = (int *)kp_prop;
-
-		of_node_put(kp_node);
-	}
-
-	return kp_node ? 0 : -ENODEV;
-}
-#endif
-
 void __init mapphone_sensors_init(void)
 {
-#ifdef CONFIG_ARM_OF
-	if (mapphone_dt_kp_init())
-		printk(KERN_INFO "Keypad: using non-dt configuration\n");
-#endif
-
-	/* keypad rows */
-	omap_cfg_reg(N4_34XX_GPIO34);
-	omap_cfg_reg(M4_34XX_GPIO35);
-	omap_cfg_reg(L4_34XX_GPIO36);
-	omap_cfg_reg(K4_34XX_GPIO37);
-	omap_cfg_reg(T3_34XX_GPIO38);
-	omap_cfg_reg(R3_34XX_GPIO39);
-	omap_cfg_reg(N3_34XX_GPIO40);
-	omap_cfg_reg(M3_34XX_GPIO41);
-
-	/* keypad columns */
-	omap_cfg_reg(K3_34XX_GPIO43_OUT);
-	omap_cfg_reg(V8_34XX_GPIO53_OUT);
-	omap_cfg_reg(U8_34XX_GPIO54_OUT);
-	omap_cfg_reg(T8_34XX_GPIO55_OUT);
-	omap_cfg_reg(R8_34XX_GPIO56_OUT);
-	omap_cfg_reg(P8_34XX_GPIO57_OUT);
-	omap_cfg_reg(N8_34XX_GPIO58_OUT);
-	omap_cfg_reg(L8_34XX_GPIO63_OUT);
-
-	/* switches */
-	omap_cfg_reg(AB2_34XX_GPIO177);
-	omap_cfg_reg(AH17_34XX_GPIO100);
-
 	mapphone_proximity_init();
 	mapphone_hall_effect_init();
 	mapphone_vibrator_init();
