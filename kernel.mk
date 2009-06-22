@@ -50,7 +50,7 @@ MFLAG := $(KERNEL_CONF_OUT_DIR)/.mbld_ok.txt
 FFLAG := $(KERNEL_CONF_OUT_DIR)/.filter_ok.txt
 
 
-all: config zImage modules modules_install 
+all: config zImage modules modules_install ext_modules
 
 inst_hook:
 	@echo "Installing auto coding style hook"
@@ -207,22 +207,30 @@ clean:
 #
 # NOTE: "strip" MUST be done for generated .ko files!!!
 # =============================
-ext_modules: tiwlan_drv graphics_drv
+ext_modules: tiwlan_drv 
 	$(modules_strip)
 
 # TODO:
 # ext_modules_clean doesn't work 
 # wlan, graphic, SMC drivers need to be updated to fix it
-ext_modules_clean: tiwlan_drv_clean graphics_drv_clean 
+ext_modules_clean: tiwlan_drv_clean 
 
 # wlan driver module
 #-------------------
-TIWLAN_DIR=$(TOPDIR)/motorola/bsp/tiwlan_drv
+API_MAKE = env -u MAKECMDGOALS make PREFIX=$(KERNEL_BUILD_DIR) \
+		CROSS=$(KERNEL_CROSS_COMPILE) \
+		CROSS_COMPILE=$(KERNEL_CROSS_COMPILE) \
+		PROCFAMILY=OMAP_3430 PROJROOT=$(PWD) \
+		HOST_PLATFORM=zoom2 \
+		KRNLSRC=$(KERNEL_SRC_DIR) KERNEL_DIR=$(KERNEL_BUILD_DIR)
+WLAN_DRV_PATH = $(PWD)/system/wlan/ti/wilink_6_1/platforms/os/linux
 tiwlan_drv:
-	make -C $(TIWLAN_DIR) ARCH=arm $(KERN_FLAGS) CROSS_COMPILE=$(KERNEL_CROSS_COMPILE) KERNEL_SRC_DIR=$(KERNEL_SRC_DIR) KERNEL_BUILD_DIR=$(KERNEL_BUILD_DIR) INSTALL_DIR=$(MOTO_MOD_INSTALL) tiwlan_drv
+	$(API_MAKE) -C $(WLAN_DRV_PATH)
+	cp $(WLAN_DRV_PATH)/tiwlan_drv.ko $(MOTO_MOD_INSTALL)
 
 tiwlan_drv_clean:
-	make -C $(TIWLAN_DIR) ARCH=arm $(KERN_FLAGS) CROSS_COMPILE=$(KERNEL_CROSS_COMPILE) KERNEL_SRC_DIR=$(KERNEL_SRC_DIR) KERNEL_BUILD_DIR=$(KERNEL_BUILD_DIR) INSTALL_DIR=$(MOTO_MOD_INSTALL) distclean
+	$(API_MAKE) -C $(WLAN_DRV_PATH) clean
+
 #
 # graphics driver module
 #-----------------------
