@@ -127,6 +127,7 @@ typedef struct {
         int write_urb_used;
         int sleeping;
         int working;
+	int allow_suspend;
         spinlock_t pm_lock;
         struct work_struct wakeup_work;
         struct delayed_work suspend_work;
