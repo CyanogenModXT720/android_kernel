@@ -2450,6 +2450,7 @@ static struct clk usim_fck = {
 	.flags		= CLOCK_IN_OMAP3430ES2 | WAIT_READY,
 	.clkdm		= { .name = "prm_clkdm" },
 	.recalc		= &omap2_clksel_recalc,
+	.set_rate       = &omap2_clksel_set_rate,
 };
 
 /* XXX should gpt1's clksel have wkup_32k_fck as the 32k opt? */
