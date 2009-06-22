@@ -192,7 +192,8 @@ __modules_install:
 	find $(KERNEL_BUILD_DIR)/lib/modules -name "*.ko" -exec cp -f {} \
 		  $(MOTO_MOD_INSTALL) \;
 
-clean:
+clean: ext_modules_clean kernel_clean
+kernel_clean:
 	make -C $(KERNEL_SRC_DIR) ARCH=arm $(KERN_FLAGS) \
 		CROSS_COMPILE=$(KERNEL_CROSS_COMPILE) \
 		O=$(KERNEL_BUILD_DIR) mrproper
