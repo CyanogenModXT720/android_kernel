@@ -4,6 +4,7 @@
  * OMAP2 serial support.
  *
  * Copyright (C) 2005-2008 Nokia Corporation
+ * Copyright (C) 2009 Motorola, Inc.
  * Author: Paul Mundt <paul.mundt@nokia.com>
  *
  * Major rework for PM support by Kevin Hilman
@@ -13,7 +14,14 @@
  * This file is subject to the terms and conditions of the GNU General Public
  * License. See the file "COPYING" in the main directory of this archive
  * for more details.
+ *
+ * Revision History:
+ *
+ * Date         Author    Comment
+ * -----------  --------  ----------------------------------------------
+ * 11-Jun-2009  Motorola  Support OMAP3430 HW flow control
  */
+
 #include <linux/kernel.h>
 #include <linux/init.h>
 #include <linux/serial_8250.h>
@@ -79,6 +87,9 @@ static struct plat_serial8250_port serial_platform_data[] = {
 		.iotype		= UPIO_MEM,
 		.regshift	= 2,
 		.uartclk	= OMAP24XX_BASE_BAUD * 16,
+#ifdef CONFIG_SERIAL_OMAP3430_HW_FLOW_CONTROL
+		.rtscts		= SERIAL8250_AUTO_RTS,
+#endif
 	}, {
 		.membase	= IO_ADDRESS(OMAP_UART2_BASE),
 		.mapbase	= OMAP_UART2_BASE,
@@ -87,6 +98,9 @@ static struct plat_serial8250_port serial_platform_data[] = {
 		.iotype		= UPIO_MEM,
 		.regshift	= 2,
 		.uartclk	= OMAP24XX_BASE_BAUD * 16,
+#ifdef CONFIG_SERIAL_OMAP3430_HW_FLOW_CONTROL
+		.rtscts		= SERIAL8250_AUTO_RTS | SERIAL8250_AUTO_CTS,
+#endif
 	}, {
 		.membase	= IO_ADDRESS(OMAP_UART3_BASE),
 		.mapbase	= OMAP_UART3_BASE,
@@ -95,6 +109,9 @@ static struct plat_serial8250_port serial_platform_data[] = {
 		.iotype		= UPIO_MEM,
 		.regshift	= 2,
 		.uartclk	= OMAP24XX_BASE_BAUD * 16,
+#ifdef CONFIG_SERIAL_OMAP3430_HW_FLOW_CONTROL
+		.rtscts		= SERIAL8250_AUTO_RTS,
+#endif
 	},
 #define QUART_CLK (1843200)
 #ifdef CONFIG_MACH_OMAP_ZOOM2
