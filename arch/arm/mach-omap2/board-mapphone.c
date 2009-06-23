@@ -62,6 +62,7 @@
 #define MAPPHONE_LM_3530_INT_GPIO	92
 #define MAPPHONE_AKM8973_INT_GPIO	175
 #define MAPPHONE_WL1271_NSHUTDOWN_GPIO	179
+#define MAPPHONE_AUDIO_PATH_GPIO	143
 
 char *bp_model = "CDMA";
 
@@ -73,6 +74,23 @@ static void __init mapphone_init_irq(void)
 	scm_clk_init();
 #endif
 	omap_gpio_init();
+}
+
+static void mapphone_audio_init(void)
+{
+	gpio_request(MAPPHONE_AUDIO_PATH_GPIO, "mapphone audio path");
+
+	omap_cfg_reg(P21_OMAP34XX_MCBSP2_FSX);
+	omap_cfg_reg(N21_OMAP34XX_MCBSP2_CLKX);
+	omap_cfg_reg(R21_OMAP34XX_MCBSP2_DR);
+	omap_cfg_reg(M21_OMAP34XX_MCBSP2_DX);
+	omap_cfg_reg(K26_OMAP34XX_MCBSP3_FSX);
+	omap_cfg_reg(W21_OMAP34XX_MCBSP3_CLKX);
+	omap_cfg_reg(U21_OMAP34XX_MCBSP3_DR);
+	omap_cfg_reg(V21_OMAP34XX_MCBSP3_DX);
+
+	gpio_direction_output(MAPPHONE_AUDIO_PATH_GPIO, 1);
+	omap_cfg_reg(AE5_34XX_GPIO143);
 }
 
 static struct omap_uart_config mapphone_uart_config __initdata = {
@@ -95,8 +113,25 @@ static int mapphone_touch_reset(void)
 	return 0;
 }
 
+static struct qtouch_ts_platform_data mapphone_ts_platform_data;
+
 static void mapphone_touch_init(void)
 {
+#ifdef CONFIG_ARM_OF
+	struct device_node *touch_node;
+	const void *touch_prop;
+	int len = 0;
+
+	if ((touch_node = of_find_node_by_path(DT_PATH_TOUCH))) {
+		if ((touch_prop = of_get_property(touch_node, DT_PROP_TOUCH_KEYMAP, &len)) \
+			&& len && (0 == len % sizeof(struct vkey))) {
+			mapphone_ts_platform_data.vkeys.count = len / sizeof(struct vkey);
+			mapphone_ts_platform_data.vkeys.keys = (struct vkey *)touch_prop;
+		}
+		of_node_put(touch_node);
+	}
+#endif
+
 	gpio_request(MAPPHONE_TOUCH_RESET_N_GPIO, "mapphone touch reset");
 	gpio_direction_output(MAPPHONE_TOUCH_RESET_N_GPIO, 1);
 	omap_cfg_reg(H19_34XX_GPIO164_OUT);
@@ -611,6 +646,7 @@ static void __init mapphone_init(void)
 	mapphone_panel_init();
 	mapphone_sensors_init();
 	mapphone_touch_init();
+	mapphone_audio_init();
 	usb_musb_init();
 	mapphone_ehci_init();
 	mapphone_sdrc_init();

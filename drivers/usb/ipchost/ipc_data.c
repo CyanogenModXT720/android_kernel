@@ -356,6 +356,7 @@ static void ipc_events(void)
     if(pending_events & IPC_PM_SUSPEND) {
       pending_events &= ~IPC_PM_SUSPEND;
       DEBUG("%s @ jiffies=%lu\n", __FUNCTION__, jiffies);
+	usb_ipc_data_param.allow_suspend = 1;
       usb_autopm_put_interface(usb_ifnum_to_if(usb_ipc_data_param.udev, IPC_DATA_CH_NUM));
     }
     if(pending_events & IPC_PM_RESUME) {
@@ -531,69 +532,87 @@ MODULE_DEVICE_TABLE (usb, usb_ipc_id_table);
 #ifdef CONFIG_PM
 static int usb_ipc_suspend(struct usb_interface *iface, pm_message_t message)
 {
-  //DEBUG("%s:sleeping=%d working=%d\n", __FUNCTION__, usb_ipc_data_param.sleeping, usb_ipc_data_param.working);
-  spin_lock_bh(&usb_ipc_data_param.pm_lock);
-  if(usb_ipc_data_param.working == 1) {
-    spin_unlock_bh(&usb_ipc_data_param.pm_lock);
-    DEBUG("%s:working, can not suspend\n", __FUNCTION__);
-    return -1;
-  }
-  if(iface->cur_altsetting->desc.bInterfaceNumber == USB_IPC_DATA_IF_NUM) {
-    if(usb_ipc_data_param.sleeping == 1) {
-      DEBUG("%s:data interface has already suspended\n", __FUNCTION__);
-    }
-    else {
-      usb_ipc_data_param.sleeping = 1;
-      DEBUG("%s:suspend ipc data interface @ jiffies=%lu\n", __FUNCTION__, jiffies);
-    }
-  }
-  else if( iface->cur_altsetting->desc.bInterfaceNumber == USB_IPC_LOG_IF_NUM) {
-    DEBUG("%s:suspend ipc log interface @ jiffies=%lu\n", __FUNCTION__, jiffies);
-  }
-  spin_unlock_bh(&usb_ipc_data_param.pm_lock);
+	DEBUG("%s:sleeping=%d working=%d\n", __func__,
+		usb_ipc_data_param.sleeping, usb_ipc_data_param.working);
+	spin_lock_bh(&usb_ipc_data_param.pm_lock);
+	if (!usb_ipc_data_param.allow_suspend) {
+		spin_unlock_bh(&usb_ipc_data_param.pm_lock);
+		return -EBUSY;
+	}
+	if (usb_ipc_data_param.working == 1) {
+		spin_unlock_bh(&usb_ipc_data_param.pm_lock);
+		DEBUG("%s:working, can not suspend\n", __func__);
+		return -1;
+	}
+	if (iface->cur_altsetting->desc.bInterfaceNumber ==
+		USB_IPC_DATA_IF_NUM) {
+		if (usb_ipc_data_param.sleeping == 1) {
+			DEBUG("%s:data interface has already suspended\n",
+				__func__);
+		} else {
+			usb_ipc_data_param.sleeping = 1;
+			DEBUG("%s:suspend ipc data interface @ jiffies=%lu\n",
+				__func__, jiffies);
+		}
+	} else if (iface->cur_altsetting->desc.bInterfaceNumber ==
+		USB_IPC_LOG_IF_NUM) {
+		DEBUG("%s:suspend ipc log interface @ jiffies=%lu\n",
+			__func__, jiffies);
+	}
+	spin_unlock_bh(&usb_ipc_data_param.pm_lock);
 
-  return 0;
+	return 0;
 }
 
 static int usb_ipc_resume(struct usb_interface *iface)
 {
-  int ret;
-  //DEBUG("%s:sleeping=%d working=%d\n", __FUNCTION__, usb_ipc_data_param.sleeping, usb_ipc_data_param.working);
-  spin_lock_bh(&usb_ipc_data_param.pm_lock);
-  if( iface->cur_altsetting->desc.bInterfaceNumber == USB_IPC_DATA_IF_NUM) {
-    if(usb_ipc_data_param.sleeping == 0) {
-      DEBUG("%s:data interface has already resumed\n", __FUNCTION__);
-      spin_unlock_bh(&usb_ipc_data_param.pm_lock);
-      return -1;
-    }
-    else {
-      usb_ipc_data_param.sleeping = 0;
-      DEBUG("%s:resume ipc data interface @ jiffies=%lu\n", __FUNCTION__, jiffies);
-    }
-    if (usb_ipc_data_param.read_urb_used) {
-      ret = usb_submit_urb(&usb_ipc_data_param.read_urb, GFP_ATOMIC|GFP_DMA);
-      usb_ipc_data_param.read_urb_used = 0;
-      DEBUG("data read urb restarted, ret=%d.\n", ret);
-    }
-    if (usb_ipc_data_param.write_urb_used) {
-      usb_ipc_data_param.working = 1;
-      ret = usb_submit_urb(&usb_ipc_data_param.write_urb, GFP_ATOMIC|GFP_DMA);
-      usb_ipc_data_param.write_urb_used = 0;
-      DEBUG("data write urb restarted, ret=%d.\n", ret);
-    }
-  }
-  else if( iface->cur_altsetting->desc.bInterfaceNumber == USB_IPC_LOG_IF_NUM) {
-    DEBUG("%s:resume ipc log interface @ jiffies=%lu\n", __FUNCTION__, jiffies);
-    if(ipc_log_param.write_buf != NULL) {
-      ipc_log_param.read_urb.transfer_buffer = ipc_log_param.write_buf->ptr;
-      ipc_log_param.read_urb.transfer_buffer_length = ipc_log_param.read_bufsize;
-      ret = usb_submit_urb(&ipc_log_param.read_urb, GFP_KERNEL);
-      DEBUG("log read urb restarted, ret=%d.\n", ret);
-    }
-  }
-  spin_unlock_bh(&usb_ipc_data_param.pm_lock);
+	int ret;
+	DEBUG("%s:sleeping=%d working=%d\n", __func__,
+		usb_ipc_data_param.sleeping, usb_ipc_data_param.working);
+	spin_lock_bh(&usb_ipc_data_param.pm_lock);
+	usb_ipc_data_param.allow_suspend = 0;
+	if (iface->cur_altsetting->desc.bInterfaceNumber
+		== USB_IPC_DATA_IF_NUM) {
+		if (usb_ipc_data_param.sleeping == 0) {
+			DEBUG("%s:data interface has already resumed\n",
+				__func__);
+			spin_unlock_bh(&usb_ipc_data_param.pm_lock);
+			return -1;
+		} else {
+			usb_ipc_data_param.sleeping = 0;
+			DEBUG("%s:resume ipc data interface @ jiffies=%lu\n",
+				__func__, jiffies);
+		}
+		if (usb_ipc_data_param.read_urb_used) {
+			ret = usb_submit_urb(&usb_ipc_data_param.read_urb,
+				GFP_ATOMIC|GFP_DMA);
+			usb_ipc_data_param.read_urb_used = 0;
+			DEBUG("data read urb restarted, ret=%d.\n", ret);
+		}
+		if (usb_ipc_data_param.write_urb_used) {
+			usb_ipc_data_param.working = 1;
+			ret = usb_submit_urb(&usb_ipc_data_param.write_urb,
+				GFP_ATOMIC|GFP_DMA);
+			usb_ipc_data_param.write_urb_used = 0;
+			DEBUG("data write urb restarted, ret=%d.\n", ret);
+		}
+	} else if (iface->cur_altsetting->desc.bInterfaceNumber ==
+		USB_IPC_LOG_IF_NUM) {
+		DEBUG("%s:resume ipc log interface @ jiffies=%lu\n",
+			__func__, jiffies);
+		if (ipc_log_param.write_buf != NULL) {
+			ipc_log_param.read_urb.transfer_buffer =
+				ipc_log_param.write_buf->ptr;
+			ipc_log_param.read_urb.transfer_buffer_length =
+				ipc_log_param.read_bufsize;
+			ret = usb_submit_urb(&ipc_log_param.read_urb,
+				GFP_KERNEL);
+			DEBUG("log read urb restarted, ret=%d.\n", ret);
+		}
+	}
+	spin_unlock_bh(&usb_ipc_data_param.pm_lock);
 
-  return 0;
+	return 0;
 }
 #endif
 

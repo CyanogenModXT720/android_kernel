@@ -152,9 +152,9 @@ static struct platform_device *cpcap_devices[] __initdata = {
 #ifdef CONFIG_SOUND_CPCAP_OMAP
 	&cpcap_audio_device,
 #endif
+	&cpcap_3mm5_device,
 	&cpcap_rtc_device,
 	&cpcap_uc_device,
-	&cpcap_3mm5_device,
 };
 
 static struct cpcap_device *misc_cpcap;
