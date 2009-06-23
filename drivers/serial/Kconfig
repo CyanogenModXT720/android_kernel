@@ -1504,4 +1504,11 @@ config SPORT_BAUD_RATE
 	default 19200 if (SERIAL_SPORT_BAUD_RATE_19200)
 	default 9600 if (SERIAL_SPORT_BAUD_RATE_9600)
 
+config SERIAL_OMAP3430_HW_FLOW_CONTROL
+    bool "Support OMAP3430 uart HW flow control"
+    default n
+    help
+      This option make the application have a chance to enable the uart working in
+      the hardware flow control mode.
+
 endmenu

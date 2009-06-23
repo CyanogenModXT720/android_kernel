@@ -2,17 +2,30 @@
  *  linux/include/linux/serial_8250.h
  *
  *  Copyright (C) 2004 Russell King
+ *  Copyright (C) 2009 Motorola, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
  * (at your option) any later version.
+ *
+ * Revision History:
+ *
+ * Date         Author    Comment
+ * -----------  --------  ---------------------------------------------
+ * 11-Jun-2009  Motorola  Support OMAP3430 HW flow control
  */
+
 #ifndef _LINUX_SERIAL_8250_H
 #define _LINUX_SERIAL_8250_H
 
 #include <linux/serial_core.h>
 #include <linux/platform_device.h>
+
+#ifdef CONFIG_SERIAL_OMAP3430_HW_FLOW_CONTROL
+#define SERIAL8250_AUTO_RTS 0x01
+#define SERIAL8250_AUTO_CTS 0x02
+#endif
 
 /*
  * This is the platform device platform_data structure
@@ -31,6 +44,10 @@ struct plat_serial8250_port {
 	unsigned int	type;		/* If UPF_FIXED_TYPE */
 	unsigned int	(*serial_in)(struct uart_port *, int);
 	void		(*serial_out)(struct uart_port *, int, int);
+
+#ifdef CONFIG_SERIAL_OMAP3430_HW_FLOW_CONTROL
+	unsigned char   rtscts;     /* bit0: rts, bit1: cts */
+#endif
 };
 
 /*
