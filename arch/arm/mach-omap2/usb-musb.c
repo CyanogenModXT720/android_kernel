@@ -120,8 +120,6 @@ static struct musb_hdrc_platform_data musb_plat = {
 	.mode		= MUSB_HOST,
 #elif defined(CONFIG_USB_GADGET_MUSB_HDRC)
 	.mode		= MUSB_PERIPHERAL,
-#else
-	.mode		= MUSB_PERIPHERAL,
 #endif
 	/* .clock is set dynamically */
 	.set_clock	= musb_set_clock,

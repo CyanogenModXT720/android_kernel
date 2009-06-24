@@ -45,14 +45,6 @@
 
 #include "musb_core.h"
 
-#ifdef CONFIG_OMAP34XX_OFFMODE
-#include <mach/resource.h>
-
-static struct constraint_id cnstr_id = {
-	.type = RES_LATENCY_CO,
-	.data = (void *)"latency",
-};
-#endif
 
 /* MUSB PERIPHERAL status 3-mar-2006:
  *
@@ -583,7 +575,7 @@ static void rxstate(struct musb *musb, struct musb_request *req)
 	struct usb_request	*request = &req->request;
 	struct musb_ep		*musb_ep = &musb->endpoints[epnum].ep_out;
 	void __iomem		*epio = musb->endpoints[epnum].regs;
-	u16			fifo_count = 0;
+	unsigned		fifo_count = 0;
 	u16			len = musb_ep->packet_sz;
 
 	csr = musb_readw(epio, MUSB_RXCSR);
@@ -695,7 +687,7 @@ static void rxstate(struct musb *musb, struct musb_request *req)
 					len, fifo_count,
 					musb_ep->packet_sz);
 
-			fifo_count = min(len, fifo_count);
+			fifo_count = min_t(unsigned, len, fifo_count);
 
 #ifdef	CONFIG_USB_TUSB_OMAP_DMA
 			if (tusb_dma_omap() && musb_ep->dma) {
@@ -882,10 +874,10 @@ static int musb_gadget_enable(struct usb_ep *ep,
 		status = -EBUSY;
 		goto fail;
 	}
-	musb_ep->type = desc->bmAttributes & USB_ENDPOINT_XFERTYPE_MASK;
+	musb_ep->type = usb_endpoint_type(desc);
 
 	/* check direction and (later) maxpacket size against endpoint */
-	if ((desc->bEndpointAddress & USB_ENDPOINT_NUMBER_MASK) != epnum)
+	if (usb_endpoint_num(desc) != epnum)
 		goto fail;
 
 	/* REVISIT this rules out high bandwidth periodic transfers */
@@ -898,7 +890,7 @@ static int musb_gadget_enable(struct usb_ep *ep,
 	 * packet size (or fail), set the mode, clear the fifo
 	 */
 	musb_ep_select(mbase, epnum);
-	if (desc->bEndpointAddress & USB_DIR_IN) {
+	if (usb_endpoint_dir_in(desc)) {
 		u16 int_txe = musb_readw(mbase, MUSB_INTRTXE);
 
 		if (hw_ep->is_shared_fifo)
@@ -1641,7 +1633,7 @@ int __init musb_gadget_setup(struct musb *musb)
 	musb->g.speed = USB_SPEED_UNKNOWN;
 
 	/* this "gadget" abstracts/virtualizes the controller */
-	strcpy(musb->g.dev.bus_id, "gadget");
+	dev_set_name(&musb->g.dev, "gadget");
 	musb->g.dev.parent = musb->controller;
 	musb->g.dev.dma_mask = musb->controller->dma_mask;
 	musb->g.dev.release = musb_gadget_release;
@@ -1670,10 +1662,6 @@ void musb_gadget_cleanup(struct musb *musb)
 	the_gadget = NULL;
 }
 
-#if defined(CONFIG_OMAP34XX_OFFMODE)
-extern int musb_context_store_and_suspend(struct musb *musb, int overwrite);
-extern void musb_context_restore_and_wakeup(void);
-#endif
 /*
  * Register the gadget driver. Used by gadget drivers when
  * registering themselves with the controller.
@@ -1690,10 +1678,6 @@ int usb_gadget_register_driver(struct usb_gadget_driver *driver)
 	int retval;
 	unsigned long flags;
 	struct musb *musb = the_gadget;
-
-#ifdef CONFIG_OMAP34XX_OFFMODE
-	struct constraint_handle	*musb_gadget_power_constraint;
-#endif
 
 	if (!driver
 			|| driver->speed != USB_SPEED_HIGH
@@ -1735,23 +1719,6 @@ int usb_gadget_register_driver(struct usb_gadget_driver *driver)
 			musb->g.dev.driver = NULL;
 		}
 
-	/* start peripheral and/or OTG engines */
-
-#if defined(CONFIG_OMAP34XX_OFFMODE)
-		/* Restore context of MUSB from OFF mode
-		 * We need to do this for the case where MUSB is built-in to
-		 * the kernel, but the gadget driver is built as a module.
-		 * If the core goes to off after the controller is initialized
-		 * but before the gadget driver is loaded and if a cable is not
-		 * connected, we would lose the controller context.
-		 */
-		musb_gadget_power_constraint = constraint_get("usb", &cnstr_id);
-		if (musb_gadget_power_constraint)
-			constraint_set(musb_gadget_power_constraint,
-						CO_LATENCY_MPUOFF_COREON);
-		musb_context_restore_and_wakeup();
-#endif
-
 		spin_lock_irqsave(&musb->lock, flags);
 
 		/* REVISIT always use otg_set_peripheral(), handling
@@ -1790,15 +1757,6 @@ int usb_gadget_register_driver(struct usb_gadget_driver *driver)
 				spin_unlock_irqrestore(&musb->lock, flags);
 			}
 		}
-
-#if defined(CONFIG_OMAP34XX_OFFMODE)
-		/* Save Context of MUSB to recover from OFF mode */
-		musb_context_store_and_suspend(musb, 1);
-		if (musb_gadget_power_constraint) {
-			constraint_remove(musb_gadget_power_constraint);
-			constraint_put(musb_gadget_power_constraint);
-		}
-#endif
 	}
 
 	return retval;
@@ -1859,25 +1817,6 @@ int usb_gadget_unregister_driver(struct usb_gadget_driver *driver)
 	int		retval = 0;
 	struct musb	*musb = the_gadget;
 
-#ifdef CONFIG_OMAP34XX_OFFMODE
-	struct constraint_handle	*musb_gadget_power_constraint;
-#endif
-
-#if defined(CONFIG_OMAP34XX_OFFMODE)
-		/* Restore context of MUSB from OFF mode
-		 * We need to do this for the case where MUSB is built-in to
-		 * the kernel, but the gadget driver is built as a module.
-		 * If the core goes to off after the controller is initialized
-		 * but before the gadget driver is loaded and if a cable is not
-		 * connected, we would lose the controller context.
-		 */
-		musb_gadget_power_constraint = constraint_get("usb", &cnstr_id);
-		if (musb_gadget_power_constraint)
-			constraint_set(musb_gadget_power_constraint,
-						CO_LATENCY_MPUOFF_COREON);
-		musb_context_restore_and_wakeup();
-#endif
-
 	if (!driver || !driver->unbind || !musb)
 		return -EINVAL;
 
@@ -1919,15 +1858,6 @@ int usb_gadget_unregister_driver(struct usb_gadget_driver *driver)
 		 * that currently misbehaves.
 		 */
 	}
-
-#if defined(CONFIG_OMAP34XX_OFFMODE)
-		/* Save Context of MUSB to recover from OFF mode */
-		musb_context_store_and_suspend(musb, 1);
-		if (musb_gadget_power_constraint) {
-			constraint_remove(musb_gadget_power_constraint);
-			constraint_put(musb_gadget_power_constraint);
-		}
-#endif
 
 	return retval;
 }

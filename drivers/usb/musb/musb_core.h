@@ -59,86 +59,11 @@ struct musb_ep;
 #include "musb_io.h"
 #include "musb_regs.h"
 
-#if !defined(CONFIG_USB_BELCARRA_MUSB_HDRC)
 #include "musb_gadget.h"
-#endif
 #include "../core/hcd.h"
 #include "musb_host.h"
 
-#define MGC_O_HDRC_POWER        0x01    /* 8-bit */
-#define MGC_O_HDRC_INTRTXE      0x06
-#define MGC_O_HDRC_INTRRXE      0x08
-#define MGC_O_HDRC_INTRUSBE     0x0B    /* 8 bit */
-#define MGC_O_HDRC_TESTMODE     0x0F    /* 8 bit */
-#define MGC_M_POWER_SOFTCONN    0x40
-#define MGC_M_POWER_HSENAB      0x20
-#define MGC_O_HDRC_DEVCTL       0x60    /* 8 bit */
-#define MGC_M_DEVCTL_SESSION    0x01
 
-/* RXCSR in Peripheral and Host mode */
-#define MGC_M_RXCSR_AUTOCLEAR     0x8000
-#define MGC_M_RXCSR_DMAENAB       0x2000
-#define MGC_M_RXCSR_DMAMODE       0x0800
-#define MGC_M_RXCSR_INCOMPRX      0x0100
-#define MGC_M_RXCSR_CLRDATATOG    0x0080
-#define MGC_M_RXCSR_FLUSHFIFO     0x0010
-#define MGC_M_RXCSR_RXPKTRDY      0x0001
-#define MGC_M_RXCSR_P_OVERRUN     0x0004
-#define MGC_M_RXCSR_P_SENTSTALL   0x0040
-#define MGC_M_RXCSR_RXPKTRDY      0x0001
-
-/* offsets to endpoint registers */
-#define MGC_O_HDRC_TXMAXP	0x00
-#define MGC_O_HDRC_INDEX        0x0E	/* 8 bit */
-
-/* These are always controlled through the INDEX register */
-#define MGC_O_HDRC_TXFIFOSZ	0x62	/* 8-bit (see masks) */
-#define MGC_O_HDRC_RXFIFOSZ	0x63	/* 8-bit (see masks) */
-#define MGC_O_HDRC_TXFIFOADD	0x64	/* 16-bit offset shifted right 3 */
-#define MGC_O_HDRC_RXFIFOADD	0x66	/* 16-bit offset shifted right 3 */
-
-#define MGC_M_CSR0_TXPKTRDY       0x0002
-#define MGC_O_HDRC_TXCSR	0x02
-#define MGC_O_HDRC_CSR0		MGC_O_HDRC_TXCSR	/* re-used for EP0 */
-#define MGC_M_CSR0_P_DATAEND      0x0008
-#define MGC_M_CSR0_P_SVDSETUPEND  0x0080
-#define MGC_M_CSR0_P_SVDRXPKTRDY  0x0040
-#define MGC_M_CSR0_P_SENDSTALL    0x0020
-#define MGC_M_CSR0_P_SETUPEND     0x0010
-#define MGC_M_CSR0_P_SENTSTALL    0x0004
-#define MGC_O_HDRC_RXCOUNT	0x08
-#define MGC_O_HDRC_COUNT0	MGC_O_HDRC_RXCOUNT	/* re-used for EP0 */
-#define MGC_O_HDRC_FADDR	0x00	/* 8-bit */
-#define MGC_M_CSR0_RXPKTRDY       0x0001
-#define MGC_M_DEVCTL_HR         0x02
-#define MGC_M_POWER_RESUME      0x04
-
-#define MGC_M_TEST_PACKET       0x08
-#define MGC_M_TEST_K            0x04
-#define MGC_M_TEST_J            0x02
-#define MGC_M_TEST_SE0_NAK      0x01
-
-#define MGC_M_POWER_HSMODE	0x10
-#define MGC_O_HDRC_RXCOUNT	0x08
-#define MGC_O_HDRC_RXCSR	0x06
-#define MGC_O_HDRC_RXMAXP	0x04
-#define MGC_O_HDRC_TXCSR	0x02
-#define MGC_O_HDRC_FRAME        0x0C
-#define MGC_O_HDRC_FIFOSIZE	0x0F
-#define MGC_M_TXCSR_P_SENTSTALL   0x0020
-#define MGC_M_TXCSR_P_UNDERRUN    0x0004
-#define MGC_M_TXCSR_TXPKTRDY      0x0001
-
-#define MGC_M_TXCSR_AUTOSET       0x8000
-#define MGC_M_TXCSR_MODE          0x2000
-#define MGC_M_TXCSR_DMAENAB       0x1000
-#define MGC_M_TXCSR_DMAMODE       0x0400
-#define MGC_M_TXCSR_CLRDATATOG    0x0040
-#define MGC_M_TXCSR_FLUSHFIFO     0x0008
-
-#define MGC_M_RXCSR_P_WZC_BITS	\
-	( MGC_M_RXCSR_P_SENTSTALL | MGC_M_RXCSR_P_OVERRUN \
-	| MGC_M_RXCSR_RXPKTRDY )
 
 #ifdef CONFIG_USB_MUSB_OTG
 
@@ -165,7 +90,7 @@ struct musb_ep;
 /* for some reason, the "select USB_GADGET_MUSB_HDRC" doesn't always
  * override that choice selection (often USB_GADGET_DUMMY_HCD).
  */
-#if !defined(CONFIG_USB_GADGET_MUSB_HDRC) && !defined(CONFIG_USB_BELCARRA_MUSB_HDRC)
+#ifndef CONFIG_USB_GADGET_MUSB_HDRC
 #error bogus Kconfig output ... select CONFIG_USB_GADGET_MUSB_HDRC
 #endif
 #endif	/* need MUSB gadget selection */
@@ -176,21 +101,9 @@ struct musb_ep;
 #define MUSB_CONFIG_PROC_FS
 #endif
 
-#ifdef CONFIG_OMAP34XX_OFFMODE
-extern int musb_context_store_and_suspend(struct musb *musb, int overwrite);
-extern void musb_context_restore_and_wakeup(void);
-#endif
-#ifdef CONFIG_TWL4030_USB_HS_ULPI
-extern struct twl4030_usb *t2_transceiver;
-#endif /* CONFIG_TWL4030_USB_HS_ULPI */
-
 /****************************** PERIPHERAL ROLE *****************************/
 
-#if defined(CONFIG_USB_GADGET_MUSB_HDRC) && defined(CONFIG_USB_BELCARRA_MUSB_HDRC)
-#error Cannot enable GADGET and BELCARRA
-#endif /* CONFIG_USB_BELCARRA_MUSB_HDRC */
-
-#if defined(CONFIG_USB_GADGET_MUSB_HDRC) && !defined(CONFIG_USB_BELCARRA_MUSB_HDRC)
+#ifdef CONFIG_USB_GADGET_MUSB_HDRC
 
 #define	is_peripheral_capable()	(1)
 
@@ -203,31 +116,7 @@ extern void musb_g_resume(struct musb *);
 extern void musb_g_wakeup(struct musb *);
 extern void musb_g_disconnect(struct musb *);
 
-#endif
-
-#if !defined(CONFIG_USB_GADGET_MUSB_HDRC) && defined(CONFIG_USB_BELCARRA_MUSB_HDRC)
-//#warning Belcarra driver
-
-extern int musb_belcarra_setup(struct musb *);
-extern void musb_belcarra_cleanup(struct musb *);
-
-#define is_peripheral_capable() (1)
-
-extern irqreturn_t musb_g_ep0_irq(struct musb *);
-extern int musb_g_setup(struct musb *, struct usb_ctrlrequest *);
-extern void musb_g_tx(struct musb *, u8, int);
-extern void musb_g_rx(struct musb *, u8, int);
-extern void musb_g_dma(struct musb *, u8, u32, u32, u16);
-extern void musb_g_reset(struct musb *);
-extern void musb_g_suspend(struct musb *);
-extern void musb_g_resume(struct musb *);
-extern void musb_g_disconnect(struct musb *);
-extern void musb_g_stop_activity(struct musb *musb);
-#endif /* CONFIG_USB_BELCARRA_MUSB_HDRC */
-
-/****************************** NO PERIPHERAL ROLE ********************************/
-
-#if !defined(CONFIG_USB_GADGET_MUSB_HDRC) && !defined(CONFIG_USB_BELCARRA_MUSB_HDRC)
+#else
 
 #define	is_peripheral_capable()	(0)
 
@@ -235,6 +124,7 @@ static inline irqreturn_t musb_g_ep0_irq(struct musb *m) { return IRQ_NONE; }
 static inline void musb_g_reset(struct musb *m) {}
 static inline void musb_g_suspend(struct musb *m) {}
 static inline void musb_g_resume(struct musb *m) {}
+static inline void musb_g_wakeup(struct musb *m) {}
 static inline void musb_g_disconnect(struct musb *m) {}
 
 #endif
@@ -301,31 +191,15 @@ enum musb_g_ep0_state {
  */
 
 #if defined(CONFIG_ARCH_DAVINCI) || defined(CONFIG_ARCH_OMAP2430) \
-		|| defined(CONFIG_ARCH_OMAP3430)
+		|| defined(CONFIG_ARCH_OMAP3430) || defined(CONFIG_BLACKFIN)
 /* REVISIT indexed access seemed to
  * misbehave (on DaVinci) for at least peripheral IN ...
  */
 #define	MUSB_FLAT_REG
 #endif
 
-/* offsets to endpoint registers in indexed model (using INDEX register) */
-#define MGC_INDEXED_OFFSET(_bEnd, _bOffset)     \
-        (0x10                   + (_bOffset))
-
-/* offsets to endpoint registers in flat models */
-#define MGC_FLAT_OFFSET(_bEnd, _bOffset)        \
-        (0x100 + (0x10*(_bEnd)) + (_bOffset))
-
-#ifdef CONFIG_USB_TUSB6010
-/* TUSB6010 EP0 configuration register is special */
-#define MGC_TUSB_OFFSET(_bEnd, _bOffset)        \
-        (0x10 + _bOffset)
-#include "tusb6010.h"           /* needed "only" for TUSB_EP0_CONF */
-#endif
-
 /* TUSB mapping: "flat" plus ep0 special cases */
 #if	defined(CONFIG_USB_TUSB6010)
-#warning TUSB MAPPING
 #define musb_ep_select(_mbase, _epnum) \
 	musb_writeb((_mbase), MUSB_INDEX, (_epnum))
 #define	MUSB_EP_OFFSET			MUSB_TUSB_OFFSET
@@ -337,40 +211,10 @@ enum musb_g_ep0_state {
 
 /* "indexed" mapping: INDEX register controls register bank select */
 #else
-#ifndef CONFIG_USB_BELCARRA_MUSB_HDRC 
-#warning INDEXED MAPPING
-#endif
 #define musb_ep_select(_mbase, _epnum) \
 	musb_writeb((_mbase), MUSB_INDEX, (_epnum))
 #define	MUSB_EP_OFFSET			MUSB_INDEXED_OFFSET
 #endif
-
-#if 1
-/* FIXME: replace with musb_readcsr(hw_ep *, REGNAME), etc
- * using hw_ep->regs, for all access except writing INDEX
- */
-#ifdef  MUSB_FLAT_REG
-
-#define MGC_ReadCsr8(_pBase, _bOffset, _bEnd) \
-        musb_readb((_pBase), MUSB_EP_OFFSET((_bEnd), (_bOffset)))
-#define MGC_ReadCsr16(_pBase, _bOffset, _bEnd) \
-        musb_readw((_pBase), MUSB_EP_OFFSET((_bEnd), (_bOffset)))
-#define MGC_WriteCsr8(_pBase, _bOffset, _bEnd, _bData) \
-        musb_writeb((_pBase), MUSB_EP_OFFSET((_bEnd), (_bOffset)), (_bData))
-#define MGC_WriteCsr16(_pBase, _bOffset, _bEnd, _bData) \
-        musb_writew((_pBase), MUSB_EP_OFFSET((_bEnd), (_bOffset)), (_bData))
-#else
-#define MGC_ReadCsr8(_pBase, _bOffset, _bEnd) \
-            musb_readb(_pBase, (_bOffset + 0x10))
-#define MGC_ReadCsr16(_pBase, _bOffset, _bEnd) \
-        musb_readw(_pBase, (_bOffset + 0x10))
-#define MGC_WriteCsr8(_pBase, _bOffset, _bEnd, _bData) \
-        musb_writeb(_pBase, (_bOffset + 0x10), _bData)
-#define MGC_WriteCsr16(_pBase, _bOffset, _bEnd, _bData) \
-        musb_writew(_pBase, (_bOffset + 0x10), _bData)
-#endif
-#endif
-
 
 /****************************** FUNCTIONS ********************************/
 
@@ -431,7 +275,7 @@ struct musb_hw_ep {
 	u8			tx_reinit;
 #endif
 
-#if defined(CONFIG_USB_GADGET_MUSB_HDRC) 
+#ifdef CONFIG_USB_GADGET_MUSB_HDRC
 	/* peripheral side */
 	struct musb_ep		ep_in;			/* TX */
 	struct musb_ep		ep_out;			/* RX */
@@ -543,9 +387,6 @@ struct musb {
 	unsigned is_multipoint:1;
 	unsigned ignore_disconnect:1;	/* during bus resets */
 
-	/* clk_suspend means the clock is suspended */
-	unsigned		clk_suspend:1;
-
 #ifdef C_MP_TX
 	unsigned bulk_split:1;
 #define	can_bulk_split(musb,type) \
@@ -590,12 +431,6 @@ struct musb {
 
 	struct musb_hdrc_config	*config;
 
-#ifdef CONFIG_USB_BELCARRA_MUSB_HDRC
-        unsigned bSetAddress:1;
-        unsigned softconnect:1;
-        void                    *pBelcarra_privdata;
-#endif /* CONFIG_USB_BELCARRA_MUSB_HDRC */
-
 #ifdef MUSB_CONFIG_PROC_FS
 	struct proc_dir_entry *proc_entry;
 #endif
@@ -612,6 +447,70 @@ static inline struct musb *gadget_to_musb(struct usb_gadget *g)
 	return container_of(g, struct musb, g);
 }
 #endif
+
+#ifdef CONFIG_BLACKFIN
+static inline int musb_read_fifosize(struct musb *musb,
+		struct musb_hw_ep *hw_ep, u8 epnum)
+{
+	musb->nr_endpoints++;
+	musb->epmask |= (1 << epnum);
+
+	if (epnum < 5) {
+		hw_ep->max_packet_sz_tx = 128;
+		hw_ep->max_packet_sz_rx = 128;
+	} else {
+		hw_ep->max_packet_sz_tx = 1024;
+		hw_ep->max_packet_sz_rx = 1024;
+	}
+	hw_ep->is_shared_fifo = false;
+
+	return 0;
+}
+
+static inline void musb_configure_ep0(struct musb *musb)
+{
+	musb->endpoints[0].max_packet_sz_tx = MUSB_EP0_FIFOSIZE;
+	musb->endpoints[0].max_packet_sz_rx = MUSB_EP0_FIFOSIZE;
+	musb->endpoints[0].is_shared_fifo = true;
+}
+
+#else
+
+static inline int musb_read_fifosize(struct musb *musb,
+		struct musb_hw_ep *hw_ep, u8 epnum)
+{
+	u8 reg = 0;
+
+	/* read from core using indexed model */
+	reg = musb_readb(hw_ep->regs, 0x10 + MUSB_FIFOSIZE);
+	/* 0's returned when no more endpoints */
+	if (!reg)
+		return -ENODEV;
+
+	musb->nr_endpoints++;
+	musb->epmask |= (1 << epnum);
+
+	hw_ep->max_packet_sz_tx = 1 << (reg & 0x0f);
+
+	/* shared TX/RX FIFO? */
+	if ((reg & 0xf0) == 0xf0) {
+		hw_ep->max_packet_sz_rx = hw_ep->max_packet_sz_tx;
+		hw_ep->is_shared_fifo = true;
+		return 0;
+	} else {
+		hw_ep->max_packet_sz_rx = 1 << ((reg & 0xf0) >> 4);
+		hw_ep->is_shared_fifo = false;
+	}
+
+	return 0;
+}
+
+static inline void musb_configure_ep0(struct musb *musb)
+{
+	musb->endpoints[0].max_packet_sz_tx = MUSB_EP0_FIFOSIZE;
+	musb->endpoints[0].max_packet_sz_rx = MUSB_EP0_FIFOSIZE;
+}
+#endif /* CONFIG_BLACKFIN */
 
 
 /***************************** Glue it together *****************************/
@@ -630,21 +529,19 @@ extern irqreturn_t musb_interrupt(struct musb *);
 
 extern void musb_platform_enable(struct musb *musb);
 extern void musb_platform_disable(struct musb *musb);
-extern int musb_platform_resume(struct musb *musb);
-extern int musb_platform_suspend(struct musb *musb);
 
 extern void musb_hnp_stop(struct musb *musb);
 
-extern void musb_platform_set_mode(struct musb *musb, u8 musb_mode);
+extern int musb_platform_set_mode(struct musb *musb, u8 musb_mode);
 
-#if defined(CONFIG_USB_TUSB6010) || \
+#if defined(CONFIG_USB_TUSB6010) || defined(CONFIG_BLACKFIN) || \
 	defined(CONFIG_ARCH_OMAP2430) || defined(CONFIG_ARCH_OMAP34XX)
 extern void musb_platform_try_idle(struct musb *musb, unsigned long timeout);
 #else
 #define musb_platform_try_idle(x, y)		do {} while (0)
 #endif
 
-#ifdef CONFIG_USB_TUSB6010
+#if defined(CONFIG_USB_TUSB6010) || defined(CONFIG_BLACKFIN)
 extern int musb_platform_get_vbus_status(struct musb *musb);
 #else
 #define musb_platform_get_vbus_status(x)	0
@@ -652,24 +549,5 @@ extern int musb_platform_get_vbus_status(struct musb *musb);
 
 extern int __init musb_platform_init(struct musb *musb);
 extern int musb_platform_exit(struct musb *musb);
-
-/*-------------------------- ProcFS definitions ---------------------*/
-
-struct proc_dir_entry;
-
-#if (MUSB_DEBUG > 0) && defined(MUSB_CONFIG_PROC_FS)
-extern struct proc_dir_entry *musb_debug_create(char *name, struct musb *data);
-extern void musb_debug_delete(char *name, struct musb *data);
-
-#else
-static inline struct proc_dir_entry *
-musb_debug_create(char *name, struct musb *data)
-{
-	return NULL;
-}
-static inline void musb_debug_delete(char *name, struct musb *data)
-{
-}
-#endif
 
 #endif	/* __MUSB_CORE_H__ */
