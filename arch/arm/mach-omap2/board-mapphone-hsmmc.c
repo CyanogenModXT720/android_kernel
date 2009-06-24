@@ -122,6 +122,64 @@ static int hsmmc_resume(struct device *dev, int slot)
 }
 #endif
 
+#ifdef CONFIG_MMC_TST
+int hsmmc_set_power(struct device *dev, int slot, int power_on,
+				int vdd)
+{
+	u32 reg;
+	int ret = 0;
+
+	if (power_on) {
+		reg = omap_ctrl_readl(OMAP2_CONTROL_DEVCONF0);
+		reg |= OMAP2_MMCSDIO1ADPCLKISEL;
+		omap_ctrl_writel(reg, OMAP2_CONTROL_DEVCONF0);
+
+		reg = omap_ctrl_readl(OMAP343X_CONTROL_PBIAS_LITE);
+		reg &= ~OMAP2_PBIASSPEEDCTRL0;
+		reg &= ~OMAP2_PBIASLITEPWRDNZ0;
+		omap_ctrl_writel(reg, OMAP343X_CONTROL_PBIAS_LITE);
+
+		mutex_lock(&regulator_lock);
+		if (!hsmmc_regulator_is_on) {
+			hsmmc_regulator_is_on = 1;
+			regulator_enable(hsmmc_regulator);
+		}
+		mutex_unlock(&regulator_lock);
+
+		/* 100ms delay required for PBIAS configuration */
+		msleep(100);
+		reg = omap_ctrl_readl(OMAP343X_CONTROL_PBIAS_LITE);
+		reg |= OMAP2_PBIASLITEPWRDNZ0;
+		if ((1 << vdd) <= MMC_VDD_165_195)
+			reg &= ~OMAP2_PBIASLITEVMODE0;
+		else
+			reg |= OMAP2_PBIASLITEVMODE0;
+		omap_ctrl_writel(reg, OMAP343X_CONTROL_PBIAS_LITE);
+
+		return ret;
+	} else {
+		reg = omap_ctrl_readl(OMAP343X_CONTROL_PBIAS_LITE);
+		reg &= ~OMAP2_PBIASLITEPWRDNZ0;
+		omap_ctrl_writel(reg, OMAP343X_CONTROL_PBIAS_LITE);
+
+		mutex_lock(&regulator_lock);
+		if (hsmmc_regulator_is_on) {
+			hsmmc_regulator_is_on = 0;
+			regulator_disable(hsmmc_regulator);
+		}
+		mutex_unlock(&regulator_lock);
+
+		/* 100ms delay required for PBIAS configuration */
+		msleep(100);
+		reg = omap_ctrl_readl(OMAP343X_CONTROL_PBIAS_LITE);
+		reg |= (OMAP2_PBIASLITEPWRDNZ0 | OMAP2_PBIASLITEVMODE0);
+		omap_ctrl_writel(reg, OMAP343X_CONTROL_PBIAS_LITE);
+	}
+
+	return 0;
+}
+EXPORT_SYMBOL(hsmmc_set_power);
+#else
 static int hsmmc_set_power(struct device *dev, int slot, int power_on,
 				int vdd)
 {
@@ -177,6 +235,7 @@ static int hsmmc_set_power(struct device *dev, int slot, int power_on,
 
 	return 0;
 }
+#endif
 
 #if defined(CONFIG_OMAP_HS_MMC2)
 static int hsmmc2_late_init(struct device *dev)
