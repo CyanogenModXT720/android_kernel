@@ -639,6 +639,7 @@ static void __init mapphone_init(void)
 	omap_board_config = mapphone_config;
 	omap_board_config_size = ARRAY_SIZE(mapphone_config);
 	mapphone_padconf_init();
+	mapphone_gpio_mapping_init();
 	mapphone_spi_init();
 	mapphone_flash_init();
 	mapphone_serial_init();

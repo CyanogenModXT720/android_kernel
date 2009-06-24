@@ -28,7 +28,7 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 
-#include <linux/gpio.h>
+#include <linux/gpio_mapping.h>
 
 struct gpio_mapping gpio_map_table[GPIO_MAP_SIZE] = {
 	{1, 92, "lcd_panel_reset"},

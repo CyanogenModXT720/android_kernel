@@ -48,5 +48,6 @@ extern void __init mapphone_spi_init(void);
 extern void __init mapphone_flash_init(void);
 extern void __init mapphone_padconf_init(void);
 extern void __init mapphone_hsmmc_init(void);
+extern void __init mapphone_gpio_mapping_init(void);
 
 #endif /*  __ASM_ARCH_OMAP_MAPPHONE_H */
