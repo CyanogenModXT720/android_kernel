@@ -1118,7 +1118,8 @@ static int __init omap_mmc_probe(struct platform_device *pdev)
 			goto err_cover_switch;
 	}
 #ifdef CONFIG_MMC_TST
-	if (host->pdata->slots[host->slot_id].set_power == hsmmc_set_power)
+	if (host->pdata->slots[host->slot_id].set_power ==
+		(*ex_hsmmc_set_power))
 		hsmmc_host = host;
 #endif
 
