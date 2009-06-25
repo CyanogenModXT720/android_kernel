@@ -620,6 +620,10 @@ static void __init mapphone_bt_init(void)
 
 static void __init mapphone_bp_model_init(void)
 {
+#ifdef CONFIG_OMAP_RESET_CLOCKS
+	struct clk *clkp;
+#endif
+
 #ifdef CONFIG_ARM_OF
 	struct device_node *bp_node;
 	const void *bp_prop;
@@ -631,6 +635,12 @@ static void __init mapphone_bp_model_init(void)
 
 		of_node_put(bp_node);
 	}
+#endif
+#ifdef CONFIG_OMAP_RESET_CLOCKS
+	/* Enable sad2d iclk */
+	clkp = clk_get(NULL, "sad2d_ick");
+	if (clkp)
+		clk_enable(clkp);
 #endif
 }
 
