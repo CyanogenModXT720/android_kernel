@@ -553,6 +553,7 @@ static int adb_function_set_alt(struct usb_function *f,
 {
 	struct adb_dev	*dev = func_to_dev(f);
 	struct usb_composite_dev *cdev = f->config->cdev;
+	struct usb_request *req = NULL;
 	int ret;
 
 	DBG(cdev, "adb_function_set_alt intf: %d alt: %d\n", intf, alt);
@@ -571,6 +572,17 @@ static int adb_function_set_alt(struct usb_function *f,
 		return ret;
 	}
 	dev->online = 1;
+
+	while ((req = req_get(dev, &dev->rx_idle))) {
+		req->length = BULK_BUFFER_SIZE;
+		ret = usb_ep_queue(dev->ep_out, req, GFP_ATOMIC);
+
+		if (ret < 0) {
+			dev->error = 1;
+			req_put(dev, &dev->rx_idle, req);
+			break;
+		}
+	}
 
 	/* readers may be blocked waiting for us to go online */
 	wake_up(&dev->read_wq);
