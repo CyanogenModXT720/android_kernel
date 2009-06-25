@@ -6,7 +6,6 @@
 
 obj-$(CONFIG_USB)		+= core/
 
-obj-$(CONFIG_MOT_FEAT_ADB_ENDEV)+= gadget/
 obj-$(CONFIG_USB_MON)		+= mon/
 
 obj-$(CONFIG_PCI)		+= host/

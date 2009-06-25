@@ -1240,14 +1240,12 @@ CONFIG_USB_MUSB_SOC=y
 # OMAP 343x high speed USB support
 #
 # CONFIG_USB_MUSB_HOST is not set
-CONFIG_USB_MUSB_PERIPHERAL=y
-# CONFIG_USB_MUSB_OTG is not set
-# CONFIG_USB_GADGET_MUSB_HDRC is not set
-# CONFIG_USB_MUSB_HDRC_HCD is not set
+# CONFIG_USB_MUSB_PERIPHERAL is not set
+CONFIG_USB_MUSB_OTG=y
+CONFIG_USB_GADGET_MUSB_HDRC=y
+CONFIG_USB_MUSB_HDRC_HCD=y
 # CONFIG_MUSB_PIO_ONLY is not set
 CONFIG_USB_INVENTRA_DMA=y
-CONFIG_USB_BELCARRA_MUSB_HDRC=y
-# CONFIG_MUSB_USE_SYSTEM_DMA_RX is not set
 # CONFIG_USB_TI_CPPI_DMA is not set
 # CONFIG_USB_MUSB_DEBUG is not set
 
@@ -1355,11 +1353,11 @@ CONFIG_USB_PANIC_ENUMERATION=y
 # CONFIG_USB_TEST is not set
 # CONFIG_USB_ISIGHTFW is not set
 # CONFIG_USB_VST is not set
-# CONFIG_USB_GADGET is not set
+CONFIG_USB_GADGET=y
 # CONFIG_USB_GADGET_DEBUG is not set
 # CONFIG_USB_GADGET_DEBUG_FILES is not set
-# CONFIG_USB_GADGET_VBUS_DRAW=2
-# CONFIG_USB_GADGET_SELECTED is not set
+CONFIG_USB_GADGET_VBUS_DRAW=2
+CONFIG_USB_GADGET_SELECTED=y
 # CONFIG_USB_GADGET_AT91 is not set
 # CONFIG_USB_GADGET_ATMEL_USBA is not set
 # CONFIG_USB_GADGET_FSL_USB2 is not set
@@ -1376,7 +1374,7 @@ CONFIG_USB_PANIC_ENUMERATION=y
 # CONFIG_USB_GADGET_NET2280 is not set
 # CONFIG_USB_GADGET_GOKU is not set
 # CONFIG_USB_GADGET_DUMMY_HCD is not set
-# CONFIG_USB_GADGET_DUALSPEED is not set
+CONFIG_USB_GADGET_DUALSPEED=y
 # CONFIG_USB_ZERO is not set
 # CONFIG_USB_ETH is not set
 # CONFIG_USB_GADGETFS is not set
@@ -1907,165 +1905,6 @@ CONFIG_PLIST=y
 CONFIG_HAS_IOMEM=y
 CONFIG_HAS_IOPORT=y
 CONFIG_HAS_DMA=y
-
-###################################################################
-#
-# Filename:     defconfig
-#
-#
-# Copyright:
-#
-#     
-#      Advanced Technology and Software Operations
-#      Copyright(c) Motorola 2007
-#
-# HISTORY:
-#
-#        Author              Date             Description
-#       ----------          --------         ------------- 
-#       Motorola            10/04/07      Changes for OSS compliance
-#
-######################################################################
-#
-# On-The-Go and USB Peripheral Support
-#
-
-#
-# On-The-Go and USB Peripheral Support
-#
-CONFIG_OTG=m
-# CONFIG_OTG_TR_AUTO is not set
-
-#
-# On-The-Go Support Platform Selection
-#
-# CONFIG_OTG_PLATFORM_OTG is not set
-# CONFIG_OTG_PLATFORM_USB is not set
-CONFIG_OTG_PLATFORM_USBD=y
-CONFIG_OTG_HIGH_SPEED=y
-
-#
-# On-The-Go Options
-#
-CONFIG_OTG_USB_PERIPHERAL=y
-CONFIG_OTG_SELF_POWERED=y
-CONFIG_OTG_BMAXPOWER=250
-# CONFIG_OTG_REMOTE_WAKEUP_CAPABLE is not set
-#
-# Language
-#
-CONFIG_OTG_LANGID=0x0904
-
-#
-# OTG Generic function
-#
-CONFIG_OTG_GENERIC=m
-#
-# OTG Generic Composite function options
-#
-CONFIG_OTG_GENERIC_VENDORID=0x22B8
-CONFIG_OTG_GENERIC_PRODUCTID=0x6424
-CONFIG_OTG_GENERIC_BCDDEVICE=0x0101
-CONFIG_OTG_GENERIC_CONFIGURATION="Motorola Android Composite Device"
-CONFIG_OTG_GENERIC_MANUFACTURER="Motorola Inc"
-CONFIG_OTG_GENERIC_PRODUCT_NAME="Sholes"
-CONFIG_OTG_ACM_NETWORK_PRODUCTID=0x6425
-CONFIG_OTG_ACM_NETWORK_BLAN_DESC="Motorola ACM BLAN Configuration"
-CONFIG_OTG_GENERIC_CONFIG_NONE=y
-
-#
-# OTG ACM function
-#
-CONFIG_OTG_ACM=m
-CONFIG_OTG_ACM_PRODUCTID=0x6422
-
-#
-# OTG Android ADB function
-#
-CONFIG_MOT_FEAT_ADB_ENDEV=y
-CONFIG_OTG_ANDROID_ADB=m
-
-#
-# OTG Android ADB function options
-#
-CONFIG_OTG_ANDROID_ADB_PRODUCTID=0x6426
-CONFIG_OTG_ANDROID_ADB_MANUFACTURER="Motorola Inc."
-CONFIG_OTG_ANDROID_ADB_PRODUCT_NAME="Moto MS"
-
-#
-# OTG Mass Storage function
-#
-CONFIG_OTG_MSC=m
-
-#
-# OTG Mass Storage function options
-#
-CONFIG_OTG_MSC_PRODUCTID=0x6426
-CONFIG_OTG_MSC_MANUFACTURER="Motorola Inc."
-CONFIG_OTG_MSC_PRODUCT_NAME="Moto MS"
-
-# CONFIG_OTG_MSC_REGISTER_TRACE is not set
-
-#
-# OTG Network Function
-#
-CONFIG_OTG_NETWORK=m
-
-#
-# Network Protocols
-#
-CONFIG_OTG_NETWORK_PRODUCTID=0x6424
-# CONFIG_OTG_NETWORK_EEM is not set
-# CONFIG_OTG_NETWORK_EEM_CRC is not set
-# CONFIG_OTG_NETWORK_EEM_STREAM is not set
-# CONFIG_OTG_NETWORK_ECM is not set
-
-#
-# Older Network Protocols
-#
-CONFIG_OTG_NETWORK_DEPRECATED=y
-CONFIG_OTG_NETWORK_BLAN=y
-
-#
-# BLAN Network Function options
-#
-CONFIG_OTG_NETWORK_BLAN_CRC=y
-CONFIG_OTG_NETWORK_BLAN_AUTO_CONFIG=y
-# CONFIG_OTG_NETWORK_BLAN_NONBRIDGED is not set
-# CONFIG_OTG_NETWORK_SAFE is not set
-# CONFIG_OTG_NETWORK_BASIC is not set
-# CONFIG_OTG_NETWORK_BASIC2 is not set
-
-#
-# Network Device Type and Address configuration (testing)
-#
-# CONFIG_OTG_NETWORK_TESTING=y
-# CONFIG_OTG_NETWORK_RFC868_AUTO_CONFIG=y
-
-#
-# OTG MTP Function
-#
-CONFIG_OTG_MTP=m
-
-#
-# OTG MTP function options
-#
-CONFIG_OTG_MTP_VENDORID=0x22b8
-CONFIG_OTG_MTP_PRODUCTID=0x6415
-CONFIG_OTG_MTP_BCDDEVICE=0x0101
-CONFIG_OTG_MTP_MANUFACTURER="Motorola Inc."
-CONFIG_OTG_MTP_PRODUCT_NAME="Motorola USB Device"
-CONFIG_OTG_MTP_DESC="MTP Configuration"
-# CONFIG_OTG_MTP_HOTPLUG is not set
-
-
-
-#
-# On-The-Go Support Platform Selection
-#
-CONFIG_OTG_OMAP_MENTOR=y
-CONFIG_OTG_OMAP_SDP2430=m
-CONFIG_OTG_OMAP_HS_MENTOR=y
 
 #
 # Motorola Features
