@@ -907,12 +907,11 @@ static struct mmc_host_ops mmc_omap_ops = {
 #ifdef CONFIG_MMC_TST
 
 static struct mmc_omap_host *hsmmc_host;
-int cardselection;
-EXPORT_SYMBOL(cardselection);
 
 void hsmmc_schedule_4test(int carddetect)
 {
-      hsmmc_host->carddetect = cardselection;
+      printk(KERN_ERR"carddetect=%d\n", carddetect);
+      hsmmc_host->carddetect = carddetect;
       schedule_work(&hsmmc_host->mmc_carddetect_work);
 }
 EXPORT_SYMBOL(hsmmc_schedule_4test);
@@ -1118,9 +1117,8 @@ static int __init omap_mmc_probe(struct platform_device *pdev)
 			goto err_cover_switch;
 	}
 #ifdef CONFIG_MMC_TST
-	if (host->pdata->slots[host->slot_id].set_power ==
-		(*ex_hsmmc_set_power))
-		hsmmc_host = host;
+		if (host->id == OMAP_MMC1_DEVID)
+			hsmmc_host = host;
 #endif
 
 	return 0;

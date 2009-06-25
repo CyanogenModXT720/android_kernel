@@ -179,7 +179,12 @@ static int hsmmc_set_power(struct device *dev, int slot, int power_on,
 }
 
 #ifdef CONFIG_MMC_TST
-int (*ex_hsmmc_set_power)(struct device *, int, int, int) = hsmmc_set_power;
+int ex_hsmmc_set_power(struct device *dev, int slot, int power_on,
+						int vdd)
+{
+    hsmmc_set_power(dev, slot, power_on, vdd);
+    return 0;
+}
 EXPORT_SYMBOL(ex_hsmmc_set_power);
 #endif
 
