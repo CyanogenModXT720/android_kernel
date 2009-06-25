@@ -38,7 +38,6 @@ obj-$(CONFIG_OMAP_PM_SRF)		+=  resource34xx.o
 obj-$(CONFIG_MPU_BRIDGE)		+= dspbridge.o
 
 # DSP
-obj-$(CONFIG_MPU_BRIDGE)        += dspbridge.o
 obj-$(CONFIG_OMAP_MBOX_FWK)	+= mailbox_mach.o
 mailbox_mach-objs		:= mailbox.o
 
@@ -84,6 +83,7 @@ obj-$(CONFIG_MACH_SHOLES)		+= board-sholes.o \
 					   board-sholes-keypad.o \
 					   board-sholes-wifi.o
 obj-$(CONFIG_MACH_MAPPHONE)		+= board-mapphone.o \
+					   board-mapphone-camera.o \
 					   board-mapphone-flash.o \
 					   board-mapphone-padconf.o \
 					   board-mapphone-panel.o \
