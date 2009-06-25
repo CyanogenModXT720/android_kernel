@@ -129,7 +129,7 @@ static s32 driver_minor = DRIVER_MINOR;
 static char *base_img;
 char *iva_img;
 static char *num_procs = "C55=1";
-static s32 shm_size = 0x400000;	/* 4 MB */
+static s32 shm_size = 0x500000;	/* 5 MB */
 static u32 phys_mempool_base;
 static u32 phys_mempool_size;
 static int tc_wordswapon;	/* Default value is always false */
@@ -197,7 +197,7 @@ static struct GT_Mask driverTrace;
 static struct file_operations bridge_fops = {
 	.open		= bridge_open,
 	.release	= bridge_release,
-	.ioctl		= bridge_ioctl,
+	.unlocked_ioctl	= bridge_ioctl,
 	.mmap		= bridge_mmap,
 };
 
@@ -665,7 +665,7 @@ static int bridge_release(struct inode *ip, struct file *filp)
 }
 
 /* This function provides IO interface to the bridge driver. */
-static int bridge_ioctl(struct inode *ip, struct file *filp, unsigned int code,
+static long bridge_ioctl(struct file *filp, unsigned int code,
 		unsigned long args)
 {
 	int status;

@@ -129,6 +129,33 @@ static inline void omap_init_camera(void)
 {
 	platform_device_register(&omap3isp_device);
 }
+
+#elif defined(CONFIG_VIDEO_OLDOMAP3) || defined(CONFIG_VIDEO_OLDOMAP3_MODULE)
+
+static struct resource cam_resources[] = {
+	{
+		.start		= OMAP34XX_CAMERA_BASE,
+		.end		= OMAP34XX_CAMERA_BASE + 0x1B70,
+		.flags		= IORESOURCE_MEM,
+	},
+	{
+		.start		= INT_34XX_CAM_IRQ,
+		.flags		= IORESOURCE_IRQ,
+	}
+};
+
+static struct platform_device omap_cam_device = {
+	.name		= "omap34xxcam",
+	.id		= -1,
+	.num_resources	= ARRAY_SIZE(cam_resources),
+	.resource	= cam_resources,
+};
+
+static inline void omap_init_camera(void)
+{
+	platform_device_register(&omap_cam_device);
+}
+
 #else
 static inline void omap_init_camera(void)
 {
@@ -546,6 +573,7 @@ static inline void omap2_mmc_mux(struct omap_mmc_platform_data *mmc_controller,
 	}
 
 	if (cpu_is_omap3430()) {
+		u32 dev_conf = 0, v_shift = 0;
 		if (controller_nr == 0) {
 			omap_cfg_reg(N28_3430_MMC1_CLK);
 			omap_cfg_reg(M27_3430_MMC1_CMD);
@@ -559,6 +587,8 @@ static inline void omap2_mmc_mux(struct omap_mmc_platform_data *mmc_controller,
 			omap_cfg_reg(R27_3430_MMC1_DAT6);
 			omap_cfg_reg(R25_3430_MMC1_DAT7);
 		#endif
+			dev_conf = OMAP2_CONTROL_DEVCONF0;
+			v_shift = OMAP2_MMCSDIO1ADPCLKISEL;
 		}
 		if (controller_nr == 1) {
 			/* MMC2 */
@@ -568,6 +598,8 @@ static inline void omap2_mmc_mux(struct omap_mmc_platform_data *mmc_controller,
 			omap_cfg_reg(AH4_3430_MMC2_DAT1);
 			omap_cfg_reg(AG4_3430_MMC2_DAT2);
 			omap_cfg_reg(AF4_3430_MMC2_DAT3);
+			dev_conf = OMAP343X_CONTROL_DEVCONF1;
+			v_shift = OMAP2_MMCSDIO2ADPCLKISEL;
 		}
 		if (controller_nr == 2) {
 			/* MMC3 */
@@ -577,6 +609,16 @@ static inline void omap2_mmc_mux(struct omap_mmc_platform_data *mmc_controller,
 			omap_cfg_reg(AH9_3430_MMC3_DAT1);
 			omap_cfg_reg(AF13_3430_MMC3_DAT2);
 			omap_cfg_reg(AE13_3430_MMC3_DAT3);
+		}
+
+		/*
+		 * Use internal loop-back in MMC/SDIO Module Input Clock
+		 * selection
+		 */
+		if (mmc_controller->slots[0].internal_clock && dev_conf) {
+			u32 v = omap_ctrl_readl(dev_conf);
+			v |= (1 << v_shift);
+			omap_ctrl_writel(v, dev_conf);
 		}
 	}
 }
@@ -620,7 +662,10 @@ void __init omap2_init_mmc(struct omap_mmc_platform_data **mmc_data,
 			name = "mmci-omap";
 		} else {
 			size = HSMMC_SIZE;
-			name = "mmci-omap-hs";
+			if (mmc_data[i]->name)
+				name = mmc_data[i]->name;
+			else
+				name = "mmci-omap-hs";
 		}
 		omap_mmc_add(name, i, base, size, irq, mmc_data[i]);
 	};
