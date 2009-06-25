@@ -47,6 +47,9 @@ struct cpcap_spi_init_data mapphone_cpcap_spi_init[] = {
 	{CPCAP_REG_S4C1,      0x0000},
 	{CPCAP_REG_S4C2,      0x3434},
 	{CPCAP_REG_S6C,       0x0000},
+	{CPCAP_REG_VRF1C,     0x002C},	/* UMTS only */
+	{CPCAP_REG_VRF2C,     0x000B},	/* UMTS only */
+	{CPCAP_REG_VRFREFC,   0x000B},	/* UMTS only */
 	{CPCAP_REG_VWLAN2C,   0x0001},
 	{CPCAP_REG_VVIBC,     0x000D},   /* Temporary */
 	{CPCAP_REG_VUSBINT1C, 0x0029},
@@ -230,21 +233,27 @@ static struct regulator_init_data cpcap_regulator[CPCAP_NUM_REGULATORS] = {
 		.constraints = {
 			.min_uV			= 2500000,
 			.max_uV			= 2775000,
-			.valid_ops_mask		= 0,
+			.valid_ops_mask   	= (REGULATOR_CHANGE_VOLTAGE |
+						   REGULATOR_CHANGE_STATUS),
+			.boot_on                	= 1,
 		},
 	},
 	[CPCAP_VRF2] = {
 		.constraints = {
 			.min_uV			= 2775000,
 			.max_uV			= 2775000,
-			.valid_ops_mask		= 0,
+			.valid_ops_mask   	= (REGULATOR_CHANGE_VOLTAGE |
+						   REGULATOR_CHANGE_STATUS),
+			.boot_on                	= 1,
 		},
 	},
 	[CPCAP_VRFREF] = {
 		.constraints = {
 			.min_uV			= 2500000,
 			.max_uV			= 2775000,
-			.valid_ops_mask		= 0,
+			.valid_ops_mask   	= (REGULATOR_CHANGE_VOLTAGE |
+						   REGULATOR_CHANGE_STATUS),
+			.boot_on                	= 1,
 		},
 	},
 	[CPCAP_VWLAN1] = {
