@@ -31,6 +31,7 @@
 #include <linux/gpio_mapping.h>
 
 struct gpio_mapping gpio_map_table[GPIO_MAP_SIZE] = {
+#ifdef CONFIG_MACH_MAPPHONE
 	{1, 92, "lcd_panel_reset"},
 	{1, 93, "lcd_panel_sd"},
 	{1, 149, "usb_ipc_phy_reset"},
@@ -38,6 +39,7 @@ struct gpio_mapping gpio_map_table[GPIO_MAP_SIZE] = {
 	{1, 163, "mmc_detect"},
 	{1, 177, "slider_data"},
 	{1, 65, "wlan_host_wake"},
+#endif
 };
 
 int get_gpio_by_name(char *name)
