@@ -823,7 +823,17 @@ unknown:
 				value = c->setup(c, ctrl);
 		}
 
+		if (cdev->config == NULL) {
+			struct usb_configuration        *cfg;
+
+			list_for_each_entry(cfg, &cdev->configs, list) {
+			if (cfg && cfg->setup)
+				value = cfg->setup(cfg, ctrl);
+			}
+		}
+		/*
 		goto done;
+		*/
 	}
 
 	/* respond with data transfer before status phase? */

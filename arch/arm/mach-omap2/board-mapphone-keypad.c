@@ -186,6 +186,12 @@ static int __init mapphone_dt_kp_init(void)
 			mapphone_keypad_matrix_info.keymap = \
 				(unsigned short *)kp_prop;
 
+		kp_prop = of_get_property(kp_node, \
+				DT_PROP_KEYPAD_NAME, NULL);
+		if (kp_prop != NULL)
+			mapphone_keypad_data.name = \
+				kp_prop;
+
 		of_node_put(kp_node);
 	}
 

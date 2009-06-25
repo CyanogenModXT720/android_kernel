@@ -435,7 +435,7 @@ static void __init mapphone_ehci_init(void)
 {
 
 	omap_cfg_reg(AF5_34XX_GPIO142);		/*  IPC_USB_SUSP      */
-	omap_cfg_reg(AA21_34XX_GPIO157);	/*  AP_TO_BP_FLASH_EN */
+	omap_cfg_reg(AA21_34XX_GPIO157_OUT);	/*  AP_TO_BP_FLASH_EN */
 	omap_cfg_reg(AD1_3430_USB3FS_PHY_MM3_RXRCV);
 	omap_cfg_reg(AD2_3430_USB3FS_PHY_MM3_TXDAT);
 	omap_cfg_reg(AC1_3430_USB3FS_PHY_MM3_TXEN_N);
@@ -620,6 +620,10 @@ static void __init mapphone_bt_init(void)
 
 static void __init mapphone_bp_model_init(void)
 {
+#ifdef CONFIG_OMAP_RESET_CLOCKS
+	struct clk *clkp;
+#endif
+
 #ifdef CONFIG_ARM_OF
 	struct device_node *bp_node;
 	const void *bp_prop;
@@ -631,6 +635,12 @@ static void __init mapphone_bp_model_init(void)
 
 		of_node_put(bp_node);
 	}
+#endif
+#ifdef CONFIG_OMAP_RESET_CLOCKS
+	/* Enable sad2d iclk */
+	clkp = clk_get(NULL, "sad2d_ick");
+	if (clkp)
+		clk_enable(clkp);
 #endif
 }
 
