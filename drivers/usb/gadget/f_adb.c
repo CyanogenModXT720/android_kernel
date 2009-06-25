@@ -586,7 +586,7 @@ static int adb_function_set_alt(struct usb_function *f,
 		usb_ep_disable(dev->ep_in);
 		return ret;
 	}
-
+	/* This is a workaround. Read when phone enumerate in case data lost */
 	adb_start_out_receive(dev);
 	dev->online = 1;
 
