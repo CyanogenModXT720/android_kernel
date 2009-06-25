@@ -24,9 +24,7 @@
  */
 
 #include <linux/module.h>
-#include <linux/io.h>
 
-#include <mach/hardware.h>
 #ifdef CONFIG_ARM_OF
 #include <mach/dt_path.h>
 #include <asm/prom.h>
@@ -114,7 +112,7 @@ void __init mapphone_gpio_mapping_init(void)
 	}
 
     of_node_put(node);
-    printk(KERN_INFO "GPIO mapping init done\n");
+    printk(KERN_INFO "GPIO mapping init done!\n");
 #else
 	printk(KERN_INFO "GPIO Mapping: Using no-dt configuration!\n");
 #endif
