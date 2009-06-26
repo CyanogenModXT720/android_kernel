@@ -25,15 +25,28 @@
 
 #include <linux/module.h>
 
+#ifdef CONFIG_GPIO_MAPPING
+#include <linux/gpio_mapping.h>
 #ifdef CONFIG_ARM_OF
 #include <mach/dt_path.h>
 #include <asm/prom.h>
-#ifdef CONFIG_GPIO_MAPPING
-#include <linux/gpio_mapping.h>
 #endif
 #endif
 
-#if defined(CONFIG_ARM_OF) && defined(CONFIG_GPIO_MAPPING)
+#ifdef CONFIG_GPIO_MAPPING
+#define GPIO_MAP_SIZE 50
+
+static struct gpio_mapping gpio_map_table[GPIO_MAP_SIZE] = {
+	{1, 92, "lcd_panel_reset"},
+	{1, 93, "lcd_panel_sd"},
+	{1, 149, "usb_ipc_phy_reset"},
+	{1, 164, "touch_panel_reset"},
+	{1, 163, "mmc_detect"},
+	{1, 177, "slider_data"},
+	{1, 65, "wlan_host_wake"},
+};
+
+#ifdef CONFIG_ARM_OF
 struct omap_gpio_map_entry {
     u32 pin_num;
     char name[GPIO_MAP_NAME_SIZE];
@@ -54,10 +67,12 @@ void trim_gpio_map_string(char *s)
     printk(KERN_ERR "Too long gpio map string name!\n");
 }
 #endif
+#endif
 
 void __init mapphone_gpio_mapping_init(void)
 {
-#if defined(CONFIG_ARM_OF) && defined(CONFIG_GPIO_MAPPING)
+#ifdef CONFIG_GPIO_MAPPING
+#ifdef CONFIG_ARM_OF
 	struct device_node *node;
 	const void *prop;
 	int i, j, size, unit_size;
@@ -112,8 +127,13 @@ void __init mapphone_gpio_mapping_init(void)
 	}
 
     of_node_put(node);
-    printk(KERN_INFO "GPIO mapping init done!\n");
+    printk(KERN_INFO "DT overwrite GPIO Mapping done!\n");
 #else
 	printk(KERN_INFO "GPIO Mapping: Using no-dt configuration!\n");
+#endif
+	gpio_mapping_init(gpio_map_table, GPIO_MAP_SIZE);
+	printk(KERN_INFO "GPIO Mapping init done!\n");
+#else
+	printk(KERN_INFO "GPIO Mapping unused!\n");
 #endif
 }

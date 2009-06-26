@@ -30,23 +30,20 @@
 
 #include <linux/gpio_mapping.h>
 
-struct gpio_mapping gpio_map_table[GPIO_MAP_SIZE] = {
-#ifdef CONFIG_MACH_MAPPHONE
-	{1, 92, "lcd_panel_reset"},
-	{1, 93, "lcd_panel_sd"},
-	{1, 149, "usb_ipc_phy_reset"},
-	{1, 164, "touch_panel_reset"},
-	{1, 163, "mmc_detect"},
-	{1, 177, "slider_data"},
-	{1, 65, "wlan_host_wake"},
-#endif
-};
+static int gpio_map_size;
+static struct gpio_mapping *gpio_map_table;
+
+void __init gpio_mapping_init(struct gpio_mapping *table, int size)
+{
+	gpio_map_size = size;
+	gpio_map_table = table;
+}
 
 int get_gpio_by_name(char *name)
 {
 	int i;
 
-	for (i = 0; i < GPIO_MAP_SIZE; i++) {
+	for (i = 0; i < gpio_map_size; i++) {
 		if (gpio_map_table[i].used == 0)
 			continue;
 

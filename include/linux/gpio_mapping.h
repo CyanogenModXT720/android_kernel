@@ -31,7 +31,6 @@
 #define __LINUX_GPIO_MAPPING_H
 
 #define GPIO_MAP_NAME_SIZE 20
-#define GPIO_MAP_SIZE 50
 
 struct gpio_mapping {
 	u32 used;
@@ -39,7 +38,7 @@ struct gpio_mapping {
 	char name[GPIO_MAP_NAME_SIZE];
 };
 
-extern struct gpio_mapping gpio_map_table[GPIO_MAP_SIZE];
+extern void __init gpio_mapping_init(struct gpio_mapping *table, int size);
 extern int get_gpio_by_name(char *name);
 
 #endif /* __LINUX_GPIO_MAPPING_H */
