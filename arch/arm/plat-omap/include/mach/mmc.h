@@ -36,11 +36,6 @@
 
 #define OMAP_MMC_MAX_SLOTS	2
 
-/*#ifdef CONFIG_MMC_TST
-extern int (*ex_hsmmc_set_power)(struct device *dev, int slot, int power_on,
-			int vdd);
-#endif*/
-
 struct omap_mmc_platform_data {
 	/* back-link to device */
 	struct device *dev;
