@@ -553,12 +553,10 @@ static inline void omap2_mmc_mux(struct omap_mmc_platform_data *mmc_controller,
 			omap_cfg_reg(N26_3430_MMC1_DAT1);
 			omap_cfg_reg(N25_3430_MMC1_DAT2);
 			omap_cfg_reg(P28_3430_MMC1_DAT3);
-		#if 0
 			omap_cfg_reg(P27_3430_MMC1_DAT4);
 			omap_cfg_reg(P26_3430_MMC1_DAT5);
 			omap_cfg_reg(R27_3430_MMC1_DAT6);
 			omap_cfg_reg(R25_3430_MMC1_DAT7);
-		#endif
 		}
 		if (controller_nr == 1) {
 			/* MMC2 */
