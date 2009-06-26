@@ -48,8 +48,8 @@ static struct gpio_mapping gpio_map_table[GPIO_MAP_SIZE] = {
 
 #ifdef CONFIG_ARM_OF
 struct omap_gpio_map_entry {
-    u32 pin_num;
-    char name[GPIO_MAP_NAME_SIZE];
+	u32 pin_num;
+	char name[GPIO_MAP_NAME_SIZE];
 } __attribute__ ((__packed__));
 
 void trim_gpio_map_string(char *s)
@@ -64,7 +64,7 @@ void trim_gpio_map_string(char *s)
 		}
 	}
 
-    printk(KERN_ERR "Too long gpio map string name!\n");
+	printk(KERN_ERR "Too long gpio map string name!\n");
 }
 #endif
 #endif
@@ -126,8 +126,8 @@ void __init mapphone_gpio_mapping_init(void)
 		prop += unit_size;
 	}
 
-    of_node_put(node);
-    printk(KERN_INFO "DT overwrite GPIO Mapping done!\n");
+	of_node_put(node);
+	printk(KERN_INFO "DT overwrite GPIO Mapping done!\n");
 #else
 	printk(KERN_INFO "GPIO Mapping: Using no-dt configuration!\n");
 #endif
