@@ -34,12 +34,6 @@
 
 #include <linux/init.h>
 
-#define GPIO_SILENCE_KEY		100
-#define GPIO_SLIDER			177
-
-#define is_cdma_phone() (!strcmp("CDMA", bp_model))
-extern char * bp_model;
-
 extern void __init mapphone_usb_init(void);
 extern void __init mapphone_flash_init(void);
 extern void __init mapphone_panel_init(void);
@@ -49,5 +43,21 @@ extern void __init mapphone_flash_init(void);
 extern void __init mapphone_padconf_init(void);
 extern void __init mapphone_hsmmc_init(void);
 extern void __init mapphone_gpio_mapping_init(void);
+extern void __init mapphone_camera_init(void);
+
+#if defined(CONFIG_VIDEO_MT9P012) || defined(CONFIG_VIDEO_MT9P012_MODULE)
+extern struct mt9p012_platform_data mapphone_mt9p012_platform_data;
+#endif
+#ifdef CONFIG_VIDEO_OMAP3_HPLENS
+extern struct hplens_platform_data mapphone_hplens_platform_data;
+#endif
+
+#define GPIO_MT9P012_STANDBY		58
+#define GPIO_MT9P012_RESET		98
+#define GPIO_SILENCE_KEY		100
+#define GPIO_SLIDER			177
+
+#define is_cdma_phone() (!strcmp("CDMA", bp_model))
+extern char *bp_model;
 
 #endif /*  __ASM_ARCH_OMAP_MAPPHONE_H */

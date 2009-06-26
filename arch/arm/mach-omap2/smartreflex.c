@@ -52,6 +52,8 @@ struct omap_sr {
 
 #define SR_REGADDR(offs)	(sr->srbase_addr + offset)
 
+static int (*omap3_volscale_vcbypass_fun) (u32, u32, u8, u8);
+
 static inline void sr_write_reg(struct omap_sr *sr, unsigned offset, u32 value)
 {
 	__raw_writel(value, SR_REGADDR(offset));
@@ -184,7 +186,7 @@ static u16 get_vdd2_opp(void)
 	u16 opp;
 	struct clk *clk;
 
-	clk = clk_get(NULL, "dpll3_m2_ck");
+	clk = clk_get(NULL, "l3_ick");
 
 	if (clk == NULL || IS_ERR(clk) || l3_opps == NULL)
 		return 0;
@@ -449,6 +451,9 @@ static int sr_reset_voltage(int srid)
 	u32 reg_addr = 0;
 	u32 loop_cnt = 0, retries_cnt = 0;
 	u32 vc_bypass_value;
+	u32 t2_smps_steps = 0;
+	u32 t2_smps_delay = 0;
+	u32 prm_vp1_voltage, prm_vp2_voltage;
 
 	if (srid == SR1) {
 		target_opp_no = get_vdd1_opp();
@@ -458,6 +463,9 @@ static int sr_reset_voltage(int srid)
 		}
 		vsel = mpu_opps[target_opp_no].vsel;
 		reg_addr = R_VDD1_SR_CONTROL;
+		prm_vp1_voltage = prm_read_mod_reg(OMAP3430_GR_MOD,
+						OMAP3_PRM_VP1_VOLTAGE_OFFSET);
+		t2_smps_steps = abs(vsel - prm_vp1_voltage);
 	} else if (srid == SR2) {
 		target_opp_no = get_vdd2_opp();
 		if (!target_opp_no) {
@@ -466,6 +474,9 @@ static int sr_reset_voltage(int srid)
 		}
 		vsel = l3_opps[target_opp_no].vsel;
 		reg_addr = R_VDD2_SR_CONTROL;
+		prm_vp2_voltage = prm_read_mod_reg(OMAP3430_GR_MOD,
+						OMAP3_PRM_VP2_VOLTAGE_OFFSET);
+		t2_smps_steps = abs(vsel - prm_vp2_voltage);
 	}
 
 	vc_bypass_value = (vsel << OMAP3430_DATA_SHIFT) |
@@ -493,6 +504,14 @@ static int sr_reset_voltage(int srid)
 		vc_bypass_value = prm_read_mod_reg(OMAP3430_GR_MOD,
 					OMAP3_PRM_VC_BYPASS_VAL_OFFSET);
 	}
+
+	/*
+	 *  T2 SMPS slew rate (min) 4mV/uS, step size 12.5mV,
+	 *  2us added as buffer.
+	 */
+	t2_smps_delay = ((t2_smps_steps * 125) / 40) + 2;
+	udelay(t2_smps_delay);
+
 	return 0;
 }
 
@@ -750,38 +769,53 @@ void disable_smartreflex(int srid)
 	}
 }
 
+void omap3_voltagescale_vcbypass_setup(omap3_voltagescale_vcbypass_t fun)
+{
+	omap3_volscale_vcbypass_fun = fun;
+}
+
 /* Voltage Scaling using SR VCBYPASS */
-int sr_voltagescale_vcbypass(u32 target_opp, u8 vsel)
+int sr_voltagescale_vcbypass(u32 target_opp, u32 current_opp,
+					u8 target_vsel, u8 current_vsel)
 {
 	int sr_status = 0;
-	u32 vdd, target_opp_no;
+	u32 vdd, target_opp_no, current_opp_no;
 	u32 vc_bypass_value;
 	u32 reg_addr = 0;
 	u32 loop_cnt = 0, retries_cnt = 0;
+	u32 t2_smps_steps = 0;
+	u32 t2_smps_delay = 0;
+
+	if (omap3_volscale_vcbypass_fun)
+		return omap3_volscale_vcbypass_fun(target_opp, current_opp,
+						target_vsel, current_vsel);
 
 	vdd = get_vdd(target_opp);
 	target_opp_no = get_opp_no(target_opp);
+	current_opp_no = get_opp_no(current_opp);
 
 	if (vdd == VDD1_OPP) {
 		sr_status = sr_stop_vddautocomap(SR1);
+		t2_smps_steps = abs(target_vsel - current_vsel);
 
 		prm_rmw_mod_reg_bits(OMAP3430_VC_CMD_ON_MASK,
-					(vsel << OMAP3430_VC_CMD_ON_SHIFT),
-					OMAP3430_GR_MOD,
-					OMAP3_PRM_VC_CMD_VAL_0_OFFSET);
+				(target_vsel << OMAP3430_VC_CMD_ON_SHIFT),
+				OMAP3430_GR_MOD,
+				OMAP3_PRM_VC_CMD_VAL_0_OFFSET);
 		reg_addr = R_VDD1_SR_CONTROL;
 
 	} else if (vdd == VDD2_OPP) {
 		sr_status = sr_stop_vddautocomap(SR2);
+		t2_smps_steps =  abs(target_vsel - current_vsel);
 
 		prm_rmw_mod_reg_bits(OMAP3430_VC_CMD_ON_MASK,
-					(vsel << OMAP3430_VC_CMD_ON_SHIFT),
-					OMAP3430_GR_MOD,
-					OMAP3_PRM_VC_CMD_VAL_1_OFFSET);
+				(target_vsel << OMAP3430_VC_CMD_ON_SHIFT),
+				OMAP3430_GR_MOD,
+				OMAP3_PRM_VC_CMD_VAL_1_OFFSET);
 		reg_addr = R_VDD2_SR_CONTROL;
 	}
 
-	vc_bypass_value = (vsel << OMAP3430_DATA_SHIFT) |
+	vc_bypass_value = (target_vsel << OMAP3430_DATA_SHIFT) |
 			(reg_addr << OMAP3430_REGADDR_SHIFT) |
 			(R_SRI2C_SLAVE_ADDR << OMAP3430_SLAVEADDR_SHIFT);
 
@@ -807,7 +841,12 @@ int sr_voltagescale_vcbypass(u32 target_opp, u8 vsel)
 					OMAP3_PRM_VC_BYPASS_VAL_OFFSET);
 	}
 
-	udelay(T2_SMPS_UPDATE_DELAY);
+	/*
+	 *  T2 SMPS slew rate (min) 4mV/uS, step size 12.5mV,
+	 *  2us added as buffer.
+	 */
+	t2_smps_delay = ((t2_smps_steps * 125) / 40) + 2;
+	udelay(t2_smps_delay);
 
 	if (sr_status) {
 		if (vdd == VDD1_OPP)
@@ -912,6 +951,7 @@ static int __init omap3_sr_init(void)
 		return -ENODEV;
         }
 
+#ifdef CONFIG_TWL4030_CORE
 	/* Enable SR on T2 */
 	ret = twl4030_i2c_read_u8(TWL4030_MODULE_PM_RECEIVER, &RdReg,
 					R_DCDC_GLOBAL_CFG);
@@ -919,6 +959,7 @@ static int __init omap3_sr_init(void)
 	RdReg |= DCDC_GLOBAL_CFG_ENABLE_SRFLX;
 	ret |= twl4030_i2c_write_u8(TWL4030_MODULE_PM_RECEIVER, RdReg,
 					R_DCDC_GLOBAL_CFG);
+#endif
 
 	if (cpu_is_omap34xx()) {
 		sr1.clk = clk_get(NULL, "sr1_fck");
