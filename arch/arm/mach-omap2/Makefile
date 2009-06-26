@@ -83,7 +83,8 @@ obj-$(CONFIG_MACH_MAPPHONE)		+= board-mapphone.o \
 					   board-mapphone-sensors.o \
 					   board-mapphone-hsmmc.o \
 					   board-mapphone-keypad.o \
-					   board-mapphone-wifi.o
+					   board-mapphone-wifi.o \
+					   board-mapphone-gpio.o
 obj-$(CONFIG_MACH_OMAP_APOLLON)		+= board-apollon.o \
 					   board-apollon-mmc.o	\
 					   board-apollon-keys.o
