@@ -115,7 +115,7 @@ static void gpiodev_devs_init(void *p_data)
 
 	while ((i < GPIO_DEVICE_NAME_LEN) && (' ' != p->name[i]))
 		i++;
-	p->name[i-1] = '\0';
+	p->name[i] = '\0';
 
 	for (i = 0; i < GPIO_DEVICE_SIZE; i++) {
 		if (p_devs[i].pin_nr == GPIO_DEVICE_UNUSED) {
