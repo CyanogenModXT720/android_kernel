@@ -101,7 +101,7 @@ static irqreturn_t GPIODev_ISR(int irq, void *param)
  * prior to the reconfiguration will be released and the new configuration
  * will take effect.
  */
-static unsigned long ConfigureGPIO(struct gpio_device * dev, u32 newconfig)
+static unsigned long ConfigureGPIO(struct gpio_device *dev, u32 newconfig)
 {
 	unsigned long ret = 0;
 
