@@ -47,7 +47,6 @@
 /* GPIODev Node */
 #define DT_PATH_GPIOGEV		"/System@0/GPIODev@0"
 #define DT_PROP_GPIODEV_INIT	"init"
-#define DT_PROP_GPIODEV_NAMELEN	20
 
 /* MUX Node */
 #define DT_PATH_MUX		"/System@0/IOMUX@0"

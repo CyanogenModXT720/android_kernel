@@ -25,16 +25,24 @@
 
 #include <linux/module.h>
 
+#ifdef CONFIG_GPIODEV
 #include <linux/gpiodev.h>
+#endif
+
 #ifdef CONFIG_GPIO_MAPPING
 #include <linux/gpio_mapping.h>
+#endif
+
 #ifdef CONFIG_ARM_OF
 #include <mach/dt_path.h>
 #include <asm/prom.h>
 #endif
-#endif
 
-static struct gpio_device gpio_devs[] = {
+#ifdef CONFIG_GPIODEV
+#define GPIO_DEVICE_SIZE 20
+#define GPIO_DEVICE_UNUSED 0xFFFF
+
+static struct gpio_device gpio_devs[GPIO_DEVICE_SIZE] = {
 	{
 		111,
 		"slide_interrupt",
@@ -70,12 +78,14 @@ static struct gpio_device gpio_devs[] = {
 		GPIODEV_CONFIG_INVALID,
 		GPIODEV_FLAG_CONFIGURABLE | GPIODEV_FLAG_LOWLEVELACCESS,
 	},
+	{
+		GPIO_DEVICE_UNUSED,
+	},
 };
 
 static struct gpio_device_platform_data gpio_device_data = {
 	.name = "mapphone-gpiodev",
 	.info = gpio_devs,
-	.info_count = ARRAY_SIZE(gpio_devs),
 };
 
 static struct platform_device mapphone_gpiodev_device = {
@@ -86,11 +96,114 @@ static struct platform_device mapphone_gpiodev_device = {
 	},
 };
 
+#ifdef CONFIG_ARM_OF
+/**
+ * Below structure definition should strictly comform to corresponding
+ * HW device tree format
+ */
+struct omap_gpiodev_entry {
+	u32 pin_num;				/* GPIO pin number  */
+	char name[GPIO_DEVICE_NAME_LEN];	/* GPIODev name */
+	u32 setting;				/* GPIO pin setting */
+} __attribute__ ((__packed__));
+
+static void gpiodev_devs_init(void *p_data)
+{
+	struct omap_gpiodev_entry *p = p_data;
+	struct gpio_device *p_devs = gpio_devs;
+	int i = 0;
+
+	while ((i < GPIO_DEVICE_NAME_LEN) && (' ' != p->name[i]))
+		i++;
+	p->name[i-1] = '\0';
+
+	for (i = 0; i < GPIO_DEVICE_SIZE; i++) {
+		if (p_devs[i].pin_nr == GPIO_DEVICE_UNUSED) {
+			p_devs[i].pin_nr = p->pin_num;
+			strcpy(p_devs[i].device_name, p->name);
+			p_devs[i].init_config = p->setting;
+			p_devs[i].current_config = GPIODEV_CONFIG_INVALID;
+			p_devs[i].flags = GPIODEV_FLAG_CONFIGURABLE |
+						GPIODEV_FLAG_LOWLEVELACCESS;
+
+			if (i != (GPIO_DEVICE_SIZE - 1))
+				p_devs[i + 1].pin_nr = GPIO_DEVICE_UNUSED;
+
+			printk(KERN_INFO "GPIODev: Add new device [%s] setting!\n",
+					p->name);
+			return;
+		}
+
+		if (strncmp(p_devs[i].device_name, p->name,
+			GPIO_DEVICE_NAME_LEN) == 0) {
+			p_devs[i].pin_nr = p->pin_num;
+			p_devs[i].init_config = p->setting;
+			p_devs[i].current_config = GPIODEV_CONFIG_INVALID;
+			p_devs[i].flags = GPIODEV_FLAG_CONFIGURABLE |
+						GPIODEV_FLAG_LOWLEVELACCESS;
+
+			printk(KERN_INFO "GPIODev: Overwrite device [%s] setting!\n",
+					p->name);
+			return;
+		}
+
+		if (i == (GPIO_DEVICE_SIZE - 1))
+			printk(KERN_ERR "GPIODev: Too big gpiodev count!\n");
+	}
+}
+
+static void gpio_devs_of_init(void)
+{
+	int size, unit_size, i, count;
+	struct device_node *node;
+	const void *prop;
+
+	node = of_find_node_by_path(DT_PATH_GPIOGEV);
+	if (node == NULL) {
+		printk(KERN_ERR
+				"Unable to read node %s from device tree!\n",
+				DT_PATH_GPIOGEV);
+		return;
+	}
+
+	unit_size = sizeof(struct omap_gpiodev_entry);
+	prop = of_get_property(node, DT_PROP_GPIODEV_INIT, &size);
+	if ((!prop) || (size % unit_size)) {
+		printk(KERN_ERR "Read property %s error!\n",
+				DT_PROP_GPIODEV_INIT);
+		of_node_put(node);
+		return;
+	}
+
+	count = size / unit_size;
+	printk(KERN_INFO "gpio_dev_size = %d\n", count);
+
+	for (i = 0; i < count; i++)
+		gpiodev_devs_init((struct omap_gpiodev_entry *)prop + i);
+
+	of_node_put(node);
+	return;
+}
+#endif
+
 static int __init mapphone_init_gpiodev(void)
 {
+	int i;
+
+#ifdef CONFIG_ARM_OF
+	gpio_devs_of_init();
+#endif
+
+	for (i = 0; i < GPIO_DEVICE_SIZE; i++) {
+		if (gpio_devs[i].pin_nr == GPIO_DEVICE_UNUSED)
+			break;
+	}
+	gpio_device_data.info_count = i;
+
 	return platform_device_register(&mapphone_gpiodev_device);
 }
 device_initcall(mapphone_init_gpiodev);
+#endif
 
 #ifdef CONFIG_GPIO_MAPPING
 #define GPIO_MAP_SIZE 50
