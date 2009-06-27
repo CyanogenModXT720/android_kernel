@@ -1025,7 +1025,7 @@ sub WARN {
 }
 sub CHK {
 	if ($check && report("CHECK: $_[0]\n")) {
-		our $clean = 1;
+		# our $clean = 0;
 		our $cnt_chk++;
 	}
 }
