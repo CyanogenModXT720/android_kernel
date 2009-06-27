@@ -25,6 +25,7 @@
 
 #include <linux/module.h>
 
+#include <linux/gpiodev.h>
 #ifdef CONFIG_GPIO_MAPPING
 #include <linux/gpio_mapping.h>
 #ifdef CONFIG_ARM_OF
@@ -32,6 +33,64 @@
 #include <asm/prom.h>
 #endif
 #endif
+
+static struct gpio_device gpio_devs[] = {
+	{
+		111,
+		"slide_interrupt",
+		GPIODEV_CONFIG_INPUT | GPIODEV_CONFIG_INT_LLEV,
+		GPIODEV_CONFIG_INVALID,
+		GPIODEV_FLAG_CONFIGURABLE | GPIODEV_FLAG_LOWLEVELACCESS,
+	},
+	{
+		149,
+		"gps_rts",
+		GPIODEV_CONFIG_OUTPUT_LOW,
+		GPIODEV_CONFIG_INVALID,
+		GPIODEV_FLAG_CONFIGURABLE | GPIODEV_FLAG_LOWLEVELACCESS,
+	},
+	{
+		59,
+		"gps_reset",
+		GPIODEV_CONFIG_OUTPUT_LOW,
+		GPIODEV_CONFIG_INVALID,
+		GPIODEV_FLAG_CONFIGURABLE | GPIODEV_FLAG_LOWLEVELACCESS,
+	},
+	{
+		136,
+		"gps_standby",
+		GPIODEV_CONFIG_OUTPUT_LOW,
+		GPIODEV_CONFIG_INVALID,
+		GPIODEV_FLAG_CONFIGURABLE | GPIODEV_FLAG_LOWLEVELACCESS,
+	},
+	{
+		160,
+		"gps_interrupt",
+		GPIODEV_CONFIG_INPUT | GPIODEV_CONFIG_INT_REDG,
+		GPIODEV_CONFIG_INVALID,
+		GPIODEV_FLAG_CONFIGURABLE | GPIODEV_FLAG_LOWLEVELACCESS,
+	},
+};
+
+static struct gpio_device_platform_data gpio_device_data = {
+	.name = "mapphone-gpiodev",
+	.info = gpio_devs,
+	.info_count = ARRAY_SIZE(gpio_devs),
+};
+
+static struct platform_device mapphone_gpiodev_device = {
+	.name = GPIO_DEVICE_DEV_NAME,
+	.id = 0,
+	.dev = {
+		.platform_data = &gpio_device_data,
+	},
+};
+
+static int __init mapphone_init_gpiodev(void)
+{
+	return platform_device_register(&mapphone_gpiodev_device);
+}
+device_initcall(mapphone_init_gpiodev);
 
 #ifdef CONFIG_GPIO_MAPPING
 #define GPIO_MAP_SIZE 50
