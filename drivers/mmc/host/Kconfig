@@ -235,3 +235,11 @@ config MMC_TMIO
 	help
 	  This provides support for the SD/MMC cell found in TC6393XB,
 	  T7L66XB and also ipaq ASIC3
+
+config MMC_TST
+    bool "MMC insert/removal auto test support"
+    default n
+    help
+           This flag controls Motorola specific changes that allows to
+           simulate MMC card insert/removal in software way instead of
+           doing it manually.

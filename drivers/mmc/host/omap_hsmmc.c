@@ -925,6 +925,19 @@ static struct mmc_host_ops mmc_omap_ops = {
 	/* NYET -- enable_sdio_irq */
 };
 
+#ifdef CONFIG_MMC_TST
+
+static struct mmc_omap_host *hsmmc_host;
+
+void hsmmc_schedule_4test(int carddetect)
+{
+      printk(KERN_ERR"carddetect=%d\n", carddetect);
+      hsmmc_host->carddetect = carddetect;
+      schedule_work(&hsmmc_host->mmc_carddetect_work);
+}
+EXPORT_SYMBOL(hsmmc_schedule_4test);
+#endif
+
 static int __init omap_mmc_probe(struct platform_device *pdev)
 {
 	struct omap_mmc_platform_data *pdata = pdev->dev.platform_data;
@@ -1137,6 +1150,10 @@ static int __init omap_mmc_probe(struct platform_device *pdev)
 		if (ret < 0)
 			goto err_cover_switch;
 	}
+#ifdef CONFIG_MMC_TST
+		if (host->id == OMAP_MMC1_DEVID)
+			hsmmc_host = host;
+#endif
 
 	return 0;
 
