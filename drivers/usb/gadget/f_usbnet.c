@@ -680,7 +680,7 @@ static int usbnet_setup(struct usb_function *f,
 static void usbnet_disable(struct usb_function *f)
 {
 	printk(KERN_INFO "%s\n", __func__);
-	/* do_set_config(0); */
+	do_set_config(0);
 }
 
 static void usbnet_suspend(struct usb_function *f)
