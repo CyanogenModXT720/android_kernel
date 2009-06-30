@@ -808,7 +808,6 @@ static void __init mapphone_init(void)
 	omap_hdq_init();
 	mapphone_bt_init();
 	mapphone_hsmmc_init();
-	mapphone_bp_model_init();
 #ifdef CONFIG_OMAP_PM_POWER_OFF
 	mapphone_power_off_init();
 #endif
