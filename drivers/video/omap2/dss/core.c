@@ -597,15 +597,28 @@ static void omap_dss_shutdown(struct platform_device *pdev)
 
 static int omap_dss_suspend(struct platform_device *pdev, pm_message_t state)
 {
+#ifdef CONFIG_OMAP2_DSS_DPLL4_WA
+	int ret;
+#endif
 	DSSDBG("suspend %d\n", state.event);
 
+#ifdef CONFIG_OMAP2_DSS_DPLL4_WA
+	ret = dss_suspend_all_displays();
+	if (ret == 0)
+		omap_writel(0x9, 0x48004D30);
+	return ret;
+#else
 	return dss_suspend_all_displays();
+#endif
 }
 
 static int omap_dss_resume(struct platform_device *pdev)
 {
 	DSSDBG("resume\n");
 
+#ifdef CONFIG_OMAP2_DSS_DPLL4_WA
+	omap_writel(0x1, 0x48004D30);
+#endif
 	return dss_resume_all_displays();
 }
 
