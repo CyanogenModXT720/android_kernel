@@ -101,6 +101,13 @@ config OMAP_RESET_CLOCKS
 	  probably do not want this option enabled until your
 	  device drivers work properly.
 
+config OMAP_PM_POWER_OFF
+	bool "Power down the omap devices."
+	depends on ARCH_OMAP
+        default n
+	help
+	  Say Y if you want to power off the devices.
+
 config OMAP_BOOT_TAG
 	bool "OMAP bootloader information passing"
         depends on ARCH_OMAP
