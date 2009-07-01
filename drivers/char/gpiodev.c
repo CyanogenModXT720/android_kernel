@@ -47,7 +47,7 @@ MODULE_LICENSE("GPL");
  * GPIODEV_DBG macro is for debugging purpose only
  * Should turn it off while releasing official version
  */
-#define GPIODEV_DBG 1
+#define GPIODEV_DBG 0
 
 #if GPIODEV_DBG
 #define trace_msg(fmt, args...)  printk("\n" KERN_ALERT fmt "\n", ##args)
@@ -638,12 +638,12 @@ static int __init gpio_device_probe(struct platform_device *pdev)
 
 	data = pdev->dev.platform_data;
 	if (data == NULL) {
-		printk(KERN_ERR "gpio_device_probe: No pdata!");
+		printk(KERN_ERR "gpio_device_probe: No pdata!\n");
 		return -ENODEV;
 	}
 
 	if ((data->info == NULL) || (data->info_count == 0)) {
-		printk(KERN_ERR "gpio_device_probe: incomplete pdata!");
+		printk(KERN_ERR "gpio_device_probe: incomplete pdata!\n");
 		return -ENODEV;
 	}
 
