@@ -784,6 +784,11 @@ static void __init prcm_setup_regs(void)
 		OMAP3430_AUTO_SSI,
 		CORE_MOD, CM_AUTOIDLE1);
 
+	prm_rmw_mod_reg_bits(0x80000000,
+		0,
+		CORE_MOD,
+		OMAP3430_PM_MPUGRPSEL1);
+
 	cm_write_mod_reg(
 		OMAP3430_AUTO_PKA |
 		OMAP3430_AUTO_AES1 |
