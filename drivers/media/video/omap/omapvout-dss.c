@@ -344,7 +344,7 @@ static int omapvout_dss_perform_vrfb_dma(struct omapvout_device *vout,
 }
 
 static int omapvout_dss_update_overlay(struct omapvout_device *vout,
-					int buf_idx, bool apply_mgr)
+							int buf_idx)
 {
 	struct omap_overlay_info o_info;
 	struct omap_overlay *ovly;
@@ -401,12 +401,10 @@ static int omapvout_dss_update_overlay(struct omapvout_device *vout,
 		return rc;
 	}
 
-	if (apply_mgr) {
-		rc = ovly->manager->apply(ovly->manager);
-		if (rc) {
-			DBG("Failed apply to overlay manager %d\n", rc);
-			return rc;
-		}
+	rc = ovly->manager->apply(ovly->manager);
+	if (rc) {
+		DBG("Failed apply to overlay manager %d\n", rc);
+		return rc;
 	}
 
 	rc = ovly->manager->device->update(ovly->manager->device,
@@ -477,7 +475,7 @@ static void omapvout_dss_perform_update(struct work_struct *work)
 		goto failed_w_idx;
 	}
 
-	rc = omapvout_dss_update_overlay(vout, idx, dss->need_cfg);
+	rc = omapvout_dss_update_overlay(vout, idx);
 	if (rc != 0) {
 		DBG("DSS update failed %d\n", rc);
 		goto failed_w_idx;
