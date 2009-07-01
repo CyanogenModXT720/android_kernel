@@ -54,10 +54,22 @@
 
 #include "pm.h"
 #include "prm-regbits-34xx.h"
+#include "smartreflex.h"
+#include "omap3-opp.h"
+
+#ifdef CONFIG_VIDEO_OLDOMAP3
+#include <media/v4l2-int-device.h>
+#if defined(CONFIG_VIDEO_MT9P012) || defined(CONFIG_VIDEO_MT9P012_MODULE)
+#include <media/mt9p012.h>
+
+#endif
+#ifdef CONFIG_VIDEO_OMAP3_HPLENS
+#include <../drivers/media/video/hplens.h>
+#endif
+#endif
 
 #define MAPPHONE_IPC_USB_SUSP_GPIO	142
 #define MAPPHONE_AP_TO_BP_FLASH_EN_GPIO	157
-#define MAPPHONE_POWER_OFF_GPIO		176
 #define MAPPHONE_TOUCH_RESET_N_GPIO	164
 #define MAPPHONE_TOUCH_INT_GPIO		99
 #define MAPPHONE_LM_3530_INT_GPIO	92
@@ -67,9 +79,48 @@
 
 char *bp_model = "CDMA";
 
+static struct omap_opp mapphone_mpu_rate_table[] = {
+	{0, 0, 0},
+	/*OPP1*/
+	{S125M, VDD1_OPP1, 0x20},
+	/*OPP2*/
+	{S250M, VDD1_OPP2, 0x27},
+	/*OPP3*/
+	{S500M, VDD1_OPP3, 0x32},
+	/*OPP4*/
+	{S550M, VDD1_OPP4, 0x38},
+	/*OPP5*/
+	{S600M, VDD1_OPP5, 0x3E},
+};
+
+static struct omap_opp mapphone_l3_rate_table[] = {
+	{0, 0, 0},
+	/*OPP1*/
+	{0, VDD2_OPP1, 0x20},
+	/*OPP2*/
+	{S83M, VDD2_OPP2, 0x27},
+	/*OPP3*/
+	{S166M, VDD2_OPP3, 0x2E},
+};
+
+static struct omap_opp mapphone_dsp_rate_table[] = {
+	{0, 0, 0},
+	/*OPP1*/
+	{S90M, VDD1_OPP1, 0x20},
+	/*OPP2*/
+	{S180M, VDD1_OPP2, 0x27},
+	/*OPP3*/
+	{S360M, VDD1_OPP3, 0x32},
+	/*OPP4*/
+	{S400M, VDD1_OPP4, 0x38},
+	/*OPP5*/
+	{S430M, VDD1_OPP5, 0x3E},
+};
+
 static void __init mapphone_init_irq(void)
 {
-	omap2_init_common_hw(NULL, NULL, NULL, NULL);
+	omap2_init_common_hw(NULL, mapphone_mpu_rate_table,
+			mapphone_dsp_rate_table, mapphone_l3_rate_table);
 	omap_init_irq();
 #ifdef CONFIG_OMAP3_PM
 	scm_clk_init();
@@ -152,7 +203,7 @@ static void mapphone_als_init(void)
 
 static struct vkey mapphone_touch_vkeys[] = {
 	{
-		.min		= 44,
+		.min		= 0,
 		.max		= 152,
 		.code		= KEY_BACK,
 	},
@@ -168,7 +219,7 @@ static struct vkey mapphone_touch_vkeys[] = {
 	},
 	{
 		.min		= 886,
-		.max		= 994,
+		.max		= 1024,
 		.code		= KEY_SEARCH,
 	},
 };
@@ -302,12 +353,29 @@ static struct i2c_board_info __initdata mapphone_i2c_bus2_board_info[] = {
 	},
 };
 
+static struct i2c_board_info __initdata mapphone_i2c_bus3_board_info[] = {
+#if defined(CONFIG_VIDEO_MT9P012) || defined(CONFIG_VIDEO_MT9P012_MODULE)
+	{
+		I2C_BOARD_INFO("mt9p012", 0x36),
+		.platform_data = &mapphone_mt9p012_platform_data,
+	},
+#endif
+#ifdef CONFIG_VIDEO_OMAP3_HPLENS
+	{
+		I2C_BOARD_INFO("HP_GEN_LENS", 0x04),
+		.platform_data = &mapphone_hplens_platform_data,
+	},
+#endif
+};
+
 static int __init mapphone_i2c_init(void)
 {
 	omap_register_i2c_bus(1, 400, mapphone_i2c_bus1_board_info,
 			      ARRAY_SIZE(mapphone_i2c_bus1_board_info));
 	omap_register_i2c_bus(2, 400, mapphone_i2c_bus2_board_info,
 			      ARRAY_SIZE(mapphone_i2c_bus2_board_info));
+	omap_register_i2c_bus(3, 400, mapphone_i2c_bus3_board_info,
+			      ARRAY_SIZE(mapphone_i2c_bus3_board_info));
 	return 0;
 }
 
@@ -316,7 +384,6 @@ arch_initcall(mapphone_i2c_init);
 extern void __init mapphone_spi_init(void);
 extern void __init mapphone_flash_init(void);
 extern void __init mapphone_gpio_iomux_init(void);
-
 
 
 #if defined(CONFIG_USB_EHCI_HCD) || defined(CONFIG_USB_EHCI_HCD_MODULE)
@@ -539,10 +606,57 @@ static struct prm_setup_vc mapphone_prm_setup = {
 #define R_SMPS_VOL_OPP2_RA0		0x03
 #define R_SMPS_VOL_OPP2_RA1		0x03
 
+#define CPCAP_SMPS_UPDATE_DELAY     170 /* In uSec */
+
+#ifdef CONFIG_OMAP_SMARTREFLEX
+int mapphone_voltagescale_vcbypass(u32 target_opp, u32 current_opp,
+					u8 target_vsel, u8 current_vsel)
+{
+
+	int sr_status = 0;
+	u32 vdd, target_opp_no;
+	u8 slave_addr = 0, opp_reg_addr = 0, volt_reg_addr = 0;
+
+	vdd = get_vdd(target_opp);
+	target_opp_no = get_opp_no(target_opp);
+
+	if (vdd == VDD1_OPP) {
+		sr_status = sr_stop_vddautocomap(SR1);
+		slave_addr = MAPPHONE_R_SRI2C_SLAVE_ADDR_SA0;
+		volt_reg_addr = MAPPHONE_R_VDD1_SR_CONTROL;
+		opp_reg_addr = R_SMPS_VOL_OPP2_RA0;
+
+	} else if (vdd == VDD2_OPP) {
+		sr_status = sr_stop_vddautocomap(SR2);
+		slave_addr = MAPPHONE_R_SRI2C_SLAVE_ADDR_SA1;
+		volt_reg_addr = MAPPHONE_R_VDD2_SR_CONTROL;
+		opp_reg_addr = R_SMPS_VOL_OPP2_RA1;
+	}
+
+	/* Update the CPCAP SWx OPP2 register, stores the on voltage value */
+	omap3_bypass_cmd(slave_addr, opp_reg_addr, target_vsel);
+
+	/* Update the CPCAP SWx voltage register, change the output voltage */
+	omap3_bypass_cmd(slave_addr, volt_reg_addr, target_vsel);
+
+	udelay(CPCAP_SMPS_UPDATE_DELAY);
+
+	if (sr_status) {
+		if (vdd == VDD1_OPP)
+			sr_start_vddautocomap(SR1, target_opp_no);
+		else if (vdd == VDD2_OPP)
+			sr_start_vddautocomap(SR2, target_opp_no);
+	}
+
+	return SR_PASS;
+}
+#endif
+
 /* Mapphone specific PM */
 static void mapphone_pm_init(void)
 {
 	omap3_set_prm_setup_vc(&mapphone_prm_setup);
+	omap3_voltagescale_vcbypass_setup(mapphone_voltagescale_vcbypass);
 
 	/* Initialize CPCAP SW1&SW2 OPP1&OPP2 registers */
 	/* SW1, OPP1 for RET Voltage --- 1.0V,
@@ -645,40 +759,20 @@ static void __init mapphone_bp_model_init(void)
 #endif
 }
 
-#ifdef CONFIG_OMAP_PM_POWER_OFF
-static void omap3_pm_power_off(void)
-{
-	printk(KERN_INFO "omap3_pm_power_off start now ...\n");
-	local_irq_disable();
-
-	gpio_request(MAPPHONE_POWER_OFF_GPIO, "power_off_gpio");
-	gpio_direction_output(MAPPHONE_POWER_OFF_GPIO, 0);
-	gpio_set_value(MAPPHONE_POWER_OFF_GPIO, 0);
-
-	do {} while (1);
-
-	/* should never be here. */
-	local_irq_enable();
-}
-
-static void __init mapphone_power_off_init(void)
-{
-	/* set the callback function for pm_power_off */
-	pm_power_off = omap3_pm_power_off;
-}
-#endif
-
 static void __init mapphone_init(void)
 {
 	omap_board_config = mapphone_config;
 	omap_board_config_size = ARRAY_SIZE(mapphone_config);
+	mapphone_bp_model_init();
 	mapphone_padconf_init();
+	mapphone_gpio_mapping_init();
 	mapphone_spi_init();
 	mapphone_flash_init();
 	mapphone_serial_init();
 	mapphone_als_init();
 	mapphone_panel_init();
 	mapphone_sensors_init();
+	mapphone_camera_init();
 	mapphone_touch_init();
 	mapphone_audio_init();
 	usb_musb_init();
@@ -690,10 +784,6 @@ static void __init mapphone_init(void)
 	omap_hdq_init();
 	mapphone_bt_init();
 	mapphone_hsmmc_init();
-	mapphone_bp_model_init();
-#ifdef CONFIG_OMAP_PM_POWER_OFF
-	mapphone_power_off_init();
-#endif
 }
 
 static void __init mapphone_map_io(void)

@@ -462,7 +462,6 @@ static DSP_STATUS DRV_ProcFreeNodeRes(HANDLE hPCtxt)
 					status = NODE_Delete(pNodeRes->hNode);
 			}
 		}
-		pNodeRes->nodeAllocated = 0;
 	}
 	return status;
 }
@@ -1509,8 +1508,9 @@ DSP_STATUS DRV_RequestResources(u32 dwContext, u32 *pDevNodeString)
 		pszdevNode = MEM_Calloc(sizeof(struct DRV_EXT), MEM_NONPAGED);
 		if (pszdevNode) {
 			LST_InitElem(&pszdevNode->link);
-                       strncpy((char *) pszdevNode->szString,
-				 (char *)dwContext, MAXREGPATHLENGTH);
+			strncpy(pszdevNode->szString,
+				 (char *)dwContext, MAXREGPATHLENGTH - 1);
+			pszdevNode->szString[MAXREGPATHLENGTH - 1] = '\0';
 			/* Update the Driver Object List */
 			*pDevNodeString = (u32)pszdevNode->szString;
 			LST_PutTail(pDRVObject->devNodeString,

@@ -47,7 +47,6 @@
 
 /*  ----------------------------------- OS Adaptation Layer */
 #include <dspbridge/mem.h>
-#include <dspbridge/util.h>
 #include <dspbridge/reg.h>
 #include <dspbridge/dbreg.h>
 #include <dspbridge/cfg.h>
@@ -850,6 +849,9 @@ static DSP_STATUS WMD_BRD_Stop(struct WMD_DEV_CONTEXT *hDevContext)
 		       (pPtAttrs->L2NumPages * sizeof(struct PageInfo)));
 	}
 	DBG_Trace(DBG_LEVEL6, "WMD_BRD_Stop - End ****** \n");
+	HW_RST_Reset(resources.dwPrmBase, HW_RST1_IVA2);
+	HW_RST_Reset(resources.dwPrmBase, HW_RST2_IVA2);
+
 	return status;
 }
 
@@ -912,7 +914,7 @@ static DSP_STATUS WMD_BRD_Delete(struct WMD_DEV_CONTEXT *hDevContext)
 		memset((u8 *)pPtAttrs->pgInfo, 0x00,
 			(pPtAttrs->L2NumPages * sizeof(struct PageInfo)));
 	}
-	DBG_Trace(DBG_LEVEL6, "WMD_BRD_Stop - End ****** \n");
+	DBG_Trace(DBG_LEVEL6, "WMD_BRD_Delete - End ****** \n");
 	HW_RST_Reset(resources.dwPrmBase, HW_RST1_IVA2);
 	HW_RST_Reset(resources.dwPrmBase, HW_RST2_IVA2);
 

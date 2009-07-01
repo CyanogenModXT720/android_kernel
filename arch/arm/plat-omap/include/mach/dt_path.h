@@ -20,6 +20,7 @@
 /* Date	 Author	  Comment
  * ===========  ==============  ==============================================
  * Jun-08-2009  Motorola	Add MUX node
+ * Jun-10-2009  Motorola    Add GPIO node
  */
 
 
@@ -58,6 +59,10 @@
 /* Touch Node */
 #define DT_PATH_TOUCH		"/System@0/I2C@0/TouchOBP@0"
 #define DT_PROP_TOUCH_KEYMAP	"touch_key_map"
+
+/* GPIO Node */
+#define DT_PATH_GPIO        "/System@0/GPIO@0"
+#define DT_PROP_GPIO_MAP    "signalmap"
 
 #endif
 #endif

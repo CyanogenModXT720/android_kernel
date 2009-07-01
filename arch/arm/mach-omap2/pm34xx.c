@@ -61,12 +61,6 @@
 
 static int regset_save_on_suspend;
 
-#define SDRC_POWER_AUTOCOUNT_SHIFT 8
-#define SDRC_POWER_AUTOCOUNT_MASK (0xffff << SDRC_POWER_AUTOCOUNT_SHIFT)
-#define SDRC_POWER_CLKCTRL_SHIFT 4
-#define SDRC_POWER_CLKCTRL_MASK (0x3 << SDRC_POWER_CLKCTRL_SHIFT)
-#define SDRC_SELF_REFRESH_ON_AUTOCOUNT (0x2 << SDRC_POWER_CLKCTRL_SHIFT)
-
 /* Scratchpad offsets */
 #define OMAP343X_TABLE_ADDRESS_OFFSET	   0x31
 #define OMAP343X_TABLE_VALUE_OFFSET	   0x30
@@ -418,19 +412,15 @@ void omap_sram_idle(void)
 	}
 
 	/*
-	 * Force SDRAM controller to self-refresh mode after timeout on
-	 * autocount. This is needed on ES3.0 to avoid SDRAM controller
-	 * hang-ups.
-	 */
+	* On EMU/HS devices ROM code restores a SRDC value
+	* from scratchpad which has automatic self refresh on timeout
+	* of AUTO_CNT = 1 enabled. This takes care of errata 1.142.
+	* Hence store/restore the SDRC_POWER register here.
+	*/
 	if (omap_rev() >= OMAP3430_REV_ES3_0 &&
 	    omap_type() != OMAP2_DEVICE_TYPE_GP &&
-	    core_next_state == PWRDM_POWER_OFF) {
+	    core_next_state == PWRDM_POWER_OFF)
 		sdrc_pwr = sdrc_read_reg(SDRC_POWER);
-		sdrc_write_reg((sdrc_pwr &
-			~(SDRC_POWER_AUTOCOUNT_MASK|SDRC_POWER_CLKCTRL_MASK)) |
-			(1 << SDRC_POWER_AUTOCOUNT_SHIFT) |
-			SDRC_SELF_REFRESH_ON_AUTOCOUNT, SDRC_POWER);
-	}
 
 	if (regset_save_on_suspend)
 		pm_dbg_regset_save(1);
@@ -441,8 +431,9 @@ void omap_sram_idle(void)
 	 * location and restores them back.
 	 */
 	_omap_sram_idle(omap3_arm_context, save_state);
+	cpu_init();
 
-	/* Restore normal SDRAM settings */
+	/* Restore normal SDRC POWER settings */
 	if (omap_rev() >= OMAP3430_REV_ES3_0 &&
 	    omap_type() != OMAP2_DEVICE_TYPE_GP &&
 	    core_next_state == PWRDM_POWER_OFF)
@@ -793,11 +784,6 @@ static void __init prcm_setup_regs(void)
 		OMAP3430_AUTO_SSI,
 		CORE_MOD, CM_AUTOIDLE1);
 
-	prm_rmw_mod_reg_bits(0x80000000,
-		0,
-		CORE_MOD,
-		OMAP3430_PM_MPUGRPSEL1);
-
 	cm_write_mod_reg(
 		OMAP3430_AUTO_PKA |
 		OMAP3430_AUTO_AES1 |
@@ -870,13 +856,8 @@ static void __init prcm_setup_regs(void)
 	cm_write_mod_reg(1 << OMAP3430_AUTO_MPU_DPLL_SHIFT,
 			 MPU_MOD,
 			 CM_AUTOIDLE2);
-#ifdef CONFIG_OMAP2_DSS_DPLL4_WA
-	/* DPLL4 auto idle workaround */
-	cm_write_mod_reg(1 << OMAP3430_AUTO_CORE_DPLL_SHIFT,
-#else
 	cm_write_mod_reg((1 << OMAP3430_AUTO_PERIPH_DPLL_SHIFT) |
 			 (1 << OMAP3430_AUTO_CORE_DPLL_SHIFT),
-#endif
 			 PLL_MOD,
 			 CM_AUTOIDLE);
 	cm_write_mod_reg(1 << OMAP3430ES2_AUTO_PERIPH2_DPLL_SHIFT,

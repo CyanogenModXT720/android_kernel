@@ -60,7 +60,7 @@ config OMAP_DEBUG_CLOCKDOMAIN
 
 config OMAP_SMARTREFLEX
 	bool "SmartReflex support"
-	depends on ARCH_OMAP34XX && TWL4030_CORE && PM
+	depends on ARCH_OMAP34XX && PM
 	help
 	  Say Y if you want to enable SmartReflex.
 
@@ -100,13 +100,6 @@ config OMAP_RESET_CLOCKS
 	  If you are booting from another operating system, you
 	  probably do not want this option enabled until your
 	  device drivers work properly.
-
-config OMAP_PM_POWER_OFF
-	bool "Power down the omap devices."
-	depends on ARCH_OMAP
-        default n
-	help
-	  Say Y if you want to power off the devices.
 
 config OMAP_BOOT_TAG
 	bool "OMAP bootloader information passing"
@@ -182,6 +175,14 @@ config OMAP_MBOX_FWK
 	help
 	  Say Y here if you want to use OMAP Mailbox framework support for
 	  DSP, IVA1.0 and IVA2 in OMAP1/2/3.
+
+config OMAP_IOMMU
+	tristate "IOMMU support"
+	depends on ARCH_OMAP
+	default n
+	help
+	  Say Y here if you want to use OMAP IOMMU support for IVA2 and
+	  Camera in OMAP3.
 
 choice
         prompt "System timer"
