@@ -341,6 +341,9 @@ struct omap_overlay_manager {
 	void (*get_manager_info)(struct omap_overlay_manager *mgr,
 			struct omap_overlay_manager_info *info);
 
+	void (*enable_alpha_blending)(struct omap_overlay_manager *mgr,
+		bool enable);
+
 	int (*apply)(struct omap_overlay_manager *mgr);
 	int (*wait_for_go)(struct omap_overlay_manager *mgr);
 };
