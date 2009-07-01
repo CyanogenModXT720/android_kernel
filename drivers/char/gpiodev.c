@@ -637,6 +637,16 @@ static int __init gpio_device_probe(struct platform_device *pdev)
 	struct gpio_device_platform_data *data;
 
 	data = pdev->dev.platform_data;
+	if (data == NULL) {
+		printk(KERN_ERR "gpio_device_probe: No pdata!");
+		return -ENODEV;
+	}
+
+	if ((data->info == NULL) || (data->info_count == 0)) {
+		printk(KERN_ERR "gpio_device_probe: incomplete pdata!");
+		return -ENODEV;
+	}
+
 	gpio_devs = data->info;
 	gpio_dev_count = data->info_count;
 
