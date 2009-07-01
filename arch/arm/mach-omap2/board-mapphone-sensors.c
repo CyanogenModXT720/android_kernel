@@ -19,6 +19,7 @@
 #include <linux/lis331dlh.h>
 #include <linux/akm8973.h>
 #include <linux/delay.h>
+#include <linux/regulator/consumer.h>
 
 #include <mach/mux.h>
 #include <mach/gpio.h>
@@ -30,10 +31,50 @@
 #define MAPPHONE_AKM8973_INT_GPIO	175
 #define MAPPHONE_AKM8973_RESET_GPIO	28
 
-static struct sfh7743_platform_data omap3430_proximity_data = {
-	.gpio_prox_int = MAPPHONE_PROX_INT_GPIO,
-	.regulator = "vsdio",
+static struct regulator *mapphone_sfh7743_regulator;
+static int mapphone_sfh7743_initialization(void)
+{
+	struct regulator *reg;
+	reg = regulator_get(NULL, "vsdio");
+	if (IS_ERR(reg))
+		return PTR_ERR(reg);
+	mapphone_sfh7743_regulator = reg;
+	return 0;
+}
+
+static void mapphone_sfh7743_exit(void)
+{
+	regulator_put(mapphone_sfh7743_regulator);
+}
+
+static int mapphone_sfh7743_power_on(void)
+{
+	return regulator_enable(mapphone_sfh7743_regulator);
+}
+
+static int mapphone_sfh7743_power_off(void)
+{
+	if (mapphone_sfh7743_regulator)
+		return regulator_disable(mapphone_sfh7743_regulator);
+	return 0;
+}
+
+static struct sfh7743_platform_data mapphone_sfh7743_data = {
+	.init = mapphone_sfh7743_initialization,
+	.exit = mapphone_sfh7743_exit,
+	.power_on = mapphone_sfh7743_power_on,
+	.power_off = mapphone_sfh7743_power_off,
+
+	.gpio = MAPPHONE_PROX_INT_GPIO,
 };
+
+static void __init mapphone_sfh7743_init(void)
+{
+	gpio_request(MAPPHONE_PROX_INT_GPIO, "sfh7743 proximity int");
+	gpio_direction_input(MAPPHONE_PROX_INT_GPIO);
+	omap_cfg_reg(Y3_34XX_GPIO180);
+}
+
 
 static struct bu52014hfv_platform_data bu52014hfv_platform_data = {
 	.docked_north_gpio = MAPPHONE_HF_NORTH_GPIO,
@@ -42,13 +83,12 @@ static struct bu52014hfv_platform_data bu52014hfv_platform_data = {
 };
 
 static struct regulator *mapphone_lis331dlh_regulator;
-static int mapphone_lis331dlh_init(void)
+static int mapphone_lis331dlh_initialization(void)
 {
 	struct regulator *reg;
 	reg = regulator_get(NULL, "vhvio");
-	if (IS_ERR(reg)) {
+	if (IS_ERR(reg))
 		return PTR_ERR(reg);
-	}
 	mapphone_lis331dlh_regulator = reg;
 	return 0;
 }
@@ -71,21 +111,23 @@ static int mapphone_lis331dlh_power_off(void)
 }
 
 struct lis331dlh_platform_data mapphone_lis331dlh_data = {
-	.init = mapphone_lis331dlh_init,
+	.init = mapphone_lis331dlh_initialization,
 	.exit = mapphone_lis331dlh_exit,
 	.power_on = mapphone_lis331dlh_power_on,
 	.power_off = mapphone_lis331dlh_power_off,
-	.min_interval   = 1,
-	.g_range        = 48,
-	.fuzz           = 4,
-	.flat           = 4,
-	.interval       = 200,
-	.axis_map_x     = 0,
-	.axis_map_y     = 1,
-	.axis_map_z     = 2,
-	.negate_x       = 0,
-	.negate_y       = 0,
-	.negate_z       = 0,
+
+	.min_interval	= 1,
+	.poll_interval	= 200,
+
+	.g_range	= LIS331DLH_G_8G,
+
+	.axis_map_x	= 0,
+	.axis_map_y	= 1,
+	.axis_map_z	= 2,
+
+	.negate_x	= 0,
+	.negate_y	= 0,
+	.negate_z	= 0,
 };
 
 static struct regulator *mapphone_akm8973_regulator;
@@ -93,9 +135,8 @@ static int mapphone_akm8973_initialization(void)
 {
 	struct regulator *reg;
 	reg = regulator_get(NULL, "vhvio");
-	if (IS_ERR(reg)) {
+	if (IS_ERR(reg))
 		return PTR_ERR(reg);
-	}
 	mapphone_akm8973_regulator = reg;
 	return 0;
 }
@@ -128,9 +169,9 @@ struct akm8973_platform_data mapphone_akm8973_data = {
 	.exit = mapphone_akm8973_exit,
 	.power_on = mapphone_akm8973_power_on,
 	.power_off = mapphone_akm8973_power_off,
+
+	.min_interval = 27,
 	.poll_interval = 200,
-	.i2c_retries = 5,
-	.i2c_retry_delay = 5,
 
 	.cal_min_threshold = 8,
 	.cal_max_threshold = 247,
@@ -156,10 +197,10 @@ static void __init mapphone_akm8973_init(void)
 }
 
 struct platform_device sfh7743_platform_device = {
-	.name = SFH7743_MODULE_NAME,
+	.name = "sfh7743",
 	.id = -1,
 	.dev = {
-		.platform_data = &omap3430_proximity_data,
+		.platform_data = &mapphone_sfh7743_data,
 	},
 };
 
@@ -171,28 +212,12 @@ static struct platform_device omap3430_hall_effect_dock = {
 	},
 };
 
-static struct platform_device omap3430_master_sensor = {
-	.name		= "master_sensor",
-	.id		= -1,
-	.dev		= {
-		.platform_data  = NULL,
-	},
-};
-
-static void mapphone_proximity_init(void)
-{
-	gpio_request(MAPPHONE_PROX_INT_GPIO, "Mapphone proximity sensor");
-	gpio_direction_input(MAPPHONE_PROX_INT_GPIO);
-	omap_cfg_reg(Y3_34XX_GPIO180);
-}
-
 static void mapphone_vibrator_init(void)
 {
 	omap_cfg_reg(Y4_34XX_GPIO181);
 }
 
 static struct platform_device *mapphone_sensors[] __initdata = {
-	&omap3430_master_sensor,
 	&sfh7743_platform_device,
 	&omap3430_hall_effect_dock,
 };
@@ -210,7 +235,7 @@ static void mapphone_hall_effect_init(void)
 
 void __init mapphone_sensors_init(void)
 {
-	mapphone_proximity_init();
+	mapphone_sfh7743_init();
 	mapphone_hall_effect_init();
 	mapphone_vibrator_init();
 	/* vibrate for 500ms at startup */

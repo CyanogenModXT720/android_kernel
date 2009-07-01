@@ -70,6 +70,7 @@
 
 #define MAPPHONE_IPC_USB_SUSP_GPIO	142
 #define MAPPHONE_AP_TO_BP_FLASH_EN_GPIO	157
+#define MAPPHONE_POWER_OFF_GPIO		176
 #define MAPPHONE_TOUCH_RESET_N_GPIO	164
 #define MAPPHONE_TOUCH_INT_GPIO		99
 #define MAPPHONE_LM_3530_INT_GPIO	92
@@ -759,6 +760,29 @@ static void __init mapphone_bp_model_init(void)
 #endif
 }
 
+#ifdef CONFIG_OMAP_PM_POWER_OFF
+static void omap3_pm_power_off(void)
+{
+	printk(KERN_INFO "omap3_pm_power_off start now ...\n");
+	local_irq_disable();
+
+	gpio_request(MAPPHONE_POWER_OFF_GPIO, "power_off_gpio");
+	gpio_direction_output(MAPPHONE_POWER_OFF_GPIO, 0);
+	gpio_set_value(MAPPHONE_POWER_OFF_GPIO, 0);
+
+	do {} while (1);
+
+	/* should never be here. */
+	local_irq_enable();
+}
+
+static void __init mapphone_power_off_init(void)
+{
+	/* set the callback function for pm_power_off */
+	pm_power_off = omap3_pm_power_off;
+}
+#endif
+
 static void __init mapphone_init(void)
 {
 	omap_board_config = mapphone_config;
@@ -784,6 +808,9 @@ static void __init mapphone_init(void)
 	omap_hdq_init();
 	mapphone_bt_init();
 	mapphone_hsmmc_init();
+#ifdef CONFIG_OMAP_PM_POWER_OFF
+	mapphone_power_off_init();
+#endif
 }
 
 static void __init mapphone_map_io(void)

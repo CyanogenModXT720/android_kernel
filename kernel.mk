@@ -54,8 +54,8 @@ all: config zImage modules modules_install ext_modules
 
 inst_hook:
 	@echo "Installing auto coding style hook"
-	@-cp -f $(KERNEL_SRC_DIR)/pre-commit $(KERNEL_SRC_DIR)/.git/hooks/
-	@-cp -f $(KERNEL_SRC_DIR)/checkpatch.pl $(KERNEL_SRC_DIR)/.git/hooks/
+	@-cp -f $(KERNEL_SRC_DIR)/scripts/pre-commit $(KERNEL_SRC_DIR)/.git/hooks/
+	@-cp -f $(KERNEL_SRC_DIR)/scripts/checkpatch.pl $(KERNEL_SRC_DIR)/.git/hooks/
 	@-chmod ugo+x $(KERNEL_SRC_DIR)/.git/hooks/*
 
 ifneq ($(BLD_CONF),)
