@@ -1580,12 +1580,18 @@ void suspend(struct early_suspend *h)
 	struct suspend_info *info = container_of(h, struct suspend_info,
 						early_suspend);
 	omapfb_blank(FB_BLANK_POWERDOWN, info->fbi);
+#ifdef CONFIG_OMAP2_DSS_DPLL4_WA
+	omap_writel(0x9, 0x48004D30);
+#endif
 }
 
 void resume(struct early_suspend *h)
 {
 	struct suspend_info *info = container_of(h, struct suspend_info,
 						early_suspend);
+#ifdef CONFIG_OMAP2_DSS_DPLL4_WA
+	omap_writel(0x1, 0x48004D30);
+#endif
 	omapfb_blank(FB_BLANK_UNBLANK, info->fbi);
 }
 
