@@ -29,9 +29,6 @@
 #include <linux/led-lm3530.h>
 #include <linux/usb/omap.h>
 #include <linux/wl127x-rfkill.h>
-#ifdef CONFIG_ANDROID_RAM_CONSOLE
-#include <linux/bootmem.h>
-#endif
 
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
@@ -49,10 +46,6 @@
 #include <asm/delay.h>
 #include <mach/control.h>
 #include <mach/hdq.h>
-
-#ifdef CONFIG_ANDROID_RAM_CONSOLE
-#include <linux/pfn.h>
-#endif
 
 #ifdef CONFIG_ARM_OF
 #include <mach/dt_path.h>
