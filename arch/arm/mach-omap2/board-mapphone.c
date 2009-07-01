@@ -29,6 +29,9 @@
 #include <linux/led-lm3530.h>
 #include <linux/usb/omap.h>
 #include <linux/wl127x-rfkill.h>
+#ifdef CONFIG_ANDROID_RAM_CONSOLE
+#include <linux/bootmem.h>
+#endif
 
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
@@ -46,6 +49,10 @@
 #include <asm/delay.h>
 #include <mach/control.h>
 #include <mach/hdq.h>
+
+#ifdef CONFIG_ANDROID_RAM_CONSOLE
+#include <linux/pfn.h>
+#endif
 
 #ifdef CONFIG_ARM_OF
 #include <mach/dt_path.h>
@@ -442,6 +449,27 @@ static struct omap_usb_platform_data usb_platform_data = {
 	.num_ports = ARRAY_SIZE(usb_port_data),
 };
 
+#ifdef CONFIG_ANDROID_RAM_CONSOLE
+#define RAM_CONSOLE_START   0x8FFE0000
+unsigned long ram_console_start = 0 ;
+static struct resource ram_console_resource = {
+	.start	= RAM_CONSOLE_START,
+	.end	= (RAM_CONSOLE_START + 0x10000 -1),
+	.flags	= IORESOURCE_MEM,
+};
+
+static struct platform_device ram_console_device = {
+	.name = "ram_console",
+	.id = 0,
+	.num_resources  = 1,
+	.resource       = &ram_console_resource,
+};
+
+void omap_init_rc(void)
+{
+	platform_device_register(&ram_console_device);
+}	
+
 static struct resource ehci_resources[] = {
 	[0] = {
 		.start	= OMAP34XX_HSUSB_HOST_BASE + 0x800,
@@ -453,6 +481,7 @@ static struct resource ehci_resources[] = {
 		.flags	= IORESOURCE_IRQ,
 	}
 };
+#endif
 
 static u64 ehci_dmamask = ~(u32)0;
 static struct platform_device ehci_device = {
@@ -808,6 +837,7 @@ static void __init mapphone_init(void)
 	omap_hdq_init();
 	mapphone_bt_init();
 	mapphone_hsmmc_init();
+	omap_init_rc();
 #ifdef CONFIG_OMAP_PM_POWER_OFF
 	mapphone_power_off_init();
 #endif
