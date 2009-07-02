@@ -36,6 +36,7 @@ struct dpll_data {
 	u32			mult_mask;
 	u32			div1_mask;
 	unsigned long		last_rounded_rate;
+	unsigned long		default_rate;
 	unsigned int		rate_tolerance;
 	u32			max_tolerance;
 	struct clk		*bypass_clk;
