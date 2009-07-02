@@ -73,13 +73,13 @@ static struct gpio_device *gpio_devs;
 static int gpio_dev_count;
 
 /*
- * GPIODev_ISR handles an interrupt on a GPIO triggered by the parameters
+ * gpiodev_isr handles an interrupt on a GPIO triggered by the parameters
  * provided when setting up the line. The interrupt that occurs here will
  * be for a specific GPIO previously configured for a particular interrupt.
  * The function will wake up any process waiting for this interrupt to be 
  * triggered.
  */
-static irqreturn_t GPIODev_ISR(int irq, void *param)
+static irqreturn_t gpiodev_isr(int irq, void *param)
 {
 	struct gpio_device *dev;
 
@@ -96,12 +96,12 @@ static irqreturn_t GPIODev_ISR(int irq, void *param)
 }
 
 /*
- * ConfigureGPIO configures the way a GPIO operates and adjusts the 
+ * config_gpio configures the way a GPIO operates and adjusts the
  * current configuration byte appropriately. Any resources in use
  * prior to the reconfiguration will be released and the new configuration
  * will take effect.
  */
-static unsigned long ConfigureGPIO(struct gpio_device *dev, u32 newconfig)
+static unsigned long config_gpio(struct gpio_device *dev, u32 newconfig)
 {
 	unsigned long ret = 0;
 
@@ -152,7 +152,7 @@ static unsigned long ConfigureGPIO(struct gpio_device *dev, u32 newconfig)
 				goto end;
 			}
 			else if (request_irq(gpio_to_irq(dev->pin_nr),
-					     &GPIODev_ISR,
+					     &gpiodev_isr,
 					     GET_INT_TYPE(newconfig),
 					     dev->device_name, dev) ) {
 				printk(KERN_ERR "Fail to request irq for \"%s\"\n", 
@@ -171,10 +171,10 @@ end:
 
 
 /*
- * GPIODev_Open handles a userspace open() to our driver. This function takes
+ * gpiodev_open handles a userspace open() to our driver. This function takes
  * the specified device out of the default state by configuring the GPIO.
  */
-static int GPIODev_Open(struct inode *inode, struct file *filp)
+static int gpiodev_open(struct inode *inode, struct file *filp)
 {
 	struct gpio_device *dev;
 	unsigned long minor;
@@ -201,7 +201,7 @@ static int GPIODev_Open(struct inode *inode, struct file *filp)
 	}
 #endif
 
-	ret = ConfigureGPIO(dev, dev->init_config);
+	ret = config_gpio(dev, dev->init_config);
 	if (ret != 0) 
 		goto end;
 
@@ -219,10 +219,10 @@ end:
 }
 
 /*
- * GPIODev_Close handles a userspace close() on a device previously
+ * gpiodev_close handles a userspace close() on a device previously
  * opened. The close reverses any initialization done on a device.
  */
-static int GPIODev_Close(struct inode *inode, struct file *filp)
+static int gpiodev_close(struct inode *inode, struct file *filp)
 {
 	struct gpio_device *dev;
 	unsigned long minor;
@@ -243,7 +243,7 @@ static int GPIODev_Close(struct inode *inode, struct file *filp)
 	}
 
 	if (dev->flags & GPIODEV_FLAG_CONFIGURABLE) {
-		ret = ConfigureGPIO(dev, GPIODEV_CONFIG_INVALID);
+		ret = config_gpio(dev, GPIODEV_CONFIG_INVALID);
 		if (ret != 0)
 			goto end;
 	}
@@ -258,12 +258,12 @@ end:
 }
 
 /*
- * GPIODev_Read handles a userspace read() on an open device. 
+ * gpiodev_read handles a userspace read() on an open device.
  * The read will only read a single byte. A read on a GPIO
  * configured for output will return the value currently in the output
  * register.
  */
-static ssize_t GPIODev_Read(struct file *filp, char *buf, size_t count,
+static ssize_t gpiodev_read(struct file *filp, char *buf, size_t count,
 			    loff_t * f_pos)
 {
 	struct gpio_device *dev;
@@ -309,11 +309,11 @@ end:
 }
 
 /*
- * GPIODev_Write handles a userspace write() on an open device. The write
+ * gpiodev_write handles a userspace write() on an open device. The write
  * must be one byte in length or the call will fail. A write on a GPIO
  * configured for input will not affect the line's status.
  */
-static ssize_t GPIODev_Write(struct file *filp, const char *buf, size_t count,
+static ssize_t gpiodev_write(struct file *filp, const char *buf, size_t count,
 			     loff_t * f_pos)
 {
 	struct gpio_device *dev;
@@ -368,7 +368,7 @@ end:
 }
 
 /*
- * GPIODev_IOCtl handles the configuration of a GPIO. The following commands are
+ * gpiodev_ioctl handles the configuration of a GPIO. The following commands are
  * supported:
  * GPIODEV_GET_CONFIG - returns the 1 byte configuration of the GPIO
  * GPIODEV_SET_CONFIG - sets up the 1 byte configuration of the GPIO
@@ -383,7 +383,7 @@ end:
  * GPIODEV_INT_POLL - Wait for gpiodev interrupt occurrence.
  *
  */
-static int GPIODev_IOCtl(struct inode *inode, struct file *filp,
+static int gpiodev_ioctl(struct inode *inode, struct file *filp,
 			 unsigned int cmd, unsigned long arg)
 {
 	GPIODEV_LOWLEVEL_CONFIG llconf;
@@ -437,7 +437,7 @@ static int GPIODev_IOCtl(struct inode *inode, struct file *filp,
 				goto end;
 			}
 
-			ret = ConfigureGPIO(dev, value);
+			ret = config_gpio(dev, value);
 		}
 		break;
 
@@ -487,7 +487,7 @@ static int GPIODev_IOCtl(struct inode *inode, struct file *filp,
 				goto end;
 			}
 
-			ret = ConfigureGPIO(dev, llconf.config);
+			ret = config_gpio(dev, llconf.config);
 		}
 		break;
 
@@ -513,13 +513,13 @@ end:
 }
 
 /*
- * GPIODev_Poll handles a user's select/poll call. This function will
+ * gpiodev_poll handles a user's select/poll call. This function will
  * return whatever functionality is currently available on a device.
  * The intended use is to wait for interrupts in a select call. By
  * waiting on an exception, a select/poll call will block until an interrupt
  * occurs.
  */
-static unsigned int GPIODev_Poll(struct file *filp, poll_table * table)
+static unsigned int gpiodev_poll(struct file *filp, poll_table * table)
 {
 	struct gpio_device *dev;
 	unsigned long minor;
@@ -553,12 +553,12 @@ end:
 
 static const struct file_operations gpiodev_fops = {
 	.owner = THIS_MODULE,
-	.open = GPIODev_Open,
-	.release = GPIODev_Close,
-	.read = GPIODev_Read,
-	.write = GPIODev_Write,
-	.ioctl = GPIODev_IOCtl,
-	.poll = GPIODev_Poll,
+	.open = gpiodev_open,
+	.release = gpiodev_close,
+	.read = gpiodev_read,
+	.write = gpiodev_write,
+	.ioctl = gpiodev_ioctl,
+	.poll = gpiodev_poll,
 };
 
 /*
