@@ -823,9 +823,9 @@ void __init reserve_node_zero(pg_data_t *pgdat)
 	}
 
 #ifdef CONFIG_ANDROID_RAM_CONSOLE
-	reserve_bootmem_node(pgdat, 0x8FFE0000, 0x10000, BOOTMEM_DEFAULT);
+	reserve_bootmem_node(pgdat, 0x8FFE0000, 0x20000, BOOTMEM_DEFAULT);
 #endif
-	
+
 #ifdef CONFIG_SA1111
 	/*
 	 * Because of the SA1111 DMA bug, we want to preserve our
