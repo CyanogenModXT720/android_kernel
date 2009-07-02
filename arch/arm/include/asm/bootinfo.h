@@ -107,6 +107,9 @@ void bi_set_flat_dev_tree_address(u32 flat_dev_tree_address);
 u16  bi_battery_status_at_boot(void);
 void bi_set_battery_status_at_boot(u16 battery_status_at_boot);
 
+u8  bi_cid_recover_boot(void);
+void bi_set_cid_recover_boot(u8 cid_recover_boot);
+
 #endif /* defined(__KERNEL__) && defined(CONFIG_BOOTINFO) */
 
 #endif

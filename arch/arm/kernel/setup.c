@@ -670,6 +670,16 @@ static int __init parse_tag_battery_status_at_boot(const struct tag *tag)
 
 __tagtable(ATAG_BATTERY_STATUS_AT_BOOT, parse_tag_battery_status_at_boot);
 
+static int __init parse_tag_cid_recover_boot(const struct tag *tag)
+{
+	bi_set_cid_recover_boot(tag->u.cid_recover_boot.cid_recover_boot);
+	printk(KERN_INFO "%s: cid_recover_boot=\"%d\"\n",
+				__func__, bi_cid_recover_boot());
+	return 0;
+}
+
+__tagtable(ATAG_CID_RECOVER_BOOT, parse_tag_cid_recover_boot);
+
 #endif /* CONFIG_BOOTINFO */
 /*
  * Scan the tag table for this tag, and call its parse function.

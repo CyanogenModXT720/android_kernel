@@ -193,6 +193,12 @@ struct tag_battery_status_at_boot {
 	u16 battery_status_at_boot;
 	u16 padding; /* each atag must be at least 4 bytes */
 };
+
+/* CID recover boot */
+#define ATAG_CID_RECOVER_BOOT 0xf1000414
+struct tag_cid_recover_boot {
+	u8 cid_recover_boot;
+};
 #else
 /* Flat dev tree address */
 #define ATAG_FLAT_DEV_TREE_ADDRESS 0xf100040A
@@ -238,6 +244,7 @@ struct tag {
                 struct tag_mbm_loader_version mbm_loader_version;
                 struct tag_flat_dev_tree_address flat_dev_tree_address;
                 struct tag_battery_status_at_boot battery_status_at_boot;
+				struct tag_cid_recover_boot cid_recover_boot;
 #else
 		struct tag_flat_dev_tree_address flat_dev_tree_address;
 #endif /* CONFIG_BOOTINFO */

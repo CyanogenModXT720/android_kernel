@@ -202,6 +202,31 @@ EXPORT_SYMBOL(bi_set_battery_status_at_boot);
 					battery_status_at_boot)
 
 /*
+ * cid_recover_boot contains the flag to indicate whether phone should
+ * boot into recover mode or not.
+ * cid_recover_boot defaults to 0 if it is not set.
+ *
+ * Exported symbols:
+ * bi_cid_recover_boot()        -- returns the value of recover boot
+ * bi_set_cid_recover_boot()    -- sets the value of recover boot
+ */
+static u8 cid_recover_boot;
+u8 bi_cid_recover_boot(void)
+{
+	return cid_recover_boot;
+}
+EXPORT_SYMBOL(bi_cid_recover_boot);
+
+void bi_set_cid_recover_boot(u8 __cid_recover_boot)
+{
+	cid_recover_boot = __cid_recover_boot;
+}
+EXPORT_SYMBOL(bi_set_cid_recover_boot);
+
+
+#define EMIT_CID_RECOVER_BOOT() \
+		EMIT_BOOTINFO("CID_RECOVER_BOOT", "0x%02x", cid_recover_boot)
+/*
  * get_bootinfo fills in the /proc/bootinfo information.
  * We currently only have the powerup reason.
  */
@@ -216,6 +241,7 @@ static int get_bootinfo(char *buf, char **start,
 	EMIT_MBM_LOADER_VERSION();
 	EMIT_FLAT_DEV_TREE_ADDRESS();
 	EMIT_BATTERY_STATUS_AT_BOOT();
+	EMIT_CID_RECOVER_BOOT();
 
 	return len;
 }
