@@ -77,6 +77,7 @@ struct usb_hcd *ghcd;
 
 /* Define USBHOST clocks for clock management */
 struct ehci_omap_clock_defs {
+	struct clk	*usbtll_wakeup_fclk;
 	struct clk	*usbhost_ick_clk;
 	struct clk	*usbhost2_120m_fck_clk;
 	struct clk	*usbhost1_48m_fck_clk;
@@ -90,6 +91,7 @@ static int usbhost_fclk_enabled;
 static DEFINE_SPINLOCK(usbtll_clock_lock);
 
 /* Clock names as per clock framework: May change so keep as #defs */
+#define USBTLL_WAKEUP_FCLK	"dpll5_ck"
 #define USBHOST_ICKL	"usbhost_ick"
 #define USBHOST_120M_FCLK	"usbhost_120m_fck"
 #define USBHOST_48M_FCLK	"usbhost_48m_fck"
@@ -315,6 +317,11 @@ static int omap_start_ehc(struct platform_device *dev, struct usb_hcd *hcd)
 	}
 	clk_enable(ehci_clocks->usbtll_ick_clk);
 
+	/* Hold the USBTLL wakeup clock for ever, needed for Remote wakaeup */
+	ehci_clocks->usbtll_wakeup_fclk =
+			clk_get(&dev->dev, USBTLL_WAKEUP_FCLK);
+	clk_enable(ehci_clocks->usbtll_wakeup_fclk);
+
 	usbtll_fclk_enabled = 1;
 	usbhost_fclk_enabled = 1;
 
@@ -456,6 +463,12 @@ static void omap_stop_ehc(struct platform_device *dev, struct usb_hcd *hcd)
 	while (!(omap_readl(OMAP_USBTLL_SYSSTATUS) & (1<<0)))
 		cpu_relax();
 	dev_dbg(hcd->self.controller, "TLL RESET DONE\n");
+
+	if (ehci_clocks->usbtll_wakeup_fclk != NULL) {
+		clk_disable(ehci_clocks->usbtll_wakeup_fclk);
+		clk_put(ehci_clocks->usbtll_wakeup_fclk);
+		ehci_clocks->usbtll_wakeup_fclk = NULL;
+	}
 
 	if (ehci_clocks->usbtll_fck_clk != NULL) {
 		clk_disable(ehci_clocks->usbtll_fck_clk);
