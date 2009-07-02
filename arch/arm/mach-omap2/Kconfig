@@ -158,3 +158,12 @@ config MACH_OVERO
 config MACH_OMAP3_PANDORA
 	bool "OMAP3 Pandora"
 	depends on ARCH_OMAP3 && ARCH_OMAP34XX
+
+config EMU_UART_DEBUG
+	bool "Provide the option of setting MiniUSB port as UART3 to debug kernel"
+	default n
+	help
+	  If enabling this feature, USB functionality is NOT available
+	  any more. Only including "emu_uart_debug" parameters in command line
+	  could activate UART3 console over miniUSB port. This feature is
+	  specific for Motorola phone with CPCAP power IC.

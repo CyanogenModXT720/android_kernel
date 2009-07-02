@@ -115,6 +115,7 @@ obj-$(CONFIG_MACH_OVERO)		+= board-overo.o \
 					   twl4030-generic-scripts.o
 obj-$(CONFIG_MACH_OMAP3_PANDORA)	+= board-omap3pandora.o \
 					   mmc-twl4030.o
+obj-$(CONFIG_EMU_UART_DEBUG)		+= board-mapphone-emu_uart.o
 
 # Platform specific device init code
 obj-y								+= usb-musb.o

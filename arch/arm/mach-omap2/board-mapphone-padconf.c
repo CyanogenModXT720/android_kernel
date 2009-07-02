@@ -32,6 +32,10 @@
 #include <mach/dt_path.h>
 #include <asm/prom.h>
 #endif
+#ifdef CONFIG_EMU_UART_DEBUG
+#include <mach/board-mapphone-emu_uart.h>
+#endif
+
 
 /* core control module padconf registers are at 0x48002030 - 0x480021E2 */
 #define OMAP343X_PADCONF_CORE_CTRL_BASE (OMAP343X_CTRL_BASE + 0x030)
@@ -1906,7 +1910,10 @@ void __init mapphone_padconf_init(void)
 			   is a half word on this architecture
 			 */
 			unsigned short val = omap_readw(addr);
-
+#ifdef CONFIG_EMU_UART_DEBUG
+			if (is_emu_uart_iomux_reg(padconf_settings[i].offset))
+				break;
+#endif
 			val &= ~(OMAP343X_PADCONF_SETTING_MASK);
 			val |= padconf_settings[i].setting;
 
