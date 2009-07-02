@@ -447,7 +447,7 @@ static struct omap_usb_platform_data usb_platform_data = {
 unsigned long ram_console_start = 0 ;
 static struct resource ram_console_resource = {
 	.start	= RAM_CONSOLE_START,
-	.end	= (RAM_CONSOLE_START + 0x10000 -1),
+	.end	= (RAM_CONSOLE_START + 0x20000 -1),
 	.flags	= IORESOURCE_MEM,
 };
 
@@ -458,10 +458,11 @@ static struct platform_device ram_console_device = {
 	.resource       = &ram_console_resource,
 };
 
-void omap_init_rc(void)
+static void  omap_init_rc(void)
 {
 	platform_device_register(&ram_console_device);
 }	
+#endif
 
 static struct resource ehci_resources[] = {
 	[0] = {
@@ -474,7 +475,6 @@ static struct resource ehci_resources[] = {
 		.flags	= IORESOURCE_IRQ,
 	}
 };
-#endif
 
 static u64 ehci_dmamask = ~(u32)0;
 static struct platform_device ehci_device = {
@@ -830,7 +830,9 @@ static void __init mapphone_init(void)
 	omap_hdq_init();
 	mapphone_bt_init();
 	mapphone_hsmmc_init();
+#ifdef CONFIG_ANDROID_RAM_CONSOLE	
 	omap_init_rc();
+#endif	
 #ifdef CONFIG_OMAP_PM_POWER_OFF
 	mapphone_power_off_init();
 #endif
