@@ -11,7 +11,7 @@
  *	  compatibility code is deprecated.
  *
  *
- * Copyright(c) 2006-2009 Motorola, Inc.
+ * Copyright (C) 2009 Motorola, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by

@@ -2,7 +2,7 @@
  * linux/include/asm/bootinfo.h:  Include file for boot information
  *                                provided on Motorola phones
  *
- * Copyright 2006-2007 Motorola, Inc.
+ * Copyright (C) 2009 Motorola, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License
@@ -19,8 +19,7 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  *
  * Date         Author          Comment
- * 12/2006      Motorola        Added defines/prototypes for /proc/bootinfo.
- * 02/2007      Motorola        Added new defines.
+ * 01/07/2009   Motorola        Initial version
  */
 
 #ifndef __ASMARM_BOOTINFO_H
