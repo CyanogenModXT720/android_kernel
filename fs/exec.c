@@ -50,6 +50,7 @@
 #include <linux/cn_proc.h>
 #include <linux/audit.h>
 #include <linux/tracehook.h>
+#include <linux/lttlite-events.h>
 #include <linux/kmod.h>
 #include <linux/fsnotify.h>
 
@@ -1335,6 +1336,11 @@ int do_execve(char * filename,
 	retval = search_binary_handler(bprm,regs);
 	if (retval < 0)
 		goto out;
+
+#ifdef CONFIG_LTT_LITE
+	/* Trace only if exec has been successful */
+	ltt_lite_ev_process(LTT_LITE_EV_PROCESS_EXEC, current);
+#endif
 
 	/* execve succeeded */
 	mutex_unlock(&current->cred_exec_mutex);

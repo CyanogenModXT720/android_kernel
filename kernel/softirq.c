@@ -23,6 +23,7 @@
 #include <linux/rcupdate.h>
 #include <linux/smp.h>
 #include <linux/tick.h>
+#include <linux/lttlite-events.h>
 
 #include <asm/irq.h>
 /*
@@ -193,9 +194,17 @@ restart:
 
 	do {
 		if (pending & 1) {
+#ifdef CONFIG_LTT_LITE
+			ltt_ev_soft_irq(LTT_EV_SOFT_IRQ_SOFT_IRQ,
+							(h - softirq_vec));
+#endif
 			int prev_count = preempt_count();
 
 			h->action(h);
+#ifdef CONFIG_LTT_LITE
+			ltt_lite_log_softirq(LTT_LITE_EV_SOFT_IRQ,
+				LTT_LITE_EVENT_RETURN, (h - softirq_vec));
+#endif
 
 			if (unlikely(prev_count != preempt_count())) {
 				printk(KERN_ERR "huh, entered softirq %td %p"
@@ -380,7 +389,16 @@ static void tasklet_action(struct softirq_action *a)
 			if (!atomic_read(&t->count)) {
 				if (!test_and_clear_bit(TASKLET_STATE_SCHED, &t->state))
 					BUG();
+#ifdef CONFIG_LTT_LITE
+				ltt_ev_soft_irq(LTT_EV_SOFT_IRQ_TASKLET_ACTION,
+					(unsigned long) (t->func));
+#endif
 				t->func(t->data);
+#ifdef CONFIG_LTT_LITE
+				ltt_lite_log_softirq(LTT_LITE_EV_TASKLET,
+					LTT_LITE_EVENT_RETURN,
+					(unsigned long) (t->func));
+#endif
 				tasklet_unlock(t);
 				continue;
 			}
@@ -415,7 +433,17 @@ static void tasklet_hi_action(struct softirq_action *a)
 			if (!atomic_read(&t->count)) {
 				if (!test_and_clear_bit(TASKLET_STATE_SCHED, &t->state))
 					BUG();
+#ifdef CONFIG_LTT_LITE
+				ltt_ev_soft_irq(
+					LTT_EV_SOFT_IRQ_TASKLET_HI_ACTION,
+					(unsigned long) (t->func));
+#endif
 				t->func(t->data);
+#ifdef CONFIG_LTT_LITE
+				ltt_lite_log_softirq(LTT_LITE_EV_TASKLET_HI,
+					LTT_LITE_EVENT_RETURN,
+					(unsigned long) (t->func));
+#endif
 				tasklet_unlock(t);
 				continue;
 			}
