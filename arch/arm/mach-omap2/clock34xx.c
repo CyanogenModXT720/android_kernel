@@ -302,6 +302,17 @@ static int omap3_noncore_dpll_enable(struct clk *clk)
 	if (!dd)
 		return -EINVAL;
 
+	/*
+	* Ensure M/N register is confgured before
+	* Enable it, otherwise DPLL will fail to lock
+	*/
+	if (clk->rate == 0) {
+		WARN_ON(dd->default_rate == 0);
+		r = omap3_noncore_dpll_set_rate(clk, dd->default_rate);
+		if (r)
+			return r;
+	}
+
 	if (clk->rate == dd->bypass_clk->rate)
 		r = _omap3_noncore_dpll_bypass(clk);
 	else

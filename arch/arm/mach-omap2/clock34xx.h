@@ -847,6 +847,7 @@ static struct clk emu_per_alwon_ck = {
 /* Type: DPLL */
 /* 3430ES2 only */
 static struct dpll_data dpll5_dd = {
+	.default_rate	= 120000000,
 	.mult_div1_reg	= OMAP3430ES2_CM_CLKSEL4,
 	.mult_mask	= OMAP3430ES2_PERIPH2_DPLL_MULT_MASK,
 	.div1_mask	= OMAP3430ES2_PERIPH2_DPLL_DIV_MASK,
