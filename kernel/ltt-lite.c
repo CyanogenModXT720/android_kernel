@@ -1948,7 +1948,7 @@ static inline void count_lost_event(unsigned short type)
  */
 static void commit_log(void *addr, int size, unsigned short type)
 {
-	/* avoide race condition when commit log */
+	/* avoid race condition when commit log */
 	struct mutex log_mutex;
 
 	struct record_header_t *header = addr;
