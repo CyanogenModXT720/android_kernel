@@ -784,6 +784,11 @@ static void __init prcm_setup_regs(void)
 		OMAP3430_AUTO_SSI,
 		CORE_MOD, CM_AUTOIDLE1);
 
+	prm_rmw_mod_reg_bits(0x80000000,
+		0,
+		CORE_MOD,
+		OMAP3430_PM_MPUGRPSEL1);
+
 	cm_write_mod_reg(
 		OMAP3430_AUTO_PKA |
 		OMAP3430_AUTO_AES1 |
@@ -856,8 +861,13 @@ static void __init prcm_setup_regs(void)
 	cm_write_mod_reg(1 << OMAP3430_AUTO_MPU_DPLL_SHIFT,
 			 MPU_MOD,
 			 CM_AUTOIDLE2);
+#ifdef CONFIG_OMAP2_DSS_DPLL4_WA
+	/* DPLL4 auto idle workaround */
+	cm_write_mod_reg(1 << OMAP3430_AUTO_CORE_DPLL_SHIFT,
+#else
 	cm_write_mod_reg((1 << OMAP3430_AUTO_PERIPH_DPLL_SHIFT) |
 			 (1 << OMAP3430_AUTO_CORE_DPLL_SHIFT),
+#endif
 			 PLL_MOD,
 			 CM_AUTOIDLE);
 	cm_write_mod_reg(1 << OMAP3430ES2_AUTO_PERIPH2_DPLL_SHIFT,
