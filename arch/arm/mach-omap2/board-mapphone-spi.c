@@ -385,5 +385,5 @@ void __init mapphone_spi_init(void)
 	spi_register_board_info(mapphone_spi_board_info,
 				ARRAY_SIZE(mapphone_spi_board_info));
 
-	regulator_has_full_constraints();
+	/* regulator_has_full_constraints(); */
 }
