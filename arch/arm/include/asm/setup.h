@@ -160,42 +160,12 @@ struct tag_memclk {
 	__u32 fmemclk;
 };
 
-#if defined(CONFIG_MACH_MAPPHONE) || defined(CONFIG_MOT_FEAT_BOOTINFO)
+#if defined(CONFIG_MACH_MAPPHONE) || defined(CONFIG_BOOTINFO)
 /* Powerup Reason */
 #define ATAG_POWERUP_REASON 0xf1000401
 
 struct tag_powerup_reason {
 	u32 powerup_reason;
-};
-
-/* ipu_buffer_address */
-#define ATAG_IPU_BUFFER_ADDRESS 0xf1000402
-struct tag_ipu_buffer_address{
-	u32 ipu_buffer_address;
-};
-
-/* is_ipu_initialized */
-#define ATAG_IS_IPU_INITIALIZED 0xf1000403
-struct tag_is_ipu_initialized{
-	u32 is_ipu_initialized;
-};
-
-/* gpu_context */
-#define ATAG_GPU_CONTEXT 0xf1000404
-struct tag_gpu_context{
-	u32 gpu_context;
-};
-
-/* Address of USB HS firmware */
-#define ATAG_USB_FIRMWARE_ADDRESS 0xf1000405
-struct tag_usb_firmware_address {
-	u32 usb_firmware_address;
-};
-
-/* Size of USB HS firmware partition */
-#define ATAG_USB_FIRMWARE_SIZE 0xf1000406
-struct tag_usb_firmware_size {
-	u32 usb_firmware_size;
 };
 
 /* MBM version */
@@ -210,40 +180,11 @@ struct tag_mbm_loader_version {
 	u32 mbm_loader_version;
 };
 
-/* Boardid */
-#define ATAG_BOARDID 0xf1000409
-struct tag_boardid {
-	u32 boardid;
-};
-
 /* Flat dev tree address */
 #define ATAG_FLAT_DEV_TREE_ADDRESS 0xf100040A
 struct tag_flat_dev_tree_address {
 	u32 flat_dev_tree_address;
 	u32 flat_dev_tree_size;
-};
-
-/* Flashing completed */
-#define ATAG_FLASHING_COMPLETED 0xf100040B
-struct tag_flashing_completed {
-	u32 flashing_completed;
-};
-
-/* Logo version */
-#define MOT_LOGO_VERSION_SIZE_OLD	24
-#define MOT_LOGO_VERSION_SIZE		128
-#define ATAG_LOGO_VERSION 0xf100040C
-struct tag_logo_version {
-	u8 * logo_version;
-	u8   logo_version_string[MOT_LOGO_VERSION_SIZE_OLD];
-	u32  logo_version_max_length;
-};
-
-/* Memory type */
-#define ATAG_MEMORY_TYPE 0xf100040D
-struct tag_memory_type {
-	u16 memory_type;
-	u16 padding; /* each atag must be at least 4 bytes */
 };
 
 /* Battery status at boot */
@@ -253,46 +194,11 @@ struct tag_battery_status_at_boot {
 	u16 padding; /* each atag must be at least 4 bytes */
 };
 
-/* Boot frequency */
-#define ATAG_BOOT_FREQUENCY 0xf100040F
-struct tag_boot_frequency {
-	u32 boot_frequency;
-};
-
-/* MEDL info */
-#define ATAG_MEDL_INFO 0xf1000410
-struct tag_medl_info {
-	u32 medl_panel_tag_id;
-	u32 medl_panel_pixel_format;
-	u32 medl_panel_status;
-};
-
-/* MBM bootup time */
-#define ATAG_MBM_BOOTUP_TIME 0xf1000411
-struct tag_mbm_bootup_time {
-	u32 mbm_bootup_time;
-};
-
-/* BP loader version */
-#define ATAG_BP_LOADER_VERSION 0xf1000412
-struct tag_bp_loader_version {
-	u32 bp_loader_version;
-};
-
-/* CLI logo version */
-#define ATAG_CLI_LOGO_VERSION 0xf1000413
-struct tag_cli_logo_version {
-	u8 * cli_logo_version;
-	u32  cli_logo_version_max_length;
-};
-
 /* CID recover boot */
 #define ATAG_CID_RECOVER_BOOT 0xf1000414
-
 struct tag_cid_recover_boot {
-        u8 cid_recover_boot;
+	u8 cid_recover_boot;
 };
-
 #else
 /* Flat dev tree address */
 #define ATAG_FLAT_DEV_TREE_ADDRESS 0xf100040A
@@ -300,7 +206,7 @@ struct tag_flat_dev_tree_address {
 	u32 flat_dev_tree_address;
 	u32 flat_dev_tree_size;
 };
-#endif /* CONFIG_MOT_FEAT_BOOTINFO */
+#endif /* CONFIG_BOOTINFO */
 
 struct tag {
 	struct tag_header hdr;
@@ -329,33 +235,19 @@ struct tag {
 		 * DC21285 specific
 		 */
 		struct tag_memclk	memclk;
-#if defined(CONFIG_MACH_MAPPHONE) || defined(CONFIG_MOT_FEAT_BOOTINFO)
+#if defined(CONFIG_MACH_MAPPHONE) || defined(CONFIG_BOOTINFO)
 		/*
 		 * Motorola specific ATAGs
 		 */
 		struct tag_powerup_reason powerup_reason;
-                struct tag_ipu_buffer_address ipu_buffer_address;
-                struct tag_is_ipu_initialized is_ipu_initialized;
-                struct tag_gpu_context gpu_context;
-                struct tag_usb_firmware_address usb_firmware_address;
-                struct tag_usb_firmware_size usb_firmware_size;
                 struct tag_mbm_version mbm_version;
                 struct tag_mbm_loader_version mbm_loader_version;
-                struct tag_boardid boardid;
                 struct tag_flat_dev_tree_address flat_dev_tree_address;
-                struct tag_flashing_completed flashing_completed;
-                struct tag_logo_version logo_version;
-                struct tag_memory_type memory_type;
                 struct tag_battery_status_at_boot battery_status_at_boot;
-                struct tag_boot_frequency boot_frequency;
-                struct tag_medl_info medl_info;
-                struct tag_mbm_bootup_time mbm_bootup_time;
-                struct tag_bp_loader_version bp_loader_version;
-                struct tag_cli_logo_version cli_logo_version;
-		struct tag_cid_recover_boot cid_recover_boot;
+				struct tag_cid_recover_boot cid_recover_boot;
 #else
 		struct tag_flat_dev_tree_address flat_dev_tree_address;
-#endif /* CONFIG_MOT_FEAT_BOOTINFO */
+#endif /* CONFIG_BOOTINFO */
 	} u;
 };
 
