@@ -1934,6 +1934,7 @@ void dispc_enable_trans_key(enum omap_channel ch, bool enable)
 		REG_FLD_MOD(DISPC_CONFIG, enable, 12, 12);
 	enable_clocks(0);
 }
+
 void dispc_enable_alpha_blending(enum omap_channel ch, bool enable)
 {
 	enable_clocks(1);
@@ -1943,6 +1944,7 @@ void dispc_enable_alpha_blending(enum omap_channel ch, bool enable)
 		REG_FLD_MOD(DISPC_CONFIG, enable, 19, 19);
 	enable_clocks(0);
 }
+
 bool dispc_alpha_blending_enabled(enum omap_channel ch)
 {
 	bool enabled;
@@ -1959,7 +1961,6 @@ bool dispc_alpha_blending_enabled(enum omap_channel ch)
 	return enabled;
 
 }
-
 
 bool dispc_trans_key_enabled(enum omap_channel ch)
 {
