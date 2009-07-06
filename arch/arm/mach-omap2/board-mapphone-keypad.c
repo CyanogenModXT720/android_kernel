@@ -70,7 +70,7 @@ static const unsigned short mapphone_p3_keymap[ARRAY_SIZE(mapphone_col_gpios) *
 	[KEYMAP_INDEX(3, 4)] = KEY_UP,
 	[KEYMAP_INDEX(3, 5)] = KEY_LEFT,
 	[KEYMAP_INDEX(3, 6)] = KEY_RIGHT,
-	[KEYMAP_INDEX(3, 7)] = KEY_ENTER,	/* d-pad center key */
+	[KEYMAP_INDEX(3, 7)] = KEY_REPLY,	/* d-pad center key */
 
 	[KEYMAP_INDEX(4, 0)] = KEY_5,
 	[KEYMAP_INDEX(4, 1)] = KEY_J,
@@ -186,11 +186,9 @@ static int __init mapphone_dt_kp_init(void)
 			mapphone_keypad_matrix_info.keymap = \
 				(unsigned short *)kp_prop;
 
-		kp_prop = of_get_property(kp_node, \
-				DT_PROP_KEYPAD_NAME, NULL);
+		kp_prop = of_get_property(kp_node, DT_PROP_KEYPAD_NAME, NULL);
 		if (kp_prop != NULL)
-			mapphone_keypad_data.name = \
-				kp_prop;
+			mapphone_keypad_data.name = kp_prop;
 
 		of_node_put(kp_node);
 	}

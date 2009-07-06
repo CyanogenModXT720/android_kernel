@@ -813,6 +813,25 @@ static int __init mapphone_omap_mdm_ctrl_init(void)
 	return platform_device_register(&omap_mdm_ctrl_platform_device);
 }
 
+#ifdef CONFIG_FB_OMAP2
+static struct resource mapphone_vout_resource[3 - CONFIG_FB_OMAP2_NUM_FBS] = {
+};
+#else
+static struct resource mapphone_vout_resource[2] = {
+};
+#endif
+
+static struct platform_device mapphone_vout_device = {
+       .name                   = "omap_vout",
+       .num_resources  = ARRAY_SIZE(mapphone_vout_resource),
+       .resource               = &mapphone_vout_resource[0],
+       .id             = -1,
+};
+static void __init mapphone_vout_init(void)
+{
+	platform_device_register(&mapphone_vout_device);
+}
+
 static void __init mapphone_bp_model_init(void)
 {
 #ifdef CONFIG_OMAP_RESET_CLOCKS
@@ -888,6 +907,7 @@ static void __init mapphone_init(void)
 	omap_hdq_init();
 	mapphone_bt_init();
 	mapphone_hsmmc_init();
+	mapphone_vout_init();
 #ifdef CONFIG_ANDROID_RAM_CONSOLE	
 	omap_init_rc();
 #endif	
