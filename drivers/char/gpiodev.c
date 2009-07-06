@@ -37,11 +37,7 @@
 #include <mach/gpio.h>
 #include <linux/autoconf.h>
 #include <linux/gpiodev.h>
-
-#if defined(CONFIG_GPIODEV_DEVICE_TREE)
-#include <mach/dt_path.h>
-#include <asm/prom.h>
-#endif
+#include <linux/platform_device.h>
 
 MODULE_AUTHOR("Motorola, Inc.");
 MODULE_DESCRIPTION("GPIO device for user space accessing GPIO pins");
@@ -59,16 +55,6 @@ MODULE_LICENSE("GPL");
 #define trace_msg(fmt, arg...) do { } while(0)
 #endif
 
-#define GPIODEV_NAME  "gpiodev"
-
-/*
- * GPIODev state flags
- */
-#define GPIODEV_FLAG_OPEN           (0x1 << 0)
-#define GPIODEV_FLAG_LOWLEVELACCESS (0x1 << 1)
-#define GPIODEV_FLAG_CONFIGURABLE   (0x1 << 2)
-#define GPIODEV_FLAG_INTERRUPTED    (0x1 << 3)
-
 const unsigned int int_type[GPIODEV_INTTYPE_MAX] = {
 	IRQF_TRIGGER_NONE,
 	IRQF_TRIGGER_RISING,
@@ -80,163 +66,24 @@ const unsigned int int_type[GPIODEV_INTTYPE_MAX] = {
 #define GET_INT_TYPE(a)    (int_type[((a) & GPIODEV_CONFIG_INT_MASK) >> GPIODEV_CONFIG_INT_MASK_OFFSET])
 #define GPIODEV_IS_INTERRUPTABLE(a)    ((((a) & GPIODEV_CONFIG_INT_MASK) != GPIODEV_CONFIG_INT_NONE) ? 1 : 0)
 
-#define GPIODEV_CONFIG_TYPE unsigned int
-
-/*
- * GPIODEVICE defines a GPIO
- *     pin_nr - pin number of the GPIO
- *     device_name - name which shows up in /dev
- *     init_config - the default configuration of a GPIO
- *     current_config - the current configuration the GPIO 
- *     flags -  status of the device node (see GPIODev state flags above)
- *     event_queue - queue to sleep on while waiting for an interrupt
- */
-
-typedef struct GPIODEVICE {
-	unsigned int pin_nr;
-#if defined(CONFIG_GPIODEV_DEVICE_TREE)
-	char device_name[DT_PROP_GPIODEV_NAMELEN];
-#else
-	char *device_name;
-#endif
-	GPIODEV_CONFIG_TYPE init_config;
-	GPIODEV_CONFIG_TYPE current_config;
-	unsigned int flags;
-	wait_queue_head_t event_queue;
-	struct mutex lock;
-} GPIODEVICE;
-
-/*
- * gpio_devs[] is the actual description of each GPIO to be supported
- */
-#if defined(CONFIG_GPIODEV_DEVICE_TREE)
-
-static struct GPIODEVICE *gpio_devs;
-static int gpio_devs_size = 0;
-static int gpio_devs_count = 0;
-
-#define GPIO_DEVICE_COUNT gpio_devs_size
-
-/**
- * Below structure definition should strictly comform to corresponding 
- * HW device tree format
- */
-struct omap_gpiodev_entry {
-	u32 pin_num;				/* GPIO pin number  */
-	char name[DT_PROP_GPIODEV_NAMELEN];	/* GPIODev name */
-	u32 setting;				/* GPIO pin setting, e.g. input, output, interrupt, invalid */
-} __attribute__ ((__packed__));
-
-static void gpiodev_devs_init(void *p_data)
-{
-	struct omap_gpiodev_entry *p = p_data;
-	struct GPIODEVICE *p_devs = &gpio_devs[gpio_devs_count];
-	int i = 0;
-
-	while ((i<DT_PROP_GPIODEV_NAMELEN) && (' ' != p->name[i++]));
-	p->name[i-1] = '\0';
-
-	if (gpio_devs_count++ >= gpio_devs_size) {
-		printk(KERN_ERR "Too big gpiodev count \n");
-		return;
-	}
-
-	p_devs->pin_nr = p->pin_num;
-	strcpy(p_devs->device_name, p->name);
-	p_devs->init_config = p->setting; 
-	p_devs->current_config = GPIODEV_CONFIG_INVALID;
-	p_devs->flags = GPIODEV_FLAG_CONFIGURABLE | GPIODEV_FLAG_LOWLEVELACCESS;
-}
-
-static int gpio_devs_hwcfg_init(void)
-{
-	int size, i;
-	struct device_node *gpio_node;
-	const void *gpio_prop;
-
-	if ((gpio_node = of_find_node_by_path(DT_PATH_GPIOGEV))) {
-		if ((gpio_prop = of_get_property(gpio_node, DT_PROP_GPIODEV_INIT, &size))) {
-
-			gpio_devs_size = (size / sizeof(struct omap_gpiodev_entry));
-			trace_msg("gpio_dev_size = %d", gpio_devs_size);
-
-			/* allocate space for the table */
-			gpio_devs = kmalloc(gpio_devs_size * sizeof(struct GPIODEVICE), GFP_KERNEL);
-
-			if (gpio_devs == NULL) {
-				printk(KERN_ERR "Unable to allocate space for GPIODev array\n");
-				return -1;
-			} else
-				for (i=0; i<gpio_devs_size; i++)
-					gpiodev_devs_init((struct omap_gpiodev_entry *)gpio_prop + i);
-		}
-
-		of_node_put(gpio_node);
-	}
-
-	return 0;
-}
-
-static void gpio_devs_hwcfg_cleanup(void)
-{
-	kfree((void *)gpio_devs);
-}
-
-#else
-
-GPIODEVICE gpio_devs[] = {
-#if GPIODEV_DBG
-	{
-	 111,
-	 "slide_interrupt",
-	 GPIODEV_CONFIG_INPUT | GPIODEV_CONFIG_INT_LLEV,
-	 GPIODEV_CONFIG_INVALID,
-	 GPIODEV_FLAG_CONFIGURABLE | GPIODEV_FLAG_LOWLEVELACCESS},
-#endif
-	{
-	 149,
-	 "gps_rts",
-	 GPIODEV_CONFIG_OUTPUT_LOW,
-	 GPIODEV_CONFIG_INVALID,
-	 GPIODEV_FLAG_CONFIGURABLE | GPIODEV_FLAG_LOWLEVELACCESS},
-	{
-	 59,
-	 "gps_reset",
-	 GPIODEV_CONFIG_OUTPUT_LOW,
-	 GPIODEV_CONFIG_INVALID,
-	 GPIODEV_FLAG_CONFIGURABLE | GPIODEV_FLAG_LOWLEVELACCESS},
-	{
-	 136,
-	 "gps_standby",
-	 GPIODEV_CONFIG_OUTPUT_LOW,
-	 GPIODEV_CONFIG_INVALID,
-	 GPIODEV_FLAG_CONFIGURABLE | GPIODEV_FLAG_LOWLEVELACCESS},
-	{
-	 160,
-	 "gps_interrupt",
-	 GPIODEV_CONFIG_INPUT | GPIODEV_CONFIG_INT_REDG,
-	 GPIODEV_CONFIG_INVALID,
-	 GPIODEV_FLAG_CONFIGURABLE | GPIODEV_FLAG_LOWLEVELACCESS}
-};
-
-#define GPIO_DEVICE_COUNT   (sizeof(gpio_devs)/sizeof(gpio_devs[0]))
-#endif /* defined(CONFIG_GPIODEV_DEVICE_TREE) */
-
 static unsigned long gpiodev_major = 0;
 static struct class *gpiodev_class;
 
+static struct gpio_device *gpio_devs;
+static int gpio_dev_count;
+
 /*
- * GPIODev_ISR handles an interrupt on a GPIO triggered by the parameters
+ * gpiodev_isr handles an interrupt on a GPIO triggered by the parameters
  * provided when setting up the line. The interrupt that occurs here will
  * be for a specific GPIO previously configured for a particular interrupt.
  * The function will wake up any process waiting for this interrupt to be 
  * triggered.
  */
-static irqreturn_t GPIODev_ISR(int irq, void *param)
+static irqreturn_t gpiodev_isr(int irq, void *param)
 {
-	GPIODEVICE *dev;
+	struct gpio_device *dev;
 
-	dev = (GPIODEVICE *) param;
+	dev = (struct gpio_device *) param;
 
 	dev->flags |= GPIODEV_FLAG_INTERRUPTED;
 
@@ -249,12 +96,12 @@ static irqreturn_t GPIODev_ISR(int irq, void *param)
 }
 
 /*
- * ConfigureGPIO configures the way a GPIO operates and adjusts the 
+ * config_gpio configures the way a GPIO operates and adjusts the
  * current configuration byte appropriately. Any resources in use
  * prior to the reconfiguration will be released and the new configuration
  * will take effect.
  */
-static unsigned long ConfigureGPIO(GPIODEVICE * dev, GPIODEV_CONFIG_TYPE newconfig)
+static unsigned long config_gpio(struct gpio_device *dev, u32 newconfig)
 {
 	unsigned long ret = 0;
 
@@ -305,7 +152,7 @@ static unsigned long ConfigureGPIO(GPIODEVICE * dev, GPIODEV_CONFIG_TYPE newconf
 				goto end;
 			}
 			else if (request_irq(gpio_to_irq(dev->pin_nr),
-					     &GPIODev_ISR,
+					     &gpiodev_isr,
 					     GET_INT_TYPE(newconfig),
 					     dev->device_name, dev) ) {
 				printk(KERN_ERR "Fail to request irq for \"%s\"\n", 
@@ -324,18 +171,18 @@ end:
 
 
 /*
- * GPIODev_Open handles a userspace open() to our driver. This function takes
+ * gpiodev_open handles a userspace open() to our driver. This function takes
  * the specified device out of the default state by configuring the GPIO.
  */
-static int GPIODev_Open(struct inode *inode, struct file *filp)
+static int gpiodev_open(struct inode *inode, struct file *filp)
 {
-	GPIODEVICE *dev;
+	struct gpio_device *dev;
 	unsigned long minor;
 	int ret = 0;
 
 	minor = MINOR(inode->i_rdev);
 
-	if (minor >= GPIO_DEVICE_COUNT)
+	if (minor >= gpio_dev_count)
 		return -ENODEV;
 
 	dev = &gpio_devs[minor];
@@ -354,7 +201,7 @@ static int GPIODev_Open(struct inode *inode, struct file *filp)
 	}
 #endif
 
-	ret = ConfigureGPIO(dev, dev->init_config);
+	ret = config_gpio(dev, dev->init_config);
 	if (ret != 0) 
 		goto end;
 
@@ -372,18 +219,18 @@ end:
 }
 
 /*
- * GPIODev_Close handles a userspace close() on a device previously
+ * gpiodev_close handles a userspace close() on a device previously
  * opened. The close reverses any initialization done on a device.
  */
-static int GPIODev_Close(struct inode *inode, struct file *filp)
+static int gpiodev_close(struct inode *inode, struct file *filp)
 {
-	GPIODEVICE *dev;
+	struct gpio_device *dev;
 	unsigned long minor;
 	int ret = 0;
 
 	minor = MINOR(inode->i_rdev);
 
-	if (minor >= GPIO_DEVICE_COUNT)
+	if (minor >= gpio_dev_count)
 		return -ENODEV;
 
 	dev = &gpio_devs[minor];
@@ -396,7 +243,7 @@ static int GPIODev_Close(struct inode *inode, struct file *filp)
 	}
 
 	if (dev->flags & GPIODEV_FLAG_CONFIGURABLE) {
-		ret = ConfigureGPIO(dev, GPIODEV_CONFIG_INVALID);
+		ret = config_gpio(dev, GPIODEV_CONFIG_INVALID);
 		if (ret != 0)
 			goto end;
 	}
@@ -411,15 +258,15 @@ end:
 }
 
 /*
- * GPIODev_Read handles a userspace read() on an open device. 
+ * gpiodev_read handles a userspace read() on an open device.
  * The read will only read a single byte. A read on a GPIO
  * configured for output will return the value currently in the output
  * register.
  */
-static ssize_t GPIODev_Read(struct file *filp, char *buf, size_t count,
+static ssize_t gpiodev_read(struct file *filp, char *buf, size_t count,
 			    loff_t * f_pos)
 {
-	GPIODEVICE *dev;
+	struct gpio_device *dev;
 	unsigned long minor;
 	unsigned long result;
 	unsigned char value;
@@ -427,7 +274,7 @@ static ssize_t GPIODev_Read(struct file *filp, char *buf, size_t count,
 
 	minor = MINOR(filp->f_dentry->d_inode->i_rdev);
 
-	if (minor >= GPIO_DEVICE_COUNT)
+	if (minor >= gpio_dev_count)
 		return -ENODEV;
 
 	dev = &gpio_devs[minor];
@@ -462,14 +309,14 @@ end:
 }
 
 /*
- * GPIODev_Write handles a userspace write() on an open device. The write
+ * gpiodev_write handles a userspace write() on an open device. The write
  * must be one byte in length or the call will fail. A write on a GPIO
  * configured for input will not affect the line's status.
  */
-static ssize_t GPIODev_Write(struct file *filp, const char *buf, size_t count,
+static ssize_t gpiodev_write(struct file *filp, const char *buf, size_t count,
 			     loff_t * f_pos)
 {
-	GPIODEVICE *dev;
+	struct gpio_device *dev;
 	unsigned long minor;
 	unsigned long result;
 	unsigned char value;
@@ -477,7 +324,7 @@ static ssize_t GPIODev_Write(struct file *filp, const char *buf, size_t count,
 
 	minor = MINOR(filp->f_dentry->d_inode->i_rdev);
 
-	if (minor >= GPIO_DEVICE_COUNT)
+	if (minor >= gpio_dev_count)
 		return -ENODEV;
 
 	dev = &gpio_devs[minor];
@@ -521,7 +368,7 @@ end:
 }
 
 /*
- * GPIODev_IOCtl handles the configuration of a GPIO. The following commands are
+ * gpiodev_ioctl handles the configuration of a GPIO. The following commands are
  * supported:
  * GPIODEV_GET_CONFIG - returns the 1 byte configuration of the GPIO
  * GPIODEV_SET_CONFIG - sets up the 1 byte configuration of the GPIO
@@ -536,19 +383,19 @@ end:
  * GPIODEV_INT_POLL - Wait for gpiodev interrupt occurrence.
  *
  */
-static int GPIODev_IOCtl(struct inode *inode, struct file *filp,
+static int gpiodev_ioctl(struct inode *inode, struct file *filp,
 			 unsigned int cmd, unsigned long arg)
 {
 	GPIODEV_LOWLEVEL_CONFIG llconf;
-	GPIODEVICE *dev;
+	struct gpio_device *dev;
 	unsigned long minor;
 	unsigned long result;
-	GPIODEV_CONFIG_TYPE value;
+	u32 value;
 	int ret = 0;
 
 	minor = MINOR(inode->i_rdev);
 
-	if (minor >= GPIO_DEVICE_COUNT)
+	if (minor >= gpio_dev_count)
 		return -ENODEV;
 
 	dev = &gpio_devs[minor];
@@ -567,7 +414,7 @@ static int GPIODev_IOCtl(struct inode *inode, struct file *filp,
 		{
 			result =
 			    copy_to_user((unsigned char *) arg,
-					 &dev->current_config, sizeof(GPIODEV_CONFIG_TYPE));
+					 &dev->current_config, sizeof(u32));
 			if (result) {
 				ret = -EFAULT;
 				goto end;
@@ -583,13 +430,14 @@ static int GPIODev_IOCtl(struct inode *inode, struct file *filp,
 			}
 
 			result =
-			    copy_from_user(&value, (unsigned char *) arg, sizeof(GPIODEV_CONFIG_TYPE));
+			    copy_from_user(&value, (unsigned char *) arg,
+								sizeof(u32));
 			if (result) {
 				ret = -EFAULT;
 				goto end;
 			}
 
-			ret = ConfigureGPIO(dev, value);
+			ret = config_gpio(dev, value);
 		}
 		break;
 
@@ -639,7 +487,7 @@ static int GPIODev_IOCtl(struct inode *inode, struct file *filp,
 				goto end;
 			}
 
-			ret = ConfigureGPIO(dev, llconf.config);
+			ret = config_gpio(dev, llconf.config);
 		}
 		break;
 
@@ -665,21 +513,21 @@ end:
 }
 
 /*
- * GPIODev_Poll handles a user's select/poll call. This function will
+ * gpiodev_poll handles a user's select/poll call. This function will
  * return whatever functionality is currently available on a device.
  * The intended use is to wait for interrupts in a select call. By
  * waiting on an exception, a select/poll call will block until an interrupt
  * occurs.
  */
-static unsigned int GPIODev_Poll(struct file *filp, poll_table * table)
+static unsigned int gpiodev_poll(struct file *filp, poll_table * table)
 {
-	GPIODEVICE *dev;
+	struct gpio_device *dev;
 	unsigned long minor;
 	unsigned int mask = 0;
 
 	minor = MINOR(filp->f_dentry->d_inode->i_rdev);
 
-	if (minor >= GPIO_DEVICE_COUNT)
+	if (minor >= gpio_dev_count)
 		return POLLERR;
 
 	dev = &gpio_devs[minor];
@@ -705,12 +553,12 @@ end:
 
 static const struct file_operations gpiodev_fops = {
 	.owner = THIS_MODULE,
-	.open = GPIODev_Open,
-	.release = GPIODev_Close,
-	.read = GPIODev_Read,
-	.write = GPIODev_Write,
-	.ioctl = GPIODev_IOCtl,
-	.poll = GPIODev_Poll,
+	.open = gpiodev_open,
+	.release = gpiodev_close,
+	.read = gpiodev_read,
+	.write = gpiodev_write,
+	.ioctl = gpiodev_ioctl,
+	.poll = gpiodev_poll,
 };
 
 /*
@@ -720,7 +568,7 @@ static const struct file_operations gpiodev_fops = {
  */
 static void gpiodev_cleanup(unsigned long device_nr)
 {
-	GPIODEVICE *gpiodev;
+	struct gpio_device *gpiodev;
 	unsigned long index;
 
 	for (index = 0; index < device_nr; index++) {
@@ -729,18 +577,14 @@ static void gpiodev_cleanup(unsigned long device_nr)
 				     MKDEV(gpiodev_major, index));
 	}
 
-#if defined(CONFIG_GPIODEV_DEVICE_TREE)
-	gpio_devs_hwcfg_cleanup();
-#endif
- 
 	class_destroy(gpiodev_class);
-	unregister_chrdev(gpiodev_major, GPIODEV_NAME);
+	unregister_chrdev(gpiodev_major, GPIO_DEVICE_DEV_NAME);
 
 }
 
 static void gpiodev_exit(void)
 {
-	gpiodev_cleanup(gpio_devs_count);
+	gpiodev_cleanup(gpio_dev_count);
 }
 
 /*
@@ -748,32 +592,24 @@ static void gpiodev_exit(void)
  * in the gpiodevs list, and creates entries in /dev corresponding to
  * each configured GPIO.
  */
-int __init gpiodev_init(void)
+static int __init gpiodev_init(void)
 {
-	GPIODEVICE *gpiodev;
+	struct gpio_device *gpiodev;
 	unsigned long index;
 	unsigned long result;
 
-	result = register_chrdev(0, GPIODEV_NAME, &gpiodev_fops);
+	result = register_chrdev(0, GPIO_DEVICE_DEV_NAME, &gpiodev_fops);
 	if (result < 0) {
 		printk(KERN_ERR "Failed to register gpiodev %s \n",
-		       GPIODEV_NAME);
+		       GPIO_DEVICE_DEV_NAME);
 
 		return result;
 	}
 
 	gpiodev_major = result;
-	gpiodev_class = class_create(THIS_MODULE, GPIODEV_NAME);
+	gpiodev_class = class_create(THIS_MODULE, GPIO_DEVICE_DEV_NAME);
 
-#if defined(CONFIG_GPIODEV_DEVICE_TREE)
-	if(gpio_devs_hwcfg_init() != 0) {
-		class_destroy(gpiodev_class);
-		unregister_chrdev(gpiodev_major, GPIODEV_NAME);
-		return -1;
-	}
-#endif
-
-	for (index = 0; index < GPIO_DEVICE_COUNT; index++) {
+	for (index = 0; index < gpio_dev_count; index++) {
 		gpiodev = &gpio_devs[index];
 
 		mutex_init(&gpiodev->lock);
@@ -792,8 +628,55 @@ int __init gpiodev_init(void)
 		trace_msg("Created device %s", gpiodev->device_name);
 	}
 
-	printk(KERN_INFO "Mot GPIODev init successfully \n");
+	printk(KERN_INFO "GPIODev init successfully \n");
 	return 0;
 }
-module_init(gpiodev_init);
-module_exit(gpiodev_exit);
+
+static int __init gpio_device_probe(struct platform_device *pdev)
+{
+	struct gpio_device_platform_data *data;
+
+	data = pdev->dev.platform_data;
+	if (data == NULL) {
+		printk(KERN_ERR "gpio_device_probe: No pdata!\n");
+		return -ENODEV;
+	}
+
+	if ((data->info == NULL) || (data->info_count == 0)) {
+		printk(KERN_ERR "gpio_device_probe: incomplete pdata!\n");
+		return -ENODEV;
+	}
+
+	gpio_devs = data->info;
+	gpio_dev_count = data->info_count;
+
+	gpiodev_init();
+	return 0;
+}
+
+static int gpio_device_remove(struct platform_device *pdev)
+{
+	gpiodev_exit();
+	return 0;
+}
+
+static struct platform_driver gpio_device_driver = {
+	.probe = gpio_device_probe,
+	.remove = gpio_device_remove,
+	.driver = {
+		.name = GPIO_DEVICE_DEV_NAME,
+	},
+};
+
+static int __devinit gpio_device_init(void)
+{
+	return platform_driver_register(&gpio_device_driver);
+}
+
+static void __exit gpio_device_exit(void)
+{
+	platform_driver_unregister(&gpio_device_driver);
+}
+
+module_init(gpio_device_init);
+module_exit(gpio_device_exit);
