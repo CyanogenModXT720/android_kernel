@@ -68,8 +68,8 @@ static struct console loggercons = {
     flags:	CON_ENABLED,
     index:	-1,
 };
-
 #endif
+int Filter_Mot_Log_Enable = 1;
 
 /* logger_offset - returns index 'n' into the log via (optimized) modulus */
 #define logger_offset(n)	((n) & (log->size - 1))
@@ -384,7 +384,18 @@ ssize_t logger_aio_write(struct kiocb *iocb, const struct iovec *iov,
 		iov++;
 		ret += nr;
 	}
-
+	if (Filter_Mot_Log_Enable) {
+		size_t len = 0;
+		len = sizeof(struct logger_entry) + 1;
+		if ((*(log->buffer+logger_offset(orig+len)) == 'M')
+		&& (*(log->buffer+logger_offset(orig+len+1)) == 'O')
+		&& (*(log->buffer+logger_offset(orig+len+2)) == 'T')
+		&& (*(log->buffer+logger_offset(orig+len+3)) == '_')) {
+			log->w_off = orig;
+			mutex_unlock(&log->mutex);
+			return ret;
+		}
+	}
 	mutex_unlock(&log->mutex);
 
 	/* wake up any blocked readers */
@@ -526,6 +537,15 @@ static long logger_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		log->head = log->w_off;
 		ret = 0;
 		break;
+	case LOGGER_FILTER_MOT_LOG_ENABLE:
+		Filter_Mot_Log_Enable = 1;
+		ret = 0;
+		break;
+	case LOGGER_FILTER_MOT_LOG_DISABLE:
+		Filter_Mot_Log_Enable = 0;
+		ret = 0;
+		break;
+
 	}
 
 	mutex_unlock(&log->mutex);
