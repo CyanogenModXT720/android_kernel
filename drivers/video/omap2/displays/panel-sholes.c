@@ -21,6 +21,8 @@
 #define EDISCO_CMD_SET_DISPLAY_OFF	0x28
 #define EDISCO_CMD_SET_COLUMN_ADDRESS	0x2A
 #define EDISCO_CMD_SET_PAGE_ADDRESS	0x2B
+#define EDISCO_CMD_SET_TEAR_ON		0x35
+#define EDISCO_CMD_SET_TEAR_SCANLINE	0x44
 
 #define EDISCO_CMD_VC   0
 #define EDISCO_VIDEO_VC 1
@@ -33,10 +35,12 @@ static struct omap_video_timings sholes_panel_timings = {
 	.x_res          = 480,
 	.y_res          = 854,
 	/*.pixel_clock  = 25000,*/
-	.hfp            = 44,
+	.dsi1_pll_fclk	= 100000,
+	.dsi2_pll_fclk  = 100000,
+	.hfp            = 0,
 	.hsw            = 2,
-	.hbp            = 38,
-	.vfp            = 1,
+	.hbp            = 2,
+	.vfp            = 0,
 	.vsw            = 1,
 	.vbp            = 1,
 };
@@ -184,7 +188,27 @@ static void sholes_panel_setup_update(struct omap_dss_device *dssdev,
 
 static int sholes_panel_enable_te(struct omap_dss_device *dssdev, bool enable)
 {
+	u8 data[3];
+	int ret;
+
+	data[0] = EDISCO_CMD_SET_TEAR_ON;
+	data[1] = 0x00;
+	ret = dsi_vc_dcs_write(EDISCO_CMD_VC, data, 2);
+	if (ret)
+		goto error;
+
+	data[0] = EDISCO_CMD_SET_TEAR_SCANLINE;
+	data[1] = 0x03;
+	data[2] = 0x56;
+	ret = dsi_vc_dcs_write(EDISCO_CMD_VC, data, 3);
+	if (ret)
+		goto error;
+
+	DBG(" edisco_ctrl_enable_te \n");
 	return 0;
+
+error:
+	return -EINVAL;
 }
 
 static int sholes_panel_rotate(struct omap_dss_device *display, u8 rotate)
@@ -211,6 +235,11 @@ static int sholes_panel_suspend(struct omap_dss_device *dssdev)
 static int sholes_panel_resume(struct omap_dss_device *dssdev)
 {
 	return sholes_panel_enable(dssdev);
+}
+
+static bool sholes_panel_te_support(struct omap_dss_device *dssdev)
+{
+	return true;
 }
 
 #if 0
@@ -242,6 +271,7 @@ static struct omap_dss_driver sholes_panel_driver = {
 	.resume = sholes_panel_resume,
 	.setup_update = sholes_panel_setup_update,
 	.enable_te = sholes_panel_enable_te,
+    .te_support = sholes_panel_te_support,
 	.set_rotate = sholes_panel_rotate,
 	.set_mirror = sholes_panel_mirror,
 	.run_test = sholes_panel_run_test,
