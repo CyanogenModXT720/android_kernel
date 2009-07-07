@@ -1,3 +1,20 @@
+/*
+ * Procedures for creating, accessing and interpreting the device tree.
+ *
+ * Paul Mackerras       August 1996.
+ * Copyright (C) 1996-2005 Paul Mackerras.
+ *
+ *  Adapted for 64bit PowerPC by Dave Engebretsen and Peter Bergner.
+ *    {engebret|bergner}@us.ibm.com
+ *
+ *  Adapted for ARM by Motorola Inc.
+ *
+ *      This program is free software; you can redistribute it and/or
+ *      modify it under the terms of the GNU General Public License
+ *      as published by the Free Software Foundation; either version
+ *      2 of the License, or (at your option) any later version.
+ */
+
 #include <stdarg.h>
 #include <linux/kernel.h>
 #include <linux/string.h>
@@ -18,14 +35,13 @@
 #include <asm/prom.h>
 #include <asm/setup.h>
 #include <asm/memory.h>
-#define DEBUG
 #ifdef DEBUG
 #define DBG(fmt...) printk(KERN_ERR fmt)
 #else
 #define DBG(fmt...)
 #endif
-
-struct boot_param_header *initial_boot_params;
+static unsigned long dev_tree_size;
+static struct boot_param_header *initial_boot_params;
 
 extern struct device_node *allnodes;	/* temporary while merging */
 
@@ -105,22 +121,17 @@ static unsigned long __init unflatten_dt_node(unsigned long mem,
 				__alignof__(struct device_node));
 	if (allnextpp) {
 		memset(np, 0, sizeof(*np));
-		np->full_name = ((char*)np) + sizeof(struct device_node);
+		np->full_name = ((char *)np) + sizeof(struct device_node);
 		if (new_format) {
-			char *p = np->full_name;
-			/* rebuild full path for new format */
-			if (dad && dad->parent) {
-				strcpy(p, dad->full_name);
+			int n = scnprintf(np->full_name, allocl, "%s/%s",
+				dad && dad->parent ? dad->full_name : "",
+				pathp);
 #ifdef DEBUG
-				if ((strlen(p) + l + 1) != allocl) {
-					DBG("%s: p: %d, l: %d, a: %d\n",
-					    pathp, (int)strlen(p), l, allocl);
-				}
-#endif
-				p += strlen(p);
+			if (n != allocl) {
+				DBG("%s: p: %d, l: %d, a: %d\n",
+				    pathp, (int)strlen(p), l, allocl);
 			}
-			*(p++) = '/';
-			memcpy(p, pathp, l);
+#endif
 		} else
 			memcpy(np->full_name, pathp, l);
 		prev_pp = &np->properties;
@@ -137,7 +148,7 @@ static unsigned long __init unflatten_dt_node(unsigned long mem,
 		}
 		kref_init(&np->kref);
 	}
-	while(1) {
+	while (1) {
 		u32 sz, noff;
 		char *pname;
 
@@ -157,7 +168,7 @@ static unsigned long __init unflatten_dt_node(unsigned long mem,
 
 		pname = find_flat_dt_string(noff);
 		if (pname == NULL) {
-			printk("Can't find property name in list !\n");
+			printk(KERN_INFO "Can't find property name in list!\n");
 			break;
 		}
 		if (strcmp(pname, "name") == 0)
@@ -171,8 +182,6 @@ static unsigned long __init unflatten_dt_node(unsigned long mem,
 				if (np->linux_phandle == 0)
 					np->linux_phandle = np->node;
 			}
-			if (strcmp(pname, "ibm,phandle") == 0)
-				np->linux_phandle = *((u32 *)*p);
 			pp->name = pname;
 			pp->length = sz;
 			pp->value = (void *)*p;
@@ -206,8 +215,7 @@ static unsigned long __init unflatten_dt_node(unsigned long mem,
 			pp->value = pp + 1;
 			*prev_pp = pp;
 			prev_pp = &pp->next;
-			memcpy(pp->value, ps, sz - 1);
-			((char *)pp->value)[sz - 1] = 0;
+			strlcpy(pp->value, ps, sz);
 			DBG("fixed up name for %s -> %s\n", pathp,
 				(char *)pp->value);
 		}
@@ -227,7 +235,7 @@ static unsigned long __init unflatten_dt_node(unsigned long mem,
 		tag = *((u32 *)(*p));
 	}
 	if (tag != OF_DT_END_NODE) {
-		printk("Weird tag at end of node: %x\n", tag);
+		printk(KERN_INFO "Weird tag at end of node: %x\n", tag);
 		return mem;
 	}
 	*p += 4;
@@ -242,37 +250,42 @@ static unsigned long __init unflatten_dt_node(unsigned long mem,
  */
 void __init unflatten_device_tree(void)
 {
-	unsigned long start, mem, size;
+	unsigned long start, size;
+	void *mem;
+	u32 *mem_endmarker;
 	struct device_node **allnextp = &allnodes;
 
 	DBG(" -> unflatten_device_tree()\n");
 	if (!initial_boot_params)
 		return;
+	reserve_bootmem(virt_to_phys(initial_boot_params),
+		dev_tree_size, BOOTMEM_DEFAULT);
 	/* First pass, scan for size */
 	start = ((unsigned long)initial_boot_params) +
 		initial_boot_params->off_dt_struct;
 	size = unflatten_dt_node(0, &start, NULL, NULL, 0);
-	size = (size | 3) + 1;
+	size = ALIGN(size, __alignof__(u32));
 
 	DBG("  size is %lx, allocating...\n", size);
 
 	/* Allocate memory for the expanded device tree */
-	mem = (unsigned long) __alloc_bootmem(size + 4, __alignof__(struct device_node), 0);
-	//mem = (unsigned long) __va(mem);
-
-	((u32 *)mem)[size / 4] = 0xdeadbeef;
+	mem = __alloc_bootmem(size + sizeof(u32),
+			__alignof__(struct device_node), 0);
+	mem_endmarker = mem + size;
+	*mem_endmarker = 0xdeadbeef;
 
 	DBG("  unflattening %lx...\n", mem);
 
 	/* Second pass, do actual unflattening */
 	start = ((unsigned long)initial_boot_params) +
 		initial_boot_params->off_dt_struct;
-	unflatten_dt_node(mem, &start, NULL, &allnextp, 0);
+	unflatten_dt_node((unsigned long)mem, &start, NULL, &allnextp, 0);
 	if (*((u32 *)start) != OF_DT_END)
-		printk(KERN_WARNING "Weird tag at end of tree: %08x\n", *((u32 *)start));
-	if (((u32 *)mem)[size / 4] != 0xdeadbeef)
+		printk(KERN_WARNING "Weird tag at end of tree: %08x\n",
+			*((u32 *)start));
+	if (*mem_endmarker != 0xdeadbeef)
 		printk(KERN_WARNING "End of tree marker overwritten: %08x\n",
-		       ((u32 *)mem)[size / 4] );
+		       *mem_endmarker);
 	*allnextp = NULL;
 
 	/* Get pointer to OF "/chosen" node for use everywhere */
@@ -311,7 +324,8 @@ struct device_node *of_node_get(struct device_node *node)
 	return node;
 }
 EXPORT_SYMBOL(of_node_get);
-static inline struct device_node * kref_to_device_node(struct kref *kref)
+
+static inline struct device_node *kref_to_device_node(struct kref *kref)
 {
 	return container_of(kref, struct device_node, kref);
 }
@@ -330,7 +344,8 @@ static void of_node_release(struct kref *kref)
 
 	/* We should never be releasing nodes that haven't been detached. */
 	if (!of_node_check_flag(node, OF_DETACHED)) {
-		printk("WARNING: Bad of_node_put() on %s\n", node->full_name);
+		printk(KERN_WARNING "WARNING: Bad of_node_put() on %s\n",
+			node->full_name);
 		dump_stack();
 		kref_init(&node->kref);
 		return;
@@ -370,27 +385,22 @@ void of_node_put(struct device_node *node)
 EXPORT_SYMBOL(of_node_put);
 
 int have_of;
-u32 phys_flat_dev_tree_address __initdata = 0;
-u32 phys_flat_dev_tree_size __initdata = 0;
 
 /* process flat device tree for hardware configuration */
 static int __init parse_tag_flat_dev_tree_address(const struct tag *tag)
 {
-    phys_flat_dev_tree_address =
-                            tag->u.flat_dev_tree_address.flat_dev_tree_address;
-    phys_flat_dev_tree_size = tag->u.flat_dev_tree_address.flat_dev_tree_size;
+    if (tag->u.flat_dev_tree.size) {
+	initial_boot_params = phys_to_virt(tag->u.flat_dev_tree.address);
+	dev_tree_size = tag->u.flat_dev_tree.size;
+    }
 
     have_of = 1;
-    if (phys_flat_dev_tree_size)
-    {
-	initial_boot_params = phys_to_virt(phys_flat_dev_tree_address);	
-    }
     printk(KERN_INFO
-		    "%s: flat_dev_tree_address=0x%08x, flat_dev_tree_size == 0x%08X\n",
-		    __FUNCTION__, phys_flat_dev_tree_address, phys_flat_dev_tree_size);
+	"flat_dev_tree_address=0x%08x, flat_dev_tree_size == 0x%08X\n",
+	tag->u.flat_dev_tree.address,
+	tag->u.flat_dev_tree.size);
 
     return 0;
 }
 
 __tagtable(ATAG_FLAT_DEV_TREE_ADDRESS, parse_tag_flat_dev_tree_address);
-

@@ -183,8 +183,8 @@ struct tag_mbm_loader_version {
 /* Flat dev tree address */
 #define ATAG_FLAT_DEV_TREE_ADDRESS 0xf100040A
 struct tag_flat_dev_tree_address {
-	u32 flat_dev_tree_address;
-	u32 flat_dev_tree_size;
+	u32 address;
+	u32 size;
 };
 
 /* Battery status at boot */
@@ -203,8 +203,8 @@ struct tag_cid_recover_boot {
 /* Flat dev tree address */
 #define ATAG_FLAT_DEV_TREE_ADDRESS 0xf100040A
 struct tag_flat_dev_tree_address {
-	u32 flat_dev_tree_address;
-	u32 flat_dev_tree_size;
+	u32 address;
+	u32 size;
 };
 #endif /* CONFIG_BOOTINFO */
 
@@ -240,9 +240,9 @@ struct tag {
 		 * Motorola specific ATAGs
 		 */
 		struct tag_powerup_reason powerup_reason;
-                struct tag_mbm_version mbm_version;
+		struct tag_mbm_version mbm_version;
                 struct tag_mbm_loader_version mbm_loader_version;
-                struct tag_flat_dev_tree_address flat_dev_tree_address;
+		struct tag_flat_dev_tree_address flat_dev_tree;
                 struct tag_battery_status_at_boot battery_status_at_boot;
 				struct tag_cid_recover_boot cid_recover_boot;
 #else
