@@ -20,6 +20,7 @@
 #include <asm/system.h>
 #include <asm/pgtable.h>
 #include <asm/tlbflush.h>
+#include <linux/lttlite-events.h>
 
 #include "fault.h"
 
@@ -260,6 +261,9 @@ do_page_fault(unsigned long addr, unsigned int fsr, struct pt_regs *regs)
 	 */
 	if (in_atomic() || !mm)
 		goto no_context;
+#ifdef CONFIG_LTT_LITE
+	ltt_ev_trap_entry(TRAP_T_PAGE_FAULT, instruction_pointer(regs));
+#endif
 
 	/*
 	 * As per x86, we may deadlock here.  However, since the kernel only
@@ -274,6 +278,9 @@ do_page_fault(unsigned long addr, unsigned int fsr, struct pt_regs *regs)
 
 	fault = __do_page_fault(mm, addr, fsr, tsk);
 	up_read(&mm->mmap_sem);
+#ifdef CONFIG_LTT_LITE
+	ltt_ev_trap_exit();
+#endif
 
 	/*
 	 * Handle the "normal" case first - VM_FAULT_MAJOR / VM_FAULT_MINOR
