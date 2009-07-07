@@ -53,6 +53,26 @@
 #define MAX_BULK_RX_REQ_NUM	8
 #define MAX_INTR_RX_REQ_NUM	8
 
+#define STRING_INTERFACE        0
+
+
+/* static strings, in UTF-8 */
+static struct usb_string usbnet_string_defs[] = {
+	[STRING_INTERFACE].s = "Motorola Test Command",
+	{  /* ZEROES END LIST */ },
+};
+
+static struct usb_gadget_strings usbnet_string_table = {
+	.language =             0x0409, /* en-us */
+	.strings =              usbnet_string_defs,
+};
+
+static struct usb_gadget_strings *usbnet_strings[] = {
+	&usbnet_string_table,
+	NULL,
+};
+
+
 struct usbnet_if_configuration {
 	u32 ip_addr;
 	u32 subnet_mask;
@@ -699,6 +719,7 @@ int __init usbnet_function_add(struct usb_composite_dev *cdev,
 {
 	struct usbnet_device *dev;
 	int ret;
+	int status;
 
 	printk(KERN_INFO "usbnet_function_add\n");
 
@@ -723,6 +744,12 @@ int __init usbnet_function_add(struct usb_composite_dev *cdev,
 		g_usbnet_context = netdev_priv(g_net_dev);
 	}
 
+	status = usb_string_id(c->cdev);
+	if (status >= 0) {
+		usbnet_string_defs[STRING_INTERFACE].id = status;
+		intf_desc.iInterface = status;
+	}
+
 	g_usbnet_context->config = 0;
 	dev->net_ctxt = g_usbnet_context;
 	dev->cdev = cdev;
@@ -736,6 +763,7 @@ int __init usbnet_function_add(struct usb_composite_dev *cdev,
 	dev->function.setup = usbnet_setup;
 	dev->function.suspend = usbnet_suspend;
 	dev->function.resume = usbnet_resume;
+	dev->function.strings = usbnet_strings;
 
 
 
