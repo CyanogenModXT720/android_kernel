@@ -211,91 +211,46 @@ static void omap3_save_secure_ram_context(u32 target_mpu_state)
 	}
 }
 
+static void prcm_clear_mod_irqs(s16 module, u16 wkst_off,
+				u16 iclk_off, u16 fclk_off) {
+	u32 wkst, fclk, iclk;
+
+	wkst = prm_read_mod_reg(module, wkst_off);
+	if (wkst) {
+		iclk = cm_read_mod_reg(module, iclk_off);
+		fclk = cm_read_mod_reg(module, fclk_off);
+		while (wkst) {
+			cm_set_mod_reg_bits(wkst, module, iclk_off);
+			cm_set_mod_reg_bits(wkst, module, fclk_off);
+			prm_write_mod_reg(wkst, module, wkst_off);
+			wkst = prm_read_mod_reg(module, wkst_off);
+		}
+		cm_write_mod_reg(iclk, module, iclk_off);
+		cm_write_mod_reg(fclk, module, fclk_off);
+	}
+}
+
 /* PRCM Interrupt Handler for wakeups */
 static irqreturn_t prcm_interrupt_handler (int irq, void *dev_id)
 {
-	u32 wkst, irqstatus_mpu;
-	u32 fclk, iclk;
+	u32 irqstatus_mpu;
 
-	/* WKUP */
-	wkst = prm_read_mod_reg(WKUP_MOD, PM_WKST);
-	if (wkst) {
-		iclk = cm_read_mod_reg(WKUP_MOD, CM_ICLKEN);
-		fclk = cm_read_mod_reg(WKUP_MOD, CM_FCLKEN);
-		cm_set_mod_reg_bits(wkst, WKUP_MOD, CM_ICLKEN);
-		cm_set_mod_reg_bits(wkst, WKUP_MOD, CM_FCLKEN);
-		prm_write_mod_reg(wkst, WKUP_MOD, PM_WKST);
-		while (prm_read_mod_reg(WKUP_MOD, PM_WKST));
-		cm_write_mod_reg(iclk, WKUP_MOD, CM_ICLKEN);
-		cm_write_mod_reg(fclk, WKUP_MOD, CM_FCLKEN);
-	}
+	do {
+		prcm_clear_mod_irqs(WKUP_MOD, PM_WKST, CM_ICLKEN, CM_FCLKEN);
+		prcm_clear_mod_irqs(CORE_MOD, PM_WKST1, CM_ICLKEN1, CM_ICLKEN1);
+		prcm_clear_mod_irqs(CORE_MOD, OMAP3430ES2_PM_WKST3,
+				CM_ICLKEN3, OMAP3430ES2_CM_FCLKEN3);
+		prcm_clear_mod_irqs(OMAP3430_PER_MOD, PM_WKST,
+				CM_ICLKEN, CM_FCLKEN);
+		if (omap_rev() > OMAP3430_REV_ES1_0)
+			prcm_clear_mod_irqs(OMAP3430ES2_USBHOST_MOD, PM_WKST,
+					CM_ICLKEN, CM_FCLKEN);
 
-	/* CORE */
-	wkst = prm_read_mod_reg(CORE_MOD, PM_WKST1);
-	if (wkst) {
-		iclk = cm_read_mod_reg(CORE_MOD, CM_ICLKEN1);
-		fclk = cm_read_mod_reg(CORE_MOD, CM_FCLKEN1);
-		cm_set_mod_reg_bits(wkst, CORE_MOD, CM_ICLKEN1);
-		cm_set_mod_reg_bits(wkst, CORE_MOD, CM_FCLKEN1);
-		prm_write_mod_reg(wkst, CORE_MOD, PM_WKST1);
-		while (prm_read_mod_reg(CORE_MOD, PM_WKST1));
-		cm_write_mod_reg(iclk, CORE_MOD, CM_ICLKEN1);
-		cm_write_mod_reg(fclk, CORE_MOD, CM_FCLKEN1);
-	}
-	wkst = prm_read_mod_reg(CORE_MOD, OMAP3430ES2_PM_WKST3);
-	if (wkst) {
-		iclk = cm_read_mod_reg(CORE_MOD, CM_ICLKEN3);
-		fclk = cm_read_mod_reg(CORE_MOD, OMAP3430ES2_CM_FCLKEN3);
-		cm_set_mod_reg_bits(wkst, CORE_MOD, CM_ICLKEN3);
-		cm_set_mod_reg_bits(wkst, CORE_MOD, OMAP3430ES2_CM_FCLKEN3);
-		prm_write_mod_reg(wkst, CORE_MOD, OMAP3430ES2_PM_WKST3);
-		while (prm_read_mod_reg(CORE_MOD, OMAP3430ES2_PM_WKST3));
-		cm_write_mod_reg(iclk, CORE_MOD, CM_ICLKEN3);
-		cm_write_mod_reg(fclk, CORE_MOD, OMAP3430ES2_CM_FCLKEN3);
-	}
-
-	/* PER */
-	wkst = prm_read_mod_reg(OMAP3430_PER_MOD, PM_WKST);
-	if (wkst) {
-		iclk = cm_read_mod_reg(OMAP3430_PER_MOD, CM_ICLKEN);
-		fclk = cm_read_mod_reg(OMAP3430_PER_MOD, CM_FCLKEN);
-		cm_set_mod_reg_bits(wkst, OMAP3430_PER_MOD, CM_ICLKEN);
-		cm_set_mod_reg_bits(wkst, OMAP3430_PER_MOD, CM_FCLKEN);
-		prm_write_mod_reg(wkst, OMAP3430_PER_MOD, PM_WKST);
-		while (prm_read_mod_reg(OMAP3430_PER_MOD, PM_WKST));
-		cm_write_mod_reg(iclk, OMAP3430_PER_MOD, CM_ICLKEN);
-		cm_write_mod_reg(fclk, OMAP3430_PER_MOD, CM_FCLKEN);
-	}
-
-	if (omap_rev() > OMAP3430_REV_ES1_0) {
-		/* USBHOST */
-		wkst = prm_read_mod_reg(OMAP3430ES2_USBHOST_MOD, PM_WKST);
-		if (wkst) {
-			iclk = cm_read_mod_reg(OMAP3430ES2_USBHOST_MOD,
-					       CM_ICLKEN);
-			fclk = cm_read_mod_reg(OMAP3430ES2_USBHOST_MOD,
-					       CM_FCLKEN);
-			cm_set_mod_reg_bits(wkst, OMAP3430ES2_USBHOST_MOD,
-					 CM_ICLKEN);
-			cm_set_mod_reg_bits(wkst, OMAP3430ES2_USBHOST_MOD,
-					 CM_FCLKEN);
-			prm_write_mod_reg(wkst, OMAP3430ES2_USBHOST_MOD,
-					  PM_WKST);
-			while (prm_read_mod_reg(OMAP3430ES2_USBHOST_MOD,
-						PM_WKST));
-			cm_write_mod_reg(iclk, OMAP3430ES2_USBHOST_MOD,
-					 CM_ICLKEN);
-			cm_write_mod_reg(fclk, OMAP3430ES2_USBHOST_MOD,
-					 CM_FCLKEN);
-		}
-	}
-
-	irqstatus_mpu = prm_read_mod_reg(OCP_MOD,
-					OMAP2_PRM_IRQSTATUS_MPU_OFFSET);
-	prm_write_mod_reg(irqstatus_mpu, OCP_MOD,
-					OMAP2_PRM_IRQSTATUS_MPU_OFFSET);
-
-	while (prm_read_mod_reg(OCP_MOD, OMAP2_PRM_IRQSTATUS_MPU_OFFSET));
+		irqstatus_mpu = prm_read_mod_reg(OCP_MOD,
+						OMAP2_PRM_IRQSTATUS_MPU_OFFSET);
+		prm_write_mod_reg(irqstatus_mpu, OCP_MOD,
+				OMAP2_PRM_IRQSTATUS_MPU_OFFSET);
+	} while (prm_read_mod_reg(OCP_MOD, OMAP2_PRM_IRQSTATUS_MPU_OFFSET));
 
 	return IRQ_HANDLED;
 }
