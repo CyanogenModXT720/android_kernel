@@ -14,6 +14,8 @@
 #include <linux/bootmem.h>
 #include <linux/mman.h>
 #include <linux/nodemask.h>
+#include <linux/ioport.h>
+#include <linux/lttlite-events.h>
 
 #include <asm/cputype.h>
 #include <asm/mach-types.h>
@@ -21,6 +23,7 @@
 #include <asm/setup.h>
 #include <asm/sizes.h>
 #include <asm/tlb.h>
+#include <asm/pgtable.h>
 
 #include <asm/mach/arch.h>
 #include <asm/mach/map.h>
@@ -832,6 +835,16 @@ void __init reserve_node_zero(pg_data_t *pgdat)
 	 * precious DMA-able memory...
 	 */
 	res_size = __pa(swapper_pg_dir) - PHYS_OFFSET;
+#endif
+#ifdef CONFIG_LTT_LITE
+	/* reserve memory for ltt lite */
+	if (ltt_lite_res.start) {
+		printk(KERN_DEBUG "LTT-LITE: reserve 0x%lx\n",
+			(unsigned long)ltt_lite_res.start);
+		reserve_bootmem_node(pgdat, ltt_lite_res.start,
+			ltt_lite_res.end - ltt_lite_res.start+1,
+			BOOTMEM_DEFAULT);
+	}
 #endif
 	if (res_size)
 		reserve_bootmem_node(pgdat, PHYS_OFFSET, res_size,

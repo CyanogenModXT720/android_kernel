@@ -36,6 +36,7 @@
 #include <linux/list.h>
 #include <linux/kallsyms.h>
 #include <linux/proc_fs.h>
+#include <linux/lttlite-events.h>
 
 #include <asm/system.h>
 #include <asm/mach/irq.h>
@@ -121,14 +122,21 @@ asmlinkage void __exception asm_do_IRQ(unsigned int irq, struct pt_regs *regs)
 	 */
 	if (irq >= NR_IRQS)
 		handle_bad_irq(irq, &bad_irq_desc);
-	else
+	else {
+#ifdef CONFIG_LTT_LITE
+		ltt_ev_irq_entry(irq, !(user_mode(regs)));
+#endif
 		generic_handle_irq(irq);
+	}
 
 	/* AT91 specific workaround */
 	irq_finish(irq);
 
 	irq_exit();
 	set_irq_regs(old_regs);
+#ifdef CONFIG_LTT_LITE
+	ltt_ev_irq_exit();
+#endif
 }
 
 void set_irq_flags(unsigned int irq, unsigned int iflags)

@@ -2022,3 +2022,5 @@ CONFIG_UMTS_SYSPANIC=y
 # End of Motorola Features
 #
 
+# LTT-LITE
+CONFIG_LTT_LITE=y

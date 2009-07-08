@@ -15,6 +15,7 @@
 #include <linux/uaccess.h>
 #include <linux/writeback.h>
 #include <linux/buffer_head.h>
+#include <linux/lttlite-events.h>
 
 #include <asm/ioctls.h>
 
@@ -488,6 +489,17 @@ int do_vfs_ioctl(struct file *filp, unsigned int fd, unsigned int cmd,
 {
 	int error = 0;
 	int __user *argp = (int __user *)arg;
+#ifdef CONFIG_LTT_LITE
+	char ltt_string[LTT_LITE_MAX_LOG_STRING_SIZE];
+
+	sprintf(ltt_string, "fd=%X/cmd=%X/arg=%X/pid=%d\n", fd,
+		cmd, (int)arg, current->pid);
+	ltt_lite_syscall_param(LTT_EV_FILE_SYSTEM_IOCTL, ltt_string,
+		strlen(ltt_string));
+	sprintf(ltt_string, "f_op=%X/pid=%d\n", (int)filp->f_op, current->pid);
+	ltt_lite_syscall_param(LTT_EV_FILE_SYSTEM_IOCTL, ltt_string,
+		strlen(ltt_string));
+#endif
 
 	switch (cmd) {
 	case FIOCLEX:

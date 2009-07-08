@@ -21,6 +21,7 @@
 #include <linux/hardirq.h>
 #include <linux/init.h>
 #include <linux/uaccess.h>
+#include <linux/lttlite-events.h>
 
 #include <asm/atomic.h>
 #include <asm/cacheflush.h>
@@ -194,6 +195,30 @@ void show_stack(struct task_struct *tsk, unsigned long *sp)
 	barrier();
 }
 
+#ifdef CONFIG_LTT_LITE
+asmlinkage void trace_real_syscall_entry(int scno)
+{
+	/*
+	 * The caller didn't bother checking for a
+	 * valid syscall number...
+	 */
+	if ((scno & 0x00f00000) != __NR_SYSCALL_BASE)
+		return;
+
+	/* mark the ARM private syscalls */
+	if ((scno & 0x00ff0000) == __ARM_NR_BASE)
+		scno |= 0x00008000;
+	ltt_lite_log_syscall(LTT_LITE_EVENT_ENTER, scno);
+}
+
+asmlinkage void trace_real_syscall_exit(int scno)
+{
+	/* mark the ARM private syscalls */
+	if ((scno & 0x00ff0000) == __ARM_NR_BASE)
+		scno |= 0x00008000;
+	ltt_lite_log_syscall(LTT_LITE_EVENT_RETURN, scno);
+}
+#endif /* CONFIG_LTT_LITE */
 #ifdef CONFIG_PREEMPT
 #define S_PREEMPT " PREEMPT"
 #else

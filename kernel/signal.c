@@ -27,6 +27,8 @@
 #include <linux/freezer.h>
 #include <linux/pid_namespace.h>
 #include <linux/nsproxy.h>
+#include <linux/lttlite-events.h>
+
 #include <trace/sched.h>
 
 #include <asm/param.h>
@@ -818,6 +820,14 @@ static int send_signal(int sig, struct siginfo *info, struct task_struct *t,
 {
 	struct sigpending *pending;
 	struct sigqueue *q;
+
+#ifdef CONFIG_LTT_LITE
+	ltt_lite_ev_sig(
+				((unsigned long)info > 2)
+				? ((unsigned short)current->pid)
+				: 0,
+				(unsigned short)t->pid, (unsigned short)sig);
+#endif
 
 	trace_sched_signal_send(sig, t);
 

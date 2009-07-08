@@ -69,6 +69,8 @@
 #include <linux/idr.h>
 #include <linux/ftrace.h>
 #include <linux/async.h>
+#include <linux/lttlite-events.h>
+
 #include <trace/boot.h>
 
 #include <asm/io.h>
@@ -469,6 +471,11 @@ static noinline void __init_refok rest_init(void)
 	__releases(kernel_lock)
 {
 	int pid;
+
+#ifdef CONFIG_LTT_LITE
+	/* initialize before the init process is started */
+	ltt_lite_early_init();
+#endif
 
 	kernel_thread(kernel_init, NULL, CLONE_FS | CLONE_SIGHAND);
 	numa_default_policy();
