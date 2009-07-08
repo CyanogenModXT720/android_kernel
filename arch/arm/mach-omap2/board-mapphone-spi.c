@@ -50,7 +50,6 @@ struct cpcap_spi_init_data mapphone_cpcap_spi_init[] = {
 	{CPCAP_REG_VRF2C,     0x000B},	/* UMTS only */
 	{CPCAP_REG_VRFREFC,   0x000B},	/* UMTS only */
 	{CPCAP_REG_VWLAN2C,   0x0001},
-	{CPCAP_REG_VVIBC,     0x000D},   /* Temporary */
 	{CPCAP_REG_VUSBINT1C, 0x0029},
 	{CPCAP_REG_VUSBINT2C, 0x0029},
 	{CPCAP_REG_TXI,       0x2000},
@@ -307,7 +306,6 @@ static struct regulator_init_data cpcap_regulator[CPCAP_NUM_REGULATORS] = {
 			.max_uV			= 3000000,
 			.valid_ops_mask		= (REGULATOR_CHANGE_VOLTAGE |
 						   REGULATOR_CHANGE_STATUS),
-			.always_on		= 1,		/* Temporary */
 		},
 		.num_consumer_supplies	= ARRAY_SIZE(cpcap_vvib_consumers),
 		.consumer_supplies	= cpcap_vvib_consumers,
