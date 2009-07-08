@@ -4,6 +4,11 @@
 
 menu "File systems"
 
+config CORE_PERMISSION
+# open core dump permission
+    bool
+	default n
+
 if BLOCK
 
 source "fs/ext2/Kconfig"
