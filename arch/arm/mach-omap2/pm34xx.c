@@ -211,6 +211,16 @@ static void omap3_save_secure_ram_context(u32 target_mpu_state)
 	}
 }
 
+/*
+ * PRCM Interrupt Handler Helper Function
+ *
+ * The purpose of this function is to clear any wake-up events latched
+ * in the PRCM PM_WKST_x registers. It is possible that a wake-up event
+ * may occur whilst attempting to clear a PM_WKST_x register and thus
+ * set another bit in this register. A while loop is used to ensure
+ * that any peripheral wake-up events occurring while attempting to
+ * clear the PM_WKST_x are detected and cleared.
+ */
 static void prcm_clear_mod_irqs(s16 module, u16 wkst_off,
 				u16 iclk_off, u16 fclk_off) {
 	u32 wkst, fclk, iclk;
@@ -230,7 +240,23 @@ static void prcm_clear_mod_irqs(s16 module, u16 wkst_off,
 	}
 }
 
-/* PRCM Interrupt Handler for wakeups */
+/*
+ * PRCM Interrupt Handler
+ *
+ * The PRM_IRQSTATUS_MPU register indicates if there are any pending
+ * interrupts from the PRCM for the MPU. These bits must be cleared in
+ * order to clear the PRCM interrupt. The PRCM interrupt handler is
+ * implemented to simply clear the PRM_IRQSTATUS_MPU in order to clear
+ * the PRCM interrupt. Please note that bit 0 of the PRM_IRQSTATUS_MPU
+ * register indicates that a wake-up event is pending for the MPU and
+ * this bit can only be cleared if the all the wake-up events latched
+ * in the various PM_WKST_x registers have been cleared. The interrupt
+ * handler is implemented using a do-while loop so that if a wake-up
+ * event occurred during the processing of the prcm interrupt handler
+ * (setting a bit in the corresponding PM_WKST_x register and thus
+ * preventing us from clearing bit 0 of the PRM_IRQSTATUS_MPU register)
+ * this would be handled.
+ */
 static irqreturn_t prcm_interrupt_handler (int irq, void *dev_id)
 {
 	u32 irqstatus_mpu;
@@ -250,6 +276,7 @@ static irqreturn_t prcm_interrupt_handler (int irq, void *dev_id)
 						OMAP2_PRM_IRQSTATUS_MPU_OFFSET);
 		prm_write_mod_reg(irqstatus_mpu, OCP_MOD,
 				OMAP2_PRM_IRQSTATUS_MPU_OFFSET);
+
 	} while (prm_read_mod_reg(OCP_MOD, OMAP2_PRM_IRQSTATUS_MPU_OFFSET));
 
 	return IRQ_HANDLED;
