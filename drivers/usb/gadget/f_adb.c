@@ -42,6 +42,25 @@
 #define RX_REQ_MAX 4
 #define TX_REQ_MAX 4
 
+#define STRING_INTERFACE        0
+
+/* static strings, in UTF-8 */
+static struct usb_string adb_string_defs[] = {
+	[STRING_INTERFACE].s = "Motorola ADB Interface",
+	{  /* ZEROES END LIST */ },
+};
+
+static struct usb_gadget_strings adb_string_table = {
+	.language =             0x0409, /* en-us */
+	.strings =              adb_string_defs,
+};
+
+static struct usb_gadget_strings *adb_strings[] = {
+	&adb_string_table,
+	NULL,
+};
+
+
 static const char shortname[] = "android_adb";
 
 struct adb_dev {
@@ -616,7 +635,7 @@ int __init adb_function_add(struct usb_composite_dev *cdev,
 	struct usb_configuration *c)
 {
 	struct adb_dev *dev;
-	int ret;
+	int ret, status;
 
 	printk(KERN_INFO "adb_function_add\n");
 
@@ -637,6 +656,12 @@ int __init adb_function_add(struct usb_composite_dev *cdev,
 	INIT_LIST_HEAD(&dev->rx_done);
 	INIT_LIST_HEAD(&dev->tx_idle);
 
+	status = usb_string_id(c->cdev);
+	if (status >= 0) {
+		adb_string_defs[STRING_INTERFACE].id = status;
+		adb_interface_desc.iInterface = status;
+	}
+
 	dev->cdev = cdev;
 	dev->function.name = "adb";
 	dev->function.descriptors = null_adb_descs;
@@ -645,6 +670,7 @@ int __init adb_function_add(struct usb_composite_dev *cdev,
 	dev->function.unbind = adb_function_unbind;
 	dev->function.set_alt = adb_function_set_alt;
 	dev->function.disable = adb_function_disable;
+	dev->function.strings = adb_strings;
 
 	/* _adb_dev must be set before calling usb_gadget_register_driver */
 	_adb_dev = dev;
