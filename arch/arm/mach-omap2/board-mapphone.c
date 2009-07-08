@@ -812,6 +812,9 @@ static struct platform_device omap_mdm_ctrl_platform_device = {
 
 static int __init mapphone_omap_mdm_ctrl_init(void)
 {
+	 if (!is_cdma_phone())
+		return -ENODEV;
+
 	gpio_request(MAPPHONE_BP_READY_AP_GPIO, "BP Normal Ready");
 	gpio_direction_input(MAPPHONE_BP_READY_AP_GPIO);
 	omap_cfg_reg(AE6_34XX_GPIO141_DOWN);
