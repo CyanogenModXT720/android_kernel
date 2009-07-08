@@ -258,8 +258,9 @@ void __init unflatten_device_tree(void)
 	DBG(" -> unflatten_device_tree()\n");
 	if (!initial_boot_params)
 		return;
-	reserve_bootmem(virt_to_phys(initial_boot_params),
-		dev_tree_size, BOOTMEM_DEFAULT);
+	mem = __alloc_bootmem(dev_tree_size, __alignof__(int), 0);
+	memcpy(mem, initial_boot_params, dev_tree_size);
+	initial_boot_params = mem;
 	/* First pass, scan for size */
 	start = ((unsigned long)initial_boot_params) +
 		initial_boot_params->off_dt_struct;
