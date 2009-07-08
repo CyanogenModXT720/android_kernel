@@ -904,6 +904,112 @@ found:
 	return 0;
 }
 
+static int dsi_pll_calc_ddrfreq_fr_sysclk(struct omap_dss_device *dssdev,
+					bool enable_hsdiv,
+					struct dsi_clock_info *cinfo)
+{
+
+	struct omap_video_timings *t = &dssdev->panel.timings;
+	struct dsi_clock_info cur, best;
+	const bool use_dss2_fck = 1;
+	unsigned long dss_clk_fck2;
+	unsigned long Fvpp;
+
+	DSSDBG("dsi_pll_calc_ddrfreq_fr_sysclk\n");
+
+	dss_clk_fck2 = dss_clk_get_rate(DSS_CLK_FCK2);
+
+   if (dssdev->phy.dsi.ddr_clk_hz == dsi.cache_clk_freq &&
+			dsi.cache_cinfo.clkin == dss_clk_fck2) {
+		DSSDBG("DSI clock info found from cache\n");
+		*cinfo = dsi.cache_cinfo;
+		return 0;
+	}
+
+	memset(&best, 0, sizeof(best));
+	memset(&cur, 0, sizeof(cur));
+
+	cur.dsiphy = dssdev->phy.dsi.ddr_clk_hz * 4;
+
+	cur.use_dss2_fck = use_dss2_fck;
+	if (use_dss2_fck)
+		cur.clkin = dss_clk_fck2;
+	else
+		cur.clkin = dispc_pclk_rate();
+
+	if (cur.clkin < 32000000)
+		cur.highfreq = 0;
+	else
+		cur.highfreq = 1;
+
+
+	/* no highfreq: 0.75MHz < Fint = clkin / regn < 2.1MHz */
+	/* highfreq: 0.75MHz < Fint = clkin / (2*regn) < 2.1MHz */
+	/* To reduce PLL lock time, keep Fint high (around 2 MHz) */
+	cur.fint = 2000000;
+
+	cur.regn = (cur.clkin/cur.fint) - 1;
+	cur.regm = (unsigned long)(cur.regn + 1) * (cur.dsiphy/1000000)
+					/ (2 * cur.clkin / 1000000);
+
+	DSSDBG("ddr_clk_hz %ld cur.dsiphy %ld fint %ld  regn %d regm %d\n",
+			dssdev->phy.dsi.ddr_clk_hz,
+			cur.dsiphy,
+			cur.fint,
+			cur.regn,
+			cur.regm);
+
+	if (t->dsi1_pll_fclk == 0 || t->dsi2_pll_fclk == 0 ||
+		t->dsi1_pll_fclk > 173000000 || t->dsi2_pll_fclk > 173000000) {
+		DSSERR(" Invalid dsi1_pll_fclk =%d dsi2_pll_fclk=%d\n",
+			t->dsi1_pll_fclk, t->dsi2_pll_fclk);
+		return -EINVAL;
+	}
+
+	cur.dsi1_pll_fclk = t->dsi1_pll_fclk * 1000; /* to Mhz */
+	cur.dsi2_pll_fclk = t->dsi2_pll_fclk * 1000; /* to Mhz */
+
+	if (enable_hsdiv == true) {
+		cur.regm4 = (cur.dsiphy / cur.dsi2_pll_fclk) - 1;
+		cur.regm3 = (cur.dsiphy / cur.dsi1_pll_fclk) - 1;
+	} else {
+		cur.regm4 = 0;
+		cur.regm3 = 0;
+	}
+
+	if (dssdev->ctrl.pixel_size == 0) {
+		DSSERR(" dssdev->ctrl.pixel_size = 0 \n");
+		return -EINVAL;
+	}
+
+	Fvpp = cur.dsiphy / dssdev->ctrl.pixel_size;
+	cur.lck_div = 1;
+	cur.pck_div = (cur.dsiphy / Fvpp) / ((cur.regm3 + 1) * cur.lck_div);
+
+   DSSDBG("dsi1_pll_fclk %ld dsi2_pll_fclk %ld pixel_size %d\n",
+			cur.dsi1_pll_fclk,
+			cur.dsi2_pll_fclk,
+			dssdev->ctrl.pixel_size);
+
+	DSSDBG("regm4 %d  regm3 %d  lck %d, pcd %d \n",
+			cur.regm4,
+			cur.regm3,
+			cur.lck_div,
+			cur.pck_div);
+
+	dispc_set_lcd_divisor(cur.lck_div, cur.pck_div);
+
+	if (cinfo)
+		*cinfo = cur;
+
+	dsi.cache_clk_freq = dssdev->phy.dsi.ddr_clk_hz;
+	dsi.cache_req_pck = 0;
+	dsi.cache_cinfo = cur;
+
+	return 0;
+}
+
+#ifndef CONFIG_OMAP2_DSS_USE_DSI_PLL
 static int dsi_pll_calc_ddrfreq(unsigned long clk_freq,
 		struct dsi_clock_info *cinfo)
 {
@@ -999,6 +1105,7 @@ found:
 
 	return 0;
 }
+#endif
 
 int dsi_pll_program(struct dsi_clock_info *cinfo)
 {
@@ -1217,7 +1324,6 @@ void dsi_dump_clocks(struct seq_file *s)
 void dsi_dump_regs(struct seq_file *s)
 {
 #define DUMPREG(r) seq_printf(s, "%-35s %08x\n", #r, dsi_read_reg(r))
-
 	dss_clk_enable(DSS_CLK_ICK | DSS_CLK_FCK1);
 
 	DUMPREG(DSI_REVISION);
@@ -2565,10 +2671,11 @@ static void dsi_update_screen_dispc(struct omap_dss_device *dssdev,
 
 	len = w * h * bytespp;
 
-	/* XXX: one packet could be longer, I think? Line buffer is
-	 * 1024 x 24bits, but we have to put DCS cmd there also.
-	 * 1023 * 3 should work, but causes strange color effects. */
-	packet_payload = min(w, (u16)1020) * bytespp;
+    /* The line buffer is 1024 x 24bits, and we want to send
+	 * much data in one package as we can but the package size
+	 * must be smaller the line buffer and it must be multiple of
+	 * the panel width */
+	packet_payload = ((u16)1023 / w) * w * bytespp;
 
 	packet_len = packet_payload + 1;	/* 1 byte for DCS cmd */
 	total_len = (len / packet_payload) * packet_len;
@@ -2897,18 +3004,39 @@ static void dsi_display_uninit_dispc(struct omap_dss_device *dssdev)
 static int dsi_display_init_dsi(struct omap_dss_device *dssdev)
 {
 	struct dsi_clock_info cinfo;
+	bool enable_hsclk, enable_hsdiv;
 	int r;
 
 	_dsi_print_reset_status();
 
-	r = dsi_pll_init(1, 0);
+#ifdef CONFIG_OMAP2_DSS_USE_DSI_PLL
+	enable_hsclk = true;
+	enable_hsdiv = true;
+
+	r = dsi_pll_init(enable_hsclk, enable_hsdiv);
+	if (r)
+		goto err0;
+
+	r = dsi_pll_calc_ddrfreq_fr_sysclk(dssdev, enable_hsdiv, &cinfo);
+	if (r)
+		goto err1;
+
+	/* Select function clk for DISPC as DSI1_PLL1_FCLK and function clk
+      for DSI as DSI2_PLL_FCLK */
+	dss_select_clk_source(1, 1);
+
+#else
+	enable_hsclk = false;
+	enable_hsdiv = true;
+
+	r = dsi_pll_init(enable_hsclk, enable_hsdiv);
 	if (r)
 		goto err0;
 
 	r = dsi_pll_calc_ddrfreq(dssdev->phy.dsi.ddr_clk_hz, &cinfo);
 	if (r)
 		goto err1;
-
+#endif
 	r = dsi_pll_program(&cinfo);
 	if (r)
 		goto err1;
@@ -3282,6 +3410,14 @@ static int dsi_display_get_te(struct omap_dss_device *dssdev)
 	return dsi.te_enabled;
 }
 
+static bool dsi_display_te_support(struct omap_dss_device *dssdev)
+{
+	if (!dssdev->driver->te_support)
+		return -ENOENT;
+
+	return dssdev->driver->te_support(dssdev);
+}
+
 static int dsi_display_set_rotate(struct omap_dss_device *dssdev, u8 rotate)
 {
 
@@ -3422,6 +3558,7 @@ int dsi_init_display(struct omap_dss_device *dssdev)
 	dssdev->get_update_mode = dsi_display_get_update_mode;
 	dssdev->enable_te = dsi_display_enable_te;
 	dssdev->get_te = dsi_display_get_te;
+    dssdev->te_support = dsi_display_te_support;
 
 	dssdev->get_rotate = dsi_display_get_rotate;
 	dssdev->set_rotate = dsi_display_set_rotate;

@@ -112,6 +112,8 @@ obj-$(CONFIG_VIDEO_OMAP3) += omap34xxcam.o
 
 obj-$(CONFIG_VIDEO_TCM825X) += tcm825x.o
 obj-$(CONFIG_VIDEO_MT9P012)     += mt9p012.o
+obj-$(CONFIG_VIDEO_MT9P012_HP)     += mt9p012_hp.o
+obj-$(CONFIG_VIDEO_MT9P013_HP)     += mt9p013_hp.o
 obj-$(CONFIG_VIDEO_OMAP3_HP3A) += hp3a/
 obj-$(CONFIG_VIDEO_OMAP3_HPLENS) += hplens.o
 
@@ -146,6 +148,7 @@ obj-$(CONFIG_VIDEO_CX23885) += cx23885/
 obj-$(CONFIG_VIDEO_PXA27x)	+= pxa_camera.o
 obj-$(CONFIG_VIDEO_SH_MOBILE_CEU)	+= sh_mobile_ceu_camera.o
 obj-$(CONFIG_VIDEO_OMAP2)		+= omap2cam.o
+obj-$(CONFIG_VIDEO_OMAP_MOT_VIDEOOUT) += omap_mot/
 obj-$(CONFIG_VIDEO_OLDOMAP3) += oldomap34xxcam.o oldisp/
 obj-$(CONFIG_SOC_CAMERA)	+= soc_camera.o
 obj-$(CONFIG_SOC_CAMERA_MT9M001)	+= mt9m001.o

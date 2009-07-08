@@ -230,6 +230,10 @@ struct omap_video_timings {
 	u16 y_res;
 	/* Unit: KHz */
 	u32 pixel_clock;
+    /* Unit: kHz */
+    u32 dsi1_pll_fclk;	/* func clk for DISPC from DSI PLL */
+    /* Unit: kHz */
+    u32 dsi2_pll_fclk;	/* func clk for DSI from DSI PLL */
 	/* Unit: pixel clocks */
 	u16 hsw;	/* Horizontal synchronization pulse width */
 	/* Unit: pixel clocks */
@@ -340,6 +344,9 @@ struct omap_overlay_manager {
 			struct omap_overlay_manager_info *info);
 	void (*get_manager_info)(struct omap_overlay_manager *mgr,
 			struct omap_overlay_manager_info *info);
+
+	void (*enable_alpha_blending)(struct omap_overlay_manager *mgr,
+		bool enable);
 
 	int (*apply)(struct omap_overlay_manager *mgr);
 	int (*wait_for_go)(struct omap_overlay_manager *mgr);
@@ -456,6 +463,7 @@ struct omap_dss_device {
 	int (*enable_te)(struct omap_dss_device *dssdev, bool enable);
 	int (*get_te)(struct omap_dss_device *dssdev);
 	int (*wait_for_te)(struct omap_dss_device *dssdev);
+    bool (*te_support) (struct omap_dss_device *dssdev);
 
 	u8 (*get_rotate)(struct omap_dss_device *dssdev);
 	int (*set_rotate)(struct omap_dss_device *dssdev, u8 rotate);
@@ -495,8 +503,9 @@ struct omap_dss_driver {
 
 	int (*enable_te)(struct omap_dss_device *dssdev, bool enable);
 	int (*wait_for_te)(struct omap_dss_device *dssdev);
+    bool (*te_support) (struct omap_dss_device *dssdev);
 
-	u8 (*get_rotate)(struct omap_dss_device *dssdev);
+    u8 (*get_rotate)(struct omap_dss_device *dssdev);
 	int (*set_rotate)(struct omap_dss_device *dssdev, u8 rotate);
 
 	bool (*get_mirror)(struct omap_dss_device *dssdev);
