@@ -3091,7 +3091,11 @@ static void dsi_display_uninit_dsi(struct omap_dss_device *dssdev)
 		dssdev->driver->disable(dssdev);
 
 	dsi_complexio_uninit();
-	dsi_pll_uninit();
+
+	/*LIBss72002 A temp workaroud to fix
+	*  display earlysuspend causes UMTS BP panic
+	*/
+	/*dsi_pll_uninit(); */
 }
 
 static int dsi_core_init(void)
