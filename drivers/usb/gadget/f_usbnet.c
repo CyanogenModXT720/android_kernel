@@ -339,6 +339,10 @@ static void usbnet_if_config(struct work_struct *work)
 
 	if (g_usbnet_ifc.iff_flag == IFF_UP)
 		usb_interface_enum_cb(ETH_TYPE_FLAG);
+	else {
+		g_usbnet_ifc.subnet_mask = 0;
+		g_usbnet_ifc.router_ip   = 0;
+	}
 }
 
 static void __init usb_ether_setup(struct net_device *dev)
@@ -794,8 +798,6 @@ struct usb_function *usbnet_function_enable(int enable, int id)
 			g_usbnet_device.function.hs_descriptors = null_function;
 			netif_stop_queue(g_net_dev);
 			g_usbnet_ifc.ip_addr = 0;
-			g_usbnet_ifc.subnet_mask = 0;
-			g_usbnet_ifc.router_ip = 0;
 			g_usbnet_ifc.iff_flag = 0;
 			g_usbnet_ifc.usbnet_config_dev = g_usbnet_context->dev;
 			schedule_work(&g_usbnet_ifc.usbnet_config_wq);
