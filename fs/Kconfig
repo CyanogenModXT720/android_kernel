@@ -4,9 +4,9 @@
 
 menu "File systems"
 
-config CORE_PERMISSION
+config CORE_DUMP_PERMISSION
 # open core dump permission
-    bool
+    bool "Core dump permission"
 	default y
 
 if BLOCK
