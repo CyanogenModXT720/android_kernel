@@ -7,7 +7,7 @@ menu "File systems"
 config CORE_DUMP_PERMISSION
 # open core dump permission
     bool "Core dump permission"
-	default y
+	default n
 
 if BLOCK
 
