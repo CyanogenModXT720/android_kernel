@@ -50,6 +50,9 @@
 #include <linux/io.h>
 #include <linux/usb/composite.h>
 
+#include <linux/miscdevice.h>
+#include <linux/proc_fs.h>
+
 #include "gadget_chips.h"
 
 /*
@@ -61,7 +64,7 @@
 /* static strings, in UTF-8 */
 static struct usb_string mtp_string_defs[] = {
 	[STRING_INTERFACE].s = "Motorola MTP Interface",
-	[STRING_MTP].s = "",
+	[STRING_MTP].s = "MSFT100\034",
 	{  /* ZEROES END LIST */ },
 };
 
@@ -173,6 +176,60 @@ struct usb_mtp_context {
 };
 
 static struct usb_mtp_context g_usb_mtp_context;
+static struct proc_dir_entry *mtp_proc;
+
+/*-------------------------------------------------------------------------*/
+/*
+ * MTP APIs
+ */
+static ssize_t mtp_read(struct file *fp, char __user *buf,
+				size_t count, loff_t *pos)
+{
+	return count;
+}
+
+static ssize_t mtp_write(struct file *fp, const char __user *buf,
+				 size_t count, loff_t *pos)
+{
+	return count;
+}
+
+static int mtp_ioctl(struct inode *inode, struct file *file,
+		unsigned int cmd, unsigned long arg)
+{
+	return 0;
+}
+
+/* file operations for MTP device /dev/mtp */
+static const struct file_operations mtp_fops = {
+	.owner = THIS_MODULE,
+	.read = mtp_read,
+	.write = mtp_write,
+	.ioctl = mtp_ioctl,
+};
+
+static struct miscdevice mtp_device = {
+	.minor = MISC_DYNAMIC_MINOR,
+	.name = "mtp",
+	.fops = &mtp_fops,
+};
+
+static ssize_t mtp_ctl_read(struct file *fp, char __user *buf,
+				size_t count, loff_t *pos)
+{
+	return count;
+}
+
+static ssize_t mtp_ctl_write(struct file *fp, const char __user *buf,
+				size_t count, loff_t *pos)
+{
+	return count;
+}
+
+static const struct file_operations mtp_ctl_fops = {
+     .read = mtp_ctl_read,
+     .write = mtp_ctl_write,
+};
 
 /*-------------------------------------------------------------------------*/
 static void mtp_int_complete(struct usb_ep *ep, struct usb_request *req)
@@ -247,6 +304,10 @@ mtp_function_unbind(struct usb_configuration *c, struct usb_function *f)
 		if (!req)
 			usb_ep_free_request(g_usb_mtp_context.bulk_in, req);
 	}
+
+	misc_deregister(&mtp_device);
+	if (mtp_proc)
+		remove_proc_entry("mtpctl", NULL);
 }
 
 static int __init
@@ -348,6 +409,16 @@ mtp_function_bind(struct usb_configuration *c, struct usb_function *f)
 		list_add_tail(&req->list, &g_usb_mtp_context.int_tx_reqs);
 		spin_unlock_irqrestore(&g_usb_mtp_context.lock, flags);
 	}
+
+	misc_register(&mtp_device);
+
+	mtp_proc = create_proc_entry("mtpctl", 0666, 0);
+	if (!mtp_proc) {
+		printk(KERN_ERR "%s: creating /proc/mtpctl failed\n", __func__);
+		goto autoconf_fail;
+	}
+	mtp_proc->proc_fops = &mtp_ctl_fops;
+
 	return 0;
 
 autoconf_fail:
@@ -358,7 +429,6 @@ autoconf_fail:
 
 static void mtp_function_disable(struct usb_function *f)
 {
-
 	usb_ep_disable(g_usb_mtp_context.bulk_in);
 	usb_ep_disable(g_usb_mtp_context.bulk_out);
 	usb_ep_disable(g_usb_mtp_context.intr_in);
@@ -416,35 +486,13 @@ static int mtp_function_set_alt(struct usb_function *f,
 }
 
 #define MTP_MOD_VENDOR_CODE   0x1C
-#define MTP_EXT_DESC_MAX_LEN  64
-#define MTP_EXT_STR_MAX_LEN   32
 static int  mtp_ext_id = 4;
-static unsigned char *mtp_ext_desc = "2800000000010400010000000000000000014D54\
-				5000000000003030000000000000000000000000";
+static unsigned char mtp_ext_desc[] =
+"\050\000\000\000\000\001\004\000\001\000\000\000\000\000\000\000\000\001"
+"\115\124\120\000\000\000\000\000\060\060\000\000\000\000\000\000\000\000"
+"\000\000\000\000";
+
 static int  mtp_ext_str_idx = 238;
-static unsigned char *mtp_ext_str_desc = "12034D005300460054003100300030001C00";
-u8 mtp_ext_str_descptor[MTP_EXT_STR_MAX_LEN];
-
-static void *mtp_str2descriptor(u8 *buf, int buf_len, const char *str)
-{
-	int ext_len = strlen(str)/2;
-	u8 val;
-	int i, j;
-
-	if (ext_len > buf_len)
-		ext_len = buf_len;
-
-	for (i = 0; i < ext_len; i++)   {
-		val = 0;
-		for (j = 2*i; j <= 2*i+1; j++)  {
-			val <<= 4;
-			val += (str[j] >= 'A') ?
-				str[j] - 'A' + 10 : str[j] - '0';
-		}
-		buf[i] = val;
-	}
-	return buf;
-}
 
 static int mtp_function_setup(struct usb_function *f,
 					const struct usb_ctrlrequest *ctrl)
@@ -453,22 +501,19 @@ static int mtp_function_setup(struct usb_function *f,
 	u16     wIndex = le16_to_cpu(ctrl->wIndex);
 	u16     wLength = le16_to_cpu(ctrl->wLength);
 	struct  usb_request  *req = g_usb_mtp_context.cdev->req;
-	u8      *ch_ptr;
 
 	if ((ctrl->bRequestType & USB_TYPE_MASK) != USB_TYPE_VENDOR)
 		return value;
 
 	if ((ctrl->bRequest == MTP_MOD_VENDOR_CODE) &&
-		(wIndex == mtp_ext_id)
-		&& mtp_ext_desc) {
-		mtp_str2descriptor(req->buf, MTP_EXT_DESC_MAX_LEN,
-							mtp_ext_desc);
-		ch_ptr = (u8 *)req->buf;
+		(wIndex == mtp_ext_id)) {
 
-		if (wLength < ch_ptr[0])
+		memcpy(req->buf, mtp_ext_desc, sizeof(mtp_ext_desc));
+
+		if (wLength < mtp_ext_desc[0])
 			value = wLength;
 		else
-			value = ch_ptr[0];
+			value = mtp_ext_desc[0];
 	}
 	return value;
 }
@@ -488,11 +533,7 @@ int __init mtp_function_add(struct usb_composite_dev *cdev,
 		mtp_string_defs[STRING_INTERFACE].id = status;
 		intf_desc.iInterface = status;
 	}
-	memset(mtp_ext_str_descptor, 0, MTP_EXT_STR_MAX_LEN);
-	mtp_str2descriptor(mtp_ext_str_descptor, MTP_EXT_STR_MAX_LEN,
-					mtp_ext_str_desc);
 	mtp_string_defs[STRING_MTP].id = mtp_ext_str_idx;
-	mtp_string_defs[STRING_MTP].s = mtp_ext_str_descptor;
 
 	g_usb_mtp_context.cdev = cdev;
 	g_usb_mtp_context.function.name = "mtp";
