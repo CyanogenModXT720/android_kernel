@@ -44,5 +44,10 @@ struct logger_entry {
 #define LOGGER_GET_LOG_LEN		_IO(__LOGGERIO, 2) /* used log len */
 #define LOGGER_GET_NEXT_ENTRY_LEN	_IO(__LOGGERIO, 3) /* next entry len */
 #define LOGGER_FLUSH_LOG		_IO(__LOGGERIO, 4) /* flush log */
+/* enable Mot internal log filter*/
+#define LOGGER_FILTER_MOT_LOG_ENABLE    _IO(__LOGGERIO, 5)
+/* disable Mot internal log filter*/
+#define LOGGER_FILTER_MOT_LOG_DISABLE   _IO(__LOGGERIO, 6)
+
 
 #endif /* _LINUX_LOGGER_H */

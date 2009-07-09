@@ -35,7 +35,7 @@ struct cpcap_spi_init_data sholes_cpcap_spi_init[] = {
 	{CPCAP_REG_PC1,       0x010A},
 	{CPCAP_REG_PC2,       0x0150},
 	{CPCAP_REG_PGC,       0x0000},
-	{CPCAP_REG_SDVSPLL,   0xDB04},
+	{CPCAP_REG_SDVSPLL,   0xDB14},
 	{CPCAP_REG_SI2CC1,    0x0201},
 	{CPCAP_REG_Si2CC2,    0x00C4},
 	{CPCAP_REG_S1C1,      0x6438},
@@ -44,7 +44,7 @@ struct cpcap_spi_init_data sholes_cpcap_spi_init[] = {
 	{CPCAP_REG_S2C2,      0x3C14},
 	{CPCAP_REG_S3C,       0x0539},
 	{CPCAP_REG_S4C1,      0x0000},
-	{CPCAP_REG_S4C2,      0x3434},
+	{CPCAP_REG_S4C2,      0x0000},
 	{CPCAP_REG_S6C,       0x0000},
 	{CPCAP_REG_VWLAN2C,   0x0001},
 	{CPCAP_REG_VVIBC,     0x000D},   /* Temporary */
@@ -198,7 +198,7 @@ static struct regulator_init_data cpcap_regulator[CPCAP_NUM_REGULATORS] = {
 			.min_uV			= 2775000,
 			.max_uV			= 2775000,
 			.valid_ops_mask		= REGULATOR_CHANGE_STATUS,
-			.boot_on		= 1,
+			.always_on		= 1,
 			.apply_uV		= 1,
 		},
 		.num_consumer_supplies	= ARRAY_SIZE(cpcap_vhvio_consumers),
@@ -358,4 +358,6 @@ void __init sholes_spi_init(void)
 	sholes_spi_board_info[0].irq = irq;
 	spi_register_board_info(sholes_spi_board_info,
 			       ARRAY_SIZE(sholes_spi_board_info));
+
+	regulator_has_full_constraints();
 }

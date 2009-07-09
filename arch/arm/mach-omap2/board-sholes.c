@@ -26,9 +26,11 @@
 #include <linux/clk.h>
 #include <linux/mm.h>
 #include <linux/qtouch_obp_ts.h>
+#include <linux/led-cpcap-lm3554.h>
 #include <linux/led-lm3530.h>
 #include <linux/usb/omap.h>
 #include <linux/wl127x-rfkill.h>
+#include <linux/omap_mdm_ctrl.h>
 
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
@@ -43,7 +45,7 @@
 #include <mach/common.h>
 #include <mach/gpmc.h>
 #include <mach/usb.h>
-#include <asm/delay.h>
+#include <linux/delay.h>
 #include <mach/control.h>
 #include <mach/hdq.h>
 
@@ -71,6 +73,12 @@
 #define SHOLES_AKM8973_INT_GPIO		175
 #define SHOLES_WL1271_NSHUTDOWN_GPIO	179
 #define SHOLES_AUDIO_PATH_GPIO		143
+#define SHOLES_BP_READY_AP_GPIO		141
+#define SHOLES_BP_READY2_AP_GPIO	59
+#define SHOLES_BP_RESOUT_GPIO		139
+#define SHOLES_BP_PWRON_GPIO		137
+#define SHOLES_AP_TO_BP_PSHOLD_GPIO	138
+#define SHOLES_AP_TO_BP_FLASH_EN_GPIO	157
 
 static struct omap_opp sholes_mpu_rate_table[] = {
 	{0, 0, 0},
@@ -180,21 +188,21 @@ static void sholes_als_init(void)
 static struct vkey sholes_touch_vkeys[] = {
 	{
 		.min		= 0,
-		.max		= 152,
+		.max		= 200,
 		.code		= KEY_BACK,
 	},
 	{
-		.min		= 321,
-		.max		= 429,
+		.min		= 330,
+		.max		= 520,
 		.code		= KEY_MENU,
 	},
 	{
-		.min		= 606,
-		.max		= 714,
+		.min		= 590,
+		.max		= 780,
 		.code		= KEY_HOME,
 	},
 	{
-		.min		= 886,
+		.min		= 880,
 		.max		= 1024,
 		.code		= KEY_SEARCH,
 	},
@@ -302,6 +310,16 @@ static struct lm3530_platform_data omap3430_als_light_data = {
 	.lower_curr_sel = 2,
 };
 
+static struct lm3554_platform_data sholes_camera_flash = {
+	.torch_brightness_def = 0xa0,
+	.flash_brightness_def = 0x78,
+	.flash_duration_def = 0x48,
+	.config_reg_1_def = 0xe0,
+	.config_reg_2_def = 0xf0,
+	.vin_monitor_def = 0x07,
+	.gpio_reg_def = 0x0,
+};
+
 static struct i2c_board_info __initdata sholes_i2c_bus1_board_info[] = {
 	{
 		I2C_BOARD_INFO(QTOUCH_TS_NAME, 0x11),
@@ -330,6 +348,10 @@ static struct i2c_board_info __initdata sholes_i2c_bus2_board_info[] = {
 };
 
 static struct i2c_board_info __initdata sholes_i2c_bus3_board_info[] = {
+	{
+		I2C_BOARD_INFO("lm3554_led", 0x53),
+		.platform_data = &sholes_camera_flash,
+	},
 #if defined(CONFIG_VIDEO_MT9P012) || defined(CONFIG_VIDEO_MT9P012_MODULE)
 	{
 		I2C_BOARD_INFO("mt9p012", 0x36),
@@ -477,22 +499,11 @@ static struct platform_device ohci_device = {
 
 static void __init sholes_ehci_init(void)
 {
-
 	omap_cfg_reg(AF5_34XX_GPIO142);		/*  IPC_USB_SUSP      */
-	omap_cfg_reg(AA21_34XX_GPIO157_OUT);	/*  AP_TO_BP_FLASH_EN */
 	omap_cfg_reg(AD1_3430_USB3FS_PHY_MM3_RXRCV);
 	omap_cfg_reg(AD2_3430_USB3FS_PHY_MM3_TXDAT);
 	omap_cfg_reg(AC1_3430_USB3FS_PHY_MM3_TXEN_N);
 	omap_cfg_reg(AE1_3430_USB3FS_PHY_MM3_TXSE0);
-
-	if (gpio_request(SHOLES_AP_TO_BP_FLASH_EN_GPIO,
-			 "ap_to_bp_flash_en") != 0) {
-		printk(KERN_WARNING "Could not request GPIO %d"
-		       " for IPC_USB_SUSP\n",
-		       SHOLES_IPC_USB_SUSP_GPIO);
-		return;
-	}
-	gpio_direction_output(SHOLES_AP_TO_BP_FLASH_EN_GPIO, 0);
 
 #if defined(CONFIG_USB_EHCI_HCD) || defined(CONFIG_USB_EHCI_HCD_MODULE)
 	platform_device_register(&ehci_device);
@@ -696,10 +707,76 @@ static void __init sholes_bt_init(void)
 	platform_device_register(&sholes_wl1271_device);
 }
 
+static struct omap_mdm_ctrl_platform_data omap_mdm_ctrl_platform_data = {
+	.bp_ready_ap_gpio = SHOLES_BP_READY_AP_GPIO,
+	.bp_ready2_ap_gpio = SHOLES_BP_READY2_AP_GPIO,
+	.bp_resout_gpio = SHOLES_BP_RESOUT_GPIO,
+	.bp_pwron_gpio = SHOLES_BP_PWRON_GPIO,
+	.ap_to_bp_pshold_gpio = SHOLES_AP_TO_BP_PSHOLD_GPIO,
+	.ap_to_bp_flash_en_gpio = SHOLES_AP_TO_BP_FLASH_EN_GPIO,
+};
+
+static struct platform_device omap_mdm_ctrl_platform_device = {
+	.name = OMAP_MDM_CTRL_MODULE_NAME,
+	.id = -1,
+	.dev = {
+		.platform_data = &omap_mdm_ctrl_platform_data,
+	},
+};
+
+static int __init sholes_omap_mdm_ctrl_init(void)
+{
+	gpio_request(SHOLES_BP_READY_AP_GPIO, "BP Normal Ready");
+	gpio_direction_input(SHOLES_BP_READY_AP_GPIO);
+	omap_cfg_reg(AE6_34XX_GPIO141_DOWN);
+
+	gpio_request(SHOLES_BP_READY2_AP_GPIO, "BP Flash Ready");
+	gpio_direction_input(SHOLES_BP_READY2_AP_GPIO);
+	omap_cfg_reg(T4_34XX_GPIO59_DOWN);
+
+	gpio_request(SHOLES_BP_RESOUT_GPIO, "BP Reset Output");
+	gpio_direction_input(SHOLES_BP_RESOUT_GPIO);
+	omap_cfg_reg(AE3_34XX_GPIO139_DOWN);
+
+	gpio_request(SHOLES_BP_PWRON_GPIO, "BP Power On");
+	gpio_direction_output(SHOLES_BP_PWRON_GPIO, 0);
+	omap_cfg_reg(AH3_34XX_GPIO137_OUT);
+
+	gpio_request(SHOLES_AP_TO_BP_PSHOLD_GPIO, "AP to BP PS Hold");
+	gpio_direction_output(SHOLES_AP_TO_BP_PSHOLD_GPIO, 0);
+	omap_cfg_reg(AF3_34XX_GPIO138_OUT);
+
+	gpio_request(SHOLES_AP_TO_BP_FLASH_EN_GPIO, "AP to BP Flash Enable");
+	gpio_direction_output(SHOLES_AP_TO_BP_FLASH_EN_GPIO, 0);
+	omap_cfg_reg(AA21_34XX_GPIO157_OUT);
+
+	return platform_device_register(&omap_mdm_ctrl_platform_device);
+}
+
+#ifdef CONFIG_FB_OMAP2
+static struct resource sholes_vout_resource[3 - CONFIG_FB_OMAP2_NUM_FBS] = {
+};
+#else
+static struct resource sholes_vout_resource[2] = {
+};
+#endif
+
+static struct platform_device sholes_vout_device = {
+       .name                   = "omap_vout",
+       .num_resources  = ARRAY_SIZE(sholes_vout_resource),
+       .resource               = &sholes_vout_resource[0],
+       .id             = -1,
+};
+static void __init sholes_vout_init(void)
+{
+	platform_device_register(&sholes_vout_device);
+}
+
 static void __init sholes_init(void)
 {
 	omap_board_config = sholes_config;
 	omap_board_config_size = ARRAY_SIZE(sholes_config);
+	sholes_omap_mdm_ctrl_init();
 	sholes_spi_init();
 	sholes_flash_init();
 	sholes_serial_init();
@@ -718,6 +795,7 @@ static void __init sholes_init(void)
 	omap_hdq_init();
 	sholes_bt_init();
 	sholes_hsmmc_init();
+	sholes_vout_init();
 }
 
 static void __init sholes_map_io(void)

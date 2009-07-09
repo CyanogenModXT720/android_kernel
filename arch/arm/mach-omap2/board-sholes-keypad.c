@@ -32,9 +32,9 @@ static const unsigned short sholes_p3_keymap[ARRAY_SIZE(sholes_col_gpios) *
 					     ARRAY_SIZE(sholes_row_gpios)] = {
 	[KEYMAP_INDEX(0, 0)] = KEY_9,
 	[KEYMAP_INDEX(0, 1)] = KEY_R,
-/*	[KEYMAP_INDEX(0, 2)] = KEY_, */
+	[KEYMAP_INDEX(0, 2)] = KEY_SEND, /* n/c dummy for CALLSEND testing*/
 	[KEYMAP_INDEX(0, 3)] = KEY_VOLUMEDOWN,
-/*	[KEYMAP_INDEX(0, 4)] = KEY_, */
+	[KEYMAP_INDEX(0, 4)] = KEY_F4,   /* n/c dummy for CALLEND testing */
 	[KEYMAP_INDEX(0, 5)] = KEY_VOLUMEUP,
 	[KEYMAP_INDEX(0, 6)] = KEY_SEARCH,
 	[KEYMAP_INDEX(0, 7)] = KEY_D,
@@ -64,7 +64,7 @@ static const unsigned short sholes_p3_keymap[ARRAY_SIZE(sholes_col_gpios) *
 	[KEYMAP_INDEX(3, 4)] = KEY_UP,
 	[KEYMAP_INDEX(3, 5)] = KEY_LEFT,
 	[KEYMAP_INDEX(3, 6)] = KEY_RIGHT,
-	[KEYMAP_INDEX(3, 7)] = KEY_ENTER,	/* d-pad center key */
+	[KEYMAP_INDEX(3, 7)] = KEY_REPLY,	/* d-pad center key */
 
 	[KEYMAP_INDEX(4, 0)] = KEY_5,
 	[KEYMAP_INDEX(4, 1)] = KEY_J,

@@ -12,6 +12,7 @@
 #include <linux/personality.h>
 #include <linux/freezer.h>
 #include <linux/uaccess.h>
+#include <linux/lttlite-events.h>
 
 #include <asm/elf.h>
 #include <asm/cacheflush.h>
@@ -647,6 +648,11 @@ static int do_signal(sigset_t *oldset, struct pt_regs *regs, int syscall)
 
 	signr = get_signal_to_deliver(&info, &ka, regs, NULL);
 	if (signr > 0) {
+#ifdef CONFIG_LTT_LITE
+		ltt_lite_ev_handle_sig((unsigned short)current->pid,
+			(unsigned short)signr,
+			(unsigned long)ka.sa.sa_handler);
+#endif
 		handle_signal(signr, &ka, &info, oldset, regs, syscall);
 		single_step_set(current);
 		return 1;

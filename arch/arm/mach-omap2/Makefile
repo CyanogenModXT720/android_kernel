@@ -25,6 +25,7 @@ obj-$(CONFIG_ARCH_OMAP2)		+= pm24xx.o
 obj-$(CONFIG_ARCH_OMAP24XX)		+= sleep24xx.o
 obj-$(CONFIG_ARCH_OMAP3)		+= pm34xx.o sleep34xx.o cpuidle34xx.o
 obj-$(CONFIG_PM_DEBUG)			+= pm-debug.o
+obj-y					+= wakeup-timer.o
 endif
 
 # SmartReflex driver
@@ -115,6 +116,7 @@ obj-$(CONFIG_MACH_OVERO)		+= board-overo.o \
 					   twl4030-generic-scripts.o
 obj-$(CONFIG_MACH_OMAP3_PANDORA)	+= board-omap3pandora.o \
 					   mmc-twl4030.o
+obj-$(CONFIG_EMU_UART_DEBUG)		+= board-mapphone-emu_uart.o
 
 # Platform specific device init code
 obj-y								+= usb-musb.o

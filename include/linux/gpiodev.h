@@ -28,6 +28,42 @@
 #include <linux/ioctl.h>
 
 /*
+ * GPIODev state flags
+ */
+#define GPIODEV_FLAG_OPEN           (0x1 << 0)
+#define GPIODEV_FLAG_LOWLEVELACCESS (0x1 << 1)
+#define GPIODEV_FLAG_CONFIGURABLE   (0x1 << 2)
+#define GPIODEV_FLAG_INTERRUPTED    (0x1 << 3)
+
+#define GPIO_DEVICE_NAME_LEN 20
+#define GPIO_DEVICE_DEV_NAME "gpio-device"
+
+/*
+ * gpio_device defines a GPIO
+ *     pin_nr - pin number of the GPIO
+ *     device_name - name which shows up in /dev
+ *     init_config - the default configuration of a GPIO
+ *     current_config - the current configuration the GPIO
+ *     flags -  status of the device node (see GPIODev state flags above)
+ *     event_queue - queue to sleep on while waiting for an interrupt
+ */
+struct gpio_device {
+	u32 pin_nr;
+	char device_name[GPIO_DEVICE_NAME_LEN];
+	u32 init_config;
+	u32 current_config;
+	u32 flags;
+	wait_queue_head_t event_queue;
+	struct mutex lock;
+};
+
+struct gpio_device_platform_data {
+	const char *name;
+	struct gpio_device *info;
+	size_t info_count;
+};
+
+/*
  * GPIODEV_LOWLEVEL_CONFIG is used to specify the low level configuration
  * of a device. This structure is passed as a parameter to an ioctl()
  * with the type of either GPIODEV_GET_LOWLEVELCONFIG or

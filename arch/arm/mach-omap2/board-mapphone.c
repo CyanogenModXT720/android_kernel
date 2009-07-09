@@ -26,9 +26,11 @@
 #include <linux/clk.h>
 #include <linux/mm.h>
 #include <linux/qtouch_obp_ts.h>
+#include <linux/led-cpcap-lm3554.h>
 #include <linux/led-lm3530.h>
 #include <linux/usb/omap.h>
 #include <linux/wl127x-rfkill.h>
+#include <linux/omap_mdm_ctrl.h>
 
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
@@ -43,7 +45,7 @@
 #include <mach/common.h>
 #include <mach/gpmc.h>
 #include <mach/usb.h>
-#include <asm/delay.h>
+#include <linux/delay.h>
 #include <mach/control.h>
 #include <mach/hdq.h>
 
@@ -76,13 +78,19 @@
 
 #define MAPPHONE_IPC_USB_SUSP_GPIO	142
 #define MAPPHONE_AP_TO_BP_FLASH_EN_GPIO	157
-#define MAPPHONE_POWER_OFF_GPIO		176
 #define MAPPHONE_TOUCH_RESET_N_GPIO	164
 #define MAPPHONE_TOUCH_INT_GPIO		99
 #define MAPPHONE_LM_3530_INT_GPIO	92
 #define MAPPHONE_AKM8973_INT_GPIO	175
 #define MAPPHONE_WL1271_NSHUTDOWN_GPIO	179
 #define MAPPHONE_AUDIO_PATH_GPIO	143
+#define MAPPHONE_BP_READY_AP_GPIO	141
+#define MAPPHONE_BP_READY2_AP_GPIO	59
+#define MAPPHONE_BP_RESOUT_GPIO		139
+#define MAPPHONE_BP_PWRON_GPIO		137
+#define MAPPHONE_AP_TO_BP_PSHOLD_GPIO	138
+#define MAPPHONE_AP_TO_BP_FLASH_EN_GPIO	157
+#define MAPPHONE_POWER_OFF_GPIO		176
 
 char *bp_model = "CDMA";
 
@@ -211,21 +219,21 @@ static void mapphone_als_init(void)
 static struct vkey mapphone_touch_vkeys[] = {
 	{
 		.min		= 0,
-		.max		= 152,
+		.max		= 200,
 		.code		= KEY_BACK,
 	},
 	{
-		.min		= 321,
-		.max		= 429,
+		.min		= 330,
+		.max		= 520,
 		.code		= KEY_MENU,
 	},
 	{
-		.min		= 606,
-		.max		= 714,
+		.min		= 590,
+		.max		= 780,
 		.code		= KEY_HOME,
 	},
 	{
-		.min		= 886,
+		.min		= 880,
 		.max		= 1024,
 		.code		= KEY_SEARCH,
 	},
@@ -333,6 +341,16 @@ static struct lm3530_platform_data omap3430_als_light_data = {
 	.lower_curr_sel = 2,
 };
 
+static struct lm3554_platform_data mapphone_camera_flash = {
+	.torch_brightness_def = 0xa0,
+	.flash_brightness_def = 0x78,
+	.flash_duration_def = 0x48,
+	.config_reg_1_def = 0xe0,
+	.config_reg_2_def = 0xf0,
+	.vin_monitor_def = 0x07,
+	.gpio_reg_def = 0x0,
+};
+
 static struct i2c_board_info __initdata mapphone_i2c_bus1_board_info[] = {
 	{
 		I2C_BOARD_INFO(QTOUCH_TS_NAME, 0x11),
@@ -381,6 +399,10 @@ static struct i2c_board_info __initdata mapphone_i2c_bus3_board_info[] = {
 		.platform_data = &mapphone_mt9p013_platform_data,
 	},
 #endif
+    {
+		I2C_BOARD_INFO("lm3554_led", 0x53),
+		.platform_data = &mapphone_camera_flash,
+	},
 #if defined(CONFIG_VIDEO_MT9P012) || defined(CONFIG_VIDEO_MT9P012_MODULE)
 	{
 		I2C_BOARD_INFO("mt9p012", 0x36),
@@ -468,6 +490,28 @@ static struct omap_usb_platform_data usb_platform_data = {
 	.num_ports = ARRAY_SIZE(usb_port_data),
 };
 
+#ifdef CONFIG_ANDROID_RAM_CONSOLE
+#define RAM_CONSOLE_START   0x8FFE0000
+unsigned long ram_console_start = 0 ;
+static struct resource ram_console_resource = {
+	.start	= RAM_CONSOLE_START,
+	.end	= (RAM_CONSOLE_START + 0x20000 -1),
+	.flags	= IORESOURCE_MEM,
+};
+
+static struct platform_device ram_console_device = {
+	.name = "ram_console",
+	.id = 0,
+	.num_resources  = 1,
+	.resource       = &ram_console_resource,
+};
+
+static void  omap_init_rc(void)
+{
+	platform_device_register(&ram_console_device);
+}	
+#endif
+
 static struct resource ehci_resources[] = {
 	[0] = {
 		.start	= OMAP34XX_HSUSB_HOST_BASE + 0x800,
@@ -528,9 +572,7 @@ static struct platform_device ohci_device = {
 
 static void __init mapphone_ehci_init(void)
 {
-
 	omap_cfg_reg(AF5_34XX_GPIO142);		/*  IPC_USB_SUSP      */
-	omap_cfg_reg(AA21_34XX_GPIO157_OUT);	/*  AP_TO_BP_FLASH_EN */
 	omap_cfg_reg(AD1_3430_USB3FS_PHY_MM3_RXRCV);
 	omap_cfg_reg(AD2_3430_USB3FS_PHY_MM3_TXDAT);
 	omap_cfg_reg(AC1_3430_USB3FS_PHY_MM3_TXEN_N);
@@ -548,15 +590,6 @@ static void __init mapphone_ehci_init(void)
 	omap_cfg_reg(AB13_3430_USB3HS_TLL_DATA5);
 	omap_cfg_reg(AA13_3430_USB3HS_TLL_DATA6);
 	omap_cfg_reg(AA12_3430_USB3HS_TLL_DATA7);
-
-	if (gpio_request(MAPPHONE_AP_TO_BP_FLASH_EN_GPIO,
-			 "ap_to_bp_flash_en") != 0) {
-		printk(KERN_WARNING "Could not request GPIO %d"
-		       " for IPC_USB_SUSP\n",
-		       MAPPHONE_IPC_USB_SUSP_GPIO);
-		return;
-	}
-	gpio_direction_output(MAPPHONE_AP_TO_BP_FLASH_EN_GPIO, 0);
 
 #if defined(CONFIG_USB_EHCI_HCD) || defined(CONFIG_USB_EHCI_HCD_MODULE)
 	platform_device_register(&ehci_device);
@@ -760,6 +793,74 @@ static void __init mapphone_bt_init(void)
 	platform_device_register(&mapphone_wl1271_device);
 }
 
+static struct omap_mdm_ctrl_platform_data omap_mdm_ctrl_platform_data = {
+	.bp_ready_ap_gpio = MAPPHONE_BP_READY_AP_GPIO,
+	.bp_ready2_ap_gpio = MAPPHONE_BP_READY2_AP_GPIO,
+	.bp_resout_gpio = MAPPHONE_BP_RESOUT_GPIO,
+	.bp_pwron_gpio = MAPPHONE_BP_PWRON_GPIO,
+	.ap_to_bp_pshold_gpio = MAPPHONE_AP_TO_BP_PSHOLD_GPIO,
+	.ap_to_bp_flash_en_gpio = MAPPHONE_AP_TO_BP_FLASH_EN_GPIO,
+};
+
+static struct platform_device omap_mdm_ctrl_platform_device = {
+	.name = OMAP_MDM_CTRL_MODULE_NAME,
+	.id = -1,
+	.dev = {
+		.platform_data = &omap_mdm_ctrl_platform_data,
+	},
+};
+
+static int __init mapphone_omap_mdm_ctrl_init(void)
+{
+	 if (!is_cdma_phone())
+		return -ENODEV;
+
+	gpio_request(MAPPHONE_BP_READY_AP_GPIO, "BP Normal Ready");
+	gpio_direction_input(MAPPHONE_BP_READY_AP_GPIO);
+	omap_cfg_reg(AE6_34XX_GPIO141_DOWN);
+
+	gpio_request(MAPPHONE_BP_READY2_AP_GPIO, "BP Flash Ready");
+	gpio_direction_input(MAPPHONE_BP_READY2_AP_GPIO);
+	omap_cfg_reg(T4_34XX_GPIO59_DOWN);
+
+	gpio_request(MAPPHONE_BP_RESOUT_GPIO, "BP Reset Output");
+	gpio_direction_input(MAPPHONE_BP_RESOUT_GPIO);
+	omap_cfg_reg(AE3_34XX_GPIO139_DOWN);
+
+	gpio_request(MAPPHONE_BP_PWRON_GPIO, "BP Power On");
+	gpio_direction_output(MAPPHONE_BP_PWRON_GPIO, 0);
+	omap_cfg_reg(AH3_34XX_GPIO137_OUT);
+
+	gpio_request(MAPPHONE_AP_TO_BP_PSHOLD_GPIO, "AP to BP PS Hold");
+	gpio_direction_output(MAPPHONE_AP_TO_BP_PSHOLD_GPIO, 0);
+	omap_cfg_reg(AF3_34XX_GPIO138_OUT);
+
+	gpio_request(MAPPHONE_AP_TO_BP_FLASH_EN_GPIO, "AP to BP Flash Enable");
+	gpio_direction_output(MAPPHONE_AP_TO_BP_FLASH_EN_GPIO, 0);
+	omap_cfg_reg(AA21_34XX_GPIO157_OUT);
+
+	return platform_device_register(&omap_mdm_ctrl_platform_device);
+}
+
+#ifdef CONFIG_FB_OMAP2
+static struct resource mapphone_vout_resource[3 - CONFIG_FB_OMAP2_NUM_FBS] = {
+};
+#else
+static struct resource mapphone_vout_resource[2] = {
+};
+#endif
+
+static struct platform_device mapphone_vout_device = {
+       .name                   = "omap_vout",
+       .num_resources  = ARRAY_SIZE(mapphone_vout_resource),
+       .resource               = &mapphone_vout_resource[0],
+       .id             = -1,
+};
+static void __init mapphone_vout_init(void)
+{
+	platform_device_register(&mapphone_vout_device);
+}
+
 static void __init mapphone_bp_model_init(void)
 {
 #ifdef CONFIG_OMAP_RESET_CLOCKS
@@ -816,6 +917,7 @@ static void __init mapphone_init(void)
 	mapphone_bp_model_init();
 	mapphone_padconf_init();
 	mapphone_gpio_mapping_init();
+	mapphone_omap_mdm_ctrl_init();
 	mapphone_spi_init();
 	mapphone_flash_init();
 	mapphone_serial_init();
@@ -834,6 +936,10 @@ static void __init mapphone_init(void)
 	omap_hdq_init();
 	mapphone_bt_init();
 	mapphone_hsmmc_init();
+	mapphone_vout_init();
+#ifdef CONFIG_ANDROID_RAM_CONSOLE	
+	omap_init_rc();
+#endif	
 #ifdef CONFIG_OMAP_PM_POWER_OFF
 	mapphone_power_off_init();
 #endif

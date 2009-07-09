@@ -72,6 +72,8 @@
 #include <linux/debugfs.h>
 #include <linux/ctype.h>
 #include <linux/ftrace.h>
+#include <linux/lttlite-events.h>
+
 #include <trace/sched.h>
 
 #include <asm/tlb.h>
@@ -4639,11 +4641,20 @@ need_resched_nonpreemptible:
 	next = pick_next_task(rq, prev);
 
 	if (likely(prev != next)) {
+#ifdef CONFIG_LTT_LITE
+		struct ltt_lite_schedchange sched_event;
+#endif
+
 		sched_info_switch(prev, next);
 
 		rq->nr_switches++;
 		rq->curr = next;
 		++*switch_count;
+
+#ifdef CONFIG_LTT_LITE
+		ltt_init_sched_event(&sched_event, prev, next);
+		ltt_ev_schedchange(&sched_event);
+#endif
 
 		context_switch(rq, prev, next); /* unlocks the rq */
 		/*

@@ -32,5 +32,6 @@ obj-$(CONFIG_VIB_OMAP_PWM)	+= vib-omap-pwm.o
 obj-$(CONFIG_NETMUX_DRIVER)	+= netmux/
 obj-$(CONFIG_NETMUX_LINKDRIVER)	+= netmux_linkdriver/
 obj-$(CONFIG_UMTS_SYSPANIC)     += syspanic.o
+obj-$(CONFIG_OMAP_MODEM_CONTROL)       += omap_mdm_ctrl.o
 obj-$(CONFIG_WL127X_RFKILL)	+= wl127x-rfkill.o
 obj-$(CONFIG_MODEM_PM_DRIVER)   += modem_pm_driver/

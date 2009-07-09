@@ -98,6 +98,14 @@ struct platform_device cpcap_keypad_led = {
 	},
 };
 
+struct platform_device cpcap_lm3554 = {
+	.name		= "flash-torch",
+	.id		= -1,
+	.dev		= {
+		.platform_data  = NULL,
+	},
+};
+
 #ifdef CONFIG_CPCAP_USB
 static struct platform_device cpcap_usb_device = {
 	.name           = "cpcap_usb",
@@ -145,6 +153,7 @@ static struct platform_device *cpcap_devices[] __initdata = {
 	&cpcap_disp_button_led,
 	&cpcap_rgb_led,
 	&cpcap_keypad_led,
+	&cpcap_lm3554,
 #ifdef CONFIG_CPCAP_USB
 	&cpcap_usb_device,
 	&cpcap_usb_det_device,
@@ -262,10 +271,10 @@ static int __devinit cpcap_probe(struct spi_device *spi)
 
 	retval = cpcap_regacc_init(cpcap);
 	if (retval < 0)
-		return retval;
+		goto free_mem;
 	retval = cpcap_irq_init(cpcap);
 	if (retval < 0)
-		return retval;
+		goto free_mem;
 
 	cpcap_vendor_read(cpcap);
 
@@ -274,7 +283,7 @@ static int __devinit cpcap_probe(struct spi_device *spi)
 
 	retval = misc_register(&cpcap_dev);
 	if (retval < 0)
-		return retval;
+		goto free_mem;
 
 	/* the cpcap usb_detection device is a consumer of the
 	 * vusb regulator */
@@ -311,6 +320,10 @@ static int __devinit cpcap_probe(struct spi_device *spi)
 
 	register_reboot_notifier(&cpcap_reboot_notifier);
 
+	return 0;
+
+free_mem:
+	kfree(cpcap);
 	return retval;
 }
 

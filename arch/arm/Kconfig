@@ -167,6 +167,14 @@ config OF
 	depends on ARM_OF
 	default n
 
+config BOOTINFO
+    bool "Boot Information Feature"
+    default n
+    help
+      This feature provides access to certain boot information
+      from both kernel context (via function call) and user
+      context (via /proc/bootinfo).
+
 config PROC_DEVICETREE
 	bool "Support for device tree in /proc"
 	depends on PROC_FS && OF
@@ -1365,3 +1373,5 @@ source "security/Kconfig"
 source "crypto/Kconfig"
 
 source "lib/Kconfig"
+
+source "kernel/Kconfig.lttlite"

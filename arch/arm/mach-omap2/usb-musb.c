@@ -55,6 +55,7 @@ static struct resource musb_resources[] = {
 	},
 };
 
+
 static int clk_on;
 
 static int musb_set_clock(struct clk *clk, int state)
@@ -139,6 +140,7 @@ static struct musb_hdrc_platform_data musb_plat = {
 	 */
 	.power		= 50,			/* up to 100 mA */
 };
+
 
 static u64 musb_dmamask = DMA_32BIT_MASK;
 
