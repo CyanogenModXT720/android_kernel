@@ -38,6 +38,7 @@
  *   2008/04/10  Motorola    Add AP Log re-work                               *
  *   2008/04/15  Motorola    add DeactivateConfigInterface in DeactivateMUX   *
  *   2008/07/15  Motorola    add NetmuxLogInit for AP config log              *
+ *   2009/07/10  Motorola    Update send buffers number                       *
  ******************************************************************************/
 
 /* register.c handles the communication process between a link driver and a   */
@@ -52,7 +53,7 @@
 
 #define REGISTER_MAX_INTERFACES 4
 #define REGISTER_HOST           1
-#define REGISTER_SEND_BUFFERS   100
+#define REGISTER_SEND_BUFFERS   336
 
 #define LOG_COMMAND_LEN            2 
 
