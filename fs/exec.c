@@ -1837,12 +1837,16 @@ void do_coredump(long signr, int exit_code, struct pt_regs *regs)
 	   but keep the previous behaviour for now. */
 	if (!ispipe && !S_ISREG(inode->i_mode))
 		goto close_fail;
+
+#ifndef CONFIG_CORE_DUMP_PERMISSION	
 	/*
 	 * Dont allow local users get cute and trick others to coredump
 	 * into their pre-created files:
 	 */
 	if (inode->i_uid != current_fsuid())
 		goto close_fail;
+#endif
+
 	if (!file->f_op)
 		goto close_fail;
 	if (!file->f_op->write)

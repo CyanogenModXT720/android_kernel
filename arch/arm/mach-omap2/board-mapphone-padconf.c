@@ -26,6 +26,7 @@
 
 #include <linux/module.h>
 #include <linux/io.h>
+#include <linux/kernel.h>
 
 #include <mach/hardware.h>
 #ifdef CONFIG_ARM_OF
@@ -50,29 +51,40 @@
 #define OMAP343X_PADCONF_CORE_D2D_TOP   (OMAP343X_CTRL_BASE + 0x260)
 
 /* wakeup module padconf registers are at 0x48002A00 - 0x48002A26 */
-#define OMAP343X_PADCONF_WKUP_BASE  (OMAP343X_CTRL_BASE + 0xA20)
+#define OMAP343X_PADCONF_WKUP_BASE  (OMAP343X_CTRL_BASE + 0xA00)
 #define OMAP343X_PADCONF_WKUP_TOP   (OMAP343X_CTRL_BASE + 0xA26)
 
 /* d2d wakeup module padconf registers are at 0x48002A4C - 0x48002A50 */
 #define OMAP343X_PADCONF_WKUP_D2D_BASE  (OMAP343X_CTRL_BASE + 0xA4C)
 #define OMAP343X_PADCONF_WKUP_D2D_TOP   (OMAP343X_CTRL_BASE + 0xA50)
 
+struct iomux_range {
+	unsigned int start;
+	unsigned int end;
+};
+
+static struct iomux_range iomux_range_base[] = {
+	{OMAP343X_PADCONF_CORE_CTRL_BASE, OMAP343X_PADCONF_CORE_CTRL_TOP},
+	{OMAP343X_PADCONF_CORE_ETK_BASE, OMAP343X_PADCONF_CORE_ETK_TOP},
+	{OMAP343X_PADCONF_CORE_D2D_BASE, OMAP343X_PADCONF_CORE_D2D_TOP},
+	{OMAP343X_PADCONF_WKUP_BASE, OMAP343X_PADCONF_WKUP_TOP},
+	{OMAP343X_PADCONF_WKUP_D2D_BASE, OMAP343X_PADCONF_WKUP_D2D_TOP}
+};
+
 inline bool is_omap343x_padconf_register(uint16_t offset)
 {
 	unsigned long addr = offset + OMAP343X_CTRL_BASE;
+	unsigned int i;
 
-	return ((offset & 0x1) == 0x0) &&
-	    (((addr >= OMAP343X_PADCONF_CORE_CTRL_BASE)
-	      && (addr <= OMAP343X_PADCONF_CORE_CTRL_TOP)) ||
-	     ((addr >= OMAP343X_PADCONF_CORE_ETK_BASE)
-	      && (addr <= OMAP343X_PADCONF_CORE_ETK_TOP)) ||
-	     ((addr >= OMAP343X_PADCONF_CORE_D2D_BASE)
-	      && (addr <= OMAP343X_PADCONF_CORE_D2D_TOP)) ||
-	     ((addr >= OMAP343X_PADCONF_WKUP_BASE)
-	      && (addr <= OMAP343X_PADCONF_WKUP_TOP)) ||
-	     ((addr >= OMAP343X_PADCONF_WKUP_D2D_BASE)
-	      && (addr <= OMAP343X_PADCONF_WKUP_D2D_TOP))
-	    );
+	if  ((offset & 0x1) != 0x0)
+		return 0;
+
+	for (i = 0; i < ARRAY_SIZE(iomux_range_base); i++)
+		if (addr >= iomux_range_base[i].start &&
+			 addr <= iomux_range_base[i].end)
+			return 1;
+
+	return 0;
 }
 
 #define OMAP343X_PADCONF_OFF_WAKEUP_ENABLED (1 << 14)
@@ -874,9 +886,7 @@ static __initdata struct {
 	    /* MMC2_DAT5 */
 	{
 	0x0166,
-		    OMAP343X_PADCONF_INPUT_ENABLED |
-		    OMAP343X_PADCONF_PULL_UP |
-		    OMAP343X_PADCONF_PUD_ENABLED | OMAP343X_PADCONF_MUXMODE5},
+		    OMAP343X_PADCONF_INPUT_ENABLED | OMAP343X_PADCONF_MUXMODE5},
 	    /* MMC2_DAT6 */
 	{
 	0x0168,
@@ -1196,7 +1206,7 @@ static __initdata struct {
 		    OMAP343X_PADCONF_INPUT_ENABLED | OMAP343X_PADCONF_MUXMODE4},
 	    /* MCSPI2_CS0 */
 	{
-	0x01DC, OMAP343X_PADCONF_MUXMODE1},
+	0x01DC, OMAP343X_PADCONF_MUXMODE4},
 	    /* MCSPI2_CS1 */
 	{
 	0x01DE,

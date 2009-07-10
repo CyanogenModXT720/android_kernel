@@ -335,7 +335,7 @@ static void mtdoops_console_sync(void)
 		/* Interrupt context, we're going to panic so try and log */
 		mtdoops_write(cxt, 1);
 	else
-		schedule_work(&cxt->work_write);
+		mtdoops_write(cxt, 0);
 }
 
 static void

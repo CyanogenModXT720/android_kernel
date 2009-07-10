@@ -578,19 +578,6 @@ static void __init mapphone_ehci_init(void)
 	omap_cfg_reg(AC1_3430_USB3FS_PHY_MM3_TXEN_N);
 	omap_cfg_reg(AE1_3430_USB3FS_PHY_MM3_TXSE0);
 
-	omap_cfg_reg(AB3_3430_USB3HS_TLL_STP);
-	omap_cfg_reg(AA6_3430_USB3HS_TLL_CLK);
-	omap_cfg_reg(AA3_3430_USB3HS_TLL_DIR);
-	omap_cfg_reg(Y3_3430_USB3HS_TLL_NXT);
-	omap_cfg_reg(AA5_3430_USB3HS_TLL_DATA0);
-	omap_cfg_reg(Y4_3430_USB3HS_TLL_DATA1);
-	omap_cfg_reg(Y5_3430_USB3HS_TLL_DATA2);
-	omap_cfg_reg(W5_3430_USB3HS_TLL_DATA3);
-	omap_cfg_reg(AB12_3430_USB3HS_TLL_DATA4);
-	omap_cfg_reg(AB13_3430_USB3HS_TLL_DATA5);
-	omap_cfg_reg(AA13_3430_USB3HS_TLL_DATA6);
-	omap_cfg_reg(AA12_3430_USB3HS_TLL_DATA7);
-
 #if defined(CONFIG_USB_EHCI_HCD) || defined(CONFIG_USB_EHCI_HCD_MODULE)
 	platform_device_register(&ehci_device);
 #endif
@@ -812,7 +799,7 @@ static struct platform_device omap_mdm_ctrl_platform_device = {
 
 static int __init mapphone_omap_mdm_ctrl_init(void)
 {
-	 if (!is_cdma_phone())
+	if (!is_cdma_phone())
 		return -ENODEV;
 
 	gpio_request(MAPPHONE_BP_READY_AP_GPIO, "BP Normal Ready");
@@ -887,28 +874,26 @@ static void __init mapphone_bp_model_init(void)
 #endif
 }
 
-#ifdef CONFIG_OMAP_PM_POWER_OFF
-static void omap3_pm_power_off(void)
+static void mapphone_pm_power_off(void)
 {
-	printk(KERN_INFO "omap3_pm_power_off start now ...\n");
+	printk(KERN_INFO "mapphone_pm_power_off start...\n");
 	local_irq_disable();
 
-	gpio_request(MAPPHONE_POWER_OFF_GPIO, "power_off_gpio");
 	gpio_direction_output(MAPPHONE_POWER_OFF_GPIO, 0);
-	gpio_set_value(MAPPHONE_POWER_OFF_GPIO, 0);
 
 	do {} while (1);
 
-	/* should never be here. */
 	local_irq_enable();
 }
 
 static void __init mapphone_power_off_init(void)
 {
-	/* set the callback function for pm_power_off */
-	pm_power_off = omap3_pm_power_off;
+	gpio_request(MAPPHONE_POWER_OFF_GPIO, "mapphone power off");
+	gpio_direction_output(MAPPHONE_POWER_OFF_GPIO, 1);
+	omap_cfg_reg(AB1_34XX_GPIO176_OUT);
+
+	pm_power_off = mapphone_pm_power_off;
 }
-#endif
 
 static void __init mapphone_init(void)
 {
@@ -937,12 +922,10 @@ static void __init mapphone_init(void)
 	mapphone_bt_init();
 	mapphone_hsmmc_init();
 	mapphone_vout_init();
+	mapphone_power_off_init();
 #ifdef CONFIG_ANDROID_RAM_CONSOLE	
 	omap_init_rc();
 #endif	
-#ifdef CONFIG_OMAP_PM_POWER_OFF
-	mapphone_power_off_init();
-#endif
 }
 
 static void __init mapphone_map_io(void)
