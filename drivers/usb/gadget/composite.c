@@ -816,7 +816,17 @@ unknown:
 		 */
 		if ((ctrl->bRequestType & USB_RECIP_MASK)
 				== USB_RECIP_INTERFACE) {
+#ifdef CONFIG_USB_MOT_ANDROID
+			if (cdev->config)
+				f = cdev->config->interface[intf];
+			else {
+				printk(KERN_INFO "%s cdev->config=NULL\n",
+					__func__);
+				f = NULL;
+			}
+#else
 			f = cdev->config->interface[intf];
+#endif
 			if (f && f->setup)
 				value = f->setup(f, ctrl);
 			else
@@ -830,7 +840,7 @@ unknown:
 				value = c->setup(c, ctrl);
 		}
 
-		if (value < 0) {
+		if (value < 0)  {
 			struct usb_configuration        *cfg;
 
 			list_for_each_entry(cfg, &cdev->configs, list) {

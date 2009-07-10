@@ -222,15 +222,17 @@ static struct usb_configuration android_config_driver = {
 static int android_setup_config(struct usb_configuration *c,
 				const struct usb_ctrlrequest *ctrl)
 {
-	int i, ret;
+	int i, ret = -EOPNOTSUPP;
 
 	for (i = 0; i < android_config_driver.next_interface_id; i++)
-		if (android_config_driver.interface[i]->setup)
+		if (android_config_driver.interface[i]->setup) {
 			ret =
 			    android_config_driver.interface[i]->
 			    setup(android_config_driver.interface[i], ctrl);
-
-	return 0;
+			if (ret >= 0)
+				return ret;
+		}
+	return ret;
 }
 
 void usb_data_transfer_callback(void)
@@ -258,6 +260,7 @@ static int __init android_bind(struct usb_composite_dev *cdev)
 	int id;
 	int ret;
 
+	dev->gadget = gadget;
 	/* Allocate string descriptor numbers ... note that string
 	 * contents can be overridden by the composite_dev glue.
 	 */
@@ -480,7 +483,7 @@ device_mode_change_write(struct file *file, const char __user *buffer,
 {
 	unsigned char cmd[MAX_DEVICE_NAME_SIZE + 1];
 	int cnt = MAX_DEVICE_NAME_SIZE;
-	int i;
+	int i, temp_device_type;
 
 	if (count == 0)
 		return 0;
@@ -491,13 +494,24 @@ device_mode_change_write(struct file *file, const char __user *buffer,
 	if (copy_from_user(cmd, buffer, cnt))
 		return -EFAULT;
 	cmd[cnt] = 0;
+
+	/* USB connect/disconnect  */
+	if (strncmp(cmd, "usb_connect", 11) == 0) {
+		usb_gadget_connect(_android_dev->gadget);
+		return count;
+	}
+	if (strncmp(cmd, "usb_disconnect", 14) == 0) {
+		usb_gadget_disconnect(_android_dev->gadget);
+		return count;
+	}
+
 	for (i = 0; i < MAX_DEVICE_TYPE_NUM; i++) {
 		if (mot_android_vid_pid[i].name == NULL)
 			return count;
 		if (strlen(mot_android_vid_pid[i].name) > cnt)
 			continue;
 		if (strncmp(cmd, mot_android_vid_pid[i].name, cnt - 1) == 0) {
-			g_device_type = mot_android_vid_pid[i].type;
+			temp_device_type = mot_android_vid_pid[i].type;
 			break;
 		}
 	}
@@ -505,6 +519,11 @@ device_mode_change_write(struct file *file, const char __user *buffer,
 	if (i == MAX_DEVICE_TYPE_NUM)
 		return count;
 
+	if (temp_device_type == g_device_type)
+		return count;
+
+	printk(KERN_INFO "%s 0x%x\n", __func__, temp_device_type);
+	g_device_type = temp_device_type;
 	force_reenumeration(_android_dev, g_device_type);
 	return count;
 }
