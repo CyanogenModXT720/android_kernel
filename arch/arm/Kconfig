@@ -1256,8 +1256,6 @@ menu "Device Drivers"
 
 source "drivers/base/Kconfig"
 
-source "drivers/of/Kconfig"
-
 source "drivers/connector/Kconfig"
 
 if ALIGNMENT_TRAP || !CPU_CP15_MMU

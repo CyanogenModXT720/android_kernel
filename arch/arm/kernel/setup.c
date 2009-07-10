@@ -787,10 +787,10 @@ void __init setup_arch(char **cmdline_p)
 	boot_command_line[COMMAND_LINE_SIZE-1] = '\0';
 	parse_cmdline(cmdline_p, from);
 	paging_init(mdesc);
-	request_standard_resources(&meminfo, mdesc);
 #if defined(CONFIG_ARM_OF)
 	unflatten_device_tree();
 #endif
+	request_standard_resources(&meminfo, mdesc);
 
 #ifdef CONFIG_SMP
 	smp_init_cpus();
