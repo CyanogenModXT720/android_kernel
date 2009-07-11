@@ -73,6 +73,10 @@
 #include <linux/usb/composite.h>
 #include <linux/usb/gadget.h>
 
+#ifdef CONFIG_USB_MOT_ANDROID
+#include "f_mot_android.h"
+#endif
+
 #include "f_mass_storage.h"
 #include "gadget_chips.h"
 
@@ -2842,6 +2846,10 @@ static int fsg_function_set_alt(struct usb_function *f,
 	DBG(fsg, "fsg_function_set_alt intf: %d alt: %d\n", intf, alt);
 	fsg->new_config = 1;
 	raise_exception(fsg, FSG_STATE_CONFIG_CHANGE);
+
+#ifdef CONFIG_USB_MOT_ANDROID
+	usb_interface_enum_cb(MSC_TYPE_FLAG);
+#endif
 	return 0;
 }
 
@@ -2904,3 +2912,30 @@ err_switch_dev_register:
 
 	return rc;
 }
+
+#ifdef CONFIG_USB_MOT_ANDROID
+/* used when eth function is disabled */
+static struct usb_descriptor_header *null_msc_descs[] = {
+	NULL,
+};
+
+struct usb_function *msc_function_enable(int enable, int id)
+{
+	struct fsg_dev	*fsg = the_fsg;
+
+	if (fsg) {
+		DBG(fsg, "msc_function_enable(%s)\n",
+			enable ? "true" : "false");
+
+		if (enable) {
+			fsg->function.descriptors = fs_function;
+			fsg->function.hs_descriptors = hs_function;
+			intf_desc.bInterfaceNumber = id;
+		} else {
+			fsg->function.descriptors = null_msc_descs;
+			fsg->function.hs_descriptors = null_msc_descs;
+		}
+	}
+	return &fsg->function;
+}
+#endif

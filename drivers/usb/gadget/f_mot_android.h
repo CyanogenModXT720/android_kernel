@@ -1,8 +1,8 @@
 /*
- * Gadget Driver for Android ADB
+ * Gadget Driver for Android
  *
- * Copyright (C) 2008 Google, Inc.
- * Author: Mike Lockwood <lockwood@android.com>
+ * Copyright (C) 2009 Motorola, Inc.
+ * Author:
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -15,15 +15,16 @@
  *
  */
 
-#ifndef __F_ADB_H
-#define __F_ADB_H
+#ifndef __F_MOT_ANDROID_H
+#define __F_MOT_ANDROID_H
 
-int adb_function_add(struct usb_composite_dev *cdev,
-	struct usb_configuration *c);
-void adb_function_enable(int enable);
+#define MSC_TYPE_FLAG         0x01
+#define ADB_TYPE_FLAG         0x02
+#define ETH_TYPE_FLAG         0x04
+#define MTP_TYPE_FLAG         0x08
+#define ACM_TYPE_FLAG         0x10
 
-#ifdef CONFIG_USB_MOT_ANDROID
-struct usb_function *adb_function_enable_id(int enable, int id);
-#endif
+void usb_interface_enum_cb(int flag);
+void usb_data_transfer_callback(void);
 
-#endif /* __F_ADB_H */
+#endif /* __F_MOT_ANDROID_H */
