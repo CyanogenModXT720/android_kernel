@@ -70,27 +70,6 @@ static const char longname[] = "Gadget Android";
 
 static DECLARE_WAIT_QUEUE_HEAD(device_mode_change_wait_q);
 
-/*
- * Get Serial number from OMAP3430 DIE ID
- */
-#define DIE_ID_REG_BASE (L4_WK_34XX_VIRT + 0xA000)
-#define DIE_ID_REG_OFFSET 0x218
-
-static unsigned char device_serial_num[17];
-
-static void get_serialnum_by_dieid(void)
-{
-	unsigned int val[2] = { 0 };	/* Num of DIE_ID reg = 2 */
-	unsigned int reg;
-
-	reg = (unsigned long)(DIE_ID_REG_BASE + DIE_ID_REG_OFFSET);
-	val[0] = __raw_readl(reg);
-	val[1] = __raw_readl(reg + 4);
-
-	sprintf(device_serial_num, "%08x%08x", val[1], val[0]);
-	device_serial_num[16] = 0;
-}
-
 /* Default vendor and product IDs, overridden by platform data */
 #define VENDOR_ID		0x22b8
 #define PRODUCT_ID		0x41da
@@ -136,12 +115,6 @@ struct android_dev {
 	int product_id;
 	int adb_product_id;
 	int version;
-
-	int adb_enabled;
-	int acm_enabled;
-	int eth_enabled;
-	int mtp_enabled;
-	int msc_enabled;
 
 	int nluns;
 };
@@ -191,8 +164,6 @@ static int __init android_bind_config(struct usb_configuration *c)
 {
 	struct android_dev *dev = _android_dev;
 	int ret;
-
-	dev->msc_enabled = MSC_TYPE_FLAG;
 
 	/* the same sequence as force_reenumeration() */
 	ret = mass_storage_function_add(dev->cdev, c, dev->nluns);
@@ -357,7 +328,7 @@ static void get_device_pid_vid(int type, int *pid, int *vid)
 
 static void force_reenumeration(struct android_dev *dev, int dev_type)
 {
-	int vid, pid, i;
+	int vid, pid, i, temp_enabled;
 	struct usb_function *f;
 
 	usb_device_cfg_flag = 0;
@@ -374,19 +345,19 @@ static void force_reenumeration(struct android_dev *dev, int dev_type)
 	/* clear all intefaces */
 	android_config_driver.next_interface_id = 0;
 
-	dev->msc_enabled = dev_type & MSC_TYPE_FLAG;
-	f = msc_function_enable(dev->msc_enabled,
+	temp_enabled = dev_type & MSC_TYPE_FLAG;
+	f = msc_function_enable(temp_enabled,
 				android_config_driver.next_interface_id);
-	if (dev->msc_enabled) {
+	if (temp_enabled) {
 		android_config_driver.interface[android_config_driver.
 						next_interface_id] = f;
 		android_config_driver.next_interface_id++;
 	}
 
-	dev->acm_enabled = dev_type & ACM_TYPE_FLAG;
-	f = acm_function_enable(dev->acm_enabled,
+	temp_enabled = dev_type & ACM_TYPE_FLAG;
+	f = acm_function_enable(temp_enabled,
 				android_config_driver.next_interface_id);
-	if (dev->acm_enabled) {
+	if (temp_enabled) {
 		android_config_driver.interface[android_config_driver.
 						next_interface_id] = f;
 		android_config_driver.next_interface_id++;
@@ -395,28 +366,28 @@ static void force_reenumeration(struct android_dev *dev, int dev_type)
 		android_config_driver.next_interface_id++;
 	}
 
-	dev->eth_enabled = dev_type & ETH_TYPE_FLAG;
-	f = usbnet_function_enable(dev->eth_enabled,
+	temp_enabled = dev_type & ETH_TYPE_FLAG;
+	f = usbnet_function_enable(temp_enabled,
 				   android_config_driver.next_interface_id);
-	if (dev->eth_enabled) {
+	if (temp_enabled) {
 		android_config_driver.interface[android_config_driver.
 						next_interface_id] = f;
 		android_config_driver.next_interface_id++;
 	}
 
-	dev->mtp_enabled = dev_type & MTP_TYPE_FLAG;
-	f = mtp_function_enable(dev->mtp_enabled,
+	temp_enabled = dev_type & MTP_TYPE_FLAG;
+	f = mtp_function_enable(temp_enabled,
 				android_config_driver.next_interface_id);
-	if (dev->mtp_enabled) {
+	if (temp_enabled) {
 		android_config_driver.interface[android_config_driver.
 						next_interface_id] = f;
 		android_config_driver.next_interface_id++;
 	}
 
-	dev->adb_enabled = dev_type & ADB_TYPE_FLAG;
-	f = adb_function_enable_id(dev->adb_enabled,
+	temp_enabled = dev_type & ADB_TYPE_FLAG;
+	f = adb_function_enable_id(temp_enabled,
 				   android_config_driver.next_interface_id);
-	if (dev->adb_enabled) {
+	if (temp_enabled) {
 		android_config_driver.interface[android_config_driver.
 						next_interface_id] = f;
 		android_config_driver.next_interface_id++;
@@ -704,9 +675,6 @@ static int __init init(void)
 	android_config_driver.next_interface_id = 1;
 	android_config_driver.interface[1] = 0;
 	android_config_driver.interface[2] = 0;
-
-	get_serialnum_by_dieid();
-	strings_dev[STRING_SERIAL_IDX].s = device_serial_num;
 
 	return ret;
 }

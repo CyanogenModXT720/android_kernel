@@ -814,19 +814,11 @@ unknown:
 		 * take such requests too, if that's ever needed:  to work
 		 * in config 0, etc.
 		 */
+#ifndef CONFIG_USB_MOT_ANDROID
 		if ((ctrl->bRequestType & USB_RECIP_MASK)
 				== USB_RECIP_INTERFACE) {
-#ifdef CONFIG_USB_MOT_ANDROID
-			if (cdev->config)
-				f = cdev->config->interface[intf];
-			else {
-				printk(KERN_INFO "%s cdev->config=NULL\n",
-					__func__);
-				f = NULL;
-			}
-#else
 			f = cdev->config->interface[intf];
-#endif
+
 			if (f && f->setup)
 				value = f->setup(f, ctrl);
 			else
@@ -839,16 +831,16 @@ unknown:
 			if (c && c->setup)
 				value = c->setup(c, ctrl);
 		}
-
-		if (value < 0)  {
+#else
+		{
 			struct usb_configuration        *cfg;
 
 			list_for_each_entry(cfg, &cdev->configs, list) {
-			if (cfg && cfg->setup)
-				value = cfg->setup(cfg, ctrl);
+				if (cfg && cfg->setup)
+					value = cfg->setup(cfg, ctrl);
 			}
 		}
-
+#endif
 		goto done;
 	}
 
