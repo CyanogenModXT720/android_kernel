@@ -92,9 +92,9 @@ static void get_serialnum_by_dieid(void)
 }
 
 /* Default vendor and product IDs, overridden by platform data */
-#define VENDOR_ID		0x18D1
-#define PRODUCT_ID		0x0001
-#define ADB_PRODUCT_ID		0x0002
+#define VENDOR_ID		0x22b8
+#define PRODUCT_ID		0x41da
+#define ADB_PRODUCT_ID		0x41da
 
 struct device_pid_vid {
 	char *name;
@@ -216,7 +216,7 @@ static struct usb_configuration android_config_driver = {
 	.setup = android_setup_config,
 	.bConfigurationValue = 1,
 	.bmAttributes = USB_CONFIG_ATT_ONE | USB_CONFIG_ATT_SELFPOWER,
-	.bMaxPower = 0x80,	/* 250ma */
+	.bMaxPower = 0xFA,	/* 500ma */
 };
 
 static int android_setup_config(struct usb_configuration *c,
@@ -624,11 +624,26 @@ static int __init android_probe(struct platform_device *pdev)
 	printk(KERN_INFO "android_probe pdata: %p\n", pdata);
 
 	if (pdata) {
+		if (pdata->vendor_id)
+			device_desc.idVendor =
+				__constant_cpu_to_le16(pdata->vendor_id);
+		if (pdata->product_id) {
+			dev->product_id = pdata->product_id;
+			device_desc.idProduct =
+				__constant_cpu_to_le16(pdata->product_id);
+		}
+		if (pdata->adb_product_id)
+			dev->adb_product_id = pdata->adb_product_id;
+		if (pdata->version)
+			dev->version = pdata->version;
+
 		if (pdata->product_name)
 			strings_dev[STRING_PRODUCT_IDX].s = pdata->product_name;
 		if (pdata->manufacturer_name)
 			strings_dev[STRING_MANUFACTURER_IDX].s =
-			    pdata->manufacturer_name;
+				pdata->manufacturer_name;
+		if (pdata->serial_number)
+			strings_dev[STRING_SERIAL_IDX].s = pdata->serial_number;
 		dev->nluns = pdata->nluns;
 	}
 

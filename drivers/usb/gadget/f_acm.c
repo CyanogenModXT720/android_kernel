@@ -302,8 +302,13 @@ static struct usb_descriptor_header *acm_hs_function[] __initdata = {
 
 /* static strings, in UTF-8 */
 static struct usb_string acm_string_defs[] = {
+#ifdef CONFIG_USB_MOT_ANDROID
+	[ACM_CTRL_IDX].s = "Motorola Communication Interface",
+	[ACM_DATA_IDX].s = "Motorola Data Interface",
+#else
 	[ACM_CTRL_IDX].s = "CDC Abstract Control Model (ACM)",
 	[ACM_DATA_IDX].s = "CDC ACM Data",
+#endif
 	{  /* ZEROES END LIST */ },
 };
 
