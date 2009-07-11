@@ -472,6 +472,26 @@ static void put_be32(u8 *buf, u32 val)
  * descriptors are built on demand.  Also the (static) config and interface
  * descriptors are adjusted during fsg_bind().
  */
+#ifdef CONFIG_USB_MOT_ANDROID
+
+#define STRING_INTERFACE        0
+
+/* static strings, in UTF-8 */
+static struct usb_string usbmsc_string_defs[] = {
+	[STRING_INTERFACE].s = "Motorola MSD Interface",
+	{  /* ZEROES END LIST */ },
+};
+
+static struct usb_gadget_strings usbmsc_string_table = {
+	.language =             0x0409, /* en-us */
+	.strings =              usbmsc_string_defs,
+};
+
+static struct usb_gadget_strings *usbmsc_strings[] = {
+	&usbmsc_string_table,
+	NULL,
+};
+#endif
 
 /* There is only one interface. */
 
@@ -2866,7 +2886,9 @@ int __init mass_storage_function_add(struct usb_composite_dev *cdev,
 {
 	int		rc;
 	struct fsg_dev	*fsg;
-
+#ifdef CONFIG_USB_MOT_ANDROID
+	int status;
+#endif
 	printk(KERN_INFO "mass_storage_function_add\n");
 	rc = fsg_alloc();
 	if (rc)
@@ -2874,6 +2896,13 @@ int __init mass_storage_function_add(struct usb_composite_dev *cdev,
 	fsg = the_fsg;
 	fsg->nluns = nluns;
 
+#ifdef CONFIG_USB_MOT_ANDROID
+	status = usb_string_id(c->cdev);
+	if (status >= 0) {
+		usbmsc_string_defs[STRING_INTERFACE].id = status;
+		intf_desc.iInterface = status;
+	}
+#endif
 	spin_lock_init(&fsg->lock);
 	init_rwsem(&fsg->filesem);
 	kref_init(&fsg->ref);
@@ -2898,6 +2927,10 @@ int __init mass_storage_function_add(struct usb_composite_dev *cdev,
 	fsg->function.setup = fsg_function_setup;
 	fsg->function.set_alt = fsg_function_set_alt;
 	fsg->function.disable = fsg_function_disable;
+
+#ifdef CONFIG_USB_MOT_ANDROID
+	fsg->function.strings = usbmsc_strings;
+#endif
 
 	rc = usb_add_function(c, &fsg->function);
 	if (rc != 0)

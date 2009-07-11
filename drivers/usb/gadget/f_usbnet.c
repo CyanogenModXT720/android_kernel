@@ -97,7 +97,7 @@ static struct usbnet_if_configuration 	g_usbnet_ifc;
 
 /* static strings, in UTF-8 */
 static struct usb_string usbnet_string_defs[] = {
-	[STRING_INTERFACE].s = "Motorola Test Command",
+	[STRING_INTERFACE].s = "Motorola Network Interface",
 	{  /* ZEROES END LIST */ },
 };
 

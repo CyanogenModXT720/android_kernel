@@ -133,6 +133,10 @@ struct android_dev {
 	struct usb_gadget *gadget;
 	struct usb_composite_dev *cdev;
 
+	int product_id;
+	int adb_product_id;
+	int version;
+
 	int adb_enabled;
 	int acm_enabled;
 	int eth_enabled;
@@ -150,13 +154,15 @@ static struct android_dev *_android_dev;
 #define STRING_MANUFACTURER_IDX		0
 #define STRING_PRODUCT_IDX		1
 #define STRING_SERIAL_IDX		2
+#define STRING_CONFIG_IDX		3
 
 /* String Table */
 static struct usb_string strings_dev[] = {
 	/* These dummy values should be overridden by platform data */
-	[STRING_MANUFACTURER_IDX].s = "Moto Android",
-	[STRING_PRODUCT_IDX].s = "Moto Android",
+	[STRING_MANUFACTURER_IDX].s = "Android",
+	[STRING_PRODUCT_IDX].s = "Android",
 	[STRING_SERIAL_IDX].s = "0123456789ABCDEF",
+	[STRING_CONFIG_IDX].s = "Motorola Android Composite Device",
 	{}			/* end of list */
 };
 
@@ -281,6 +287,12 @@ static int __init android_bind(struct usb_composite_dev *cdev)
 		return id;
 	strings_dev[STRING_SERIAL_IDX].id = id;
 	device_desc.iSerialNumber = id;
+
+	id = usb_string_id(cdev);
+	if (id < 0)
+		return id;
+	strings_dev[STRING_CONFIG_IDX].id = id;
+	android_config_driver.iConfiguration = id;
 
 	if (gadget->ops->wakeup)
 		android_config_driver.bmAttributes |= USB_CONFIG_ATT_WAKEUP;
