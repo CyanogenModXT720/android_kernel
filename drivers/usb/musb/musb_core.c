@@ -907,7 +907,11 @@ void musb_start(struct musb *musb)
 			musb->is_active = 1;
 	}
 	musb_platform_enable(musb);
+#ifdef CONFIG_USB_MOT_ANDROID /* At default, NOT enumeration ?? */
+	musb_writeb(regs, MUSB_DEVCTL, 0);
+#else
 	musb_writeb(regs, MUSB_DEVCTL, devctl);
+#endif
 }
 
 

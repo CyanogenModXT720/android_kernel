@@ -105,7 +105,7 @@ static struct device_pid_vid mot_android_vid_pid[MAX_DEVICE_TYPE_NUM] = {
 	{}
 };
 
-static int g_device_type = MSC_TYPE_FLAG;
+static int g_device_type;
 static atomic_t device_mode_change_excl;
 
 struct android_dev {
@@ -178,7 +178,9 @@ static int __init android_bind_config(struct usb_configuration *c)
 	ret = mtp_function_add(dev->cdev, c);
 	if (ret)
 		return ret;
-	return adb_function_add(dev->cdev, c);
+	ret = adb_function_add(dev->cdev, c);
+
+	return ret;
 }
 
 static int android_setup_config(struct usb_configuration *c,
@@ -224,7 +226,6 @@ void usb_data_transfer_callback(void)
 void usb_interface_enum_cb(int flag)
 {
 	usb_device_cfg_flag |= flag;
-	printk(KERN_INFO "%s 0x%x 0x%x\n", __func__, usb_device_cfg_flag, flag);
 	if (usb_device_cfg_flag == g_device_type)
 		wake_up_interruptible(&device_mode_change_wait_q);
 }
@@ -478,7 +479,17 @@ device_mode_change_write(struct file *file, const char __user *buffer,
 		return -EFAULT;
 	cmd[cnt] = 0;
 
-	/* USB connect/disconnect  */
+	/* USB cable detached Command */
+	if (strncmp(cmd, "usb_cable_detach", 16) == 0) {
+		usb_data_transfer_flag = 0;
+		g_device_type = 0;
+		usb_device_cfg_flag = 0;
+		usb_get_desc_flag   = 0;
+		usb_gadget_disconnect(_android_dev->gadget);
+		return count;
+	}
+
+	/* USB connect/disconnect Test Commands */
 	if (strncmp(cmd, "usb_connect", 11) == 0) {
 		usb_gadget_connect(_android_dev->gadget);
 		return count;
@@ -505,7 +516,6 @@ device_mode_change_write(struct file *file, const char __user *buffer,
 	if (temp_device_type == g_device_type)
 		return count;
 
-	printk(KERN_INFO "%s 0x%x\n", __func__, temp_device_type);
 	g_device_type = temp_device_type;
 	force_reenumeration(_android_dev, g_device_type);
 	return count;
@@ -516,7 +526,8 @@ static unsigned int device_mode_change_poll(struct file *file,
 {
 	poll_wait(file, &device_mode_change_wait_q, wait);
 
-	if ((usb_device_cfg_flag != g_device_type) &&
+	if (((usb_device_cfg_flag != g_device_type) ||
+		(g_device_type == 0)) &&
 		(adb_mode_changed_flag == 0) && (usb_get_desc_flag == 0))
 		return 0;
 
@@ -534,7 +545,8 @@ static ssize_t device_mode_change_read(struct file *file, char *buf,
 	unsigned char get_desc_str[] = "get_desc\0";
 
 	if ((adb_mode_changed_flag == 0) &&
-		(usb_device_cfg_flag != g_device_type) &&
+		((usb_device_cfg_flag != g_device_type) ||
+		(g_device_type == 0)) &&
 		(usb_get_desc_flag == 0))
 		return 0;
 
@@ -603,8 +615,6 @@ static int __init android_probe(struct platform_device *pdev)
 {
 	struct android_usb_platform_data *pdata = pdev->dev.platform_data;
 	struct android_dev *dev = _android_dev;
-
-	printk(KERN_INFO "android_probe pdata: %p\n", pdata);
 
 	if (pdata) {
 		if (pdata->vendor_id)

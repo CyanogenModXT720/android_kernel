@@ -474,6 +474,11 @@ static void put_be32(u8 *buf, u32 val)
  */
 #ifdef CONFIG_USB_MOT_ANDROID
 
+/* used when eth function is disabled */
+static struct usb_descriptor_header *null_msc_descs[] = {
+	NULL,
+};
+
 #define STRING_INTERFACE        0
 
 /* static strings, in UTF-8 */
@@ -2796,8 +2801,11 @@ fsg_function_bind(struct usb_configuration *c, struct usb_function *f)
 				fs_bulk_in_desc.bEndpointAddress;
 		hs_bulk_out_desc.bEndpointAddress =
 				fs_bulk_out_desc.bEndpointAddress;
-
+#ifdef CONFIG_USB_MOT_ANDROID
+		f->hs_descriptors = null_msc_descs;
+#else
 		f->hs_descriptors = hs_function;
+#endif
 	}
 
 	/* Allocate the data buffers */
@@ -2921,7 +2929,11 @@ int __init mass_storage_function_add(struct usb_composite_dev *cdev,
 
 	fsg->cdev = cdev;
 	fsg->function.name = shortname;
+#ifdef CONFIG_USB_MOT_ANDROID
+	fsg->function.descriptors = null_msc_descs;
+#else
 	fsg->function.descriptors = fs_function;
+#endif
 	fsg->function.bind = fsg_function_bind;
 	fsg->function.unbind = fsg_function_unbind;
 	fsg->function.setup = fsg_function_setup;
@@ -2947,11 +2959,6 @@ err_switch_dev_register:
 }
 
 #ifdef CONFIG_USB_MOT_ANDROID
-/* used when eth function is disabled */
-static struct usb_descriptor_header *null_msc_descs[] = {
-	NULL,
-};
-
 struct usb_function *msc_function_enable(int enable, int id)
 {
 	struct fsg_dev	*fsg = the_fsg;

@@ -90,6 +90,13 @@ static struct usbnet_context 		*g_usbnet_context;
 static struct net_device     		*g_net_dev;
 static struct usbnet_if_configuration 	g_usbnet_ifc;
 
+#ifdef CONFIG_USB_MOT_ANDROID
+/* used when eth function is disabled */
+static struct usb_descriptor_header *null_function[] = {
+	NULL,
+};
+#endif
+
 /*
  * USB descriptors
  */
@@ -756,8 +763,14 @@ int __init usbnet_function_add(struct usb_composite_dev *cdev,
 	dev->net_ctxt = g_usbnet_context;
 	dev->cdev = cdev;
 	dev->function.name = "usbnet";
+
+#ifdef CONFIG_USB_MOT_ANDROID
+	dev->function.descriptors = null_function;
+	dev->function.hs_descriptors = null_function;
+#else
 	dev->function.descriptors = fs_function;
 	dev->function.hs_descriptors = hs_function;
+#endif
 	dev->function.strings = usbnet_strings;
 	dev->function.bind = usbnet_bind;
 	dev->function.unbind = usbnet_unbind;
@@ -780,11 +793,6 @@ err1:
 }
 
 #ifdef CONFIG_USB_MOT_ANDROID
-/* used when eth function is disabled */
-static struct usb_descriptor_header *null_function[] = {
-	NULL,
-};
-
 struct usb_function *usbnet_function_enable(int enable, int id)
 {
 	if (g_usbnet_context) {
