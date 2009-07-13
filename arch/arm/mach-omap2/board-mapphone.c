@@ -582,7 +582,8 @@ static void __init mapphone_ehci_init(void)
 	platform_device_register(&ehci_device);
 #endif
 #if defined(CONFIG_USB_OHCI_HCD) || defined(CONFIG_USB_OHCI_HCD_MODULE)
-	platform_device_register(&ohci_device);
+	if (is_cdma_phone())
+		platform_device_register(&ohci_device);
 #endif
 }
 
