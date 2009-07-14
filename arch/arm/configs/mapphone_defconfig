@@ -1227,13 +1227,8 @@ CONFIG_VIDEO_CAPTURE_DRIVERS=y
 CONFIG_VIDEO_FIXED_MINOR_RANGES=y
 # CONFIG_VIDEO_HELPER_CHIPS_AUTO is not set
 CONFIG_VIDEO_OMAP3_HP3A=y
-<<<<<<< HEAD:arch/arm/configs/mapphone_defconfig
-CONFIG_VIDEO_OMAP_VIDEOOUT=y
-CONFIG_VIDEO_OMAP_VIDEOOUT_BUFPOOL=y
-=======
 CONFIG_VIDEO_OMAP_MOT_VIDEOOUT=y
 CONFIG_VIDEO_OMAP_MOT_VIDEOOUT_BUFPOOL=y
->>>>>>> 4f753fcc69f3adb74cefebe6ac7a227dc490eb05:arch/arm/configs/mapphone_defconfig
 
 #
 # Encoders/decoders and other helper chips
