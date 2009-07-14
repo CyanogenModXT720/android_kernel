@@ -206,6 +206,9 @@ static int ether_queue_out(struct usb_request *req)
 	struct sk_buff *skb;
 	int ret;
 
+	if (g_usbnet_context->config == 0)
+		return -ENOMEM;
+
 	skb = alloc_skb(USB_MTU + NET_IP_ALIGN, GFP_ATOMIC);
 	if (!skb) {
 		printk(KERN_INFO "%s: failed to alloc skb\n", __func__);
@@ -222,6 +225,7 @@ static int ether_queue_out(struct usb_request *req)
 	ret = usb_ep_queue(g_usbnet_context->bulk_out, req, GFP_KERNEL);
 	if (ret == 0)
 		return 0;
+	dev_kfree_skb_any(skb);
 fail:
 	spin_lock_irqsave(&g_usbnet_context->lock, flags);
 	list_add_tail(&req->list, &g_usbnet_context->rx_reqs);
@@ -236,6 +240,11 @@ static int usb_ether_xmit(struct sk_buff *skb, struct net_device *dev)
 	unsigned long flags;
 	unsigned len;
 	int rc;
+
+	if (g_usbnet_context->config == 0) {
+		printk(KERN_INFO "%s: device offline\n", __func__);
+		return 1;
+	}
 
 	spin_lock_irqsave(&g_usbnet_context->lock, flags);
 	if (list_empty(&g_usbnet_context->tx_reqs)) {
@@ -270,7 +279,6 @@ static int usb_ether_xmit(struct sk_buff *skb, struct net_device *dev)
 	if (rc != 0) {
 		spin_lock_irqsave(&g_usbnet_context->lock, flags);
 		list_add_tail(&req->list, &g_usbnet_context->tx_reqs);
-		netif_start_queue(dev);
 		spin_unlock_irqrestore(&g_usbnet_context->lock, flags);
 
 		dev_kfree_skb_any(skb);
