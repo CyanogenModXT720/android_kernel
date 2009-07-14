@@ -48,6 +48,7 @@
 #include <linux/delay.h>
 #include <mach/control.h>
 #include <mach/hdq.h>
+#include <linux/usb/android.h>
 
 #ifdef CONFIG_ARM_OF
 #include <mach/dt_path.h>
@@ -91,7 +92,11 @@
 #define MAPPHONE_AP_TO_BP_PSHOLD_GPIO	138
 #define MAPPHONE_AP_TO_BP_FLASH_EN_GPIO	157
 #define MAPPHONE_POWER_OFF_GPIO		176
+#define DIE_ID_REG_BASE			(L4_WK_34XX_PHYS + 0xA000)
+#define DIE_ID_REG_OFFSET		0x218
+#define MAX_USB_SERIAL_NUM		17
 
+static char device_serial[MAX_USB_SERIAL_NUM];
 char *bp_model = "CDMA";
 
 static struct omap_opp mapphone_mpu_rate_table[] = {
@@ -141,6 +146,32 @@ static void __init mapphone_init_irq(void)
 	scm_clk_init();
 #endif
 	omap_gpio_init();
+}
+
+static struct android_usb_platform_data andusb_plat = {
+	.manufacturer_name	= "Motorola",
+	.serial_number		= device_serial,
+};
+
+static struct platform_device androidusb_device = {
+	.name	= "android_usb",
+	.id	= -1,
+	.dev	= {
+		.platform_data	= &andusb_plat,
+	},
+};
+
+static void mapphone_gadget_init(void)
+{
+	unsigned int val[2];
+	unsigned int reg;
+
+	reg = DIE_ID_REG_BASE + DIE_ID_REG_OFFSET;
+	val[0] = omap_readl(reg);
+	val[1] = omap_readl(reg + 4);
+
+	snprintf(device_serial, MAX_USB_SERIAL_NUM, "%08x%08x", val[1], val[0]);
+	platform_device_register(&androidusb_device);
 }
 
 static void mapphone_audio_init(void)
@@ -923,6 +954,7 @@ static void __init mapphone_init(void)
 	mapphone_hsmmc_init();
 	mapphone_vout_init();
 	mapphone_power_off_init();
+	mapphone_gadget_init();
 #ifdef CONFIG_ANDROID_RAM_CONSOLE	
 	omap_init_rc();
 #endif	
