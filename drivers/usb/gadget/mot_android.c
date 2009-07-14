@@ -269,6 +269,7 @@ static int __init android_bind(struct usb_composite_dev *cdev)
 	if (gadget->ops->wakeup)
 		android_config_driver.bmAttributes |= USB_CONFIG_ATT_WAKEUP;
 
+	/* double check to move this call to f_acm.c??? */
 	gserial_setup(gadget, 1);
 
 	/* register our configuration */
@@ -294,13 +295,8 @@ static int __init android_bind(struct usb_composite_dev *cdev)
 		device_desc.bcdDevice = __constant_cpu_to_le16(0x9999);
 	}
 
-	device_desc.bcdDevice = cpu_to_le16(0x0101);
-
 	usb_gadget_set_selfpowered(gadget);
 	dev->cdev = cdev;
-
-	/* Workaround because the vendor request is gotten before Set config */
-	cdev->config = &android_config_driver;
 
 	return 0;
 }
@@ -332,6 +328,7 @@ static void force_reenumeration(struct android_dev *dev, int dev_type)
 	int vid, pid, i, temp_enabled;
 	struct usb_function *f;
 
+	/* using other namespace ??? */
 	usb_device_cfg_flag = 0;
 	usb_get_desc_flag   = 0;
 	usb_data_transfer_flag = 0;
@@ -469,7 +466,7 @@ device_mode_change_write(struct file *file, const char __user *buffer,
 	int cnt = MAX_DEVICE_NAME_SIZE;
 	int i, temp_device_type;
 
-	if (count == 0)
+	if (count <= 0)
 		return 0;
 
 	if (cnt > count)
@@ -538,12 +535,17 @@ static ssize_t device_mode_change_read(struct file *file, char *buf,
 				       size_t count, loff_t *ppos)
 {
 	int ret, size, cnt;
+	/* double check last zero */
 	unsigned char no_changed[] = "none:\0";
 	unsigned char adb_en_str[] = "adb_enable:\0";
 	unsigned char adb_dis_str[] = "adb_disable:\0";
 	unsigned char enumerated_str[] = "enumerated\0";
 	unsigned char get_desc_str[] = "get_desc\0";
 
+	/* Message format example:
+	* none:adb_enable:enumerated
+	*/
+	/* using one macro/function to replace it ???*/
 	if ((adb_mode_changed_flag == 0) &&
 		((usb_device_cfg_flag != g_device_type) ||
 		(g_device_type == 0)) &&
@@ -590,8 +592,6 @@ static ssize_t device_mode_change_read(struct file *file, char *buf,
 		}
 	}
 	cnt += size;
-	buf += size;
-	*buf = 0;
 
 	return cnt;
 }
@@ -681,11 +681,6 @@ static int __init init(void)
 		platform_driver_unregister(&android_platform_driver);
 	}
 
-	/* At default, only MSC is enabled */
-	android_config_driver.next_interface_id = 1;
-	android_config_driver.interface[1] = 0;
-	android_config_driver.interface[2] = 0;
-
 	return ret;
 }
 
@@ -695,6 +690,7 @@ static void __exit cleanup(void)
 {
 	usb_composite_unregister(&android_usb_driver);
 	misc_deregister(&adb_enable_device);
+	misc_deregister(&mode_change_device);
 	platform_driver_unregister(&android_platform_driver);
 	kfree(_android_dev);
 	_android_dev = NULL;
