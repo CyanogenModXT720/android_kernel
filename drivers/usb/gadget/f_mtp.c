@@ -517,7 +517,6 @@ struct mtp_event_data {
 #define MTP_IOC_CANCEL_IO        _IO(MTP_IOC_MAGIC, 5)
 #define MTP_IOC_DEVICE_RESET     _IO(MTP_IOC_MAGIC, 6)
 
-struct usb_request *musb_gadget_get_request(struct usb_ep *ep);
 static int mtp_ioctl(struct inode *inode, struct file *file,
 		unsigned int cmd, unsigned long arg)
 {
