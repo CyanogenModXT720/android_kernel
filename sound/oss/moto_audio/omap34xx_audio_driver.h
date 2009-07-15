@@ -1,97 +1,16 @@
-/*
- * Copyright (C) 2007 Motorola
- *
- * This program is licensed under a BSD license with the following terms:
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
- *
- * - Redistributions of source code must retain the above copyright notice,
- * this list of conditions and the following disclaimer.
- * - Redistributions in binary form must reproduce the above copyright notice,
- * this list of conditions and the following disclaimer in the documentation
- * and/or other materials provided with the distribution.
- * - Neither the name of Motorola nor the names of its contributors may be used
- * to endorse or promote products derived from this software without specific
- * prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- * Date         Author    Comment
- * ----------   --------  ---------------------------
- * 12/11/2007   Motorola  File creation
- */
-
-/*!
- * @file omap34xx_audio_driver.h
- *
- * @ingroup audio
- *
- * @brief This is the header file of the audio driver
- *
- */
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 #ifndef OMAP34XX_AUDIO_DRIVER_H
 #define OMAP34XX_AUDIO_DRIVER_H
 
 #define MCBSP_WRAPPER
 
-/*============================================================================
-
-GENERAL DESCRIPTION:
-
-==============================================================================
-				INCLUDE FILES
-==============================================================================*/
 #ifdef MCBSP_WRAPPER
 #include <mach/dma.h>
 #include <mach/mcbsp.h>
 #include <linux/interrupt.h>
 #include <linux/delay.h>
-#endif				/* MCBSP_WRAPPER */
+#endif /* MCBSP_WRAPPER */
 
-/*============================================================================
-				CONSTANTS
-==============================================================================*/
-#define AUDIO_SAMPLE_DATA_WIDTH              16
-
-/*============================================================================
-				ENUMS
-==============================================================================*/
-enum {
-	STDAC_ROUTE_NONE = 0,
-	STDAC_ROUTE_STEREO = 1,
-	STDAC_ROUTE_HIFI_STEREO = 2,	/* Data transfer using DMA */
-	STDAC_ROUTE_FM_RECORD = 3,
-	STDAC_ROUTE_FM_RECORD_AND_PLAYBACK = 4,
-};
-
-enum {
-	CODEC_ROUTE_NONE = 0,
-	CODEC_ROUTE_MONO_PLAYBACK = 1,
-	CODEC_ROUTE_MONO_RECORD = 2,
-	CODEC_ROUTE_PHONE = 3,
-	CODEC_ROUTE_RECORD_AND_PLAYBACK = 4,
-	CODEC_ROUTE_MONO_BLUETOOTH = 5,
-};
-
-/*============================================================================
-				STRUCTURES AND OTHER TYPEDEFS
-==============================================================================*/
 #ifdef MCBSP_WRAPPER
 
 #if defined(CONFIG_ARCH_OMAP24XX) || defined(CONFIG_ARCH_OMAP34XX)
@@ -105,7 +24,6 @@ enum {
 
 /********************** McBSP SYSCONFIG bit definitions ********************/
 #define FORCE_IDLE 0x0
-#define NO_IDLE 0x1
 #define SMART_IDLE 0x2
 #define MCBSP_SYSC_IOFF_FOFF 0x0
 #define MCBSP_SYSC_IOFF_FON 0x2	/* Err in TRM ES2.0 ?? */
@@ -127,13 +45,11 @@ enum {
 #define OMAP_MCBSP_SKIP_SECOND (0x1<<2)
 /* RRST STATE */
 #define OMAP_MCBSP_RRST_DISABLE 0
-#define OMAP_MCBSP_RRST_ENABLE 1
 /*XRST STATE */
 #define OMAP_MCBSP_XRST_DISABLE 0
-#define OMAP_MCBSP_XRST_ENABLE 1
 
 #define OMAP_MCBSP_FRAME_SINGLEPHASE 1
-#define OMAP_MCBSP_FRAME_DUALPHASE 2
+#define OMAP_MCBSP_FRAME_DUALPHASE   2
 
 /* Sample Rate Generator Clock source */
 #define OMAP_MCBSP_SRGCLKSRC_CLKS 1
@@ -143,7 +59,6 @@ enum {
 
 /* SRG input clock polarity */
 #define OMAP_MCBSP_CLKS_POLARITY_RISING 1
-#define OMAP_MCBSP_CLKS_POLARITY_FALLING 2
 #define OMAP_MCBSP_CLKX_POLARITY_RISING 1
 #define OMAP_MCBSP_CLKX_POLARITY_FALLING 2
 #define OMAP_MCBSP_CLKR_POLARITY_RISING 1
@@ -165,16 +80,11 @@ enum {
 
 /* Justification */
 #define OMAP_MCBSP_RJUST_ZEROMSB 0
-#define OMAP_MCBSP_RJUST_SIGNMSB 1
-#define OMAP_MCBSP_LJUST_ZEROLSB 2
 
-#define OMAP_MCBSP_DATADELAY0 0
 #define OMAP_MCBSP_DATADELAY1 1
-#define OMAP_MCBSP_DATADELAY2 2
 
 /* Reverse mode for 243X and 34XX */
 #define OMAP_MCBSP_MSBFIRST 0
-#define OMAP_MCBSP_LSBFIRST 1
 
 #define OMAP_MCBSP_FRAMELEN_N(NUM_WORDS) ((NUM_WORDS - 1) & 0x7F)
 
@@ -194,15 +104,15 @@ struct omap_mcbsp_cfg_param {
 };
 
 struct omap_mcbsp_srg_fsg_cfg {
-	u32 period; /* Frame period */
-	u32 pulse_width; /* Frame width */
+	u32 period;		/* Frame period */
+	u32 pulse_width;	/* Frame width */
 	u8 fsgm;
 	u32 sample_rate;
 	u32 bits_per_sample;
 	u32 srg_src;
-	u8 sync_mode; /* SRG free running mode */
+	u8 sync_mode;		/* SRG free running mode */
 	u8 polarity;
-	u8 dlb; /* digital loopback mode */
+	u8 dlb;			/* digital loopback mode */
 };
 
 struct omap_mcbsp_dma_transfer_params {
@@ -217,30 +127,19 @@ struct omap_mcbsp_dma_transfer_params {
 };
 
 struct omap_mcbsp_wrapper {
-	u8 auto_reset; /* Auto Reset */
-	u8 txskip_alt; /* Tx skip flags */
-	u8 rxskip_alt; /* Rx skip flags */
+	u8 auto_reset;		/* Auto Reset */
+	u8 txskip_alt;		/* Tx skip flags */
+	u8 rxskip_alt;		/* Rx skip flags */
 	void *rx_cb_arg;
 	void *tx_cb_arg;
 	void (*rx_callback) (u32 ch_status, void *arg);
 	void (*tx_callback) (u32 ch_status, void *arg);
 	int rx_dma_chain_state;
 	int tx_dma_chain_state;
-	int interface_mode; /* Master / Slave */
-	struct omap_dma_channel_params rx_params; /* Used For Rx FIFO */
+	int interface_mode;	/* Master / Slave */
+	struct omap_dma_channel_params rx_params;	/* Used For Rx FIFO */
 };
-#endif				/* MCBSP_WRAPPER */
-/*============================================================================
-				MACROS
-==============================================================================*/
-
-/*============================================================================
-			GLOBAL VARIABLE DECLARATIONS
-==============================================================================*/
-
-/*============================================================================
-			FUNCTION PROTOTYPES
-==============================================================================*/
+#endif /* MCBSP_WRAPPER */
 #ifdef MCBSP_WRAPPER
 
 void omap_mcbsp_write(void __iomem *io_base, u16 reg, u32 val);
@@ -265,8 +164,4 @@ int omap2_mcbsp_params_cfg(unsigned int id, int interface_mode,
 			   struct omap_mcbsp_srg_fsg_cfg *param);
 #endif /* MCBSP_WRAPPER */
 
-#endif /* APAL_DRIVER_H */
-
-#ifdef __cplusplus
-}
-#endif
+#endif /* OMAP34XX_AUDIO_DRIVER_H */
