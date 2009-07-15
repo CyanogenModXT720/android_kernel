@@ -30,13 +30,6 @@
 
 #define	PORT_WAKE_BITS	(PORT_WKOC_E|PORT_WKDISC_E|PORT_WKCONN_E)
 
-#if defined(CONFIG_USB_OHCI_HCD) || defined(CONFIG_USB_OHCI_HCD_MODULE)
-int ts27010mux_service_enable(void)
-{
-	return 0;
-}
-#endif
-
 #ifdef	CONFIG_PM
 
 static int ehci_hub_control(
@@ -190,6 +183,11 @@ static int ehci_bus_suspend (struct usb_hcd *hcd)
 
 	ehci->next_statechange = jiffies + msecs_to_jiffies(10);
 	spin_unlock_irq (&ehci->lock);
+
+	/* ehci_work() may have re-enabled the watchdog timer, which we do not
+	 * want, and so we must delete any pending watchdog timer events.
+	 */
+	del_timer_sync(&ehci->watchdog);
 	return 0;
 }
 
@@ -442,18 +440,21 @@ static int check_reset_complete (
 		ehci_dbg (ehci, "port %d full speed --> companion\n",
 			index + 1);
 
-		/* when detect a full speed device, it's compliant with EHCI specification
-		 * to give up ownership of that port. But for our case, there is really no other device
-		 * connected to port 3, and for some reason when a panic in the device happens, the peripheral
-		 * shows up as full speed device, hence enumeration with EHCI fails. To workaround
-		 * this issue, BP reset USB controller and restart enumeration process if
-		 * enumeration doesn't seem to happen, and in EHCI driver, we don't give up ownership
-		 * of the port, simply waiting for the peripheral to connect again.
-		 */
+		/* when detect a full speed device, it's compliant with EHCI
+		 * specification to give up ownership of that port. But for our
+		 * case, there is really no other device connected to port 3,
+		 * and for some reason when a panic in the device happens,
+		 * the peripheral shows up as full speed device, hence
+		 * enumeration with EHCI fails. To workaround this issue, BP
+		 * reset USB controller and restart enumeration process if
+		 * enumeration doesn't seem to happen, and in EHCI driver, we
+		 * don't give up ownership of the port, simply waiting for the
+		 * of the port, simply waiting for the peripheral to connect
+		 * again. */
 #if defined(CONFIG_USB_OHCI_HCD) || defined(CONFIG_USB_OHCI_HCD_MODULE)
-		if((index != 2) || ts27010mux_service_enable()) {
+		if ((index != 2) || is_cdma_phone()) {
 #else
-		if(index != 2) {
+		if (index != 2) {
 #endif
 			// what happens if HCS_N_CC(params) == 0 ?
 			port_status |= PORT_OWNER;

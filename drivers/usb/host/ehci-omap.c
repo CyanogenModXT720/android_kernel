@@ -42,6 +42,7 @@
 #include <mach/gpio.h>
 
 #include "ehci-omap.h"
+#include <mach/hardware.h>
 
 #ifdef CONFIG_MOT_FEAT_GPIO_API
 #include <mach/mot-gpio-omap.h>
@@ -67,7 +68,7 @@ struct usb_hcd *ghcd;
 #define	EXT_PHY_RESET_GPIO_PORT1	(57)
 #define	EXT_PHY_RESET_GPIO_PORT2	(61)
 #define	EXT_PHY_RESET_DELAY		(500)
-#ifdef CONFIG_MACH_OMAP3430PHONE 
+#ifdef CONFIG_MACH_MAPPHONE
 	#define EXT_PHY_RESET_GPIO_PORT (149)
 #endif
 
@@ -180,7 +181,7 @@ static void omap_usb_utmi_init(struct usb_hcd *hcd, u8 tll_channel_mask)
 			    OMAP_TLL_CHANNEL_CONF(i));
 
 #if defined(CONFIG_USB_OHCI_HCD) || defined(CONFIG_USB_OHCI_HCD_MODULE)
-		if ((ts27010mux_service_enable()) && (i == 2)) {
+		if ((is_cdma_phone()) && (i == 2)) {
 			/* 0x1: UTMI-to-serial (FS/LS) mode: 
 			 * To serial controller (TLL) or serial PHY */
 			omap_writel(omap_readl(OMAP_TLL_CHANNEL_CONF(i)) |
@@ -269,7 +270,7 @@ static int omap_start_ehc(struct platform_device *dev, struct usb_hcd *hcd)
 
 #ifdef EXTERNAL_PHY_RESET
 	/* Refer: ISSUE1 */
-#ifndef CONFIG_MACH_OMAP3430PHONE 
+#ifndef CONFIG_MACH_MAPPHONE
 	omap_request_gpio(EXT_PHY_RESET_GPIO_PORT1);
 	omap_set_gpio_direction(EXT_PHY_RESET_GPIO_PORT1, 0);
 	omap_request_gpio(EXT_PHY_RESET_GPIO_PORT2);
@@ -356,7 +357,7 @@ static int omap_start_ehc(struct platform_device *dev, struct usb_hcd *hcd)
 			OMAP_USBTLL_SYSCONFIG);
 
 #if defined(CONFIG_USB_OHCI_HCD) || defined(CONFIG_USB_OHCI_HCD_MODULE)
-	if (ts27010mux_service_enable()) {
+	if (is_cdma_phone()) {
 		/* Put UHH in NoIdle/NoStandby mode */
 		omap_writel((0 << OMAP_UHH_SYSCONFIG_AUTOIDLE_SHIFT) |
 			(1 << OMAP_UHH_SYSCONFIG_ENAWAKEUP_SHIFT) |
@@ -406,17 +407,17 @@ static int omap_start_ehc(struct platform_device *dev, struct usb_hcd *hcd)
 	 * Hold the PHY in RESET for enough time till PHY is settled and ready
 	 */
 	udelay(EXT_PHY_RESET_DELAY);
-#ifndef CONFIG_MACH_OMAP3430PHONE 
+#ifndef CONFIG_MACH_MAPPHONE
 	omap_set_gpio_dataout(EXT_PHY_RESET_GPIO_PORT1, 0);
 	omap_set_gpio_dataout(EXT_PHY_RESET_GPIO_PORT2, 0);
 #elif defined(CONFIG_MOT_FEAT_GPIO_API)
         gpio_set_value(GPIO_SIGNAL_USB_IPC_RESET_PHY, 1);
 #else
         omap_set_gpio_dataout(EXT_PHY_RESET_GPIO_PORT, 1);
-#endif /* CONFIG_MACH_OMAP3430PHONE */
+#endif /* CONFIG_MACH_MAPPHONE */
 #endif
 
-#if defined(CONFIG_MACH_OMAP3430PHONE)
+#if defined(CONFIG_MACH_MAPPHONE)
 	/* Refer ISSUE2: LINK assumes external charge pump */
 
 	/* use Port1 VBUS to charge externally Port2:
@@ -431,7 +432,7 @@ static int omap_start_ehc(struct platform_device *dev, struct usb_hcd *hcd)
 
 	while (!(omap_readl(EHCI_INSNREG05_ULPI) &
 		(1<<EHCI_INSNREG05_ULPI_CONTROL_SHIFT)));
-#endif /* CONFIG_MACH_OMAP3430PHONE */
+#endif /* CONFIG_MACH_MAPPHONE */
 
         return 0;
 }
@@ -533,7 +534,7 @@ static int omap_ehci_bus_suspend(struct usb_hcd *hcd)
 	ret = ehci_bus_suspend(hcd);
 
 #if defined(CONFIG_USB_OHCI_HCD) || defined(CONFIG_USB_OHCI_HCD_MODULE)
-	if (!ts27010mux_service_enable() && !ehci_clocks->suspended) {
+	if (!is_cdma_phone() && !ehci_clocks->suspended) {
 #else
 	if (!ehci_clocks->suspended) {
 #endif
@@ -591,7 +592,7 @@ static int omap_ehci_bus_resume(struct usb_hcd *hcd)
 	spin_lock_irqsave(&usbtll_clock_lock, flags);
 
 #if defined(CONFIG_USB_OHCI_HCD) || defined(CONFIG_USB_OHCI_HCD_MODULE)
-	if (!ts27010mux_service_enable() && ehci_clocks->suspended) {
+	if (!is_cdma_phone() && ehci_clocks->suspended) {
 #else
 	if (ehci_clocks->suspended) {
 #endif
@@ -635,7 +636,7 @@ static void omap_ehci_shutdown(struct usb_hcd *hcd)
 	spin_lock_irqsave(&usbtll_clock_lock, flags);
 
 #if defined(CONFIG_USB_OHCI_HCD) || defined(CONFIG_USB_OHCI_HCD_MODULE)
-	if (!ts27010mux_service_enable() && ehci_clocks->suspended) {
+	if (!is_cdma_phone() && ehci_clocks->suspended) {
 #else
 	if (ehci_clocks->suspended) {
 #endif
