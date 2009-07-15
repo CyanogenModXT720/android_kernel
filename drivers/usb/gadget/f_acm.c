@@ -633,14 +633,6 @@ acm_bind(struct usb_configuration *c, struct usb_function *f)
 	int			status;
 	struct usb_ep		*ep;
 
-#ifdef CONFIG_USB_MOT_ANDROID
-/*
-	status = gserial_setup(cdev->gadget, 1);
-	if (status < 0)
-		printk(KERN_INFO "%s gserial_setup failed status=%d\n",
-			__func__, status);
-*/
-#endif
 	/* allocate instance-specific interface IDs, and patch descriptors */
 	status = usb_interface_id(c, f);
 	if (status < 0)
@@ -773,9 +765,6 @@ acm_unbind(struct usb_configuration *c, struct usb_function *f)
 #endif
 	gs_free_req(acm->notify, acm->notify_req);
 	kfree(acm);
-#ifdef CONFIG_USB_MOT_ANDROID
-	/* gserial_cleanup(); */
-#endif
 }
 
 /* Some controllers can't support CDC ACM ... */
