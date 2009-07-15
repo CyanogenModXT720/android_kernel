@@ -38,6 +38,7 @@
 #include <linux/usb/gadget.h>
 
 #include "gadget_chips.h"
+
 #include "f_mot_android.h"
 
 /*
@@ -53,6 +54,7 @@
 #endif
 
 #define BULK_BUFFER_SIZE    8192
+#define MIN(a, b)	((a < b) ? a : b)
 
 /*
  *
@@ -177,6 +179,7 @@ struct usb_mtp_context {
 	struct list_head ctl_rx_done_reqs;
 
 	int online;
+	int error;
 	int cancel;
 	int ctl_cancel;
 
@@ -299,6 +302,9 @@ static void mtp_in_complete(struct usb_ep *ep, struct usb_request *req)
 	if (req->status == -ECONNRESET)
 		usb_ep_fifo_flush(ep);
 
+	if (req->status != 0)
+		g_usb_mtp_context.error = 1;
+
 	req_put(&g_usb_mtp_context.tx_reqs, req);
 	wake_up(&g_usb_mtp_context.tx_wq);
 }
@@ -309,6 +315,7 @@ static void mtp_out_complete(struct usb_ep *ep, struct usb_request *req)
 	if (req->status == 0) {
 		req_put(&g_usb_mtp_context.rx_done_reqs, req);
 	} else {
+		g_usb_mtp_context.error = 1;
 		if (req->status == -ECONNRESET)
 			usb_ep_fifo_flush(ep);
 		req_put(&g_usb_mtp_context.rx_reqs, req);
@@ -335,6 +342,10 @@ static ssize_t mtp_read(struct file *fp, char __user *buf,
 
 	while (count > 0) {
 		mtp_debug("count=%d\n", count);
+		if (g_usb_mtp_context.error) {
+			mtp_err("error\n");
+			return -EIO;
+		}
 		/* we will block until we're online */
 		ret = wait_event_interruptible(g_usb_mtp_context.rx_wq,
 			(g_usb_mtp_context.online || g_usb_mtp_context.cancel));
@@ -360,6 +371,8 @@ requeue_req:
 				req, GFP_ATOMIC);
 
 			if (ret < 0) {
+				mtp_err("error %d\n", ret);
+				g_usb_mtp_context.error = 1;
 				req_put(&g_usb_mtp_context.rx_reqs, req);
 				return ret;
 			}
@@ -438,6 +451,10 @@ static ssize_t mtp_write(struct file *fp, const char __user *buf,
 
 	while (count > 0) {
 		mtp_debug("count=%d\n", count);
+		if (g_usb_mtp_context.error) {
+			mtp_err("error\n");
+			return -EIO;
+		}
 		/* get an idle tx request to use */
 		ret = wait_event_interruptible(g_usb_mtp_context.tx_wq,
 			(g_usb_mtp_context.online || g_usb_mtp_context.cancel));
@@ -487,6 +504,7 @@ static ssize_t mtp_write(struct file *fp, const char __user *buf,
 				req, GFP_ATOMIC);
 			if (ret < 0) {
 				mtp_err("error %d\n", ret);
+				g_usb_mtp_context.error = 1;
 				req_put(&g_usb_mtp_context.tx_reqs, req);
 				rc = ret;
 				break;
@@ -505,7 +523,7 @@ static ssize_t mtp_write(struct file *fp, const char __user *buf,
 /* ioctl related */
 #define MTP_EVENT_SIZE   28
 struct mtp_event_data {
-	unsigned char data[MTP_EVENT_SIZE];
+    unsigned char data[MTP_EVENT_SIZE];
 };
 
 #define MTP_IOC_MAGIC    'm'
@@ -521,7 +539,7 @@ struct mtp_event_data {
 static int mtp_ioctl(struct inode *inode, struct file *file,
 		unsigned int cmd, unsigned long arg)
 {
-	int len, clen, n;
+	int len, clen, count, n;
 	struct usb_request *req;
 	struct mtp_event_data event;
 
@@ -530,7 +548,8 @@ static int mtp_ioctl(struct inode *inode, struct file *file,
 
 	switch (cmd) {
 	case MTP_IOC_EVENT:
-		if (copy_from_user(event.data, (void *)arg, MTP_EVENT_SIZE))
+		count = MIN(_IOC_SIZE(cmd), MTP_EVENT_SIZE);
+		if (copy_from_user(event.data, (void *)arg,  count))
 			return -EINVAL;
 
 		/* length is in little endian */
@@ -541,7 +560,10 @@ static int mtp_ioctl(struct inode *inode, struct file *file,
 		req = g_usb_mtp_context.int_tx_req;
 		if (!req)
 			return -EINVAL;
-		req->length = clen;
+		count = MIN(MTP_EVENT_SIZE, clen);
+		memcpy(req->buf, event.data, count);
+		req->length = count;
+		req->zero = 0;
 		if (usb_ep_queue(g_usb_mtp_context.intr_in, req, GFP_ATOMIC))
 			return -EINVAL;
 		break;
@@ -607,17 +629,17 @@ static struct miscdevice mtp_device = {
 #define MTP_CTL_CLASS_REPLY  2
 
 struct mtp_ctl_msg_header {
-	int msg_len;
-	int msg_id;
+    int msg_len;
+    int msg_id;
 };
 
 #define MTP_CTL_MSG_HEADER_SIZE   (sizeof(struct mtp_ctl_msg_header))
 #define MTP_CTL_MSG_SIZE	(MTP_CTL_MSG_HEADER_SIZE +\
-				sizeof(struct usb_ctrlrequest))
+			 sizeof(struct usb_ctrlrequest))
 
 #define MTP_CLASS_CANCEL_REQ			0x64
 #define MTP_CLASS_GET_EXTEND_EVEVT_DATA	0x65
-#define MTP_CLASS_RESET_REQ			0x66
+#define MTP_CLASS_RESET_REQ				0x66
 #define MTP_CLASS_GET_DEVICE_STATUS		0x67
 
 
@@ -647,7 +669,7 @@ static void mtp_ctl_write_complete(struct usb_ep *ep, struct usb_request *req)
 static ssize_t mtp_ctl_read(struct file *file, char *buf,
 	size_t count, loff_t *pos)
 {
-	int ret, size = sizeof(struct usb_ctrlrequest);
+    int ret, size = sizeof(struct usb_ctrlrequest);
 	struct mtp_ctl_msg_header msg;
 
 	mtp_debug("count=%d\n", count);
@@ -695,19 +717,19 @@ static ssize_t mtp_ctl_read(struct file *file, char *buf,
 	}
 
 	mtp_debug("return %d\n", ret);
-	return ret;
+    return ret;
 
 ctl_read_fail:
 	ctl_req_put(&g_usb_mtp_context.ctl_rx_reqs, cur_creq);
 	cur_creq = NULL;
 	mtp_debug("return -EFAULT\n");
-	return -EFAULT;
+    return -EFAULT;
 }
 
 static ssize_t mtp_ctl_write(struct file *file, const char *buf,
 	size_t count, loff_t *pos)
 {
-	struct mtp_ctl_msg_header msg;
+    struct mtp_ctl_msg_header msg;
 	struct usb_request *req = NULL;
 	struct usb_ep *ep0;
 	int ret;
@@ -725,26 +747,26 @@ static ssize_t mtp_ctl_write(struct file *file, const char *buf,
 		return ret;
 
 	ep0 = g_usb_mtp_context.cdev->gadget->ep0;
-	if (count > ep0->maxpacket || count < MTP_CTL_MSG_HEADER_SIZE) {
+    if (count > ep0->maxpacket || count < MTP_CTL_MSG_HEADER_SIZE) {
 		mtp_err("size invalid\n");
 		return -ENOMEM;
-	}
+    }
 
-	/* msg info */
-	if (copy_from_user(&msg, buf, MTP_CTL_MSG_HEADER_SIZE))
+    /* msg info */
+    if (copy_from_user(&msg, buf, MTP_CTL_MSG_HEADER_SIZE))
 		return -EINVAL;
 
-	mtp_debug("msg len = %d, msg id = %d", msg.msg_len, msg.msg_id);
-	if (msg.msg_id != MTP_CTL_CLASS_REPLY) {
+    mtp_debug("msg len = %d, msg id = %d", msg.msg_len, msg.msg_id);
+    if (msg.msg_id != MTP_CTL_CLASS_REPLY) {
 		mtp_err("invalid id %d", msg.msg_id);
 		return -EINVAL;
-	}
+    }
 
-	/* sending the data */
+    /* sending the data */
 	req = g_usb_mtp_context.cdev->req;
-	req->length = count - MTP_CTL_MSG_HEADER_SIZE;
+    req->length = count - MTP_CTL_MSG_HEADER_SIZE;
 	req->complete = mtp_ctl_write_complete;
-	if (copy_from_user(req->buf,
+    if (copy_from_user(req->buf,
 		(u8 *)buf + MTP_CTL_MSG_HEADER_SIZE, req->length)) {
 		return -EINVAL;
 	}
@@ -766,12 +788,12 @@ static ssize_t mtp_ctl_write(struct file *file, const char *buf,
 		return ret;
 
 	mtp_debug("return count=%d\n", count);
-	return count;
+    return count;
 }
 
 static const struct file_operations mtp_ctl_fops = {
-	.read = mtp_ctl_read,
-	.write = mtp_ctl_write,
+     .read = mtp_ctl_read,
+     .write = mtp_ctl_write,
 };
 
 static void
@@ -793,7 +815,7 @@ mtp_function_unbind(struct usb_configuration *c, struct usb_function *f)
 	req_free(g_usb_mtp_context.int_tx_req, g_usb_mtp_context.intr_in);
 
 	misc_deregister(&mtp_device);
-	remove_proc_entry("mtpctl", NULL);
+    remove_proc_entry("mtpctl", NULL);
 }
 
 static int __init
@@ -802,7 +824,7 @@ mtp_function_bind(struct usb_configuration *c, struct usb_function *f)
 	int n, rc, id;
 	struct usb_ep *ep;
 	struct usb_request *req;
-	struct proc_dir_entry *mtp_proc = NULL;
+    struct proc_dir_entry *mtp_proc = NULL;
 
 	g_usb_mtp_context.cdev = c->cdev;
 	/* allocate interface ID(s) */
@@ -886,8 +908,8 @@ mtp_function_bind(struct usb_configuration *c, struct usb_function *f)
 	if (!mtp_proc) {
 		mtp_err("creating /proc/mtpctl failed\n");
 		goto autoconf_fail;
-	}
-	mtp_proc->proc_fops = &mtp_ctl_fops;
+    }
+    mtp_proc->proc_fops = &mtp_ctl_fops;
 
 	return 0;
 
@@ -900,6 +922,10 @@ autoconf_fail:
 static void mtp_function_disable(struct usb_function *f)
 {
 	g_usb_mtp_context.online = 0;
+	g_usb_mtp_context.cancel = 1;
+	g_usb_mtp_context.ctl_cancel = 1;
+	g_usb_mtp_context.error = 1;
+
 	usb_ep_disable(g_usb_mtp_context.bulk_in);
 	usb_ep_disable(g_usb_mtp_context.bulk_out);
 	usb_ep_disable(g_usb_mtp_context.intr_in);
@@ -923,8 +949,11 @@ static void start_out_receive(void)
 	while ((req = req_get(&g_usb_mtp_context.rx_reqs))) {
 		req->length = BULK_BUFFER_SIZE;
 		ret = usb_ep_queue(g_usb_mtp_context.bulk_out, req, GFP_ATOMIC);
-		if (ret < 0)
+		if (ret < 0) {
+			mtp_err("error %d\n", ret);
+			g_usb_mtp_context.error = 1;
 			req_put(&g_usb_mtp_context.rx_reqs, req);
+		}
 	}
 }
 
@@ -958,6 +987,8 @@ static int mtp_function_set_alt(struct usb_function *f,
 		return ret;
 	}
 
+	usb_interface_enum_cb(MTP_TYPE_FLAG);
+
 	g_usb_mtp_context.cur_read_req = 0;
 	g_usb_mtp_context.read_buf = 0;
 	g_usb_mtp_context.data_len = 0;
@@ -968,8 +999,7 @@ static int mtp_function_set_alt(struct usb_function *f,
 	g_usb_mtp_context.online = 1;
 	g_usb_mtp_context.cancel = 0;
 	g_usb_mtp_context.ctl_cancel = 0;
-
-	usb_interface_enum_cb(MTP_TYPE_FLAG);
+	g_usb_mtp_context.error = 0;
 
 	/* readers may be blocked waiting for us to go online */
 	wake_up(&g_usb_mtp_context.rx_wq);

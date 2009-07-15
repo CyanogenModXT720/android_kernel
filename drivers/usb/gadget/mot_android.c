@@ -576,7 +576,7 @@ static ssize_t device_mode_change_read(struct file *file, char *buf,
 	buf += size;
 
 	/* append USB enumerated state */
-	if (usb_device_cfg_flag == g_device_type) {
+	if ((usb_device_cfg_flag == g_device_type) && (g_device_type != 0)) {
 		usb_device_cfg_flag = 0;
 		size = strlen(enumerated_str);
 		ret += copy_to_user(buf, enumerated_str, size);
