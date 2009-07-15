@@ -20,40 +20,38 @@
 
 /* #define VERBOSE_DEBUG */
 
-#include <linux/blkdev.h>
-#include <linux/completion.h>
-#include <linux/dcache.h>
+#include <linux/module.h>
+#include <linux/init.h>
+#include <linux/poll.h>
 #include <linux/delay.h>
+#include <linux/wait.h>
+#include <linux/err.h>
+#include <linux/interrupt.h>
+
+#include <linux/types.h>
 #include <linux/device.h>
-#include <linux/fcntl.h>
-#include <linux/file.h>
-#include <linux/fs.h>
-#include <linux/kref.h>
-#include <linux/kthread.h>
-#include <linux/limits.h>
-#include <linux/rwsem.h>
-#include <linux/slab.h>
-#include <linux/spinlock.h>
-#include <linux/string.h>
-#include <linux/freezer.h>
-#include <linux/utsname.h>
-
-#include <linux/if.h>
-#include <linux/in.h>
-#include <linux/inetdevice.h>
-#include <linux/uaccess.h>
-#include <linux/workqueue.h>
-
-#include <linux/usb/ch9.h>
-#include <linux/usb/gadget.h>
-
-#include <linux/io.h>
-#include <linux/usb/composite.h>
-
 #include <linux/miscdevice.h>
 #include <linux/proc_fs.h>
 
+#include <linux/usb/ch9.h>
+#include <linux/usb/composite.h>
+#include <linux/usb/gadget.h>
+
 #include "gadget_chips.h"
+
+/*
+#define DEBUG
+*/
+
+#ifdef DEBUG
+#define mtp_debug(fmt, arg...)	printk(KERN_DEBUG "%s(): " fmt, __func__, ##arg)
+#define mtp_err(fmt, arg...)	printk(KERN_ERR "%s(): " fmt, __func__, ##arg)
+#else
+#define mtp_debug(fmt, arg...)
+#define mtp_err(fmt, arg...)
+#endif
+
+#define BULK_BUFFER_SIZE    8192
 
 /*
  *
@@ -157,8 +155,9 @@ static struct usb_descriptor_header *null_mtp_descs[] = {
 };
 
 #define MAX_BULK_RX_REQ_NUM 8
-#define MAX_BULK_TX_REQ_NUM 8
-#define MAX_INTR_TX_REQ_NUM 8
+#define MAX_BULK_TX_REQ_NUM 4
+#define MAX_CTL_RX_REQ_NUM	8
+
 /*---------------------------------------------------------------------------*/
 struct usb_mtp_context {
 	struct usb_function function;
@@ -171,32 +170,420 @@ struct usb_mtp_context {
 	struct usb_ep *intr_in;
 
 	struct list_head rx_reqs;
+	struct list_head rx_done_reqs;
 	struct list_head tx_reqs;
-	struct list_head int_tx_reqs;
+	struct list_head ctl_rx_reqs;
+	struct list_head ctl_rx_done_reqs;
+
+	int online;
+	int cancel;
+	int ctl_cancel;
+
+	wait_queue_head_t rx_wq;
+	wait_queue_head_t tx_wq;
+	wait_queue_head_t ctl_rx_wq;
+	wait_queue_head_t ctl_tx_wq;
+
+	struct usb_request *int_tx_req;
+
+	/* the request we're currently reading from */
+	struct usb_request *cur_read_req;
+	/* buffer to point to available data in the current request */
+	unsigned char *read_buf;
+	/* available data length */
+	int data_len;
 };
 
 static struct usb_mtp_context g_usb_mtp_context;
-static struct proc_dir_entry *mtp_proc;
+
+/* record all usb requests for bulk out */
+static struct usb_request *pending_reqs[MAX_BULK_RX_REQ_NUM];
+#define MTP_CANCEL_REQ_DATA_SIZE		6
+
+struct ctl_req_wrapper {
+	int header;
+	struct usb_ctrlrequest creq;
+	struct list_head	list;
+	char cancel_data[MTP_CANCEL_REQ_DATA_SIZE];
+};
+
+struct ctl_req_wrapper ctl_reqs[MAX_CTL_RX_REQ_NUM];
+struct ctl_req_wrapper *cur_creq;
+int ctl_tx_done;
 
 /*-------------------------------------------------------------------------*/
-/*
- * MTP APIs
- */
+
+static struct usb_request *req_new(struct usb_ep *ep, int size)
+{
+	struct usb_request *req = usb_ep_alloc_request(ep, GFP_KERNEL);
+	if (!req)
+		return NULL;
+
+	/* now allocate buffers for the requests */
+	req->buf = kmalloc(size, GFP_KERNEL);
+	if (!req->buf) {
+		usb_ep_free_request(ep, req);
+		return NULL;
+	}
+
+	return req;
+}
+
+static void req_free(struct usb_request *req, struct usb_ep *ep)
+{
+	if (req) {
+		kfree(req->buf);
+		usb_ep_free_request(ep, req);
+	}
+}
+
+/* add a request to the tail of a list */
+static void req_put(struct list_head *head, struct usb_request *req)
+{
+	unsigned long flags;
+
+	spin_lock_irqsave(&g_usb_mtp_context.lock, flags);
+	list_add_tail(&req->list, head);
+	spin_unlock_irqrestore(&g_usb_mtp_context.lock, flags);
+}
+
+/* remove a request from the head of a list */
+static struct usb_request *req_get(struct list_head *head)
+{
+	unsigned long flags;
+	struct usb_request *req;
+
+	spin_lock_irqsave(&g_usb_mtp_context.lock, flags);
+	if (list_empty(head)) {
+		req = 0;
+	} else {
+		req = list_first_entry(head, struct usb_request, list);
+		list_del(&req->list);
+	}
+	spin_unlock_irqrestore(&g_usb_mtp_context.lock, flags);
+	return req;
+}
+
+/* add a mtp control request to the tail of a list */
+static void ctl_req_put(struct list_head *head, struct ctl_req_wrapper *req)
+{
+	unsigned long flags;
+
+	spin_lock_irqsave(&g_usb_mtp_context.lock, flags);
+	list_add_tail(&req->list, head);
+	spin_unlock_irqrestore(&g_usb_mtp_context.lock, flags);
+}
+
+/* remove a request from the head of a list */
+static struct ctl_req_wrapper *ctl_req_get(struct list_head *head)
+{
+	unsigned long flags;
+	struct ctl_req_wrapper *req;
+
+	spin_lock_irqsave(&g_usb_mtp_context.lock, flags);
+	if (list_empty(head)) {
+		req = 0;
+	} else {
+		req = list_first_entry(head, struct ctl_req_wrapper, list);
+		list_del(&req->list);
+	}
+	spin_unlock_irqrestore(&g_usb_mtp_context.lock, flags);
+	return req;
+}
+/*-------------------------------------------------------------------------*/
+
+static void mtp_in_complete(struct usb_ep *ep, struct usb_request *req)
+{
+	mtp_debug("status is %d %p %d\n", req->status, req, req->actual);
+	if (req->status == -ECONNRESET)
+		usb_ep_fifo_flush(ep);
+
+	req_put(&g_usb_mtp_context.tx_reqs, req);
+	wake_up(&g_usb_mtp_context.tx_wq);
+}
+
+static void mtp_out_complete(struct usb_ep *ep, struct usb_request *req)
+{
+	mtp_debug("status is %d %p %d\n", req->status, req, req->actual);
+	if (req->status == 0) {
+		req_put(&g_usb_mtp_context.rx_done_reqs, req);
+	} else {
+		if (req->status == -ECONNRESET)
+			usb_ep_fifo_flush(ep);
+		req_put(&g_usb_mtp_context.rx_reqs, req);
+	}
+	wake_up(&g_usb_mtp_context.rx_wq);
+}
+
+static void mtp_int_complete(struct usb_ep *ep, struct usb_request *req)
+{
+	mtp_debug("status is %d %d\n", req->status, req->actual);
+
+	if (req->status == -ECONNRESET)
+		usb_ep_fifo_flush(ep);
+
+	return;
+}
+
 static ssize_t mtp_read(struct file *fp, char __user *buf,
 				size_t count, loff_t *pos)
 {
-	return count;
+	struct usb_request *req = 0;
+	int xfer, rc = count;
+	int ret;
+
+	while (count > 0) {
+		mtp_debug("count=%d\n", count);
+		/* we will block until we're online */
+		ret = wait_event_interruptible(g_usb_mtp_context.rx_wq,
+			(g_usb_mtp_context.online || g_usb_mtp_context.cancel));
+		if (g_usb_mtp_context.cancel) {
+			mtp_debug("cancel return in mtp_read at beginning\n");
+			g_usb_mtp_context.cancel = 0;
+			return -EINVAL;
+		}
+		if (ret < 0) {
+			rc = ret;
+			break;
+		}
+
+		/* if we have idle read requests, get them queued */
+		while (1) {
+			req = req_get(&g_usb_mtp_context.rx_reqs);
+			if (!req)
+				break;
+requeue_req:
+			req->length = BULK_BUFFER_SIZE;
+			mtp_debug("rx %p queue\n", req);
+			ret = usb_ep_queue(g_usb_mtp_context.bulk_out,
+				req, GFP_ATOMIC);
+
+			if (ret < 0) {
+				req_put(&g_usb_mtp_context.rx_reqs, req);
+				return ret;
+			}
+		}
+
+		/* if we have data pending, give it to userspace */
+		if (g_usb_mtp_context.data_len > 0) {
+			if (g_usb_mtp_context.data_len < count)
+				xfer = g_usb_mtp_context.data_len;
+			else
+				xfer = count;
+
+			if (copy_to_user(buf, g_usb_mtp_context.read_buf,
+								xfer)) {
+				rc = -EFAULT;
+				break;
+			}
+			g_usb_mtp_context.read_buf += xfer;
+			g_usb_mtp_context.data_len -= xfer;
+			buf += xfer;
+			count -= xfer;
+			mtp_debug("xfer=%d\n", xfer);
+
+			/* if we've emptied the buffer, release the request */
+			if (g_usb_mtp_context.data_len == 0) {
+				req_put(&g_usb_mtp_context.rx_reqs,
+						g_usb_mtp_context.cur_read_req);
+				g_usb_mtp_context.cur_read_req = 0;
+			}
+			continue;
+		}
+
+		/* wait for a request to complete */
+		req = 0;
+		mtp_debug("wait req finish\n");
+		ret = wait_event_interruptible(g_usb_mtp_context.rx_wq,
+		((req = req_get(&g_usb_mtp_context.rx_done_reqs))
+			|| g_usb_mtp_context.cancel));
+		mtp_debug("req finished\n");
+		if (g_usb_mtp_context.cancel) {
+			if (req != 0)
+				req_put(&g_usb_mtp_context.rx_reqs, req);
+			mtp_debug("cancel return in mtp_read at complete\n");
+			g_usb_mtp_context.cancel = 0;
+			return -EINVAL;
+		}
+		if (ret < 0) {
+			rc = ret;
+			break;
+		}
+		if (req != 0) {
+			/* if we got a 0-len one we need to put it back into
+			** service.  if we made it the current read req we'd
+			** be stuck forever
+			*/
+			if (req->actual == 0)
+				goto requeue_req;
+
+			g_usb_mtp_context.cur_read_req = req;
+			g_usb_mtp_context.data_len = req->actual;
+			g_usb_mtp_context.read_buf = req->buf;
+			mtp_debug("rx %p done actual=%d\n", req, req->actual);
+		}
+	}
+
+	mtp_debug("mtp_read returning %d\n", rc);
+	return rc;
 }
 
 static ssize_t mtp_write(struct file *fp, const char __user *buf,
 				 size_t count, loff_t *pos)
 {
-	return count;
+	struct usb_request *req;
+	int rc = count, xfer;
+	int ret;
+
+	while (count > 0) {
+		mtp_debug("count=%d\n", count);
+		/* get an idle tx request to use */
+		ret = wait_event_interruptible(g_usb_mtp_context.tx_wq,
+			(g_usb_mtp_context.online || g_usb_mtp_context.cancel));
+
+		if (g_usb_mtp_context.cancel) {
+			mtp_debug("cancel return in mtp_write at beginning\n");
+			g_usb_mtp_context.cancel = 0;
+			return -EINVAL;
+		}
+		if (ret < 0) {
+			rc = ret;
+			break;
+		}
+
+		req = 0;
+		mtp_debug("get tx req\n");
+		ret = wait_event_interruptible(g_usb_mtp_context.tx_wq,
+			((req = req_get(&g_usb_mtp_context.tx_reqs))
+			 || g_usb_mtp_context.cancel));
+
+		mtp_debug("got tx req\n");
+		if (g_usb_mtp_context.cancel) {
+			mtp_debug("cancel return in mtp_write get req\n");
+			if (req != 0)
+				req_put(&g_usb_mtp_context.tx_reqs, req);
+			g_usb_mtp_context.cancel = 0;
+			return -EINVAL;
+		}
+		if (ret < 0) {
+			rc = ret;
+			break;
+		}
+
+		if (req != 0) {
+			if (count > BULK_BUFFER_SIZE)
+				xfer = BULK_BUFFER_SIZE;
+			else
+				xfer = count;
+			if (copy_from_user(req->buf, buf, xfer)) {
+				req_put(&g_usb_mtp_context.tx_reqs, req);
+				rc = -EFAULT;
+				break;
+			}
+
+			req->length = xfer;
+			ret = usb_ep_queue(g_usb_mtp_context.bulk_in,
+				req, GFP_ATOMIC);
+			if (ret < 0) {
+				mtp_err("error %d\n", ret);
+				req_put(&g_usb_mtp_context.tx_reqs, req);
+				rc = ret;
+				break;
+			}
+
+			buf += xfer;
+			count -= xfer;
+			mtp_debug("xfer=%d\n", xfer);
+		}
+	}
+
+	mtp_debug("mtp_write returning %d\n", rc);
+	return rc;
 }
+
+/* ioctl related */
+#define MTP_EVENT_SIZE   28
+struct mtp_event_data {
+    unsigned char data[MTP_EVENT_SIZE];
+};
+
+#define MTP_IOC_MAGIC    'm'
+#define MTP_IOC_MAXNR    10
+
+#define MTP_IOC_EVENT            _IOW(MTP_IOC_MAGIC, 1, struct mtp_event_data)
+#define MTP_IOC_SEND_ZLP         _IO(MTP_IOC_MAGIC, 2)
+#define MTP_IOC_GET_EP_SIZE_IN   _IOR(MTP_IOC_MAGIC, 3, int)
+#define MTP_IOC_GET_VENDOR_FLAG  _IOR(MTP_IOC_MAGIC, 4, int)
+#define MTP_IOC_CANCEL_IO        _IO(MTP_IOC_MAGIC, 5)
+#define MTP_IOC_DEVICE_RESET     _IO(MTP_IOC_MAGIC, 6)
 
 static int mtp_ioctl(struct inode *inode, struct file *file,
 		unsigned int cmd, unsigned long arg)
 {
+	int len, clen, n;
+	struct usb_request *req;
+	struct mtp_event_data event;
+
+	if (!g_usb_mtp_context.online)
+		return -EINVAL;
+
+	switch (cmd) {
+	case MTP_IOC_EVENT:
+		if (copy_from_user(event.data, (void *)arg, MTP_EVENT_SIZE))
+			return -EINVAL;
+
+		/* length is in little endian */
+		memcpy(&len, event.data, sizeof(len));
+		clen = le32_to_cpu(len);
+		mtp_debug("len=%d cpu len=%d\n", len, clen);
+		/* send event through interrupt in */
+		req = g_usb_mtp_context.int_tx_req;
+		if (!req)
+			return -EINVAL;
+		req->length = clen;
+		if (usb_ep_queue(g_usb_mtp_context.intr_in, req, GFP_ATOMIC))
+			return -EINVAL;
+		break;
+	case MTP_IOC_SEND_ZLP:
+		req = req_get(&g_usb_mtp_context.tx_reqs);
+		if (!req)
+			return -EINVAL;
+		req->length = 0;
+		if (usb_ep_queue(g_usb_mtp_context.bulk_in, req, GFP_ATOMIC)) {
+			req_put(&g_usb_mtp_context.tx_reqs, req);
+			return -EINVAL;
+		}
+		break;
+	case MTP_IOC_GET_EP_SIZE_IN:
+		/* get endpoint buffer size for bulk in */
+		len = BULK_BUFFER_SIZE;
+		if (copy_to_user((void *)arg, &len, sizeof(int)))
+			return -EINVAL;
+		break;
+	case MTP_IOC_CANCEL_IO:
+		mtp_debug("MTP_IOC_CANCEL_IO:\n");
+		g_usb_mtp_context.cancel = 1;
+		for (n = 0; n < MAX_BULK_RX_REQ_NUM; n++) {
+			req = pending_reqs[n];
+			if (req && req->actual) {
+				mtp_debug("%p %d\n", req, req->actual);
+				req->actual = 0;
+			}
+		}
+		/* we've cancelled the recv urb, start new one */
+		mtp_debug("MTP_IOC_CANCEL_IO end:\n");
+		wake_up(&g_usb_mtp_context.rx_wq);
+		wake_up(&g_usb_mtp_context.tx_wq);
+		break;
+	case MTP_IOC_DEVICE_RESET:
+		g_usb_mtp_context.cancel = 1;
+		g_usb_mtp_context.ctl_cancel = 1;
+		wake_up(&g_usb_mtp_context.rx_wq);
+		wake_up(&g_usb_mtp_context.tx_wq);
+		wake_up(&g_usb_mtp_context.ctl_rx_wq);
+		wake_up(&g_usb_mtp_context.ctl_tx_wq);
+		break;
+	}
 	return 0;
 }
 
@@ -214,16 +601,171 @@ static struct miscdevice mtp_device = {
 	.fops = &mtp_fops,
 };
 
-static ssize_t mtp_ctl_read(struct file *fp, char __user *buf,
-				size_t count, loff_t *pos)
+/* mtpctl related */
+#define MTP_CTL_CLASS_REQ    1
+#define MTP_CTL_CLASS_REPLY  2
+
+struct mtp_ctl_msg_header {
+    int msg_len;
+    int msg_id;
+};
+
+#define MTP_CTL_MSG_HEADER_SIZE   (sizeof(struct mtp_ctl_msg_header))
+#define MTP_CTL_MSG_SIZE	(MTP_CTL_MSG_HEADER_SIZE +\
+			 sizeof(struct usb_ctrlrequest))
+
+#define MTP_CLASS_CANCEL_REQ			0x64
+#define MTP_CLASS_GET_EXTEND_EVEVT_DATA	0x65
+#define MTP_CLASS_RESET_REQ				0x66
+#define MTP_CLASS_GET_DEVICE_STATUS		0x67
+
+
+static void mtp_ctl_read_complete(struct usb_ep *ep, struct usb_request *req)
 {
-	return count;
+	struct ctl_req_wrapper	*ctl_req = ep->driver_data;
+
+	mtp_debug("mtp_ctl_read_complete --> %d, %d/%d\n",
+	req->status, req->actual, req->length);
+
+	if (req->status == 0)
+		memcpy(ctl_req->cancel_data, req->buf, req->actual);
+
+	wake_up(&g_usb_mtp_context.ctl_rx_wq);
 }
 
-static ssize_t mtp_ctl_write(struct file *fp, const char __user *buf,
-				size_t count, loff_t *pos)
+static void mtp_ctl_write_complete(struct usb_ep *ep, struct usb_request *req)
 {
-	return count;
+	mtp_debug("mtp_ctl_write_complete --> %d, %d/%d\n",
+	req->status, req->actual, req->length);
+
+	ctl_tx_done = 1;
+
+	wake_up(&g_usb_mtp_context.ctl_tx_wq);
+}
+
+static ssize_t mtp_ctl_read(struct file *file, char *buf,
+	size_t count, loff_t *pos)
+{
+    int ret, size = sizeof(struct usb_ctrlrequest);
+	struct mtp_ctl_msg_header msg;
+
+	mtp_debug("count=%d\n", count);
+
+	if (!g_usb_mtp_context.online)
+		return -EINVAL;
+
+	if (!cur_creq) {
+		ret = wait_event_interruptible(g_usb_mtp_context.ctl_rx_wq,
+		((cur_creq = ctl_req_get(&g_usb_mtp_context.ctl_rx_done_reqs))
+			|| g_usb_mtp_context.ctl_cancel));
+		if (g_usb_mtp_context.ctl_cancel) {
+			mtp_debug("ctl_cancel return in mtp_ctl_read\n");
+			g_usb_mtp_context.ctl_cancel = 0;
+			return -EINVAL;
+		}
+		if (ret < 0)
+			return ret;
+	}
+
+	msg.msg_id = MTP_CTL_CLASS_REQ;
+	msg.msg_len = MTP_CTL_MSG_SIZE;
+	if (cur_creq->creq.bRequest == MTP_CLASS_CANCEL_REQ)
+		msg.msg_len = MTP_CTL_MSG_SIZE + MTP_CANCEL_REQ_DATA_SIZE;
+
+	if (cur_creq->header == 1) {
+		cur_creq->header = 0;
+		if (copy_to_user(buf, &msg, MTP_CTL_MSG_HEADER_SIZE))
+			goto ctl_read_fail;
+		ret = MTP_CTL_MSG_HEADER_SIZE;
+		mtp_debug("msg header return %d\n", ret);
+	} else {
+		if (copy_to_user(buf, &cur_creq->creq, size))
+			goto ctl_read_fail;
+		ret = size;
+		if (cur_creq->creq.bRequest == MTP_CLASS_CANCEL_REQ) {
+			if (copy_to_user(buf + size, &cur_creq->cancel_data,
+				MTP_CANCEL_REQ_DATA_SIZE))
+				goto ctl_read_fail;
+			ret += MTP_CANCEL_REQ_DATA_SIZE;
+		}
+		mtp_debug("prepare %d %x\n", ret, cur_creq->creq.bRequest);
+		ctl_req_put(&g_usb_mtp_context.ctl_rx_reqs, cur_creq);
+		cur_creq = NULL;
+	}
+
+	mtp_debug("return %d\n", ret);
+    return ret;
+
+ctl_read_fail:
+	ctl_req_put(&g_usb_mtp_context.ctl_rx_reqs, cur_creq);
+	cur_creq = NULL;
+	mtp_debug("return -EFAULT\n");
+    return -EFAULT;
+}
+
+static ssize_t mtp_ctl_write(struct file *file, const char *buf,
+	size_t count, loff_t *pos)
+{
+    struct mtp_ctl_msg_header msg;
+	struct usb_request *req = NULL;
+	struct usb_ep *ep0;
+	int ret;
+
+	mtp_debug("count=%d\n", count);
+
+	ret = wait_event_interruptible(g_usb_mtp_context.ctl_tx_wq,
+		(g_usb_mtp_context.online || g_usb_mtp_context.ctl_cancel));
+	if (g_usb_mtp_context.ctl_cancel) {
+		mtp_debug("ctl_cancel return in mtp_ctl_write 1\n");
+		g_usb_mtp_context.ctl_cancel = 0;
+		return -EINVAL;
+	}
+	if (ret < 0)
+		return ret;
+
+	ep0 = g_usb_mtp_context.cdev->gadget->ep0;
+    if (count > ep0->maxpacket || count < MTP_CTL_MSG_HEADER_SIZE) {
+		mtp_err("size invalid\n");
+		return -ENOMEM;
+    }
+
+    /* msg info */
+    if (copy_from_user(&msg, buf, MTP_CTL_MSG_HEADER_SIZE))
+		return -EINVAL;
+
+    mtp_debug("msg len = %d, msg id = %d", msg.msg_len, msg.msg_id);
+    if (msg.msg_id != MTP_CTL_CLASS_REPLY) {
+		mtp_err("invalid id %d", msg.msg_id);
+		return -EINVAL;
+    }
+
+    /* sending the data */
+	req = g_usb_mtp_context.cdev->req;
+    req->length = count - MTP_CTL_MSG_HEADER_SIZE;
+	req->complete = mtp_ctl_write_complete;
+    if (copy_from_user(req->buf,
+		(u8 *)buf + MTP_CTL_MSG_HEADER_SIZE, req->length)) {
+		return -EINVAL;
+	}
+	ctl_tx_done = 0;
+	if (usb_ep_queue(ep0, req, GFP_ATOMIC)) {
+		req->status = 0;
+		mtp_ctl_write_complete(ep0, req);
+		return -EIO;
+	}
+	ret = wait_event_interruptible(g_usb_mtp_context.ctl_tx_wq,
+		(ctl_tx_done || g_usb_mtp_context.ctl_cancel));
+	ctl_tx_done = 0;
+	if (g_usb_mtp_context.ctl_cancel) {
+		mtp_debug("ctl_cancel return in mtp_ctl_write\n");
+		g_usb_mtp_context.ctl_cancel = 0;
+		return -EINVAL;
+	}
+	if (ret < 0)
+		return ret;
+
+	mtp_debug("return count=%d\n", count);
+    return count;
 }
 
 static const struct file_operations mtp_ctl_fops = {
@@ -231,83 +773,26 @@ static const struct file_operations mtp_ctl_fops = {
      .write = mtp_ctl_write,
 };
 
-/*-------------------------------------------------------------------------*/
-static void mtp_int_complete(struct usb_ep *ep, struct usb_request *req)
-{
-	/* we don't need to support anything here */
-	return;
-}
-
-static void mtp_out_complete(struct usb_ep *ep, struct usb_request *req)
-{
-	if (req->status == 0)
-		printk(KERN_INFO "%s status is ok\n", __func__);
-	else
-		printk(KERN_INFO "%s status is error\n", __func__);
-}
-
-static void mtp_in_complete(struct usb_ep *ep, struct usb_request *req)
-{
-	if (req->status == 0)
-		printk(KERN_INFO "%s status is ok\n", __func__);
-	else
-		printk(KERN_INFO "%s status is error\n", __func__);
-}
-
 static void
 mtp_function_unbind(struct usb_configuration *c, struct usb_function *f)
 {
 	struct usb_request *req;
-	unsigned long flags;
+	int n;
 
-	/* Free BULK OUT Requests */
-	for (;;) {
-		spin_lock_irqsave(&g_usb_mtp_context.lock, flags);
-		if (list_empty(&g_usb_mtp_context.rx_reqs))
-			break;
-		else {
-			req = list_first_entry(&g_usb_mtp_context.rx_reqs,
-					struct usb_request, list);
-			list_del(&req->list);
-		}
-		spin_unlock_irqrestore(&g_usb_mtp_context.lock, flags);
-		if (!req)
-			usb_ep_free_request(g_usb_mtp_context.bulk_out, req);
-	}
+	for (n = 0; n < MAX_BULK_RX_REQ_NUM; n++)
+		pending_reqs[n] = NULL;
 
-	/* Free BULK IN Requests */
-	for (;;) {
-		spin_lock_irqsave(&g_usb_mtp_context.lock, flags);
-		if (list_empty(&g_usb_mtp_context.tx_reqs))
-			break;
-		else {
-			req = list_first_entry(&g_usb_mtp_context.tx_reqs,
-						struct usb_request, list);
-			list_del(&req->list);
-		}
-		spin_unlock_irqrestore(&g_usb_mtp_context.lock, flags);
-		if (!req)
-			usb_ep_free_request(g_usb_mtp_context.bulk_in, req);
-	}
+	while ((req = req_get(&g_usb_mtp_context.rx_reqs)))
+		req_free(req, g_usb_mtp_context.bulk_out);
+	while ((req = req_get(&g_usb_mtp_context.rx_done_reqs)))
+		req_free(req, g_usb_mtp_context.bulk_out);
+	while ((req = req_get(&g_usb_mtp_context.tx_reqs)))
+		req_free(req, g_usb_mtp_context.bulk_in);
 
-	for (;;) {
-		spin_lock_irqsave(&g_usb_mtp_context.lock, flags);
-		if (list_empty(&g_usb_mtp_context.int_tx_reqs))
-			break;
-		else {
-			req = list_first_entry(
-					&g_usb_mtp_context.int_tx_reqs,
-					struct usb_request, list);
-			list_del(&req->list);
-		}
-		spin_unlock_irqrestore(&g_usb_mtp_context.lock, flags);
-		if (!req)
-			usb_ep_free_request(g_usb_mtp_context.bulk_in, req);
-	}
+	req_free(g_usb_mtp_context.int_tx_req, g_usb_mtp_context.intr_in);
 
 	misc_deregister(&mtp_device);
-	if (mtp_proc)
-		remove_proc_entry("mtpctl", NULL);
+    remove_proc_entry("mtpctl", NULL);
 }
 
 static int __init
@@ -316,7 +801,7 @@ mtp_function_bind(struct usb_configuration *c, struct usb_function *f)
 	int n, rc, id;
 	struct usb_ep *ep;
 	struct usb_request *req;
-	unsigned long flags;
+    struct proc_dir_entry *mtp_proc = NULL;
 
 	g_usb_mtp_context.cdev = c->cdev;
 	/* allocate interface ID(s) */
@@ -329,8 +814,7 @@ mtp_function_bind(struct usb_configuration *c, struct usb_function *f)
 	ep = usb_ep_autoconfig(g_usb_mtp_context.cdev->gadget,
 						&fs_bulk_in_desc);
 	if (!ep) {
-		printk(KERN_INFO "%s auto-configure hs_bulk_in_desc error\n",
-						__func__);
+		mtp_err("auto-configure hs_bulk_in_desc error\n");
 		goto autoconf_fail;
 	}
 	ep->driver_data = &g_usb_mtp_context;
@@ -339,8 +823,7 @@ mtp_function_bind(struct usb_configuration *c, struct usb_function *f)
 	ep = usb_ep_autoconfig(g_usb_mtp_context.cdev->gadget,
 						&fs_bulk_out_desc);
 	if (!ep) {
-		printk(KERN_INFO "%s auto-configure hs_bulk_out_desc error\n",
-		      __func__);
+		mtp_err("auto-configure hs_bulk_out_desc error\n");
 		goto autoconf_fail;
 	}
 	ep->driver_data = &g_usb_mtp_context;
@@ -349,8 +832,7 @@ mtp_function_bind(struct usb_configuration *c, struct usb_function *f)
 	ep = usb_ep_autoconfig(g_usb_mtp_context.cdev->gadget,
 						&fs_intr_in_desc);
 	if (!ep) {
-		printk(KERN_INFO "%s auto-configure hs_intr_in_desc error\n",
-		      __func__);
+		mtp_err("auto-configure hs_intr_in_desc error\n");
 		goto autoconf_fail;
 	}
 	ep->driver_data = &g_usb_mtp_context;
@@ -369,55 +851,42 @@ mtp_function_bind(struct usb_configuration *c, struct usb_function *f)
 	rc = -ENOMEM;
 
 	for (n = 0; n < MAX_BULK_RX_REQ_NUM; n++) {
-		req = usb_ep_alloc_request(g_usb_mtp_context.bulk_out,
-					 GFP_KERNEL);
-		if (!req) {
-			printk(KERN_INFO "%s: alloc request bulk_out fail\n",
-							__func__);
-			break;
-		}
+		req = req_new(g_usb_mtp_context.bulk_out, BULK_BUFFER_SIZE);
+		if (!req)
+			goto autoconf_fail;
+
+		pending_reqs[n] = req;
+
 		req->complete = mtp_out_complete;
-		spin_lock_irqsave(&g_usb_mtp_context.lock, flags);
-		list_add_tail(&req->list, &g_usb_mtp_context.rx_reqs);
-		spin_unlock_irqrestore(&g_usb_mtp_context.lock, flags);
+		req_put(&g_usb_mtp_context.rx_reqs, req);
 	}
 	for (n = 0; n < MAX_BULK_TX_REQ_NUM; n++) {
-		req = usb_ep_alloc_request(g_usb_mtp_context.bulk_in,
-					 GFP_KERNEL);
-		if (!req) {
-			printk(KERN_INFO "%s: alloc request bulk_in fail\n",
-							__func__);
-			break;
-		}
+		req = req_new(g_usb_mtp_context.bulk_in, BULK_BUFFER_SIZE);
+		if (!req)
+			goto autoconf_fail;
+
 		req->complete = mtp_in_complete;
-		spin_lock_irqsave(&g_usb_mtp_context.lock, flags);
-		list_add_tail(&req->list, &g_usb_mtp_context.tx_reqs);
-		spin_unlock_irqrestore(&g_usb_mtp_context.lock, flags);
+		req_put(&g_usb_mtp_context.tx_reqs, req);
 	}
 
-	/* Interrupt Endpoint */
-	for (n = 0; n < MAX_INTR_TX_REQ_NUM; n++) {
-		req = usb_ep_alloc_request(g_usb_mtp_context.intr_in,
-					 GFP_KERNEL);
-		if (!req) {
-			printk(KERN_INFO "%s: alloc request intr_in fail\n",
-							__func__);
-			break;
-		}
-		req->complete = mtp_int_complete;
-		spin_lock_irqsave(&g_usb_mtp_context.lock, flags);
-		list_add_tail(&req->list, &g_usb_mtp_context.int_tx_reqs);
-		spin_unlock_irqrestore(&g_usb_mtp_context.lock, flags);
-	}
+	for (n = 0; n < MAX_CTL_RX_REQ_NUM; n++)
+		ctl_req_put(&g_usb_mtp_context.ctl_rx_reqs, &ctl_reqs[n]);
+
+	g_usb_mtp_context.int_tx_req =
+		req_new(g_usb_mtp_context.intr_in, BULK_BUFFER_SIZE);
+	if (!g_usb_mtp_context.int_tx_req)
+		goto autoconf_fail;
+
+	g_usb_mtp_context.int_tx_req->complete = mtp_int_complete;
 
 	misc_register(&mtp_device);
 
 	mtp_proc = create_proc_entry("mtpctl", 0666, 0);
 	if (!mtp_proc) {
-		printk(KERN_ERR "%s: creating /proc/mtpctl failed\n", __func__);
+		mtp_err("creating /proc/mtpctl failed\n");
 		goto autoconf_fail;
-	}
-	mtp_proc->proc_fops = &mtp_ctl_fops;
+    }
+    mtp_proc->proc_fops = &mtp_ctl_fops;
 
 	return 0;
 
@@ -429,17 +898,38 @@ autoconf_fail:
 
 static void mtp_function_disable(struct usb_function *f)
 {
+	g_usb_mtp_context.online = 0;
 	usb_ep_disable(g_usb_mtp_context.bulk_in);
 	usb_ep_disable(g_usb_mtp_context.bulk_out);
 	usb_ep_disable(g_usb_mtp_context.intr_in);
+
+	g_usb_mtp_context.cur_read_req = 0;
+	g_usb_mtp_context.read_buf = 0;
+	g_usb_mtp_context.data_len = 0;
+	/* readers may be blocked waiting for us to go online */
+	wake_up(&g_usb_mtp_context.rx_wq);
+	wake_up(&g_usb_mtp_context.tx_wq);
+	wake_up(&g_usb_mtp_context.ctl_rx_wq);
+	wake_up(&g_usb_mtp_context.ctl_tx_wq);
 }
 
+static void start_out_receive(void)
+{
+	struct usb_request *req;
+	int ret;
+
+	/* if we have idle read requests, get them queued */
+	while ((req = req_get(&g_usb_mtp_context.rx_reqs))) {
+		req->length = BULK_BUFFER_SIZE;
+		ret = usb_ep_queue(g_usb_mtp_context.bulk_out, req, GFP_ATOMIC);
+		if (ret < 0)
+			req_put(&g_usb_mtp_context.rx_reqs, req);
+	}
+}
 
 static int mtp_function_set_alt(struct usb_function *f,
 		unsigned intf, unsigned alt)
 {
-	unsigned long flags;
-	struct usb_request *req;
 	int ret;
 
 	ret = usb_ep_enable(g_usb_mtp_context.bulk_in,
@@ -467,21 +957,19 @@ static int mtp_function_set_alt(struct usb_function *f,
 		return ret;
 	}
 
+	g_usb_mtp_context.cur_read_req = 0;
+	g_usb_mtp_context.read_buf = 0;
+	g_usb_mtp_context.data_len = 0;
+
 	/* we're online -- get all rx requests queued */
-	for (;;) {
-		spin_lock_irqsave(&g_usb_mtp_context.lock, flags);
-		if (list_empty(&g_usb_mtp_context.rx_reqs)) {
-			req = 0;
-		} else {
-			req = list_first_entry(&g_usb_mtp_context.rx_reqs,
-					       struct usb_request, list);
-			list_del(&req->list);
-		}
-		spin_unlock_irqrestore(&g_usb_mtp_context.lock, flags);
-		if (!req)
-			break;
-		/* Start Receive with BULK OUT */
-	}
+	start_out_receive();
+
+	g_usb_mtp_context.online = 1;
+	g_usb_mtp_context.cancel = 0;
+	g_usb_mtp_context.ctl_cancel = 0;
+
+	/* readers may be blocked waiting for us to go online */
+	wake_up(&g_usb_mtp_context.rx_wq);
 	return 0;
 }
 
@@ -491,7 +979,6 @@ static unsigned char mtp_ext_desc[] =
 "\050\000\000\000\000\001\004\000\001\000\000\000\000\000\000\000\000\001"
 "\115\124\120\000\000\000\000\000\060\060\000\000\000\000\000\000\000\000"
 "\000\000\000\000";
-
 static int  mtp_ext_str_idx = 238;
 
 static int mtp_function_setup(struct usb_function *f,
@@ -500,21 +987,80 @@ static int mtp_function_setup(struct usb_function *f,
 	int	value = -EOPNOTSUPP;
 	u16     wIndex = le16_to_cpu(ctrl->wIndex);
 	u16     wLength = le16_to_cpu(ctrl->wLength);
-	struct  usb_request  *req = g_usb_mtp_context.cdev->req;
+	struct usb_composite_dev *cdev = f->config->cdev;
+	struct usb_request	*req = cdev->req;
+	struct ctl_req_wrapper	*ctl_req;
 
-	if ((ctrl->bRequestType & USB_TYPE_MASK) != USB_TYPE_VENDOR)
-		return value;
+	mtp_debug("bRequestType=0x%x bRequest=0x%x wIndex=0x%x wLength=0x%x\n",
+		ctrl->bRequestType, ctrl->bRequest, wIndex, wLength);
 
-	if ((ctrl->bRequest == MTP_MOD_VENDOR_CODE) &&
-		(wIndex == mtp_ext_id)) {
+	switch (ctrl->bRequestType & USB_TYPE_MASK) {
+	case USB_TYPE_VENDOR:
+		switch (ctrl->bRequest) {
+		case MTP_MOD_VENDOR_CODE:
+			if (wIndex == mtp_ext_id) {
+				memcpy(req->buf, mtp_ext_desc,
+						sizeof(mtp_ext_desc));
+				if (wLength < mtp_ext_desc[0])
+					value = wLength;
+				else
+					value = mtp_ext_desc[0];
 
-		memcpy(req->buf, mtp_ext_desc, sizeof(mtp_ext_desc));
+				req->zero = 0;
+				req->length = value;
+				if (usb_ep_queue(cdev->gadget->ep0, req,
+					GFP_ATOMIC))
+					mtp_err("kevin:ep0 in queue failed\n");
+			}
+			break;
+		default:
+			break;
+		}
+		break;
+	case USB_TYPE_CLASS:
+		switch (ctrl->bRequest) {
+		case MTP_CLASS_CANCEL_REQ:
+		case MTP_CLASS_GET_EXTEND_EVEVT_DATA:
+		case MTP_CLASS_RESET_REQ:
+		case MTP_CLASS_GET_DEVICE_STATUS:
+			mtp_debug("kevin:request=0x%x\n", ctrl->bRequest);
+			ctl_req = ctl_req_get(&g_usb_mtp_context.ctl_rx_reqs);
+			if (!ctl_req) {
+				mtp_err("get free ctl req failed\n");
+				break;
+			}
+			memcpy(&ctl_req->creq, ctrl,
+					sizeof(struct usb_ctrlrequest));
+			ctl_req->header = 1;
+			ctl_req_put(&g_usb_mtp_context.ctl_rx_done_reqs,
+				ctl_req);
+			value = 0;
+			if ((ctrl->bRequest  == MTP_CLASS_CANCEL_REQ)
+				&& wLength == MTP_CANCEL_REQ_DATA_SIZE) {
 
-		if (wLength < mtp_ext_desc[0])
-			value = wLength;
-		else
-			value = mtp_ext_desc[0];
+				memset(&ctl_req->cancel_data, 0,
+					MTP_CANCEL_REQ_DATA_SIZE);
+				value = wLength;
+				cdev->gadget->ep0->driver_data = ctl_req;
+				req->complete = mtp_ctl_read_complete;
+				req->zero = 0;
+				req->length = wLength;
+
+				if (usb_ep_queue(cdev->gadget->ep0,
+						req, GFP_ATOMIC)) {
+					mtp_err("kevin:ep0 out queue failed\n");
+					mtp_ctl_read_complete(cdev->gadget->ep0,
+							req);
+				}
+			} else
+				wake_up(&g_usb_mtp_context.ctl_rx_wq);
+			break;
+		default:
+			break;
+		}
 	}
+
+	mtp_debug("return value=%d\n", value);
 	return value;
 }
 
@@ -524,15 +1070,23 @@ int __init mtp_function_add(struct usb_composite_dev *cdev,
 	int ret = 0;
 	int status;
 
+	init_waitqueue_head(&g_usb_mtp_context.rx_wq);
+	init_waitqueue_head(&g_usb_mtp_context.tx_wq);
+	init_waitqueue_head(&g_usb_mtp_context.ctl_rx_wq);
+	init_waitqueue_head(&g_usb_mtp_context.ctl_tx_wq);
+
 	INIT_LIST_HEAD(&g_usb_mtp_context.rx_reqs);
+	INIT_LIST_HEAD(&g_usb_mtp_context.rx_done_reqs);
 	INIT_LIST_HEAD(&g_usb_mtp_context.tx_reqs);
-	INIT_LIST_HEAD(&g_usb_mtp_context.int_tx_reqs);
+	INIT_LIST_HEAD(&g_usb_mtp_context.ctl_rx_reqs);
+	INIT_LIST_HEAD(&g_usb_mtp_context.ctl_rx_done_reqs);
 
 	status = usb_string_id(c->cdev);
 	if (status >= 0) {
 		mtp_string_defs[STRING_INTERFACE].id = status;
 		intf_desc.iInterface = status;
 	}
+
 	mtp_string_defs[STRING_MTP].id = mtp_ext_str_idx;
 
 	g_usb_mtp_context.cdev = cdev;
@@ -548,10 +1102,22 @@ int __init mtp_function_add(struct usb_composite_dev *cdev,
 
 	ret = usb_add_function(c, &g_usb_mtp_context.function);
 	if (ret) {
-		printk(KERN_ERR "MTP gadget driver failed to initialize\n");
+		mtp_err("MTP gadget driver failed to initialize\n");
 		return ret;
 	}
 
 	return 0;
 }
 
+struct usb_function *mtp_function_enable(int enable, int id)
+{
+	if (enable) {
+		g_usb_mtp_context.function.descriptors = fs_mtp_descs;
+		g_usb_mtp_context.function.hs_descriptors = hs_mtp_descs;
+		intf_desc.bInterfaceNumber = id;
+	} else {
+		g_usb_mtp_context.function.descriptors = null_mtp_descs;
+		g_usb_mtp_context.function.hs_descriptors = null_mtp_descs;
+	}
+	return &g_usb_mtp_context.function;
+}
