@@ -47,8 +47,6 @@ struct plat_serial8250_port {
 #ifdef CONFIG_SERIAL_OMAP3430_HW_FLOW_CONTROL
 	unsigned char   rtscts;     /* bit0: rts, bit1: cts */
 #endif
-	void		(*pm)(struct uart_port *port,
-			      unsigned int state, unsigned int old);
 };
 
 /*
