@@ -818,7 +818,11 @@ serial_omap_set_termios(struct uart_port *port, struct ktermios *termios,
 	serial_out(up, UART_IER, up->ier);
 
 	if (termios->c_cflag & CRTSCTS)
+#ifdef CONFIG_SERIAL_OMAP3430_HW_FLOW_CONTROL
+		efr |= (port->unused1 << 6);
+#else
 		efr |= (UART_EFR_CTS | UART_EFR_RTS);
+#endif
 
 	serial_out(up, UART_LCR, cval | UART_LCR_DLAB);/* set DLAB */
 	serial_out(up, UART_DLL, quot & 0xff);		/* LS of divisor */
@@ -1307,6 +1311,9 @@ static int serial_omap_probe(struct platform_device *pdev)
 		up->port.flags = pdata->flags;
 		up->port.uartclk = 48000000;
 		up->port.regshift = 2;
+#ifdef CONFIG_SERIAL_OMAP3430_HW_FLOW_CONTROL
+		up->port.unused1 = pdata->rtscts;
+#endif
 	}
 
 
