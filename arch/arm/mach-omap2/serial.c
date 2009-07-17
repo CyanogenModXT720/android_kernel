@@ -14,12 +14,6 @@
  * This file is subject to the terms and conditions of the GNU General Public
  * License. See the file "COPYING" in the main directory of this archive
  * for more details.
- *
- * Revision History:
- *
- * Date         Author    Comment
- * -----------  --------  ----------------------------------------------
- * 11-Jun-2009  Motorola  Support OMAP3430 HW flow control
  */
 
 #include <linux/kernel.h>
@@ -97,7 +91,7 @@ static struct plat_serialomap_port serial_platform_data[] = {
 		.irq		= 72,
 		.regshift	= 2,
 #ifdef CONFIG_SERIAL_OMAP3430_HW_FLOW_CONTROL
-		.rtscts		= SERIAL8250_AUTO_RTS,
+		.rtscts		= SERIALOMAP_AUTO_RTS,
 #endif
 		.flags		= UPF_BOOT_AUTOCONF,
 	},
@@ -106,7 +100,7 @@ static struct plat_serialomap_port serial_platform_data[] = {
 		.irq		= 73,
 		.regshift	= 2,
 #ifdef CONFIG_SERIAL_OMAP3430_HW_FLOW_CONTROL
-		.rtscts		= SERIAL8250_AUTO_RTS | SERIAL8250_AUTO_CTS,
+		.rtscts		= SERIALOMAP_AUTO_RTS | SERIALOMAP_AUTO_CTS,
 #endif
 		.flags		= UPF_BOOT_AUTOCONF,
 	},
@@ -115,7 +109,7 @@ static struct plat_serialomap_port serial_platform_data[] = {
 		.irq		= 74,
 		.regshift	= 2,
 #ifdef CONFIG_SERIAL_OMAP3430_HW_FLOW_CONTROL
-		.rtscts		= SERIAL8250_AUTO_RTS,
+		.rtscts		= SERIALOMAP_AUTO_RTS,
 #endif
 		.flags		= UPF_BOOT_AUTOCONF,
 	},
