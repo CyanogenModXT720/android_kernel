@@ -465,7 +465,17 @@ static unsigned int check_modem_status(struct uart_omap_port *up)
 static inline irqreturn_t serial_omap_irq(int irq, void *dev_id)
 {
 	struct uart_omap_port *up = dev_id;
-	unsigned int iir, lsr;
+	unsigned int iir, lsr, ssr;
+
+#if 0
+	ssr = serial_in(up, UART_OMAP_SSR);
+	if (ssr & (1 << 2)) {
+		unsigned int scr;
+		scr = serial_in(up, UART_OMAP_SCR);
+		scr |= (1<<4);
+		serial_out(up, UART_OMAP_SCR, scr);
+	}
+#endif
 
 	iir = serial_in(up, UART_IIR);
 	if (iir & UART_IIR_NO_INT)
@@ -733,6 +743,7 @@ serial_omap_set_termios(struct uart_port *port, struct ktermios *termios,
 	unsigned char efr = 0;
 	unsigned long flags;
 	unsigned int baud, quot;
+	unsigned int scr;
 
 	serial_out(up, UART_LCR, UART_LCR_DLAB);
 	serial_out(up, UART_DLL, 0);
@@ -830,9 +841,17 @@ serial_omap_set_termios(struct uart_port *port, struct ktermios *termios,
 
 	serial_out(up, UART_LCR, cval);		/* reset DLAB */
 	up->lcr = cval;				/* Save LCR */
+#if 0
+	scr = (1 << 4);				/* RX_CTS_WU_EN */
+#else
+	scr = 0;
+#endif
 	if (up->use_dma)
-		serial_out(up, UART_OMAP_SCR  , ((1 << 6) | (1 << 7)));
+		scr |= (1 << 6) | (1 << 7);	/* TX_TRIG_GRANU1 | RX_TRIG_GRANU1 */
 
+	serial_out(up, UART_OMAP_SCR, scr);
+
+	
 	serial_out(up, UART_LCR, 0xbf);	/* Access EFR */
 	serial_out(up, UART_EFR, UART_EFR_ECB);
 	serial_out(up, UART_LCR, 0x0);		/* Access FCR */
@@ -877,6 +896,10 @@ serial_omap_pm(struct uart_port *port, unsigned int state,
 	serial_out(up, UART_LCR, 0xBF);
 	serial_out(up, UART_EFR, efr);
 	serial_out(up, UART_LCR, 0);
+
+	if (oldstate == 3) {
+		wake_lock_timeout(&serial_omap_wakelock, (HZ * 10));
+	}
 }
 
 static void serial_omap_release_port(struct uart_port *port)
