@@ -43,11 +43,11 @@
 
 #ifdef CONFIG_ARM_OF
 #include <asm/prom.h>
+#include <mach/hardware.h>
 #endif
 #ifdef CONFIG_BOOTINFO
 #include <asm/bootinfo.h>
 #endif
-#include <mach/hardware.h>
 
 #include "compat.h"
 #include "atags.h"
@@ -852,6 +852,7 @@ static int c_show(struct seq_file *m, void *v)
 {
 	int i;
 
+#if defined(CONFIG_ARM_OF)
 	static char *p = NULL;
 	int len = strlen(bp_model);
 
@@ -863,6 +864,7 @@ static int c_show(struct seq_file *m, void *v)
 			machine_name = strcat(p, bp_model);
 		}
 	}
+#endif
 
 	seq_printf(m, "Processor\t: %s rev %d (%s)\n",
 		   cpu_name, read_cpuid_id() & 15, elf_platform);
