@@ -25,6 +25,7 @@
 #include <linux/err.h>
 #include <linux/clk.h>
 #include <linux/mm.h>
+#include <linux/bootmem.h>
 #include <linux/qtouch_obp_ts.h>
 #include <linux/led-cpcap-lm3554.h>
 #include <linux/led-lm3530.h>
@@ -521,28 +522,6 @@ static struct omap_usb_platform_data usb_platform_data = {
 	.num_ports = ARRAY_SIZE(usb_port_data),
 };
 
-#ifdef CONFIG_ANDROID_RAM_CONSOLE
-#define RAM_CONSOLE_START   0x8FFE0000
-unsigned long ram_console_start = 0 ;
-static struct resource ram_console_resource = {
-	.start	= RAM_CONSOLE_START,
-	.end	= (RAM_CONSOLE_START + 0x20000 -1),
-	.flags	= IORESOURCE_MEM,
-};
-
-static struct platform_device ram_console_device = {
-	.name = "ram_console",
-	.id = 0,
-	.num_resources  = 1,
-	.resource       = &ram_console_resource,
-};
-
-static void  omap_init_rc(void)
-{
-	platform_device_register(&ram_console_device);
-}	
-#endif
-
 static struct resource ehci_resources[] = {
 	[0] = {
 		.start	= OMAP34XX_HSUSB_HOST_BASE + 0x800,
@@ -880,6 +859,38 @@ static void __init mapphone_vout_init(void)
 	platform_device_register(&mapphone_vout_device);
 }
 
+#ifdef CONFIG_ANDROID_RAM_CONSOLE
+#define RAM_CONSOLE_START   0x8E000000
+#define RAM_CONSOLE_SIZE    0x20000
+static struct resource ram_console_resource = {
+       .start  = RAM_CONSOLE_START,
+       .end    = (RAM_CONSOLE_START + RAM_CONSOLE_SIZE - 1),
+       .flags  = IORESOURCE_MEM,
+};
+
+static struct platform_device ram_console_device = {
+       .name = "ram_console",
+       .id = 0,
+       .num_resources  = 1,
+       .resource       = &ram_console_resource,
+};
+
+static inline void mapphone_ramconsole_init(void)
+{
+	platform_device_register(&ram_console_device);
+}
+
+static inline void omap2_ramconsole_reserve_sdram(void)
+{
+	reserve_bootmem(RAM_CONSOLE_START, RAM_CONSOLE_SIZE, 0);
+}
+#else
+static inline void mapphone_ramconsole_init(void) {}
+
+static inline void omap2_ramconsole_reserve_sdram(void) {}
+#endif
+
+
 static void __init mapphone_bp_model_init(void)
 {
 #ifdef CONFIG_OMAP_RESET_CLOCKS
@@ -934,6 +945,7 @@ static void __init mapphone_init(void)
 	mapphone_bp_model_init();
 	mapphone_padconf_init();
 	mapphone_gpio_mapping_init();
+	mapphone_ramconsole_init();
 	mapphone_omap_mdm_ctrl_init();
 	mapphone_spi_init();
 	mapphone_flash_init();
@@ -956,13 +968,11 @@ static void __init mapphone_init(void)
 	mapphone_vout_init();
 	mapphone_power_off_init();
 	mapphone_gadget_init();
-#ifdef CONFIG_ANDROID_RAM_CONSOLE	
-	omap_init_rc();
-#endif	
 }
 
 static void __init mapphone_map_io(void)
 {
+	omap2_ramconsole_reserve_sdram();
 	omap2_set_globals_343x();
 	omap2_map_common_io();
 }
