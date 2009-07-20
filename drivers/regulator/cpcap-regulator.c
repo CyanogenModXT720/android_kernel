@@ -89,7 +89,7 @@ static struct {
 		ARRAY_SIZE(vsdio_val_tbl), vsdio_val_tbl},
 	[CPCAP_VPLL]     = {CPCAP_REG_VPLLC, 0x0043, 0x0018, 3, 0x0000,
 		ARRAY_SIZE(vpll_val_tbl), vpll_val_tbl},
-	[CPCAP_VRF1]     = {CPCAP_REG_VRF1C, 0x008C, 0x0020, 5, 0x0000,
+	[CPCAP_VRF1]     = {CPCAP_REG_VRF1C, 0x00AC, 0x0002, 1, 0x0000,
 		ARRAY_SIZE(vrf1_val_tbl), vrf1_val_tbl},
 	[CPCAP_VRF2]     = {CPCAP_REG_VRF2C, 0x0023, 0x0008, 3, 0x0000,
 		ARRAY_SIZE(vrf2_val_tbl), vrf2_val_tbl},
