@@ -185,6 +185,17 @@ static int cpcap_reboot(struct notifier_block *this, unsigned long code,
 			result = NOTIFY_BAD;
 		}
 
+		if (mode != NULL && !strncmp("outofcharge", mode, 12)) {
+			/* Set the outofcharge bit in the cpcap */
+			ret = cpcap_regacc_write(misc_cpcap, CPCAP_REG_VAL1,
+				CPCAP_BIT_OUT_CHARGE_ONLY,
+				CPCAP_BIT_OUT_CHARGE_ONLY);
+			if (ret) {
+				dev_err(&(misc_cpcap->spi->dev),
+					"outofcharge cpcap set failure.\n");
+				result = NOTIFY_BAD;
+			}
+		}
 		/* Check if we are starting recovery mode */
 		if (mode != NULL && !strncmp("recovery", mode, 9)) {
 			/* Set the fota (recovery mode) bit in the cpcap */
