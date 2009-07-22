@@ -270,6 +270,9 @@ enum cpcap_reg {
 
 	CPCAP_REG_MAX		/* The largest valid register value. */
 	= CPCAP_REG_END,
+
+	CPCAP_REG_SIZE = CPCAP_REG_MAX + 1,
+	CPCAP_REG_UNUSED = CPCAP_REG_MAX + 2,
 };
 
 enum {
