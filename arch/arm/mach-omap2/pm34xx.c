@@ -66,7 +66,7 @@ static int regset_save_on_suspend;
 #define OMAP343X_TABLE_VALUE_OFFSET	   0x30
 #define OMAP343X_CONTROL_REG_VALUE_OFFSET  0x32
 
-#define DEBUG_WAKEUP 1
+#define DEBUG_WAKEUP 0
 
 #define PM_WKST_WKUP_ST_GPIO1 (1 << 3)
 #define PM_WKST1_CORE_ST_UART1 (1 << 13)
