@@ -896,10 +896,6 @@ serial_omap_pm(struct uart_port *port, unsigned int state,
 	serial_out(up, UART_LCR, 0xBF);
 	serial_out(up, UART_EFR, efr);
 	serial_out(up, UART_LCR, 0);
-
-	if (oldstate == 3) {
-		wake_lock_timeout(&serial_omap_wakelock, (HZ * 10));
-	}
 }
 
 static void serial_omap_release_port(struct uart_port *port)
