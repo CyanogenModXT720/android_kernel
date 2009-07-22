@@ -1642,6 +1642,14 @@ static int audio_ioctl(struct inode *inode, struct file *file,
 			cpcap_audio_state.stdac_rate =
 				valid_sample_rates[count].cpcap_audio_rate;
 		} else {
+			if ((file->f_mode & FMODE_WRITE) &&
+				(samp_rate != 8000 && samp_rate != 16000)) {
+				AUDIO_ERROR_LOG("[%d] Unsupported "
+						"Codec sample rate!!\n",
+						(u32) samp_rate);
+				ret = -EINVAL;
+				goto out;
+			}
 			cpcap_audio_state.codec_rate =
 				valid_sample_rates[count].cpcap_audio_rate;
 		}
