@@ -681,7 +681,7 @@ CONFIG_MTD_BLOCK=y
 # CONFIG_INFTL is not set
 # CONFIG_RFD_FTL is not set
 # CONFIG_SSFDC is not set
-CONFIG_MTD_OOPS=y
+# CONFIG_MTD_OOPS is no set
 
 #
 # RAM/ROM/Flash chip drivers
@@ -1808,7 +1808,7 @@ CONFIG_MPU_BRIDGE=y
 #
 # File systems
 #
-CONFIG_CORE_DUMP_PERMISSION=y
+# CONFIG_CORE_DUMP_PERMISSION is not set
 CONFIG_EXT2_FS=y
 # CONFIG_EXT2_FS_XATTR is not set
 # CONFIG_EXT2_FS_XIP is not set
@@ -2179,4 +2179,4 @@ CONFIG_UMTS_SYSPANIC=y
 #
 
 # LTT-LITE
-CONFIG_LTT_LITE=y
+# CONFIG_LTT_LITE is not set

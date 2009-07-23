@@ -67,6 +67,11 @@ PRODUCT_SPECIFIC_DEFCONFIGS += \
     ${LJAPDEFCONFIGSRC}/product/${PRODUCT}.config
 endif
 
+ifneq ($(ENG_BLD),)
+PRODUCT_SPECIFIC_DEFCONFIGS += \
+    ${LJAPDEFCONFIGSRC}/eng_bld.config
+endif
+
 ifeq ($(TEST_DRV_CER), 1)
         ifeq ($(TEST_COVERAGE),)
                 TEST_COVERAGE=1
