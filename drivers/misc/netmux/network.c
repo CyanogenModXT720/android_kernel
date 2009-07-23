@@ -37,6 +37,7 @@
  *   2007/12/05  Motorola    Change code as kernel upgrade                    *
  *   2008/07/09  Motorola    upmerge to kernel 2.6.24 for TI 23.5             *
  *   2009/04/27  Motorola    Increment receive/transmit packet number         *
+ *   2009/07/23  Motorola    Add wake lock functionality                      *
  ******************************************************************************/
 
 /* network.c defines an interface between a NetMUX and the Linux networking   */
@@ -47,7 +48,9 @@
 #include "network.h"
 #include "config.h"
 #include "debug.h"
+#include <linux/wakelock.h>
 
+extern struct wake_lock netmux_send_wakelock;
 
 /*
  * NetworkInform is called by the mux (and sometimes the
@@ -544,6 +547,10 @@ int NetworkTransmit (COMMBUFF* commbuff, struct net_device* netdev)
     int32 length = commbuff_length(commbuff);
 
     DEBUG("NetworkTransmit(0x%p, 0x%p)\n", commbuff, netdev);
+
+    /* Acquire NM_send wakelock */
+    DEBUG("Acquire netmux_send_wakelock\n");
+    wake_lock(&netmux_send_wakelock);
 
     priv_netdev = netdev_priv(netdev);
     device = *priv_netdev;

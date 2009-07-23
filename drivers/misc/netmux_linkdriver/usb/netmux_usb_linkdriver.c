@@ -52,6 +52,7 @@
  *   2008/10/30  Motorola    Add dynamic log for linkdriver                   *
  *   2008/12/25  Motorola    change init_module, call IPC register func       *
  *   2009/05/20  Motorola    Add mini trace functionality                     *
+ *   2009/07/23  Motorola    Add wake lock functionality                      *
  ******************************************************************************/
  
 /* netmux_usb_linkdriver.c is responsible for communicating with the NetMUX  *
@@ -78,6 +79,7 @@
 #include <linux/device.h>
 #include <linux/spinlock.h>
 #include <linux/ipc_api.h> 
+#include <linux/wakelock.h>
 
 #include <asm/io.h>
 
@@ -206,6 +208,9 @@ static unsigned long USBInform           (void* param1, void* param2);
 
 HW_CTRL_IPC_DATA_NODE_DESCRIPTOR_T write_buff[SEND_QUEUE_MAX_SIZE];
 
+struct wake_lock netmux_to_usb;
+struct wake_lock usb_to_netmux;
+
 void TRACE(unsigned long function_index, unsigned long param)
 {
     if (LDLogState[0] == LDLOG_COMMAND_MINI_TRACE)
@@ -333,6 +338,10 @@ static void MUXTransmitComplete (unsigned long nb_bytes)
     }
     else {
         spin_unlock_bh(&ild_lock);
+
+	/* Remove netmux_to_usb wakelock */
+	DEBUG("Releasing netmux_to_usb\n");
+	wake_unlock(&netmux_to_usb);
     }
 }
 
@@ -372,7 +381,8 @@ static void MUXReceiveComplete (unsigned long arg)
 
         skb_put(receive_commbuff[index], ipc_readbuff[index].length);
 
-        // Send buffers to MUX without checking for L bit 
+	/* Send buffers to MUX without checking for L bit */
+	DEBUG("Calling ifmux.MUXReceive\n");
         ifmux.MUXReceive((void*)receive_commbuff[index], ifmux.id);
        
         LOGSKBUFF(receive_commbuff[index]); 
@@ -402,6 +412,13 @@ static void MUXReceiveComplete (unsigned long arg)
     // remains same and so initialisation of its fields are not required
     ipc_readbuff[RECEIVE_LIST_MAX_SIZE -1].comand = END_BIT;
 
+    /* Release usb_to_netmux wakelock */
+    /* This is done here before the driver read as just after IT can be raised
+       which will then acquire the wakelock. This is a possible race condition
+       that is avoided by design if wakelock is released before calliing drive */
+    DEBUG("Releasing usb_to_netmux\n");
+    wake_unlock(&usb_to_netmux);
+
     status = hw_ctrl_ipc_read_ex2(ipc_channel_handle, ipc_readbuff);
 
     if (status != HW_CTRL_IPC_STATUS_OK) 
@@ -428,6 +445,12 @@ static void USBReadCallback (HW_CTRL_IPC_READ_STATUS_T *read_status)
 {
     DEBUG("%s(0x%p)\n", __FUNCTION__, read_status);
     TRACE(5, read_status->nb_bytes);
+
+    /* Acquire usb_to_netmux wakelock */
+    /* Acquire it as soon as we are notified that data are available
+       in the usb driver */
+    DEBUG("Acquire usb_to_netmux\n");
+    wake_lock(&usb_to_netmux);
 
     tasklet_schedule(&read_callback);
 }
@@ -548,6 +571,11 @@ static unsigned long USBQueue (void* param)
 {
 
     spin_lock_bh(&ild_lock);
+
+    /* acquire netmux_to_usb wakelock */
+    DEBUG("Acquire netmux_to_usb\n");
+    wake_lock(&netmux_to_usb);
+
 
     /* tell NetMUX to wait since the queue is full */
     if (SEND_QUEUE_LEN == SEND_QUEUE_MAX_SIZE)
@@ -702,7 +730,10 @@ void LDInit(void)
     tasklet_init(&write_callback, &MUXTransmitComplete, 0);
     tasklet_init(&read_callback, &MUXReceiveComplete, 0);
     skb_queue_head_init(&send_queue);
-    
+
+    wake_lock_init(&netmux_to_usb, WAKE_LOCK_SUSPEND, "LD_netmux_to_usb");
+    wake_lock_init(&usb_to_netmux, WAKE_LOCK_SUSPEND, "LD_usb_to_netmux");
+
     LDLogState[0] = '0';
     LDLogState[1] = '\0';
                                                                                                                              
@@ -843,4 +874,8 @@ void cleanup_module (void)
         if (receive_commbuff[index])
             dev_kfree_skb(receive_commbuff[index]);
     }
+
+    wake_lock_destroy(&netmux_to_usb);
+    wake_lock_destroy(&usb_to_netmux);
+
 }
