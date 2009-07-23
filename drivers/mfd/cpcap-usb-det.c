@@ -22,6 +22,7 @@
 #include <linux/platform_device.h>
 #include <linux/wakelock.h>
 #include <linux/workqueue.h>
+#include <mach/omap-pm.h>
 
 #include <linux/regulator/consumer.h>
 
@@ -82,6 +83,8 @@ struct cpcap_usb_det_data {
 	struct regulator *regulator;
 	struct wake_lock wake_lock;
 	unsigned char is_vusb_enabled;
+	unsigned char is_constraint_set;
+	struct device dummy_dev;
 };
 
 static const char *accy_devices[] = {
@@ -172,6 +175,9 @@ static int configure_hardware(struct cpcap_usb_det_data *data,
 	switch (accy) {
 	case CPCAP_ACCY_USB:
 	case CPCAP_ACCY_FACTORY:
+		/* Set mpu latency constraint to allow the max state C4*/
+		omap_pm_set_max_mpu_wakeup_lat(&data->dummy_dev, 3300);
+		data->is_constraint_set = 1;
 		retval |= cpcap_regacc_write(data->cpcap, CPCAP_REG_USBC1, 0,
 					     CPCAP_BIT_VBUSPD);
 		retval |= cpcap_regacc_write(data->cpcap, CPCAP_REG_USBC2,
@@ -193,6 +199,11 @@ static int configure_hardware(struct cpcap_usb_det_data *data,
 
 	case CPCAP_ACCY_NONE:
 	default:
+		if (data->is_constraint_set) {
+			/* Clear constraint */
+			omap_pm_set_max_mpu_wakeup_lat(&data->dummy_dev, -1);
+			data->is_constraint_set = 0;
+		}
 		retval |= cpcap_regacc_write(data->cpcap, CPCAP_REG_USBC1, 0,
 					     CPCAP_BIT_VBUSPD);
 		retval |= cpcap_regacc_write(data->cpcap, CPCAP_REG_USBC2, 0,
