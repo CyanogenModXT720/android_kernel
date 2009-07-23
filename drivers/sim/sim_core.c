@@ -903,6 +903,7 @@ static int sim_ioctl(struct inode *inode, struct file *file, unsigned int cmd, u
                 /*  if we are active ...  */
                 if ((BOOL)args_kernel[1] == FALSE) 
                 {
+			omap2_block_sleep();
                     /* enable the SIM FCLK */
                     clk_enable (usim_fck);
 
@@ -918,6 +919,7 @@ static int sim_ioctl(struct inode *inode, struct file *file, unsigned int cmd, u
 
                     /* disable the SIM FCLK */
                     clk_disable (usim_fck);
+			omap2_allow_sleep();
                 }
 
                 sim_low_power_enabled = (BOOL)args_kernel[1];
