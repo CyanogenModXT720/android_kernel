@@ -344,8 +344,10 @@ static irqreturn_t prcm_interrupt_handler (int irq, void *dev_id)
 			prcm_clear_mod_irqs(OMAP3430ES2_USBHOST_MOD, PM_WKST,
 					CM_ICLKEN, CM_FCLKEN);
 
+		/*
 		if (do_uart_pm)
 			omap_uart_pm_wake();
+		*/
 
 		irqstatus_mpu = prm_read_mod_reg(OCP_MOD,
 						OMAP2_PRM_IRQSTATUS_MPU_OFFSET);
