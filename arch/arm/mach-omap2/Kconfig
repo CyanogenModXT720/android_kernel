@@ -184,3 +184,10 @@ config EMU_UART_DEBUG
 	  any more. Only including "emu_uart_debug" parameters in command line
 	  could activate UART3 console over miniUSB port. This feature is
 	  specific for Motorola phone with CPCAP power IC.
+
+config PROC_OMAP_PHONE_ID
+        bool "/proc/phoneid support"
+        depends on PROC_FS && ARCH_OMAP34XX
+	default n
+	help
+	  Exports the DIE_ID reg value.

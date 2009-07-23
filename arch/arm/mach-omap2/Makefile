@@ -122,4 +122,5 @@ obj-$(CONFIG_EMU_UART_DEBUG)		+= board-mapphone-emu_uart.o
 # Platform specific device init code
 obj-y								+= usb-musb.o
 obj-$(CONFIG_MACH_OMAP2_TUSB6010)	+= usb-tusb6010.o
+obj-$(CONFIG_PROC_OMAP_PHONE_ID)       	+= phoneid.o
 
