@@ -150,6 +150,27 @@ static struct platform_device androidusb_device = {
 	},
 };
 
+static int cpcap_usb_connected_probe(struct platform_device *pdev)
+{
+	android_usb_set_connected(1);
+	return 0;
+}
+
+static int cpcap_usb_connected_remove(struct platform_device *pdev)
+{
+	android_usb_set_connected(0);
+	return 0;
+}
+
+static struct platform_driver cpcap_usb_connected_driver = {
+	.probe		= cpcap_usb_connected_probe,
+	.remove		= cpcap_usb_connected_remove,
+	.driver		= {
+		.name	= "cpcap_usb_connected",
+		.owner	= THIS_MODULE,
+	},
+};
+
 static void sholes_gadget_init(void)
 {
 	unsigned int val[2];
@@ -159,8 +180,9 @@ static void sholes_gadget_init(void)
 	val[0] = omap_readl(reg);
 	val[1] = omap_readl(reg + 4);
 
-	snprintf(device_serial, MAX_USB_SERIAL_NUM, "%08x%08x", val[1], val[0]);
+	snprintf(device_serial, MAX_USB_SERIAL_NUM, "%08X%08X", val[1], val[0]);
 	platform_device_register(&androidusb_device);
+	platform_driver_register(&cpcap_usb_connected_driver);
 }
 
 static void sholes_audio_init(void)
@@ -222,21 +244,21 @@ static void sholes_als_init(void)
 static struct vkey sholes_touch_vkeys[] = {
 	{
 		.min		= 0,
-		.max		= 200,
+		.max		= 193,
 		.code		= KEY_BACK,
 	},
 	{
-		.min		= 330,
-		.max		= 520,
+		.min		= 275,
+		.max		= 467,
 		.code		= KEY_MENU,
 	},
 	{
-		.min		= 590,
-		.max		= 780,
+		.min		= 556,
+		.max		= 748,
 		.code		= KEY_HOME,
 	},
 	{
-		.min		= 880,
+		.min		= 834,
 		.max		= 1024,
 		.code		= KEY_SEARCH,
 	},
@@ -263,8 +285,8 @@ static struct qtouch_ts_platform_data sholes_ts_platform_data = {
 	.hw_reset	= sholes_touch_reset,
 	.power_cfg	= {
 		.idle_acq_int	= 1,
-		.active_acq_int	= 16,
-		.active_idle_to	= 25,
+		.active_acq_int	= 0xff,
+		.active_idle_to	= 0xff,
 	},
 	.acquire_cfg	= {
 		.charge_time	= 10,
@@ -275,7 +297,7 @@ static struct qtouch_ts_platform_data sholes_ts_platform_data = {
 		.sync		= 0,
 	},
 	.multi_touch_cfg	= {
-		.ctrl		= 0x03,
+		.ctrl		= 0x0f,
 		.x_origin	= 0,
 		.y_origin	= 0,
 		.x_size		= 12,
@@ -291,19 +313,23 @@ static struct qtouch_ts_platform_data sholes_ts_platform_data = {
 		.merge_hyst	= 0,
 		.merge_thresh	= 3,
 	},
-	.linear_tbl_cfg = {
-		.ctrl = 0x01,
-		.x_offset = 0x0000,
-		.x_segment = {0x5f,0x3b,0x3f,0x38,
-					  0x46,0x3c,0x39,0x3f,
-					  0x3a,0x3c,0x3e,0x3c,
-					  0x3e,0x3f,0x3e,0x3f},
-		.y_offset = 0x0000,
-		.y_segment = {0x5e,0x4c,0x3e,0x3d,
-					  0x3d,0x3b,0x3d,0x3e,
-					  0x3e,0x3c,0x38,0x3d,
-					  0x3c,0x3e,0x3c,0x3c},
-	},
+	  .linear_tbl_cfg = {
+		  .ctrl = 0x01,
+		  .x_offset = 0x0000,
+		  .x_segment = {
+			  0x4D, 0x40, 0x3E, 0x3E,
+			  0x44, 0x3c, 0x3c, 0x3d,
+			  0x3f, 0x42, 0x3f, 0x3c,
+			  0x3f, 0x3f, 0x3e, 0x44
+		  },
+		  .y_offset = 0x0000,
+		  .y_segment = {
+			  0x42, 0x38, 0x34, 0x3c,
+			  0x3c, 0x44, 0x3e, 0x3b,
+			  0x42, 0x41, 0x43, 0x45,
+			  0x43, 0x45, 0x43, 0x46
+		  },
+	  },
 	.grip_suppression_cfg = {
 		.ctrl		= 0x00,
 		.xlogrip	= 0x00,
@@ -324,24 +350,24 @@ static struct qtouch_ts_platform_data sholes_ts_platform_data = {
 };
 
 static struct lm3530_platform_data omap3430_als_light_data = {
-	.gen_config = 0x33,
-	.als_config = 0x7D,
-	.brightness_ramp = 0x36,
+	.gen_config = 0x3b,
+	.als_config = 0x7b,
+	.brightness_ramp = 0x2d,
 	.als_zone_info = 0x00,
-	.als_resistor_sel = 0x66,
+	.als_resistor_sel = 0x41,
 	.brightness_control = 0x00,
-	.zone_boundary_0 = 0x33,
-	.zone_boundary_1 = 0x66,
-	.zone_boundary_2 = 0x99,
-	.zone_boundary_3 = 0xCC,
-	.zone_target_0 = 0x19,
-	.zone_target_1 = 0x33,
-	.zone_target_2 = 0x4c,
-	.zone_target_3 = 0x66,
-	.zone_target_4 = 0x7f,
+	.zone_boundary_0 = 0x4,
+	.zone_boundary_1 = 0x44,
+	.zone_boundary_2 = 0xc5,
+	.zone_boundary_3 = 0xC5,
+	.zone_target_0 = 0x23,
+	.zone_target_1 = 0x31,
+	.zone_target_2 = 0x63,
+	.zone_target_3 = 0x7b,
+	.zone_target_4 = 0x7b,
 	.manual_current = 0x33,
-	.upper_curr_sel = 5,
-	.lower_curr_sel = 2,
+	.upper_curr_sel = 6,
+	.lower_curr_sel = 3,
 };
 
 static struct lm3554_platform_data sholes_camera_flash = {
