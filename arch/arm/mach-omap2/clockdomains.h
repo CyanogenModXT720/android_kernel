@@ -238,7 +238,7 @@ static struct clockdomain cam_clkdm = {
 static struct clockdomain usbhost_clkdm = {
 	.name		= "usbhost_clkdm",
 	.pwrdm		= { .name = "usbhost_pwrdm" },
-	.flags		= CLKDM_CAN_HWSUP_SWSUP,
+	.flags		= CLKDM_CAN_SWSUP,
 	.clktrctrl_mask = OMAP3430ES2_CLKTRCTRL_USBHOST_MASK,
 	.omap_chip	= OMAP_CHIP_INIT(CHIP_GE_OMAP3430ES2),
 };
