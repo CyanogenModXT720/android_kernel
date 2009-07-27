@@ -310,6 +310,8 @@ const static struct v4l2_fmtdesc mt9p013_formats[] = {
 #define NUM_CAPTURE_FORMATS ARRAY_SIZE(mt9p013_formats)
 static u32 min_exposure_time;
 static u32 max_exposure_time;
+static int min_linear_gain = MT9P013_MIN_LINEAR_GAIN;
+static int max_linear_gain = MT9P013_MAX_LINEAR_GAIN;
 static enum mt9p013_frame_type current_iframe = MT9P013_FRAME_1296_30FPS;
 static enum v4l2_power current_power_state = V4L2_POWER_OFF;
 static struct mt9p013_clock_freq current_clk = {
@@ -864,6 +866,22 @@ int mt9p013_set_gain(u16 linear_gain_q8, struct v4l2_int_device *s,
 	struct mt9p013_sensor_settings *ss = &sensor_settings[current_iframe];
 
 	if ((current_power_state == V4L2_POWER_ON) || sensor->resuming) {
+		if (linear_gain_q8 < min_linear_gain) {
+			linear_gain_q8 = min_linear_gain;
+			dev_err(&client->dev, "Gain=%d out of legal range.\n",
+				linear_gain_q8);
+			dev_err(&client->dev, "Gain must be greater than %d \n",
+				min_linear_gain);
+		}
+
+		if (linear_gain_q8 > max_linear_gain) {
+			linear_gain_q8 = max_linear_gain;
+			dev_err(&client->dev, "Gain=%d out of legal range.\n",
+				linear_gain_q8);
+			dev_err(&client->dev, "Gain must be less than %d \n",
+				max_linear_gain);
+		}
+
 		/* Convert gain from linear to register value
 			(1<<2 = 0.5 lsb before shift) */
 		linear_gain_q5 = (linear_gain_q8 + (1<<2)) >> 3;
@@ -891,18 +909,10 @@ int mt9p013_set_gain(u16 linear_gain_q8, struct v4l2_int_device *s,
 
 		if (analog_gain_code < MT9P013_MIN_ANALOG_GAIN) {
 			analog_gain_code = MT9P013_MIN_ANALOG_GAIN;
-			dev_err(&client->dev, "Gain=%d out of legal range.\n",
-				linear_gain_q8);
-			dev_err(&client->dev, "Gain must be greater than %d \n",
-				MT9P013_MIN_LINEAR_GAIN);
 		}
 
 		if (analog_gain_code > MT9P013_MAX_ANALOG_GAIN) {
 			analog_gain_code = MT9P013_MAX_ANALOG_GAIN;
-			dev_err(&client->dev, "Gain=%d out of legal range.\n",
-				linear_gain_q8);
-			dev_err(&client->dev, "Gain must be less than %d \n",
-				MT9P013_MAX_LINEAR_GAIN);
 		}
 
 		/* Combine Digital gain and analog gains */
@@ -1232,14 +1242,6 @@ static unsigned long mt9p013_calc_xclk(struct v4l2_int_device *s)
 	timeperframe->numerator = 1;
 	timeperframe->denominator = sensor->fps;
 
-	/*
-	if ((pix->width <= VIDEO_WIDTH_4X_BINN) && (sensor->fps > 15) &&
-							(!qvga_120))
-		xclk = MT9P013_XCLK_NOM_2;
-	else
-		xclk = MT9P013_XCLK_NOM_1;
-	*/
-
 	xclk = MT9P013_XCLK_NOM_2;
 
 	return xclk;
@@ -1251,7 +1253,7 @@ static unsigned long mt9p013_calc_xclk(struct v4l2_int_device *s)
 static int mt9p013_set_orientation(enum mt9p013_orientation val,
 			struct v4l2_int_device *s, struct vcontrol *lvc)
 {
-	int err = 0, i;
+	int err = 0;
 	u8 orient;
 	struct mt9p013_sensor *sensor = s->priv;
 	struct i2c_client *client = sensor->i2c_client;
@@ -1283,15 +1285,38 @@ static int mt9p013_set_orientation(enum mt9p013_orientation val,
 	if (err) {
 		v4l_err(client, "Error setting orientation: %d", err);
 	} else {
-		i = find_vctrl(V4L2_CID_PRIVATE_ORIENTATION);
+		lvc->current_value = (u32)val;
+	}
+
+	return err;
+}
+
+
+static int mt9p013_calibration_adjust(struct v4l2_int_device *s)
+{
+	int i, err = 0;
+	struct mt9p013_sensor *sensor = s->priv;
+	struct i2c_client *client = sensor->i2c_client;
+	struct vcontrol *lvc;
+
+	/* adj 0x308E to match calibration setting */
+	err = mt9p013_write_reg(client, I2C_MT9P013_16BIT,
+		REG_RESERVED_MFR_308E, 0xE060);
+
+	/* adjust minimum gain */
+	if (err == 0) {
+		min_linear_gain = MT9P013_MIN_LINEAR_GAIN_CAL_ADJ;
+		i = find_vctrl(V4L2_CID_GAIN);
 		if (i >= 0) {
 			lvc = &video_control[i];
-			lvc->current_value = (u32)val;
+			lvc->qc.minimum = min_linear_gain;
+			dev_dbg(&client->dev, "setting min gain=%d\n", min_linear_gain);
 		}
 	}
 
 	return err;
 }
+
 
 /**
  * mt9p013_configure_frame - Setup the frame, clock and exposure parmas in the
@@ -1474,6 +1499,8 @@ static int mt9p013_configure(struct v4l2_int_device *s)
 		I2C_INITIAL_LIST_SIZE);
 	if (err)
 		return err;
+
+	mt9p013_calibration_adjust(s);
 
 	/* Determine Xclk & range check Frame Rate */
 	xclk = mt9p013_calc_xclk(s);
