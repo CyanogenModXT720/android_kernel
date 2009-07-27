@@ -1160,7 +1160,7 @@ int __init omap3_pm_init(void)
 	 * waking up PER with every CORE wakeup - see
 	 * http://marc.info/?l=linux-omap&m=121852150710062&w=2
 	*/
-	pwrdm_add_wkdep(per_pwrdm, core_pwrdm);
+	/*pwrdm_add_wkdep(per_pwrdm, core_pwrdm);*/
 
 	if (omap_type() != OMAP2_DEVICE_TYPE_GP) {
 		omap3_secure_ram_storage =
