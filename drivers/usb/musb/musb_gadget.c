@@ -1704,7 +1704,12 @@ int usb_gadget_register_driver(struct usb_gadget_driver *driver)
 		musb->gadget_driver = driver;
 		musb->g.dev.driver = &driver->driver;
 		driver->driver.bus = NULL;
+#ifdef CONFIG_USB_MOT_ANDROID
+		/* At default, shall NOT enumeration */
+		musb->softconnect = 0;
+#else
 		musb->softconnect = 1;
+#endif
 		retval = 0;
 	}
 
