@@ -63,5 +63,11 @@
 #define DT_PATH_GPIO        "/System@0/GPIO@0"
 #define DT_PROP_GPIO_MAP    "signalmap"
 
+/* CPCAP Node */
+#define DT_PATH_CPCAP			"/System@0/SPI@0/PowerIC@0"
+#define DT_PROP_CPCAP_SPIINIT	"spiinit"
+#define DT_PROP_CPCAP_RGTINIT	"regulator_init"
+#define DT_PROP_CPCAP_RGTMODE	"regulator_mode"
+
 #endif
 #endif
