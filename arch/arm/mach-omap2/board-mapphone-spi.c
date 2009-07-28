@@ -280,6 +280,8 @@ static struct regulator_init_data cpcap_regulator[CPCAP_NUM_REGULATORS] = {
 			.max_uV			= 2900000,
 			.valid_ops_mask		= 0,
 		},
+		.num_consumer_supplies	= ARRAY_SIZE(cpcap_vsim_consumers),
+		.consumer_supplies	= cpcap_vsim_consumers,
 	},
 	[CPCAP_VSIMCARD] = {
 		.constraints = {
@@ -287,6 +289,8 @@ static struct regulator_init_data cpcap_regulator[CPCAP_NUM_REGULATORS] = {
 			.max_uV			= 2900000,
 			.valid_ops_mask		= 0,
 		},
+		.num_consumer_supplies	= ARRAY_SIZE(cpcap_vsimcard_consumers),
+		.consumer_supplies	= cpcap_vsimcard_consumers,
 	},
 	[CPCAP_VVIB] = {
 		.constraints = {
