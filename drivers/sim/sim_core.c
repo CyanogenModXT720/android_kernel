@@ -77,6 +77,7 @@
 #include <linux/timer.h>
 #include <linux/version.h>
 #include <linux/wait.h>
+#include <linux/pm.h>
 
 #include <linux/regulator/consumer.h>
 
@@ -226,7 +227,8 @@ static int sim_ioctl(struct inode *inode, struct file *file, unsigned int cmd, u
 static int sim_open(struct inode *inode, struct file *file);
 static int sim_free(struct inode *inode, struct file *file);
 static unsigned int sim_poll(struct file *file, poll_table *wait);
-
+static int sim_suspend(struct platform_device *pdev, pm_message_t state);
+static int sim_resume(struct platform_device *pdev);
 static irqreturn_t sim_module_int_irq_1(int irq, void *dev_id);
 
 static void sim_module_int_reset_detect (UINT8 reader_id);
@@ -256,6 +258,8 @@ static struct platform_driver sim_driver =
     },
     .probe = sim_probe,
     .remove = sim_remove,
+    .suspend = sim_suspend,
+    .resume = sim_resume,
 };
 
 /* Platform device structure for the SIM driver */
@@ -1694,6 +1698,44 @@ static int sim_remove(struct platform_device *pdev)
     class_destroy(sim_class);
     unregister_chrdev(sim_module_major, SIM_DEV_NAME);
     tracemsg("sim_remove: Driver-device disassociation complete.\n");
+    return 0;
+}
+
+/* DESCRIPTION:
+       This routine suspends the device.
+
+   INPUTS:
+       struct platform_device *pdev : the platform device pointer
+       pm_message_t state : the power mode that the system is going into
+
+   OUTPUTS:
+       Returns 0 if successful.
+
+   IMPORTANT NOTES:
+       None.
+*/
+static int sim_suspend(struct platform_device *pdev, pm_message_t state)
+{
+	int ret = 0;
+	if (sim_low_power_enabled == FALSE)
+		ret = -EBUSY;
+	return ret;
+}
+
+/* DESCRIPTION:
+       This routine resumes the device.
+
+   INPUTS:
+       struct platform_device *pdev : the platform device pointer
+
+   OUTPUTS:
+       Returns 0 if successful.
+
+   IMPORTANT NOTES:
+       None.
+*/
+static int sim_resume(struct platform_device *pdev)
+{
     return 0;
 }
 
