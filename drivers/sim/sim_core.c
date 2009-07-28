@@ -17,6 +17,7 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  
  * 02111-1307, USA
  *
+ * Motorola 2009-Jul-28 - Porting suspend/resume functionality
  * Motorola 2009-Jun-17 - Adding clock framework changes
  * Motorola 2009-Jun-01 - Adding power regulator changes
  * Motorola 2009-Mar-30 - Workaround 1.8V issue
