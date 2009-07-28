@@ -799,6 +799,11 @@ CONFIG_NETMUX_DRIVER=m
 CONFIG_MOT_NETMUX_LINKDRIVER=m
 
 #
+# Motorola netmux driver
+#
+CONFIG_SEC_DRIVER=m
+
+#
 # Motorola Modem PM Driver
 #
 CONFIG_MODEM_PM_DRIVER=m
