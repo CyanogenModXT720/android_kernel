@@ -1173,7 +1173,7 @@ static ssize_t pm_info_show(struct kobject *kobj, struct kobj_attribute *attr,
 	len += sprintf(buf + len, "omap_uart_can_sleep: %s\n",
 			flag_uart_can_sleep ? "YES" : "NO");
 	len += sprintf(buf + len, "dma status check:    %s\n",
-			flag_omap_dma_running ? "Not Running" : "Running");
+			flag_omap_dma_running ? "Running" : "Not Running");
 
 	/* last 10 timers power domain status */
 	len += sprintf(buf + len, "\nLast 10 times state (MPU+CORE):\n");
@@ -1186,8 +1186,8 @@ static ssize_t pm_info_show(struct kobject *kobj, struct kobj_attribute *attr,
 	/* counter of each power domain*/
 	len += sprintf(buf + len, "\nPowerdomains state statistic:\n");
 	list_for_each_entry(pwrst, &pwrst_list, node) {
-		len += sprintf(buf + len, "%s: OFF: %8d RET: %8d "
-				"INA: %8d ON: %d\n",
+		len += sprintf(buf + len, "%s: OFF: %d RET: %d "
+				"INA: %d ON: %d\n",
 				pwrst->pwrdm->name,
 				pwrst_counter[idx][PWRDM_POWER_OFF],
 				pwrst_counter[idx][PWRDM_POWER_RET],
