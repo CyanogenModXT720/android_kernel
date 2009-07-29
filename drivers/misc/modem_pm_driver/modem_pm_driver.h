@@ -15,6 +15,7 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
  * 02111-1307, USA
  *
+ * Motorola 2009-Jul-13 - Update for K29 to use Resource Framework
  * Motorola 2009-Jan-28 - Initial Creation
  */
 
@@ -25,15 +26,6 @@
 
 #define MODEM_PM_DRIVER_DEV_NAME  "modem_pm_driver"
 
-
-#define RES_LATENCY_CO          0x5 /* Latency constraint */
-#define RES_OPP_CO              0x7 /* OPP constraint */
-#define CO_VDD2_OPP3            0x3 /* VDD2 OPP constraint levels */
-
-/* Latency constraint levels */
-#define CO_LATENCY_MPUOFF_COREON        0x3
-#define CO_LATENCY_MPUOFF_CORERET       0x4
-
 enum MODEM_PM_SHARED_DDR_FREQUENCY_OPP_CONSTRAINT_T {
 	MODEM_PM_SHARED_DDR_FREQUENCY_OPP_HIGH,
 	MODEM_PM_SHARED_DDR_FREQUENCY_OPP_NO_VOTE,
@@ -43,11 +35,6 @@ enum MODEM_PM_SHARED_DDR_LOW_POWER_POLICY_CONSTRAINT_T {
 	MODEM_PM_SHARED_DDR_LOW_POWER_POLICY_ON_INACTIVE,
 	MODEM_PM_SHARED_DDR_LOW_POWER_POLICY_RET,
 	MODEM_PM_SHARED_DDR_LOW_POWER_POLICY_NO_VOTE,
-};
-
-struct constraint_id {
-	int   type;
-	void *data;
 };
 
 /* Frequency OPP constraint command */
