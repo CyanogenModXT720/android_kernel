@@ -336,11 +336,17 @@ static void dump_wkst_regs(s16 module, u16 wkst_off, u32 wkst)
  * that any peripheral wake-up events occurring while attempting to
  * clear the PM_WKST_x are detected and cleared.
  */
-static void prcm_clear_mod_irqs(s16 module, u16 wkst_off,
-				u16 iclk_off, u16 fclk_off) {
-	u32 wkst, fclk, iclk;
+static void prcm_clear_mod_irqs(s16 module, u8 regs)
+{
+	u32 wkst, fclk, iclk, clken;
+	u16 wkst_off = (regs == 3) ? OMAP3430ES2_PM_WKST3 : PM_WKST1;
+	u16 fclk_off = (regs == 3) ? OMAP3430ES2_CM_FCLKEN3 : CM_FCLKEN1;
+	u16 iclk_off = (regs == 3) ? CM_ICLKEN3 : CM_ICLKEN1;
+	u16 grpsel_off = (regs == 3) ?
+		OMAP3430ES2_PM_MPUGRPSEL3 : OMAP3430_PM_MPUGRPSEL;
 
 	wkst = prm_read_mod_reg(module, wkst_off);
+	wkst &= prm_read_mod_reg(module, grpsel_off);
 	if (wkst) {
 #ifdef CONFIG_SUSPEND
 		dump_wkst_regs(module, wkst_off, wkst);
@@ -348,14 +354,15 @@ static void prcm_clear_mod_irqs(s16 module, u16 wkst_off,
 		iclk = cm_read_mod_reg(module, iclk_off);
 		fclk = cm_read_mod_reg(module, fclk_off);
 		while (wkst) {
-			cm_set_mod_reg_bits(wkst, module, iclk_off);
-			if (OMAP3430ES2_USBHOST_MOD == module)
-				cm_set_mod_reg_bits(
-					(1<<OMAP3430ES2_EN_USBHOST2_SHIFT)|
-					(1<<OMAP3430ES2_EN_USBHOST1_SHIFT),
-					module, fclk_off);
-			else
-				cm_set_mod_reg_bits(wkst, module, fclk_off);
+			clken = wkst;
+			cm_set_mod_reg_bits(clken, module, iclk_off);
+			/*
+			 * For USBHOST, we don't know whether HOST1 or
+			 * HOST2 woke us up, so enable both f-clocks
+			 */
+			if (module == OMAP3430ES2_USBHOST_MOD)
+				clken |= 1 << OMAP3430ES2_EN_USBHOST2_SHIFT;
+			cm_set_mod_reg_bits(clken, module, fclk_off);
 			prm_write_mod_reg(wkst, module, wkst_off);
 			wkst = prm_read_mod_reg(module, wkst_off);
 		}
@@ -386,20 +393,18 @@ static irqreturn_t prcm_interrupt_handler (int irq, void *dev_id)
 	u32 irqstatus_mpu;
 
 	do {
-		prcm_clear_mod_irqs(WKUP_MOD, PM_WKST, CM_ICLKEN, CM_FCLKEN);
-		prcm_clear_mod_irqs(CORE_MOD, PM_WKST1, CM_ICLKEN1, CM_ICLKEN1);
-		prcm_clear_mod_irqs(CORE_MOD, OMAP3430ES2_PM_WKST3,
-				CM_ICLKEN3, OMAP3430ES2_CM_FCLKEN3);
-		prcm_clear_mod_irqs(OMAP3430_PER_MOD, PM_WKST,
-				CM_ICLKEN, CM_FCLKEN);
-		if (omap_rev() > OMAP3430_REV_ES1_0)
-			prcm_clear_mod_irqs(OMAP3430ES2_USBHOST_MOD, PM_WKST,
-					CM_ICLKEN, CM_FCLKEN);
+		prcm_clear_mod_irqs(WKUP_MOD, 1);
+		prcm_clear_mod_irqs(CORE_MOD, 1);
+		prcm_clear_mod_irqs(OMAP3430_PER_MOD, 1);
+		if (omap_rev() > OMAP3430_REV_ES1_0) {
+			prcm_clear_mod_irqs(CORE_MOD, 3);
+			prcm_clear_mod_irqs(OMAP3430ES2_USBHOST_MOD, 1);
+		}
 
 		irqstatus_mpu = prm_read_mod_reg(OCP_MOD,
-						OMAP2_PRM_IRQSTATUS_MPU_OFFSET);
+					OMAP2_PRM_IRQSTATUS_MPU_OFFSET);
 		prm_write_mod_reg(irqstatus_mpu, OCP_MOD,
-				OMAP2_PRM_IRQSTATUS_MPU_OFFSET);
+					OMAP2_PRM_IRQSTATUS_MPU_OFFSET);
 
 	} while (prm_read_mod_reg(OCP_MOD, OMAP2_PRM_IRQSTATUS_MPU_OFFSET));
 
