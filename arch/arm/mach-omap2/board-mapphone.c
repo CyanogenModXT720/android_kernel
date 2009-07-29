@@ -60,6 +60,7 @@
 #include "prm-regbits-34xx.h"
 #include "smartreflex.h"
 #include "omap3-opp.h"
+#include "sdram-toshiba-TYA000B801AXHM10.h"
 
 #ifdef CONFIG_VIDEO_OLDOMAP3
 #include <media/v4l2-int-device.h>
@@ -114,14 +115,17 @@ static struct omap_opp mapphone_mpu_rate_table[] = {
 	{S600M, VDD1_OPP5, 0x3E},
 };
 
+#define S80M 80250000
+#define S160M 160500000
+
 static struct omap_opp mapphone_l3_rate_table[] = {
 	{0, 0, 0},
 	/*OPP1*/
 	{0, VDD2_OPP1, 0x20},
 	/*OPP2*/
-	{S83M, VDD2_OPP2, 0x27},
+	{S80M, VDD2_OPP2, 0x27},
 	/*OPP3*/
-	{S166M, VDD2_OPP3, 0x2E},
+	{S160M, VDD2_OPP3, 0x2E},
 };
 
 static struct omap_opp mapphone_dsp_rate_table[] = {
@@ -140,8 +144,9 @@ static struct omap_opp mapphone_dsp_rate_table[] = {
 
 static void __init mapphone_init_irq(void)
 {
-	omap2_init_common_hw(NULL, mapphone_mpu_rate_table,
-			mapphone_dsp_rate_table, mapphone_l3_rate_table);
+	omap2_init_common_hw(TYA000B801AXHM10_sdrc_params,
+			mapphone_mpu_rate_table, mapphone_dsp_rate_table,
+			mapphone_l3_rate_table);
 	omap_init_irq();
 #ifdef CONFIG_OMAP3_PM
 	scm_clk_init();
@@ -664,11 +669,11 @@ static struct prm_setup_vc mapphone_prm_setup = {
 	.voltsetup2 = 0x0,
 	.vdd0_on = 0x65,
 	.vdd0_onlp = 0x45,
-	.vdd0_ret = 0x17,
+	.vdd0_ret = 0x19,
 	.vdd0_off = 0x00,
 	.vdd1_on = 0x65,
 	.vdd1_onlp = 0x45,
-	.vdd1_ret = 0x17,
+	.vdd1_ret = 0x19,
 	.vdd1_off = 0x00,
 	.i2c_slave_ra = (MAPPHONE_R_SRI2C_SLAVE_ADDR_SA1 <<
 			OMAP3430_SMPS_SA1_SHIFT) |

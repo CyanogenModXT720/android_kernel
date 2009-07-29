@@ -1303,7 +1303,6 @@ int __init omap3_pm_init(void)
 
 	pm_idle = omap3_pm_idle;
 
-	omap3_save_scratchpad_contents();
 	omap3_idle_init();
 
 	pwrdm_add_wkdep(neon_pwrdm, mpu_pwrdm);
@@ -1338,6 +1337,7 @@ int __init omap3_pm_init(void)
 		printk(KERN_ERR "sysfs_create_file failed: pm_info\n");
 #endif
 
+	omap3_save_scratchpad_contents();
 err1:
 	return ret;
 err2:
