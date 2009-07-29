@@ -17,6 +17,7 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  
  * 02111-1307, USA
  *
+ * Motorola 2009-Jul-22 - Enabling latency constraints
  * Motorola 2009-Jun-17 - Adding clock framework changes
  * Motorola 2009-Jun-01 - Adding power regulator changes
  * Motorola 2009-Mar-30 - Workaround 1.8V issue
@@ -83,6 +84,7 @@
 #include <mach/hardware.h>
 #include <mach/prcm.h>
 #include <mach/resource.h>
+#include <mach/omap-pm.h>
 
 #include "smart_card.h"
 #include "smart_card_kernel.h"
@@ -903,7 +905,9 @@ static int sim_ioctl(struct inode *inode, struct file *file, unsigned int cmd, u
                 /*  if we are active ...  */
                 if ((BOOL)args_kernel[1] == FALSE) 
                 {
-			omap2_block_sleep();
+                    /* Request the latency constraint */
+                    omap_pm_set_max_mpu_wakeup_lat(&sim_device.dev, 10);
+
                     /* enable the SIM FCLK */
                     clk_enable (usim_fck);
 
@@ -919,7 +923,9 @@ static int sim_ioctl(struct inode *inode, struct file *file, unsigned int cmd, u
 
                     /* disable the SIM FCLK */
                     clk_disable (usim_fck);
-			omap2_allow_sleep();
+
+                    /* Release the latency constraint */
+                    omap_pm_set_max_mpu_wakeup_lat(&sim_device.dev, -1);
                 }
 
                 sim_low_power_enabled = (BOOL)args_kernel[1];
