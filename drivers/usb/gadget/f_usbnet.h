@@ -21,4 +21,6 @@
 int usbnet_function_add(struct usb_composite_dev *cdev,
 	struct usb_configuration *c);
 
+struct usb_function *usbnet_function_enable(int enable, int id);
+
 #endif /* __F_USBNET_H */

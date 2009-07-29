@@ -66,11 +66,6 @@ static int regset_save_on_suspend;
 #define OMAP343X_TABLE_VALUE_OFFSET	   0x30
 #define OMAP343X_CONTROL_REG_VALUE_OFFSET  0x32
 
-#define DEBUG_WAKEUP 0
-
-#define PM_WKST_WKUP_ST_GPIO1 (1 << 3)
-#define PM_WKST1_CORE_ST_UART1 (1 << 13)
-
 struct power_state {
 	struct powerdomain *pwrdm;
 	u32 next_state;
@@ -114,43 +109,6 @@ static struct prm_setup_vc prm_setup = {
 	.vdd_ch_conf = OMAP3430_CMD1 | OMAP3430_RAV1,
 	.vdd_i2c_cfg = OMAP3430_MCODE_SHIFT | OMAP3430_HSEN | OMAP3430_SREN,
 };
-
-static int do_uart_pm;
-
-#if DEBUG_WAKEUP
-static void dump_regs(char *title, unsigned int r, char **decoder_ring)
-{
-	int i;
-	printk("%s: ", title);
-	for (i = 0; i < 32; i++) {
-		if (!decoder_ring[i])
-			break;
-		if ((r & (1 << i)) && decoder_ring[i][0] != '\0')
-			printk("%s ", decoder_ring[i]);
-	}
-	printk("\n");
-}
-
-static char *pm_wkup_wkst_decoder[] = {
-	"GPT1", "", "", "GPIO1", "", "", "SR1", "SR2",
-	"IO", "", "", "", "", "", "", "", "IO_CHAIN", NULL,
-};
-
-static char *pm_core_wkst1_decoder[] = {
-	"", "", "", "", "HSOTGUSB", "", "", "", "", "MCBSP1", "MCBSP5",
-	"GPT10", "GPT11", "UART1", "UART2", "I2C1", "I2C2", "I2C3",
-	"MCSPI1", "MCSPI2", "MCSPI3", "MCSPI4", "", "", "MMC1", "MMC2",
-	"", "", "", "", "MMC3", "", NULL
-};
-
-static char *pm_core_wkst3_decoder[] = { "", "", "USBTLL", NULL };
-
-static char *pm_per_wkst_decoder[] = {
-	"MCBSP2", "MCBSP3", "MCBSP4", "GPT2", "GPT3", "GPT4", "GPT5", "GPT6",
-	 "GPT7", "GPT8", "GPT9", "UART3", "", "GPIO2", "GPIO3", "GPIO4",
-	"GPIO5", "GPIO6", NULL
-};
-#endif
 
 static inline void omap3_per_save_context(void)
 {
@@ -269,39 +227,17 @@ static void prcm_clear_mod_irqs(s16 module, u16 wkst_off,
 
 	wkst = prm_read_mod_reg(module, wkst_off);
 	if (wkst) {
-		if ((WKUP_MOD == module) && (PM_WKST == wkst_off)) {
-#if DEBUG_WAKEUP
-			dump_regs("wkup_dom wkup status", wkst,
-					pm_wkup_wkst_decoder);
-#endif
-			if (wkst & PM_WKST_WKUP_ST_GPIO1)
-				do_uart_pm = 1;
-		} else if ((CORE_MOD == module) && (PM_WKST1 == wkst_off)) {
-#if DEBUG_WAKEUP
-			dump_regs("core_dom wkup status", wkst,
-					pm_core_wkst1_decoder);
-#endif
-			if (wkst & PM_WKST1_CORE_ST_UART1)
-				do_uart_pm = 1;
-		} else if ((CORE_MOD == module) &&
-				(OMAP3430ES2_PM_WKST3 == wkst_off)) {
-#if DEBUG_WAKEUP
-			dump_regs("core_dom wkup status3", wkst,
-					pm_core_wkst3_decoder);
-#endif
-		} else if ((OMAP3430_PER_MOD == module) &&
-				(PM_WKST == wkst_off)) {
-#if DEBUG_WAKEUP
-			dump_regs("per_dom wkup status", wkst,
-					pm_per_wkst_decoder);
-#endif
-		}
-
 		iclk = cm_read_mod_reg(module, iclk_off);
 		fclk = cm_read_mod_reg(module, fclk_off);
 		while (wkst) {
 			cm_set_mod_reg_bits(wkst, module, iclk_off);
-			cm_set_mod_reg_bits(wkst, module, fclk_off);
+			if (OMAP3430ES2_USBHOST_MOD == module)
+				cm_set_mod_reg_bits(
+					(1<<OMAP3430ES2_EN_USBHOST2_SHIFT)|
+					(1<<OMAP3430ES2_EN_USBHOST1_SHIFT),
+					module, fclk_off);
+			else
+				cm_set_mod_reg_bits(wkst, module, fclk_off);
 			prm_write_mod_reg(wkst, module, wkst_off);
 			wkst = prm_read_mod_reg(module, wkst_off);
 		}
@@ -332,8 +268,6 @@ static irqreturn_t prcm_interrupt_handler (int irq, void *dev_id)
 	u32 irqstatus_mpu;
 
 	do {
-		do_uart_pm = 0;
-
 		prcm_clear_mod_irqs(WKUP_MOD, PM_WKST, CM_ICLKEN, CM_FCLKEN);
 		prcm_clear_mod_irqs(CORE_MOD, PM_WKST1, CM_ICLKEN1, CM_ICLKEN1);
 		prcm_clear_mod_irqs(CORE_MOD, OMAP3430ES2_PM_WKST3,
@@ -343,11 +277,6 @@ static irqreturn_t prcm_interrupt_handler (int irq, void *dev_id)
 		if (omap_rev() > OMAP3430_REV_ES1_0)
 			prcm_clear_mod_irqs(OMAP3430ES2_USBHOST_MOD, PM_WKST,
 					CM_ICLKEN, CM_FCLKEN);
-
-		/*
-		if (do_uart_pm)
-			omap_uart_pm_wake();
-		*/
 
 		irqstatus_mpu = prm_read_mod_reg(OCP_MOD,
 						OMAP2_PRM_IRQSTATUS_MPU_OFFSET);
@@ -677,9 +606,6 @@ static int omap3_pm_suspend(void)
 			goto restore;
 	}
 
-#if DEBUG_WAKEUP
-	printk("%s(): zzzzzz....\n", __func__);
-#endif
 	omap_uart_prepare_suspend();
 
 	regset_save_on_suspend = 1;
@@ -814,6 +740,7 @@ static void __init prcm_setup_regs(void)
 	if (omap_rev() > OMAP3430_REV_ES1_0) {
 		prm_write_mod_reg(0, OMAP3430ES2_SGX_MOD, PM_WKDEP);
 		prm_write_mod_reg(0, OMAP3430ES2_USBHOST_MOD, PM_WKDEP);
+		prm_write_mod_reg(0, OMAP3430ES2_USBHOST_MOD, OMAP3430_PM_IVAGRPSEL);
 	} else
 		prm_write_mod_reg(0, GFX_MOD, PM_WKDEP);
 
@@ -1160,7 +1087,7 @@ int __init omap3_pm_init(void)
 	 * waking up PER with every CORE wakeup - see
 	 * http://marc.info/?l=linux-omap&m=121852150710062&w=2
 	*/
-	pwrdm_add_wkdep(per_pwrdm, core_pwrdm);
+	/*pwrdm_add_wkdep(per_pwrdm, core_pwrdm);*/
 
 	if (omap_type() != OMAP2_DEVICE_TYPE_GP) {
 		omap3_secure_ram_storage =

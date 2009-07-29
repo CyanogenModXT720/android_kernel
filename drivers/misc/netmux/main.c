@@ -36,6 +36,7 @@
  *   2007/05/01  Motorola    Use printk to replace DEBUG.                     *
  *   2007/12/05  Motorola    change code as kernel upgrade                    *
  *   2007/12/05  Motorola    Add NetmuxLogInit in init module                 *
+ *   2009/07/23  Motorola    Add wake lock functionality                      *
  ******************************************************************************/
 
 /* main.c defines entry points for the NetMUX.  Each entry point is unique    */
@@ -50,6 +51,7 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/device.h>
+#include <linux/wakelock.h>
 
 /*
  * Decribe the module to Linux so it doesn't complain that
@@ -65,6 +67,9 @@ MODULE_LICENSE("Dual BSD/GPL");
 EXPORT_SYMBOL(RegisterMUXLink);
 EXPORT_SYMBOL(UnregisterMUXLink);
 
+
+struct wake_lock netmux_send_wakelock;
+struct wake_lock netmux_receive_wakelock;
 
 /*
  * A list of registered interfaces is defined in register.c
@@ -94,6 +99,10 @@ static int __init netmux_init(void)
     }
 
     NetmuxLogInit();
+
+    wake_lock_init(&netmux_send_wakelock, WAKE_LOCK_SUSPEND, "NETMUX_send");
+    wake_lock_init(&netmux_receive_wakelock, WAKE_LOCK_SUSPEND, "NETMUX_receive");
+
     return 0;
 }
 
@@ -107,6 +116,10 @@ static void __exit netmux_exit(void)
     while(interfacelist)
         DeactivateMUX(interfacelist);
     shutdown_utilities();
+
+    wake_lock_destroy(&netmux_send_wakelock);
+    wake_lock_destroy(&netmux_receive_wakelock);
+
     class_destroy(netmux_class);
 }
 

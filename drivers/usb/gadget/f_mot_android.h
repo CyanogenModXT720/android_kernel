@@ -1,6 +1,8 @@
-/* include/linux/android_aid.h
+/*
+ * Gadget Driver for Android
  *
- * Copyright (C) 2008 Google, Inc.
+ * Copyright (C) 2009 Motorola, Inc.
+ * Author:
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -13,14 +15,16 @@
  *
  */
 
-#ifndef _LINUX_ANDROID_AID_H
-#define _LINUX_ANDROID_AID_H
+#ifndef __F_MOT_ANDROID_H
+#define __F_MOT_ANDROID_H
 
-/* AIDs that the kernel treats differently */
-#define AID_NET_BT_ADMIN 3001
-#define AID_NET_BT       3002
-#define AID_INET         3003
-#define AID_NET_RAW      3004
-#define AID_NET_ADMIN    3005
+#define MSC_TYPE_FLAG         0x01
+#define ADB_TYPE_FLAG         0x02
+#define ETH_TYPE_FLAG         0x04
+#define MTP_TYPE_FLAG         0x08
+#define ACM_TYPE_FLAG         0x10
 
-#endif
+void usb_interface_enum_cb(int flag);
+void usb_data_transfer_callback(void);
+
+#endif /* __F_MOT_ANDROID_H */

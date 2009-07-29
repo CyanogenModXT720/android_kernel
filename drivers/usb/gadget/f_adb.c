@@ -36,6 +36,10 @@
 
 #include "f_adb.h"
 
+#ifdef CONFIG_USB_MOT_ANDROID
+#include "f_mot_android.h"
+#endif
+
 #define BULK_BUFFER_SIZE           4096
 
 /* number of rx and tx requests to allocate */
@@ -270,6 +274,9 @@ static int __init create_bulk_endpoints(struct adb_dev *dev,
 		return -ENODEV;
 	}
 	DBG(cdev, "usb_ep_autoconfig for ep_in got %s\n", ep->name);
+#if CONFIG_USB_MOT_ANDROID
+	ep->driver_data = _adb_dev;
+#endif
 	dev->ep_in = ep;
 
 	ep = usb_ep_autoconfig(cdev->gadget, out_desc);
@@ -278,6 +285,9 @@ static int __init create_bulk_endpoints(struct adb_dev *dev,
 		return -ENODEV;
 	}
 	DBG(cdev, "usb_ep_autoconfig for adb ep_out got %s\n", ep->name);
+#if CONFIG_USB_MOT_ANDROID
+	ep->driver_data = _adb_dev;
+#endif
 	dev->ep_out = ep;
 
 	/* now allocate requests for our endpoints */
@@ -567,6 +577,7 @@ adb_function_unbind(struct usb_configuration *c, struct usb_function *f)
 	_adb_dev = NULL;
 }
 
+#ifdef CONFIG_USB_MOT_ANDROID
 static void adb_start_out_receive(struct adb_dev *dev)
 {
 	struct usb_request *req;
@@ -576,12 +587,15 @@ static void adb_start_out_receive(struct adb_dev *dev)
 	while ((req = req_get(dev, &dev->rx_idle))) {
 		req->length = BULK_BUFFER_SIZE;
 		ret = usb_ep_queue(dev->ep_out, req, GFP_ATOMIC);
+
 		if (ret < 0) {
 			dev->error = 1;
 			req_put(dev, &dev->rx_idle, req);
+			break;
 		}
 	}
 }
+#endif
 
 static int adb_function_set_alt(struct usb_function *f,
 		unsigned intf, unsigned alt)
@@ -605,10 +619,12 @@ static int adb_function_set_alt(struct usb_function *f,
 		usb_ep_disable(dev->ep_in);
 		return ret;
 	}
-	/* This is a workaround. Read when phone enumerate in case data lost */
-	adb_start_out_receive(dev);
 	dev->online = 1;
 
+#ifdef CONFIG_USB_MOT_ANDROID
+	adb_start_out_receive(dev);
+	usb_interface_enum_cb(ADB_TYPE_FLAG);
+#endif
 	/* readers may be blocked waiting for us to go online */
 	wake_up(&dev->read_wq);
 	return 0;
@@ -710,3 +726,21 @@ void adb_function_enable(int enable)
 	}
 }
 
+#ifdef CONFIG_USB_MOT_ANDROID
+struct usb_function *adb_function_enable_id(int enable, int id)
+{
+	struct adb_dev *dev = _adb_dev;
+
+	if (dev) {
+		if (enable) {
+			dev->function.descriptors = fs_adb_descs;
+			dev->function.hs_descriptors = hs_adb_descs;
+			adb_interface_desc.bInterfaceNumber = id;
+		} else {
+			dev->function.descriptors = null_adb_descs;
+			dev->function.hs_descriptors = null_adb_descs;
+		}
+	}
+	return &dev->function;
+}
+#endif

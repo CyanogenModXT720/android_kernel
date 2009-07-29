@@ -1,6 +1,8 @@
-/* include/linux/android_aid.h
+/*
+ * Gadget Driver for Android ACM
  *
- * Copyright (C) 2008 Google, Inc.
+ * Copyright (C) 2009 Motorola, Inc.
+ * Author:
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -13,14 +15,12 @@
  *
  */
 
-#ifndef _LINUX_ANDROID_AID_H
-#define _LINUX_ANDROID_AID_H
+#ifndef __F_ACM_H
+#define __F_ACM_H
 
-/* AIDs that the kernel treats differently */
-#define AID_NET_BT_ADMIN 3001
-#define AID_NET_BT       3002
-#define AID_INET         3003
-#define AID_NET_RAW      3004
-#define AID_NET_ADMIN    3005
+struct usb_function *acm_function_enable(int enable, int id);
 
-#endif
+int acm_function_add(struct usb_composite_dev *cdev,
+	struct usb_configuration *c);
+
+#endif /* __F_ACM_H */

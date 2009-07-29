@@ -1,5 +1,5 @@
 /*
- * Gadget Driver for Motorola Android
+ * Gadget Driver for Android
  *
  * Copyright (C) 2008 Google, Inc.
  * Author: Mike Lockwood <lockwood@android.com>
@@ -21,6 +21,11 @@
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/fs.h>
+#include <linux/types.h>
+#include <linux/poll.h>
+#include <linux/wait.h>
+#include <linux/err.h>
+#include <linux/device.h>
 
 #include <linux/delay.h>
 #include <linux/kernel.h>
@@ -32,11 +37,14 @@
 #include <linux/usb/ch9.h>
 #include <linux/usb/composite.h>
 #include <linux/usb/gadget.h>
+#include <linux/io.h>
 
 #include "f_mass_storage.h"
-#include "f_usbnet.h"
-#include "f_mtp.h"
 #include "f_adb.h"
+#include "f_usbnet.h"
+#include "f_acm.h"
+#include "f_mtp.h"
+#include "f_mot_android.h"
 #include "u_serial.h"
 
 #include "gadget_chips.h"
@@ -53,19 +61,52 @@
 #include "epautoconf.c"
 #include "composite.c"
 
-MODULE_AUTHOR("Mike Lockwood");
-MODULE_DESCRIPTION("Android Composite USB Driver");
+MODULE_AUTHOR("Motorola");
+MODULE_DESCRIPTION("Motorola Android Composite USB Driver");
 MODULE_LICENSE("GPL");
 MODULE_VERSION("1.0");
 
 static const char longname[] = "Gadget Android";
 
+static DECLARE_WAIT_QUEUE_HEAD(device_mode_change_wait_q);
+
 /* Default vendor and product IDs, overridden by platform data */
 #define VENDOR_ID		0x22b8
 #define PRODUCT_ID		0x41da
-#define ADB_PRODUCT_ID	0x41da
+#define ADB_PRODUCT_ID		0x41da
 
-#define NUM_ACM_PORTS 1
+struct device_pid_vid {
+	char *name;
+	u32 type;
+	int vid;
+	int pid;
+};
+
+#define MAX_DEVICE_TYPE_NUM   20
+#define MAX_DEVICE_NAME_SIZE  30
+static struct device_pid_vid mot_android_vid_pid[MAX_DEVICE_TYPE_NUM] = {
+	{"msc", MSC_TYPE_FLAG, 0x22b8, 0x41d9},
+	{"msc_adb", MSC_TYPE_FLAG | ADB_TYPE_FLAG, 0x22b8, 0x41db},
+	{"eth", ETH_TYPE_FLAG, 0x22b8, 0x41d4},
+	{"mtp", MTP_TYPE_FLAG, 0x22b8, 0x6415},
+	{"acm", ACM_TYPE_FLAG, 0x22b8, 0x6422},
+	{"eth_adb", ETH_TYPE_FLAG | ADB_TYPE_FLAG, 0x22b8, 0x41d4},
+	{"acm_eth_mtp", ACM_TYPE_FLAG | ETH_TYPE_FLAG | MTP_TYPE_FLAG, 0x22b8,
+	 0x41d8},
+	{"mtp_adb", MTP_TYPE_FLAG | ADB_TYPE_FLAG, 0x22b8, 0x41dc},
+	{"acm_eth_mtp_adb",
+	 ACM_TYPE_FLAG | ETH_TYPE_FLAG | MTP_TYPE_FLAG | ADB_TYPE_FLAG, 0x22b8,
+	 0x41da},
+	{"acm_eth_adb", ACM_TYPE_FLAG | ETH_TYPE_FLAG | ADB_TYPE_FLAG, 0x22b8,
+	 0x41e2},
+	{"msc_eth", MSC_TYPE_FLAG | ETH_TYPE_FLAG, 0x22b8, 0x41d4},
+	{"msc_adb_eth", MSC_TYPE_FLAG | ADB_TYPE_FLAG | ETH_TYPE_FLAG, 0x22b8,
+	 0x41d4},
+	{}
+};
+
+static int g_device_type;
+static atomic_t device_mode_change_excl;
 
 struct android_dev {
 	struct usb_gadget *gadget;
@@ -75,7 +116,6 @@ struct android_dev {
 	int adb_product_id;
 	int version;
 
-	int adb_enabled;
 	int nluns;
 };
 
@@ -96,12 +136,12 @@ static struct usb_string strings_dev[] = {
 	[STRING_PRODUCT_IDX].s = "Android",
 	[STRING_SERIAL_IDX].s = "0123456789ABCDEF",
 	[STRING_CONFIG_IDX].s = "Motorola Android Composite Device",
-	{  }			/* end of list */
+	{}			/* end of list */
 };
 
 static struct usb_gadget_strings stringtab_dev = {
-	.language	= 0x0409,	/* en-us */
-	.strings	= strings_dev,
+	.language = 0x0409,	/* en-us */
+	.strings = strings_dev,
 };
 
 static struct usb_gadget_strings *dev_strings[] = {
@@ -110,76 +150,105 @@ static struct usb_gadget_strings *dev_strings[] = {
 };
 
 static struct usb_device_descriptor device_desc = {
-	.bLength              = sizeof(device_desc),
-	.bDescriptorType      = USB_DT_DEVICE,
-	.bcdUSB               = __constant_cpu_to_le16(0x0200),
-	.bDeviceClass         = USB_CLASS_PER_INTERFACE,
-	.idVendor             = __constant_cpu_to_le16(VENDOR_ID),
-	.idProduct            = __constant_cpu_to_le16(PRODUCT_ID),
-	.bcdDevice            = __constant_cpu_to_le16(0xffff),
-	.bNumConfigurations   = 1,
+	.bLength = sizeof(device_desc),
+	.bDescriptorType = USB_DT_DEVICE,
+	.bcdUSB = __constant_cpu_to_le16(0x0200),
+	.bDeviceClass = USB_CLASS_PER_INTERFACE,
+	.idVendor = __constant_cpu_to_le16(VENDOR_ID),
+	.idProduct = __constant_cpu_to_le16(PRODUCT_ID),
+	.bcdDevice = __constant_cpu_to_le16(0xffff),
+	.bNumConfigurations = 1,
 };
+
+void android_usb_set_connected(int connected)
+{
+	if (_android_dev && _android_dev->cdev && _android_dev->cdev->gadget) {
+		if (connected)
+			usb_gadget_connect(_android_dev->cdev->gadget);
+		else
+			usb_gadget_disconnect(_android_dev->cdev->gadget);
+	}
+}
 
 static int __init android_bind_config(struct usb_configuration *c)
 {
 	struct android_dev *dev = _android_dev;
 	int ret;
-	printk(KERN_DEBUG "android_bind_config\n");
 
-	ret = acm_bind_config(c, 0);
+	/* the same sequence as force_reenumeration() */
+	ret = mass_storage_function_add(dev->cdev, c, dev->nluns);
 	if (ret)
 		return ret;
-
+	ret = acm_function_add(dev->cdev, c);
+	if (ret)
+		return ret;
 	ret = usbnet_function_add(dev->cdev, c);
 	if (ret)
 		return ret;
-
 	ret = mtp_function_add(dev->cdev, c);
 	if (ret)
 		return ret;
-
 	ret = adb_function_add(dev->cdev, c);
-	if (ret)
-		return ret;
 
-	/* Enable ADB always */
-	dev->adb_enabled = 1;
-	adb_function_enable(1);
-	return 0;
+	return ret;
 }
 
-static  int android_setup_config(struct usb_configuration *c,
-	const struct usb_ctrlrequest *ctrl);
+static int android_setup_config(struct usb_configuration *c,
+				const struct usb_ctrlrequest *ctrl);
+static int usb_device_cfg_flag;
+static int usb_get_desc_flag;
+static int usb_data_transfer_flag;
+
 static struct usb_configuration android_config_driver = {
-	.label		= "android",
-	.bind		= android_bind_config,
-	.setup      = android_setup_config,
+	.label = "android",
+	.bind = android_bind_config,
+	.setup = android_setup_config,
 	.bConfigurationValue = 1,
-	.bmAttributes	= USB_CONFIG_ATT_ONE | USB_CONFIG_ATT_SELFPOWER,
-	.bMaxPower	= 0xFA, /* 500ma */
+	.bmAttributes = USB_CONFIG_ATT_ONE | USB_CONFIG_ATT_SELFPOWER,
+	.bMaxPower = 0xFA,	/* 500ma */
 };
 
-static  int android_setup_config(struct usb_configuration *c,
-	const struct usb_ctrlrequest *ctrl)
+static int android_setup_config(struct usb_configuration *c,
+				const struct usb_ctrlrequest *ctrl)
 {
-    int i, ret;
+	int i, ret = -EOPNOTSUPP;
 
 	for (i = 0; i < android_config_driver.next_interface_id; i++)
-		if (android_config_driver.interface[i]->setup)
-			ret = android_config_driver.interface[i]->setup(
-				android_config_driver.interface[i], ctrl);
-    return 0;
+		if (android_config_driver.interface[i]->setup) {
+			ret =
+			    android_config_driver.interface[i]->
+			    setup(android_config_driver.interface[i], ctrl);
+			if (ret >= 0)
+				return ret;
+		}
+	return ret;
 }
+
+void usb_data_transfer_callback(void)
+{
+	if (usb_data_transfer_flag == 0) {
+		usb_data_transfer_flag = 1;
+		usb_get_desc_flag = 1;
+		wake_up_interruptible(&device_mode_change_wait_q);
+	}
+}
+
+void usb_interface_enum_cb(int flag)
+{
+	usb_device_cfg_flag |= flag;
+	if (usb_device_cfg_flag == g_device_type)
+		wake_up_interruptible(&device_mode_change_wait_q);
+}
+
 static int __init android_bind(struct usb_composite_dev *cdev)
 {
 	struct android_dev *dev = _android_dev;
-	struct usb_gadget	*gadget = cdev->gadget;
-	int			gcnum;
-	int			id;
-	int			ret;
+	struct usb_gadget *gadget = cdev->gadget;
+	int gcnum;
+	int id;
+	int ret;
 
-	printk(KERN_INFO "android_bind\n");
-
+	dev->gadget = gadget;
 	/* Allocate string descriptor numbers ... note that string
 	 * contents can be overridden by the composite_dev glue.
 	 */
@@ -210,7 +279,8 @@ static int __init android_bind(struct usb_composite_dev *cdev)
 	if (gadget->ops->wakeup)
 		android_config_driver.bmAttributes |= USB_CONFIG_ATT_WAKEUP;
 
-	gserial_setup(gadget, NUM_ACM_PORTS);
+	/* double check to move this call to f_acm.c??? */
+	gserial_setup(gadget, 1);
 
 	/* register our configuration */
 	ret = usb_add_config(cdev, &android_config_driver);
@@ -231,7 +301,7 @@ static int __init android_bind(struct usb_composite_dev *cdev)
 		 * can need hardware-specific attention though.
 		 */
 		pr_warning("%s: controller '%s' not recognized\n",
-			longname, gadget->name);
+			   longname, gadget->name);
 		device_desc.bcdDevice = __constant_cpu_to_le16(0x9999);
 	}
 
@@ -242,38 +312,109 @@ static int __init android_bind(struct usb_composite_dev *cdev)
 }
 
 static struct usb_composite_driver android_usb_driver = {
-	.name		= "android_usb",
-	.dev		= &device_desc,
-	.strings	= dev_strings,
-	.bind		= android_bind,
+	.name = "android_usb",
+	.dev = &device_desc,
+	.strings = dev_strings,
+	.bind = android_bind,
 };
 
-static void enable_adb(struct android_dev *dev, int enable)
+static void get_device_pid_vid(int type, int *pid, int *vid)
 {
-	if (enable != dev->adb_enabled) {
-		dev->adb_enabled = enable;
-		adb_function_enable(enable);
+	int i;
 
-		/* set product ID to the appropriate value */
-		if (enable)
-			device_desc.idProduct =
-				__constant_cpu_to_le16(dev->adb_product_id);
-		else
-			device_desc.idProduct =
-				__constant_cpu_to_le16(dev->product_id);
-		if (dev->cdev)
-			dev->cdev->desc.idProduct = device_desc.idProduct;
-
-		/* force reenumeration */
-		/*
-		if (dev->cdev && dev->cdev->gadget &&
-				dev->cdev->gadget->speed != USB_SPEED_UNKNOWN) {
-			usb_gadget_disconnect(dev->cdev->gadget);
-			msleep(10);
-			usb_gadget_connect(dev->cdev->gadget);
-		} */
+	*vid = 0;
+	*pid = 0;
+	for (i = 0; i < MAX_DEVICE_TYPE_NUM; i++) {
+		if (mot_android_vid_pid[i].type == type) {
+			*pid = mot_android_vid_pid[i].pid;
+			*vid = mot_android_vid_pid[i].vid;
+			break;
+		}
 	}
 }
+
+static void force_reenumeration(struct android_dev *dev, int dev_type)
+{
+	int vid, pid, i, temp_enabled;
+	struct usb_function *f;
+
+	/* using other namespace ??? */
+	usb_device_cfg_flag = 0;
+	usb_get_desc_flag   = 0;
+	usb_data_transfer_flag = 0;
+
+	get_device_pid_vid(dev_type, &pid, &vid);
+	device_desc.idProduct = __constant_cpu_to_le16(pid);
+	device_desc.idVendor = __constant_cpu_to_le16(vid);
+
+	for (i = 0; i < MAX_CONFIG_INTERFACES; i++)
+		android_config_driver.interface[i] = 0;
+
+	/* clear all intefaces */
+	android_config_driver.next_interface_id = 0;
+
+	temp_enabled = dev_type & MSC_TYPE_FLAG;
+	f = msc_function_enable(temp_enabled,
+				android_config_driver.next_interface_id);
+	if (temp_enabled) {
+		android_config_driver.interface[android_config_driver.
+						next_interface_id] = f;
+		android_config_driver.next_interface_id++;
+	}
+
+	temp_enabled = dev_type & ACM_TYPE_FLAG;
+	f = acm_function_enable(temp_enabled,
+				android_config_driver.next_interface_id);
+	if (temp_enabled) {
+		android_config_driver.interface[android_config_driver.
+						next_interface_id] = f;
+		android_config_driver.next_interface_id++;
+		android_config_driver.interface[android_config_driver.
+						next_interface_id] = f;
+		android_config_driver.next_interface_id++;
+	}
+
+	temp_enabled = dev_type & ETH_TYPE_FLAG;
+	f = usbnet_function_enable(temp_enabled,
+				   android_config_driver.next_interface_id);
+	if (temp_enabled) {
+		android_config_driver.interface[android_config_driver.
+						next_interface_id] = f;
+		android_config_driver.next_interface_id++;
+	}
+
+	temp_enabled = dev_type & MTP_TYPE_FLAG;
+	f = mtp_function_enable(temp_enabled,
+				android_config_driver.next_interface_id);
+	if (temp_enabled) {
+		android_config_driver.interface[android_config_driver.
+						next_interface_id] = f;
+		android_config_driver.next_interface_id++;
+	}
+
+	temp_enabled = dev_type & ADB_TYPE_FLAG;
+	f = adb_function_enable_id(temp_enabled,
+				   android_config_driver.next_interface_id);
+	if (temp_enabled) {
+		android_config_driver.interface[android_config_driver.
+						next_interface_id] = f;
+		android_config_driver.next_interface_id++;
+	}
+
+	if (dev->cdev) {
+		dev->cdev->desc.idProduct = device_desc.idProduct;
+		dev->cdev->desc.idVendor = device_desc.idVendor;
+	}
+
+	if (dev->cdev && dev->cdev->gadget)  {
+		/* dev->cdev->gadget->speed != USB_SPEED_UNKNOWN ? */
+		usb_gadget_disconnect(dev->cdev->gadget);
+		msleep(10);
+		usb_gadget_connect(dev->cdev->gadget);
+	}
+}
+
+static int adb_mode_changed_flag;
 
 static int adb_enable_open(struct inode *ip, struct file *fp)
 {
@@ -281,24 +422,24 @@ static int adb_enable_open(struct inode *ip, struct file *fp)
 		atomic_dec(&adb_enable_excl);
 		return -EBUSY;
 	}
-
-	printk(KERN_INFO "enabling adb\n");
-/*	enable_adb(_android_dev, 1);*/
+	adb_mode_changed_flag = 1;
+	wake_up_interruptible(&device_mode_change_wait_q);
 
 	return 0;
 }
 
 static int adb_enable_release(struct inode *ip, struct file *fp)
 {
-	printk(KERN_INFO "disabling adb\n");
-	/*enable_adb(_android_dev, 0);*/
 	atomic_dec(&adb_enable_excl);
+	adb_mode_changed_flag = 1;
+	wake_up_interruptible(&device_mode_change_wait_q);
+
 	return 0;
 }
 
-static struct file_operations adb_enable_fops = {
-	.owner =   THIS_MODULE,
-	.open =    adb_enable_open,
+static const struct file_operations adb_enable_fops = {
+	.owner = THIS_MODULE,
+	.open = adb_enable_open,
 	.release = adb_enable_release,
 };
 
@@ -308,12 +449,182 @@ static struct miscdevice adb_enable_device = {
 	.fops = &adb_enable_fops,
 };
 
+/*
+ * Device is used for USB mode switch
+ */
+static int device_mode_change_open(struct inode *ip, struct file *fp)
+{
+	if (atomic_inc_return(&device_mode_change_excl) != 1) {
+		atomic_dec(&device_mode_change_excl);
+		return -EBUSY;
+	}
+
+	return 0;
+}
+
+static int device_mode_change_release(struct inode *ip, struct file *fp)
+{
+	atomic_dec(&device_mode_change_excl);
+	return 0;
+}
+
+static ssize_t
+device_mode_change_write(struct file *file, const char __user *buffer,
+			 size_t count, loff_t *ppos)
+{
+	unsigned char cmd[MAX_DEVICE_NAME_SIZE + 1];
+	int cnt = MAX_DEVICE_NAME_SIZE;
+	int i, temp_device_type;
+
+	if (count <= 0)
+		return 0;
+
+	if (cnt > count)
+		cnt = count;
+
+	if (copy_from_user(cmd, buffer, cnt))
+		return -EFAULT;
+	cmd[cnt] = 0;
+
+	/* USB cable detached Command */
+	if (strncmp(cmd, "usb_cable_detach", 16) == 0) {
+		usb_data_transfer_flag = 0;
+		g_device_type = 0;
+		usb_device_cfg_flag = 0;
+		usb_get_desc_flag   = 0;
+		usb_gadget_disconnect(_android_dev->gadget);
+		return count;
+	}
+
+	/* USB connect/disconnect Test Commands */
+	if (strncmp(cmd, "usb_connect", 11) == 0) {
+		usb_gadget_connect(_android_dev->gadget);
+		return count;
+	}
+	if (strncmp(cmd, "usb_disconnect", 14) == 0) {
+		usb_gadget_disconnect(_android_dev->gadget);
+		return count;
+	}
+
+	for (i = 0; i < MAX_DEVICE_TYPE_NUM; i++) {
+		if (mot_android_vid_pid[i].name == NULL)
+			return count;
+		if (strlen(mot_android_vid_pid[i].name) > cnt)
+			continue;
+		if (strncmp(cmd, mot_android_vid_pid[i].name, cnt - 1) == 0) {
+			temp_device_type = mot_android_vid_pid[i].type;
+			break;
+		}
+	}
+
+	if (i == MAX_DEVICE_TYPE_NUM)
+		return count;
+
+	if (temp_device_type == g_device_type)
+		return count;
+
+	g_device_type = temp_device_type;
+	force_reenumeration(_android_dev, g_device_type);
+	return count;
+}
+
+static unsigned int device_mode_change_poll(struct file *file,
+					    struct poll_table_struct *wait)
+{
+	poll_wait(file, &device_mode_change_wait_q, wait);
+
+	if (((usb_device_cfg_flag != g_device_type) ||
+		(g_device_type == 0)) &&
+		(adb_mode_changed_flag == 0) && (usb_get_desc_flag == 0))
+		return 0;
+
+	return POLLIN | POLLRDNORM;
+}
+
+static ssize_t device_mode_change_read(struct file *file, char *buf,
+				       size_t count, loff_t *ppos)
+{
+	int ret, size, cnt;
+	/* double check last zero */
+	unsigned char no_changed[] = "none:\0";
+	unsigned char adb_en_str[] = "adb_enable:\0";
+	unsigned char adb_dis_str[] = "adb_disable:\0";
+	unsigned char enumerated_str[] = "enumerated\0";
+	unsigned char get_desc_str[] = "get_desc\0";
+
+	/* Message format example:
+	* none:adb_enable:enumerated
+	*/
+	/* using one macro/function to replace it ???*/
+	if ((adb_mode_changed_flag == 0) &&
+		((usb_device_cfg_flag != g_device_type) ||
+		(g_device_type == 0)) &&
+		(usb_get_desc_flag == 0))
+		return 0;
+
+	/* append PC request mode */
+	size = strlen(no_changed);
+	ret = copy_to_user(buf, no_changed, size);
+	cnt = size;
+	buf += size;
+
+	/* append ADB status */
+	if (!adb_mode_changed_flag) {
+		size = strlen(no_changed);
+		ret = copy_to_user(buf, no_changed, size);
+	} else {
+		if (atomic_read(&adb_enable_excl)) {
+			size = strlen(adb_en_str);
+			ret = copy_to_user(buf, adb_en_str, size);
+		} else {
+			size = strlen(adb_dis_str);
+			ret = copy_to_user(buf, adb_dis_str, size);
+		}
+		adb_mode_changed_flag = 0;
+	}
+	cnt += size;
+	buf += size;
+
+	/* append USB enumerated state */
+	if ((usb_device_cfg_flag == g_device_type) && (g_device_type != 0)) {
+		usb_device_cfg_flag = 0;
+		size = strlen(enumerated_str);
+		ret += copy_to_user(buf, enumerated_str, size);
+
+	} else {
+		if (usb_get_desc_flag == 1) {
+			usb_get_desc_flag = 0;
+			size = strlen(get_desc_str);
+			ret += copy_to_user(buf, get_desc_str, size);
+		} else {
+			size = strlen(no_changed) - 1;
+			ret += copy_to_user(buf, no_changed, size);
+		}
+	}
+	cnt += size;
+
+	return cnt;
+}
+
+static const struct file_operations device_mode_change_fops = {
+	.owner = THIS_MODULE,
+	.open = device_mode_change_open,
+	.write = device_mode_change_write,
+	.poll = device_mode_change_poll,
+	.read = device_mode_change_read,
+	.release = device_mode_change_release,
+};
+
+static struct miscdevice mode_change_device = {
+	.minor = MISC_DYNAMIC_MINOR,
+	.name = "usb_device_mode",
+	.fops = &device_mode_change_fops,
+};
+
 static int __init android_probe(struct platform_device *pdev)
 {
 	struct android_usb_platform_data *pdata = pdev->dev.platform_data;
 	struct android_dev *dev = _android_dev;
-
-	printk(KERN_INFO "android_probe pdata: %p\n", pdata);
 
 	if (pdata) {
 		if (pdata->vendor_id)
@@ -333,7 +644,7 @@ static int __init android_probe(struct platform_device *pdev)
 			strings_dev[STRING_PRODUCT_IDX].s = pdata->product_name;
 		if (pdata->manufacturer_name)
 			strings_dev[STRING_MANUFACTURER_IDX].s =
-					pdata->manufacturer_name;
+				pdata->manufacturer_name;
 		if (pdata->serial_number)
 			strings_dev[STRING_SERIAL_IDX].s = pdata->serial_number;
 		dev->nluns = pdata->nluns;
@@ -343,7 +654,7 @@ static int __init android_probe(struct platform_device *pdev)
 }
 
 static struct platform_driver android_platform_driver = {
-	.driver = { .name = "android_usb", },
+	.driver = {.name = "android_usb",},
 	.probe = android_probe,
 };
 
@@ -352,15 +663,10 @@ static int __init init(void)
 	struct android_dev *dev;
 	int ret;
 
-	printk(KERN_INFO "android init\n");
-
 	dev = kzalloc(sizeof(*dev), GFP_KERNEL);
 	if (!dev)
 		return -ENOMEM;
 
-	/* set default values, which should be overridden by platform data */
-	dev->product_id = PRODUCT_ID;
-	dev->adb_product_id = ADB_PRODUCT_ID;
 	_android_dev = dev;
 
 	ret = platform_driver_register(&android_platform_driver);
@@ -371,22 +677,33 @@ static int __init init(void)
 		platform_driver_unregister(&android_platform_driver);
 		return ret;
 	}
-	ret = usb_composite_register(&android_usb_driver);
+	ret = misc_register(&mode_change_device);
 	if (ret) {
 		misc_deregister(&adb_enable_device);
 		platform_driver_unregister(&android_platform_driver);
+		return ret;
 	}
+
+	ret = usb_composite_register(&android_usb_driver);
+	if (ret) {
+		misc_deregister(&adb_enable_device);
+		misc_deregister(&mode_change_device);
+		platform_driver_unregister(&android_platform_driver);
+	}
+
 	return ret;
 }
+
 module_init(init);
 
 static void __exit cleanup(void)
 {
 	usb_composite_unregister(&android_usb_driver);
 	misc_deregister(&adb_enable_device);
+	misc_deregister(&mode_change_device);
 	platform_driver_unregister(&android_platform_driver);
-	gserial_cleanup();
 	kfree(_android_dev);
 	_android_dev = NULL;
 }
+
 module_exit(cleanup);
