@@ -80,28 +80,33 @@ struct device_pid_vid {
 	u32 type;
 	int vid;
 	int pid;
+	char *config_name;
 };
 
 #define MAX_DEVICE_TYPE_NUM   20
 #define MAX_DEVICE_NAME_SIZE  30
 static struct device_pid_vid mot_android_vid_pid[MAX_DEVICE_TYPE_NUM] = {
-	{"msc", MSC_TYPE_FLAG, 0x22b8, 0x41d9},
-	{"msc_adb", MSC_TYPE_FLAG | ADB_TYPE_FLAG, 0x22b8, 0x41db},
-	{"eth", ETH_TYPE_FLAG, 0x22b8, 0x41d4},
-	{"mtp", MTP_TYPE_FLAG, 0x22b8, 0x6415},
-	{"acm", ACM_TYPE_FLAG, 0x22b8, 0x6422},
-	{"eth_adb", ETH_TYPE_FLAG | ADB_TYPE_FLAG, 0x22b8, 0x41d4},
+	{"msc", MSC_TYPE_FLAG, 0x22b8, 0x41d9, "Motorola Config 14"},
+	{"msc_adb", MSC_TYPE_FLAG | ADB_TYPE_FLAG, 0x22b8, 0x41db,
+	 "Motorola Config 42"},
+	{"eth", ETH_TYPE_FLAG, 0x22b8, 0x41d4, "Motorola Config 13"},
+	{"mtp", MTP_TYPE_FLAG, 0x22b8, 0x41D6, "Motorola Config 15"},
+	{"acm", ACM_TYPE_FLAG, 0x22b8, 0x6422, "Motorola Config 1"},
+	{"eth_adb", ETH_TYPE_FLAG | ADB_TYPE_FLAG, 0x22b8, 0x41d4,
+	 "Motorola Android Composite Device"},
 	{"acm_eth_mtp", ACM_TYPE_FLAG | ETH_TYPE_FLAG | MTP_TYPE_FLAG, 0x22b8,
-	 0x41d8},
-	{"mtp_adb", MTP_TYPE_FLAG | ADB_TYPE_FLAG, 0x22b8, 0x41dc},
+	 0x41d8, "Motorola Config 30"},
+	{"mtp_adb", MTP_TYPE_FLAG | ADB_TYPE_FLAG, 0x22b8, 0x41dc,
+	 "Motorola Config 32"},
 	{"acm_eth_mtp_adb",
 	 ACM_TYPE_FLAG | ETH_TYPE_FLAG | MTP_TYPE_FLAG | ADB_TYPE_FLAG, 0x22b8,
-	 0x41da},
+	 0x41da, "Motorola Config 31"},
 	{"acm_eth_adb", ACM_TYPE_FLAG | ETH_TYPE_FLAG | ADB_TYPE_FLAG, 0x22b8,
-	 0x41e2},
-	{"msc_eth", MSC_TYPE_FLAG | ETH_TYPE_FLAG, 0x22b8, 0x41d4},
+	 0x41e2, "Motorola Android Composite Device"},
+	{"msc_eth", MSC_TYPE_FLAG | ETH_TYPE_FLAG, 0x22b8, 0x41d4,
+	 "Motorola Android Composite Device"},
 	{"msc_adb_eth", MSC_TYPE_FLAG | ADB_TYPE_FLAG | ETH_TYPE_FLAG, 0x22b8,
-	 0x41d4},
+	 0x41d4, "Motorola Android Composite Device"},
 	{}
 };
 
@@ -513,6 +518,8 @@ device_mode_change_write(struct file *file, const char __user *buffer,
 			continue;
 		if (strncmp(cmd, mot_android_vid_pid[i].name, cnt - 1) == 0) {
 			temp_device_type = mot_android_vid_pid[i].type;
+			strings_dev[STRING_CONFIG_IDX].s =
+			mot_android_vid_pid[i].config_name;
 			break;
 		}
 	}

@@ -104,7 +104,7 @@ static struct usb_descriptor_header *null_function[] = {
 
 /* static strings, in UTF-8 */
 static struct usb_string usbnet_string_defs[] = {
-	[STRING_INTERFACE].s = "Motorola Network Interface",
+	[STRING_INTERFACE].s = "Motorola Networking Interface",
 	{  /* ZEROES END LIST */ },
 };
 
