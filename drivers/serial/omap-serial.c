@@ -256,7 +256,7 @@ static void serial_omap_stop_tx(struct uart_port *port)
 		up->ier &= ~UART_IER_THRI;
 		serial_out(up, UART_IER, up->ier);
 	}
-#ifdef CONFIG_OMAP3_PM
+#ifdef CONFIG_PM
 	if (!up->uart_dma.rx_dma_state) {
 		unsigned int tmp;
 		tmp = (serial_in(up, UART_OMAP_SYSC) & 0x7) | (2 << 3);
@@ -378,7 +378,7 @@ static void transmit_chars(struct uart_omap_port *up)
 static void serial_omap_start_tx(struct uart_port *port)
 {
 	struct uart_omap_port *up = (struct uart_omap_port *)port;
-#ifdef CONFIG_OMAP3_PM
+#ifdef CONFIG_PM
 		/* Disallow OCP bus idle. UART TX irqs are not seen during
 		 * bus idle. Alternative is to set kernel timer at fifo
 		 * drain rate.
@@ -1249,7 +1249,7 @@ static void uart_rx_dma_callback(int lch, u16 ch_status, void *data)
 
 static void serial_omap_start_rxdma(struct uart_omap_port *up)
 {
-#ifdef CONFIG_OMAP3_PM
+#ifdef CONFIG_PM
 	/* Disallow OCP bus idle. UART TX irqs are not seen during
 	 * bus idle. Alternative is to set kernel timer at fifo
 	 * drain rate.
