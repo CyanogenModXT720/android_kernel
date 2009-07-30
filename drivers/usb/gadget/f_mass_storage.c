@@ -73,6 +73,10 @@
 #include <linux/usb/composite.h>
 #include <linux/usb/gadget.h>
 
+#ifdef CONFIG_USB_MOT_ANDROID
+#include "f_mot_android.h"
+#endif
+
 #include "f_mass_storage.h"
 #include "gadget_chips.h"
 
@@ -468,6 +472,31 @@ static void put_be32(u8 *buf, u32 val)
  * descriptors are built on demand.  Also the (static) config and interface
  * descriptors are adjusted during fsg_bind().
  */
+#ifdef CONFIG_USB_MOT_ANDROID
+
+/* used when eth function is disabled */
+static struct usb_descriptor_header *null_msc_descs[] = {
+	NULL,
+};
+
+#define STRING_INTERFACE        0
+
+/* static strings, in UTF-8 */
+static struct usb_string usbmsc_string_defs[] = {
+	[STRING_INTERFACE].s = "Motorola MSD Interface",
+	{  /* ZEROES END LIST */ },
+};
+
+static struct usb_gadget_strings usbmsc_string_table = {
+	.language =             0x0409, /* en-us */
+	.strings =              usbmsc_string_defs,
+};
+
+static struct usb_gadget_strings *usbmsc_strings[] = {
+	&usbmsc_string_table,
+	NULL,
+};
+#endif
 
 /* There is only one interface. */
 
@@ -2772,8 +2801,11 @@ fsg_function_bind(struct usb_configuration *c, struct usb_function *f)
 				fs_bulk_in_desc.bEndpointAddress;
 		hs_bulk_out_desc.bEndpointAddress =
 				fs_bulk_out_desc.bEndpointAddress;
-
+#ifdef CONFIG_USB_MOT_ANDROID
+		f->hs_descriptors = null_msc_descs;
+#else
 		f->hs_descriptors = hs_function;
+#endif
 	}
 
 	/* Allocate the data buffers */
@@ -2842,6 +2874,10 @@ static int fsg_function_set_alt(struct usb_function *f,
 	DBG(fsg, "fsg_function_set_alt intf: %d alt: %d\n", intf, alt);
 	fsg->new_config = 1;
 	raise_exception(fsg, FSG_STATE_CONFIG_CHANGE);
+
+#ifdef CONFIG_USB_MOT_ANDROID
+	usb_interface_enum_cb(MSC_TYPE_FLAG);
+#endif
 	return 0;
 }
 
@@ -2858,7 +2894,9 @@ int __init mass_storage_function_add(struct usb_composite_dev *cdev,
 {
 	int		rc;
 	struct fsg_dev	*fsg;
-
+#ifdef CONFIG_USB_MOT_ANDROID
+	int status;
+#endif
 	printk(KERN_INFO "mass_storage_function_add\n");
 	rc = fsg_alloc();
 	if (rc)
@@ -2866,6 +2904,13 @@ int __init mass_storage_function_add(struct usb_composite_dev *cdev,
 	fsg = the_fsg;
 	fsg->nluns = nluns;
 
+#ifdef CONFIG_USB_MOT_ANDROID
+	status = usb_string_id(c->cdev);
+	if (status >= 0) {
+		usbmsc_string_defs[STRING_INTERFACE].id = status;
+		intf_desc.iInterface = status;
+	}
+#endif
 	spin_lock_init(&fsg->lock);
 	init_rwsem(&fsg->filesem);
 	kref_init(&fsg->ref);
@@ -2884,12 +2929,20 @@ int __init mass_storage_function_add(struct usb_composite_dev *cdev,
 
 	fsg->cdev = cdev;
 	fsg->function.name = shortname;
+#ifdef CONFIG_USB_MOT_ANDROID
+	fsg->function.descriptors = null_msc_descs;
+#else
 	fsg->function.descriptors = fs_function;
+#endif
 	fsg->function.bind = fsg_function_bind;
 	fsg->function.unbind = fsg_function_unbind;
 	fsg->function.setup = fsg_function_setup;
 	fsg->function.set_alt = fsg_function_set_alt;
 	fsg->function.disable = fsg_function_disable;
+
+#ifdef CONFIG_USB_MOT_ANDROID
+	fsg->function.strings = usbmsc_strings;
+#endif
 
 	rc = usb_add_function(c, &fsg->function);
 	if (rc != 0)
@@ -2904,3 +2957,25 @@ err_switch_dev_register:
 
 	return rc;
 }
+
+#ifdef CONFIG_USB_MOT_ANDROID
+struct usb_function *msc_function_enable(int enable, int id)
+{
+	struct fsg_dev	*fsg = the_fsg;
+
+	if (fsg) {
+		DBG(fsg, "msc_function_enable(%s)\n",
+			enable ? "true" : "false");
+
+		if (enable) {
+			fsg->function.descriptors = fs_function;
+			fsg->function.hs_descriptors = hs_function;
+			intf_desc.bInterfaceNumber = id;
+		} else {
+			fsg->function.descriptors = null_msc_descs;
+			fsg->function.hs_descriptors = null_msc_descs;
+		}
+	}
+	return &fsg->function;
+}
+#endif

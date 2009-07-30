@@ -17,34 +17,6 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  
  * 02111-1307, USA
  *
- * Motorola 2009-Jul-28 - Porting suspend/resume functionality
- * Motorola 2009-Jun-17 - Adding clock framework changes
- * Motorola 2009-Jun-01 - Adding power regulator changes
- * Motorola 2009-Mar-30 - Workaround 1.8V issue
- * Motorola 2009-Mar-12 - Warning cleanup
- * Motorola 2009-Feb-13 - Changes to support TI Kernel 25.4
- * Motorola 2009-Jan-08 - Fix low power mode
- * Motorola 2009-Jan-06 - Changes to support TI Kernel 25.3
- * Motorola 2008-Dec-06 - Adding a Sleep IOCTL
- * Motorola 2008-Dec-01 - Update the handling of card detect
- * Motorola 2008-Aug-12 - Modify the SIM driver for new OMAP H/W
- * Motorola 2007-Jun-04 - Port from Linux 2.6.10 to Linux 2.6.18
- * Motorola 2007-May-22 - Set a flag for _all_tx_data_sent
- * Motorola 2007-Mar-13 - Converted to module.
- * Motorola 2007-Feb-28 - Add call to mpm_handle_ioi to the ISRs
- * Motorola 2007-Jan-09 - Correct the SIMPD debouncing thread
- * Motorola 2006-Aug-24 - Remove some functionality from the driver
- * Motorola 2006-Aug-21 - Add support for all peripheral clock frequencies
- * Motorola 2006-Jul-24 - More MVL upmerge changes
- * Motorola 2006-Jul-14 - MVL upmerge
- * Motorola 2006-Jun-07 - Provide prescalar adjustment for a doubled input clock
- * Motorola 2006-Apr-20 - Now set SP_SIM1_TRXD GPIO in init function
- * Motorola 2006-Apr-14 - Update baud rate selection
- * Motorola 2006-Mar-20 - Cleanup and Update for BUTE
- * Motorola 2006-Feb-02 - Remove reference clock control
- * Motorola 2006-Jan-30 - Added an IOCTL to retrieve the entire IC register array
- * Motorola 2006-Jan-27 - Added ETU counter roll-over handling to the ISR
- * Motorola 2005-Mar-18 - Initial creation.
  */
 
 /*
@@ -85,6 +57,7 @@
 #include <mach/hardware.h>
 #include <mach/prcm.h>
 #include <mach/resource.h>
+#include <mach/omap-pm.h>
 
 #include "smart_card.h"
 #include "smart_card_kernel.h"
@@ -908,6 +881,9 @@ static int sim_ioctl(struct inode *inode, struct file *file, unsigned int cmd, u
                 /*  if we are active ...  */
                 if ((BOOL)args_kernel[1] == FALSE) 
                 {
+                    /* Request the latency constraint */
+                    omap_pm_set_max_mpu_wakeup_lat(&sim_device.dev, 10);
+
                     /* enable the SIM FCLK */
                     clk_enable (usim_fck);
 
@@ -923,6 +899,9 @@ static int sim_ioctl(struct inode *inode, struct file *file, unsigned int cmd, u
 
                     /* disable the SIM FCLK */
                     clk_disable (usim_fck);
+
+                    /* Release the latency constraint */
+                    omap_pm_set_max_mpu_wakeup_lat(&sim_device.dev, -1);
                 }
 
                 sim_low_power_enabled = (BOOL)args_kernel[1];

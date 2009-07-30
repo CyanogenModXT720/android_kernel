@@ -875,7 +875,9 @@ void musb_start(struct musb *musb)
 
 	/* put into basic highspeed mode and start session */
 	musb_writeb(regs, MUSB_POWER, MUSB_POWER_ISOUPDATE
+#ifndef CONFIG_USB_MOT_ANDROID /* At default, shall NOT enumeration */
 						| MUSB_POWER_SOFTCONN
+#endif
 						| MUSB_POWER_HSENAB
 						/* ENSUSPEND wedges tusb */
 						/* | MUSB_POWER_ENSUSPEND */
@@ -905,7 +907,11 @@ void musb_start(struct musb *musb)
 			musb->is_active = 1;
 	}
 	musb_platform_enable(musb);
+#ifdef CONFIG_USB_MOT_ANDROID /* At default, NOT enumeration ?? */
+	musb_writeb(regs, MUSB_DEVCTL, 0);
+#else
 	musb_writeb(regs, MUSB_DEVCTL, devctl);
+#endif
 }
 
 

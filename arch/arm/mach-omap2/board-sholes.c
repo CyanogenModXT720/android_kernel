@@ -25,6 +25,7 @@
 #include <linux/err.h>
 #include <linux/clk.h>
 #include <linux/mm.h>
+#include <linux/bootmem.h>
 #include <linux/qtouch_obp_ts.h>
 #include <linux/led-cpcap-lm3554.h>
 #include <linux/led-lm3530.h>
@@ -54,6 +55,7 @@
 #include "prm-regbits-34xx.h"
 #include "smartreflex.h"
 #include "omap3-opp.h"
+#include "sdram-toshiba-TYA000B801AXHM10.h"
 
 #ifdef CONFIG_VIDEO_OLDOMAP3
 #include <media/v4l2-int-device.h>
@@ -101,14 +103,17 @@ static struct omap_opp sholes_mpu_rate_table[] = {
 	{S600M, VDD1_OPP5, 0x3E},
 };
 
+#define S80M 80250000
+#define S160M 160500000
+
 static struct omap_opp sholes_l3_rate_table[] = {
 	{0, 0, 0},
 	/*OPP1*/
 	{0, VDD2_OPP1, 0x20},
 	/*OPP2*/
-	{S83M, VDD2_OPP2, 0x27},
+	{S80M, VDD2_OPP2, 0x27},
 	/*OPP3*/
-	{S166M, VDD2_OPP3, 0x2E},
+	{S160M, VDD2_OPP3, 0x2E},
 };
 
 static struct omap_opp sholes_dsp_rate_table[] = {
@@ -127,8 +132,9 @@ static struct omap_opp sholes_dsp_rate_table[] = {
 
 static void __init sholes_init_irq(void)
 {
-	omap2_init_common_hw(NULL, sholes_mpu_rate_table,
-			sholes_dsp_rate_table, sholes_l3_rate_table);
+	omap2_init_common_hw(TYA000B801AXHM10_sdrc_params,
+			sholes_mpu_rate_table, sholes_dsp_rate_table,
+			sholes_l3_rate_table);
 	omap_init_irq();
 #ifdef CONFIG_OMAP3_PM
 	scm_clk_init();
@@ -149,6 +155,27 @@ static struct platform_device androidusb_device = {
 	},
 };
 
+static int cpcap_usb_connected_probe(struct platform_device *pdev)
+{
+	android_usb_set_connected(1);
+	return 0;
+}
+
+static int cpcap_usb_connected_remove(struct platform_device *pdev)
+{
+	android_usb_set_connected(0);
+	return 0;
+}
+
+static struct platform_driver cpcap_usb_connected_driver = {
+	.probe		= cpcap_usb_connected_probe,
+	.remove		= cpcap_usb_connected_remove,
+	.driver		= {
+		.name	= "cpcap_usb_connected",
+		.owner	= THIS_MODULE,
+	},
+};
+
 static void sholes_gadget_init(void)
 {
 	unsigned int val[2];
@@ -158,8 +185,9 @@ static void sholes_gadget_init(void)
 	val[0] = omap_readl(reg);
 	val[1] = omap_readl(reg + 4);
 
-	snprintf(device_serial, MAX_USB_SERIAL_NUM, "%08x%08x", val[1], val[0]);
+	snprintf(device_serial, MAX_USB_SERIAL_NUM, "%08X%08X", val[1], val[0]);
 	platform_device_register(&androidusb_device);
+	platform_driver_register(&cpcap_usb_connected_driver);
 }
 
 static void sholes_audio_init(void)
@@ -221,21 +249,21 @@ static void sholes_als_init(void)
 static struct vkey sholes_touch_vkeys[] = {
 	{
 		.min		= 0,
-		.max		= 200,
+		.max		= 193,
 		.code		= KEY_BACK,
 	},
 	{
-		.min		= 330,
-		.max		= 520,
+		.min		= 275,
+		.max		= 467,
 		.code		= KEY_MENU,
 	},
 	{
-		.min		= 590,
-		.max		= 780,
+		.min		= 556,
+		.max		= 748,
 		.code		= KEY_HOME,
 	},
 	{
-		.min		= 880,
+		.min		= 834,
 		.max		= 1024,
 		.code		= KEY_SEARCH,
 	},
@@ -262,8 +290,8 @@ static struct qtouch_ts_platform_data sholes_ts_platform_data = {
 	.hw_reset	= sholes_touch_reset,
 	.power_cfg	= {
 		.idle_acq_int	= 1,
-		.active_acq_int	= 16,
-		.active_idle_to	= 25,
+		.active_acq_int	= 0xff,
+		.active_idle_to	= 0xff,
 	},
 	.acquire_cfg	= {
 		.charge_time	= 10,
@@ -274,7 +302,7 @@ static struct qtouch_ts_platform_data sholes_ts_platform_data = {
 		.sync		= 0,
 	},
 	.multi_touch_cfg	= {
-		.ctrl		= 0x03,
+		.ctrl		= 0x0f,
 		.x_origin	= 0,
 		.y_origin	= 0,
 		.x_size		= 12,
@@ -290,19 +318,23 @@ static struct qtouch_ts_platform_data sholes_ts_platform_data = {
 		.merge_hyst	= 0,
 		.merge_thresh	= 3,
 	},
-	.linear_tbl_cfg = {
-		.ctrl = 0x01,
-		.x_offset = 0x0000,
-		.x_segment = {0x5f,0x3b,0x3f,0x38,
-					  0x46,0x3c,0x39,0x3f,
-					  0x3a,0x3c,0x3e,0x3c,
-					  0x3e,0x3f,0x3e,0x3f},
-		.y_offset = 0x0000,
-		.y_segment = {0x5e,0x4c,0x3e,0x3d,
-					  0x3d,0x3b,0x3d,0x3e,
-					  0x3e,0x3c,0x38,0x3d,
-					  0x3c,0x3e,0x3c,0x3c},
-	},
+	  .linear_tbl_cfg = {
+		  .ctrl = 0x01,
+		  .x_offset = 0x0000,
+		  .x_segment = {
+			  0x4D, 0x40, 0x3E, 0x3E,
+			  0x44, 0x3c, 0x3c, 0x3d,
+			  0x3f, 0x42, 0x3f, 0x3c,
+			  0x3f, 0x3f, 0x3e, 0x44
+		  },
+		  .y_offset = 0x0000,
+		  .y_segment = {
+			  0x42, 0x38, 0x34, 0x3c,
+			  0x3c, 0x44, 0x3e, 0x3b,
+			  0x42, 0x41, 0x43, 0x45,
+			  0x43, 0x45, 0x43, 0x46
+		  },
+	  },
 	.grip_suppression_cfg = {
 		.ctrl		= 0x00,
 		.xlogrip	= 0x00,
@@ -323,24 +355,24 @@ static struct qtouch_ts_platform_data sholes_ts_platform_data = {
 };
 
 static struct lm3530_platform_data omap3430_als_light_data = {
-	.gen_config = 0x33,
-	.als_config = 0x7D,
-	.brightness_ramp = 0x36,
+	.gen_config = 0x3b,
+	.als_config = 0x7b,
+	.brightness_ramp = 0x2d,
 	.als_zone_info = 0x00,
-	.als_resistor_sel = 0x66,
+	.als_resistor_sel = 0x41,
 	.brightness_control = 0x00,
-	.zone_boundary_0 = 0x33,
-	.zone_boundary_1 = 0x66,
-	.zone_boundary_2 = 0x99,
-	.zone_boundary_3 = 0xCC,
-	.zone_target_0 = 0x19,
-	.zone_target_1 = 0x33,
-	.zone_target_2 = 0x4c,
-	.zone_target_3 = 0x66,
-	.zone_target_4 = 0x7f,
+	.zone_boundary_0 = 0x4,
+	.zone_boundary_1 = 0x44,
+	.zone_boundary_2 = 0xc5,
+	.zone_boundary_3 = 0xC5,
+	.zone_target_0 = 0x23,
+	.zone_target_1 = 0x31,
+	.zone_target_2 = 0x63,
+	.zone_target_3 = 0x7b,
+	.zone_target_4 = 0x7b,
 	.manual_current = 0x33,
-	.upper_curr_sel = 5,
-	.lower_curr_sel = 2,
+	.upper_curr_sel = 6,
+	.lower_curr_sel = 3,
 };
 
 static struct lm3554_platform_data sholes_camera_flash = {
@@ -587,11 +619,11 @@ static struct prm_setup_vc sholes_prm_setup = {
 	.voltsetup2 = 0x0,
 	.vdd0_on = 0x65,
 	.vdd0_onlp = 0x45,
-	.vdd0_ret = 0x17,
+	.vdd0_ret = 0x19,
 	.vdd0_off = 0x00,
 	.vdd1_on = 0x65,
 	.vdd1_onlp = 0x45,
-	.vdd1_ret = 0x17,
+	.vdd1_ret = 0x19,
 	.vdd1_off = 0x00,
 	.i2c_slave_ra = (SHOLES_R_SRI2C_SLAVE_ADDR_SA1 <<
 			OMAP3430_SMPS_SA1_SHIFT) |
@@ -621,19 +653,24 @@ int sholes_voltagescale_vcbypass(u32 target_opp, u32 current_opp,
 {
 
 	int sr_status = 0;
-	u32 vdd, target_opp_no;
+	u32 vdd, target_opp_no, current_opp_no;
 	u8 slave_addr = 0, opp_reg_addr = 0, volt_reg_addr = 0;
 
 	vdd = get_vdd(target_opp);
 	target_opp_no = get_opp_no(target_opp);
+	current_opp_no = get_opp_no(current_opp);
 
 	if (vdd == VDD1_OPP) {
+		printk("VDD1_opp:%d->%d,vsel=%02x \n",
+			current_opp_no, target_opp_no);
 		sr_status = sr_stop_vddautocomap(SR1);
 		slave_addr = SHOLES_R_SRI2C_SLAVE_ADDR_SA0;
 		volt_reg_addr = SHOLES_R_VDD1_SR_CONTROL;
 		opp_reg_addr = R_SMPS_VOL_OPP2_RA0;
 
 	} else if (vdd == VDD2_OPP) {
+		printk("VDD2_opp:%d->%d,vsel=%02x \n",
+			current_opp_no, target_opp_no);
 		sr_status = sr_stop_vddautocomap(SR2);
 		slave_addr = SHOLES_R_SRI2C_SLAVE_ADDR_SA1;
 		volt_reg_addr = SHOLES_R_VDD2_SR_CONTROL;
@@ -723,7 +760,8 @@ static int __init omap_hdq_init(void)
 }
 
 static struct wl127x_rfkill_platform_data sholes_wl1271_pdata = {
-	.nshutdown_gpio = SHOLES_WL1271_NSHUTDOWN_GPIO,
+	.bt_nshutdown_gpio = SHOLES_WL1271_NSHUTDOWN_GPIO,
+	.fm_enable_gpio = -1,
 };
 
 static struct platform_device sholes_wl1271_device = {
@@ -805,6 +843,38 @@ static void __init sholes_vout_init(void)
 	platform_device_register(&sholes_vout_device);
 }
 
+#ifdef CONFIG_ANDROID_RAM_CONSOLE
+#define RAM_CONSOLE_START   0x8E000000
+#define RAM_CONSOLE_SIZE    0x20000
+static struct resource ram_console_resource = {
+       .start  = RAM_CONSOLE_START,
+       .end    = (RAM_CONSOLE_START + RAM_CONSOLE_SIZE - 1),
+       .flags  = IORESOURCE_MEM,
+};
+
+static struct platform_device ram_console_device = {
+       .name = "ram_console",
+       .id = 0,
+       .num_resources  = 1,
+       .resource       = &ram_console_resource,
+};
+
+static inline void sholes_ramconsole_init(void)
+{
+	platform_device_register(&ram_console_device);
+}
+
+static inline void omap2_ramconsole_reserve_sdram(void)
+{
+	reserve_bootmem(RAM_CONSOLE_START, RAM_CONSOLE_SIZE, 0);
+}
+#else
+static inline void sholes_ramconsole_init(void) {}
+
+static inline void omap2_ramconsole_reserve_sdram(void) {}
+#endif
+
+
 static void sholes_pm_power_off(void)
 {
 	printk(KERN_INFO "sholes_pm_power_off start...\n");
@@ -830,6 +900,7 @@ static void __init sholes_init(void)
 {
 	omap_board_config = sholes_config;
 	omap_board_config_size = ARRAY_SIZE(sholes_config);
+	sholes_ramconsole_init();
 	sholes_omap_mdm_ctrl_init();
 	sholes_spi_init();
 	sholes_flash_init();
@@ -856,6 +927,7 @@ static void __init sholes_init(void)
 
 static void __init sholes_map_io(void)
 {
+	omap2_ramconsole_reserve_sdram();
 	omap2_set_globals_343x();
 	omap2_map_common_io();
 }

@@ -45,6 +45,7 @@
 #include <../arch/arm/mach-omap2/ti-compat.h>
 #include <../arch/arm/mach-omap2/prcm-regs.h>
 #endif
+#include <asm/mach/serial_omap.h>
 
 unsigned long isr8250_activity;
 
@@ -64,7 +65,7 @@ unsigned long isr8250_activity;
 #ifdef DEBUG
 #define DPRINTK  printk
 #else
-#define DPRINTK( x... )
+#define DPRINTK(x...)
 #endif
 
 /*
@@ -74,7 +75,7 @@ unsigned long isr8250_activity;
  */
 #define is_real_interrupt(irq)  ((irq) != 0)
 
-// TBD: move this to header file
+/* TBD: move this to header file */
 static u8 uart_dma_tx[MAX_UARTS + 1] =
     { OMAP24XX_DMA_UART1_TX, OMAP24XX_DMA_UART2_TX, OMAP24XX_DMA_UART3_TX };
 static u8 uart_dma_rx[MAX_UARTS + 1] =
@@ -135,7 +136,8 @@ static void serial_omap_display_reg(struct uart_port *port);
 static void serial_omap_rx_timeout(unsigned long uart_no);
 static void serial_omap_start_rxdma(struct uart_omap_port *up);
 
-int console_detect(char *str){
+int console_detect(char *str)
+{
 	extern char *saved_command_line;
 	char *next, *start = NULL;
 	int i;
@@ -158,8 +160,8 @@ int console_detect(char *str){
 	start = strchr(start, '=') + 1;
 	while (*start != ',') {
 		str[i++] = *start++;
-		if (i > 6){
-			printk("Invalid Console Name\n");
+		if (i > 6) {
+			printk(KERN_ERR "Invalid Console Name\n");
 			return -EPERM;
 		}
 	}
@@ -224,7 +226,7 @@ static void serial_omap_enable_ms(struct uart_port *port)
 {
 	struct uart_omap_port *up = (struct uart_omap_port *)port;
 
-	DPRINTK("serial_omap_enable_ms+%d\n",up->pdev->id);
+	DPRINTK("serial_omap_enable_ms+%d\n", up->pdev->id);
 	up->ier |= UART_IER_MSI;
 	serial_out(up, UART_IER, up->ier);
 }
@@ -232,19 +234,18 @@ static void serial_omap_enable_ms(struct uart_port *port)
 static void serial_omap_stop_tx(struct uart_port *port)
 {
 	struct uart_omap_port *up = (struct uart_omap_port *)port;
-	if (up->use_dma) {
-		if (up->uart_dma.tx_dma_channel != 0xFF) {
+	if (up->use_dma && up->uart_dma.tx_dma_channel != 0xFF) {
 		/*
-		 * Check if dma is still active . If yes do nothing , return.
-		 * Else stop dma
+		 * Check if dma is still active . If yes do nothing,
+		 * return. Else stop dma.
 		 */
-			int status = omap_readl(OMAP34XX_DMA4_BASE + OMAP_DMA4_CCR(up->uart_dma.tx_dma_channel));
-			if (status & (1 << 7))
-				return;
-			omap_stop_dma(up->uart_dma.tx_dma_channel);
-			omap_free_dma(up->uart_dma.tx_dma_channel);
-			up->uart_dma.tx_dma_channel = 0xFF;
-		}
+		int status = omap_readl(OMAP34XX_DMA4_BASE +
+				OMAP_DMA4_CCR(up->uart_dma.tx_dma_channel));
+		if (status & (1 << 7))
+			return;
+		omap_stop_dma(up->uart_dma.tx_dma_channel);
+		omap_free_dma(up->uart_dma.tx_dma_channel);
+		up->uart_dma.tx_dma_channel = 0xFF;
 	}
 
 	if (up->ier & UART_IER_THRI) {
@@ -386,10 +387,10 @@ static void serial_omap_start_tx(struct uart_port *port)
 	if (up->use_dma && !(up->port.x_char)) {
 
 		struct circ_buf *xmit = &up->port.info->xmit;
-		unsigned int start = up->uart_dma.tx_buf_dma_phys + (xmit->tail & (UART_XMIT_SIZE - 1));
-		if (uart_circ_empty(xmit) || up->uart_dma.tx_dma_state) {
+		unsigned int start = up->uart_dma.tx_buf_dma_phys +
+				     (xmit->tail & (UART_XMIT_SIZE - 1));
+		if (uart_circ_empty(xmit) || up->uart_dma.tx_dma_state)
 			return;
-		}
 		spin_lock(&(up->uart_dma.tx_lock));
 		up->uart_dma.tx_dma_state = 1;
 		spin_unlock(&(up->uart_dma.tx_lock));
@@ -402,17 +403,20 @@ static void serial_omap_start_tx(struct uart_port *port)
 			up->uart_dma.tx_buf_size = (up->uart_dma.tx_buf_dma_phys + UART_XMIT_SIZE) - start;
 
 		if (up->uart_dma.tx_dma_channel == 0xFF) {
-			omap_request_dma(uart_dma_tx[up->pdev->id-1],"UART Tx DMA",
-			(void *)uart_tx_dma_callback,up,
-			&(up->uart_dma.tx_dma_channel));
+			omap_request_dma(uart_dma_tx[up->pdev->id-1],
+					 "UART Tx DMA",
+					 (void *)uart_tx_dma_callback, up,
+					&(up->uart_dma.tx_dma_channel));
 		}
 		omap_set_dma_dest_params(up->uart_dma.tx_dma_channel, 0,
-					 OMAP_DMA_AMODE_CONSTANT, UART_BASE(up->pdev->id - 1), 0,0);
+					 OMAP_DMA_AMODE_CONSTANT,
+					 UART_BASE(up->pdev->id - 1), 0, 0);
 		omap_set_dma_src_params(up->uart_dma.tx_dma_channel, 0,
-			OMAP_DMA_AMODE_POST_INC, start, 0,0);
+			OMAP_DMA_AMODE_POST_INC, start, 0, 0);
 
 		omap_set_dma_transfer_params(up->uart_dma.tx_dma_channel,
-					     OMAP_DMA_DATA_TYPE_S8, up->uart_dma.tx_buf_size, 1,
+					     OMAP_DMA_DATA_TYPE_S8,
+					     up->uart_dma.tx_buf_size, 1,
 					     OMAP_DMA_SYNC_ELEMENT,
 					     uart_dma_tx[(up->pdev->id)-1], 0);
 
@@ -458,7 +462,17 @@ static unsigned int check_modem_status(struct uart_omap_port *up)
 static inline irqreturn_t serial_omap_irq(int irq, void *dev_id)
 {
 	struct uart_omap_port *up = dev_id;
-	unsigned int iir, lsr;
+	unsigned int iir, lsr, ssr;
+
+#if 0
+	ssr = serial_in(up, UART_OMAP_SSR);
+	if (ssr & (1 << 2)) {
+		unsigned int scr;
+		scr = serial_in(up, UART_OMAP_SCR);
+		scr |= (1<<4);
+		serial_out(up, UART_OMAP_SCR, scr);
+	}
+#endif
 
 	iir = serial_in(up, UART_IIR);
 	if (iir & UART_IIR_NO_INT)
@@ -468,14 +482,12 @@ static inline irqreturn_t serial_omap_irq(int irq, void *dev_id)
 		up->ier &= ~UART_IER_RDI;
 		serial_out(up, UART_IER, up->ier);
 		serial_omap_start_rxdma(up);
-	}
-	else if (lsr & UART_LSR_DR) {
+	} else if (lsr & UART_LSR_DR) {
 		receive_chars(up, &lsr);
 	}
 	check_modem_status(up);
-	if ((lsr & UART_LSR_THRE) && (iir & 0x2)) {
+	if ((lsr & UART_LSR_THRE) && (iir & 0x2))
 		transmit_chars(up);
-	}
 	isr8250_activity = jiffies;
 
 	return IRQ_HANDLED;
@@ -487,7 +499,7 @@ static unsigned int serial_omap_tx_empty(struct uart_port *port)
 	unsigned long flags;
 	unsigned int ret;
 
-	DPRINTK("serial_omap_tx_empty+%d\n",up->pdev->id);
+	DPRINTK("serial_omap_tx_empty+%d\n", up->pdev->id);
 	spin_lock_irqsave(&up->port.lock, flags);
 	ret = serial_in(up, UART_LSR) & UART_LSR_TEMT ? TIOCSER_TEMT : 0;
 	spin_unlock_irqrestore(&up->port.lock, flags);
@@ -502,7 +514,7 @@ static unsigned int serial_omap_get_mctrl(struct uart_port *port)
 	unsigned int ret;
 
 	status = check_modem_status(up);
-	DPRINTK("serial_omap_get_mctrl+%d\n",up->pdev->id);
+	DPRINTK("serial_omap_get_mctrl+%d\n", up->pdev->id);
 
 	ret = 0;
 	if (status & UART_MSR_DCD)
@@ -521,7 +533,7 @@ static void serial_omap_set_mctrl(struct uart_port *port, unsigned int mctrl)
 	struct uart_omap_port *up = (struct uart_omap_port *)port;
 	unsigned char mcr = 0;
 
-	DPRINTK("serial_omap_set_mctrl+%d\n",up->pdev->id);
+	DPRINTK("serial_omap_set_mctrl+%d\n", up->pdev->id);
 	if (mctrl & TIOCM_RTS)
 		mcr |= UART_MCR_RTS;
 	if (mctrl & TIOCM_DTR)
@@ -542,7 +554,7 @@ static void serial_omap_break_ctl(struct uart_port *port, int break_state)
 	struct uart_omap_port *up = (struct uart_omap_port *)port;
 	unsigned long flags;
 
-	DPRINTK("serial_omap_break_ctl+%d\n",up->pdev->id);
+	DPRINTK("serial_omap_break_ctl+%d\n", up->pdev->id);
 	spin_lock_irqsave(&up->port.lock, flags);
 	if (break_state == -1)
 		up->lcr |= UART_LCR_SBC;
@@ -556,7 +568,7 @@ static int serial_omap_startup(struct uart_port *port)
 {
 	struct uart_omap_port *up = (struct uart_omap_port *)port;
 	unsigned long flags;
-	int irq_flags = 0;
+	int irq_flags = port->flags & UPF_SHARE_IRQ ? IRQF_SHARED : 0;
 	int retval;
 
 	/* Zoom2 has GPIO_102 connected to Serial device:
@@ -567,8 +579,11 @@ static int serial_omap_startup(struct uart_port *port)
 	/*
 	 * Allocate the IRQ
 	 */
-	retval = request_irq(up->port.irq, serial_omap_irq, irq_flags, up->name, up);
+	retval = request_irq(up->port.irq, serial_omap_irq, irq_flags,
+			     up->name, up);
 	if (retval) {
+		printk(KERN_ERR "%s: Failed to register IRQ %d for %s (%d)\n",
+		       __func__, up->port.irq, up->name, retval);
 		return retval;
 	}
 
@@ -634,8 +649,8 @@ static int serial_omap_startup(struct uart_port *port)
 			free_page((unsigned long)up->port.info->xmit.buf);
 			up->port.info->xmit.buf = NULL;
 			up->port.info->xmit.buf = dma_alloc_coherent(NULL,
-                                               UART_XMIT_SIZE,
-                                               (dma_addr_t *)&(up->uart_dma.tx_buf_dma_phys), 0);
+							UART_XMIT_SIZE,
+						(dma_addr_t *)&(up->uart_dma.tx_buf_dma_phys), 0);
 			up->is_buf_dma_alloced = 1;
 		}
 		init_timer(&(up->uart_dma.rx_timer));
@@ -652,7 +667,8 @@ static int serial_omap_startup(struct uart_port *port)
 		* are set via set_termios(), which will be occurring imminently
 		* anyway, so we don't enable them here.
 		*/
-		up->ier = UART_IER_RLSI | UART_IER_RDI; //| UART_IER_RTOIE |UART_IER_THRI;
+		up->ier = UART_IER_RLSI | UART_IER_RDI;
+			/*| UART_IER_RTOIE |UART_IER_THRI; */
 		serial_out(up, UART_IER, up->ier);
 	}
 
@@ -664,7 +680,7 @@ static void serial_omap_shutdown(struct uart_port *port)
 	struct uart_omap_port *up = (struct uart_omap_port *)port;
 	unsigned long flags;
 
-	DPRINTK("serial_omap_shutdown+%d\n",up->pdev->id);
+	DPRINTK("serial_omap_shutdown+%d\n", up->pdev->id);
 	/*
 	 * Disable interrupts from this port
 	 */
@@ -691,12 +707,13 @@ static void serial_omap_shutdown(struct uart_port *port)
 	 * Read data port to reset things, and then free the irq
 	 */
 	(void) serial_in(up, UART_RX);
-	if (up->use_dma ) {
+	if (up->use_dma) {
 		int tmp;
 		if (up->is_buf_dma_alloced) {
 			dma_free_coherent(up->port.dev,
-				  UART_XMIT_SIZE,
-				  up->port.info->xmit.buf, up->uart_dma.tx_buf_dma_phys);
+					  UART_XMIT_SIZE,
+					  up->port.info->xmit.buf,
+					  up->uart_dma.tx_buf_dma_phys);
 			up->port.info->xmit.buf = NULL;
 			up->is_buf_dma_alloced = 0;
 		}
@@ -722,6 +739,7 @@ serial_omap_set_termios(struct uart_port *port, struct ktermios *termios,
 	unsigned char efr = 0;
 	unsigned long flags;
 	unsigned int baud, quot;
+	unsigned int scr;
 
 	serial_out(up, UART_LCR, UART_LCR_DLAB);
 	serial_out(up, UART_DLL, 0);
@@ -811,7 +829,11 @@ serial_omap_set_termios(struct uart_port *port, struct ktermios *termios,
 	serial_out(up, UART_IER, up->ier);
 
 	if (termios->c_cflag & CRTSCTS)
+#ifdef CONFIG_SERIAL_OMAP3430_HW_FLOW_CONTROL
+		efr |= (port->unused1 << 6);
+#else
 		efr |= (UART_EFR_CTS | UART_EFR_RTS);
+#endif
 
 	serial_out(up, UART_LCR, cval | UART_LCR_DLAB);/* set DLAB */
 	serial_out(up, UART_DLL, quot & 0xff);		/* LS of divisor */
@@ -819,8 +841,16 @@ serial_omap_set_termios(struct uart_port *port, struct ktermios *termios,
 
 	serial_out(up, UART_LCR, cval);		/* reset DLAB */
 	up->lcr = cval;				/* Save LCR */
+#if 0
+	scr = (1 << 4);				/* RX_CTS_WU_EN */
+#else
+	scr = 0;
+#endif
 	if (up->use_dma)
-		serial_out(up, UART_OMAP_SCR  , ((1 << 6) | (1 << 7)));
+		scr |= (1 << 6) | (1 << 7);	/* TX_TRIG_GRANU1 | RX_TRIG_GRANU1 */
+
+	serial_out(up, UART_OMAP_SCR, scr);
+
 
 	serial_out(up, UART_LCR, 0xbf);	/* Access EFR */
 	serial_out(up, UART_EFR, UART_EFR_ECB);
@@ -846,7 +876,7 @@ serial_omap_set_termios(struct uart_port *port, struct ktermios *termios,
 		serial_out(up, UART_OMAP_MDR1, OMAP_MDR1_MODE16X);
 	spin_unlock_irqrestore(&up->port.lock, flags);
 
-	DPRINTK("serial_omap_set_termios+%d\n",up->pdev->id);
+	DPRINTK("serial_omap_set_termios+%d\n", up->pdev->id);
 	serial_omap_display_reg(port);
 }
 
@@ -856,13 +886,13 @@ serial_omap_pm(struct uart_port *port, unsigned int state,
 {
 	struct uart_omap_port *up = (struct uart_omap_port *)port;
 	unsigned char efr;
-	DPRINTK("serial_omap_pm+%d\n",up->pdev->id);
+	DPRINTK("serial_omap_pm+%d\n", up->pdev->id);
 	efr = serial_in(up, UART_EFR);
 	serial_out(up, UART_LCR, 0xBF);
 	serial_out(up, UART_EFR, efr | UART_EFR_ECB);
 	serial_out(up, UART_LCR, 0);
 
-	serial_out(up, UART_IER, (state!=0) ? UART_IERX_SLEEP: 0);
+	serial_out(up, UART_IER, (state != 0) ? UART_IERX_SLEEP : 0);
 	serial_out(up, UART_LCR, 0xBF);
 	serial_out(up, UART_EFR, efr);
 	serial_out(up, UART_LCR, 0);
@@ -883,7 +913,7 @@ static void serial_omap_config_port(struct uart_port *port, int flags)
 {
 	struct uart_omap_port *up = (struct uart_omap_port *)port;
 
-	DPRINTK("serial_omap_config_port+%d\n",up->pdev->id);
+	DPRINTK("serial_omap_config_port+%d\n", up->pdev->id);
 	up->port.type = PORT_OMAP;
 }
 
@@ -900,7 +930,7 @@ serial_omap_type(struct uart_port *port)
 {
 	struct uart_omap_port *up = (struct uart_omap_port *)port;
 
-	DPRINTK("serial_omap_type+%d\n",up->pdev->id);
+	DPRINTK("serial_omap_type+%d\n", up->pdev->id);
 	return up->name;
 }
 
@@ -1099,8 +1129,6 @@ static int serial_omap_resume(struct platform_device *dev)
 	return 0;
 }
 
-static int line;
-
 static void serial_omap_rx_timeout(unsigned long uart_no)
 {
 	struct uart_omap_port *up = ui[uart_no - 1];
@@ -1122,8 +1150,7 @@ static void serial_omap_rx_timeout(unsigned long uart_no)
 		}
 
 		return;
-	}
-	else {
+	} else {
 		unsigned int curr_transmitted_size = curr_dma_pos - up->uart_dma.prev_rx_dma_pos;
 		up->port.icount.rx += curr_transmitted_size;
 		tty_insert_flip_string(up->port.info->port.tty, up->uart_dma.rx_buf + (up->uart_dma.prev_rx_dma_pos - up->uart_dma.rx_buf_dma_phys), curr_transmitted_size);
@@ -1131,10 +1158,9 @@ static void serial_omap_rx_timeout(unsigned long uart_no)
 		up->uart_dma.prev_rx_dma_pos = curr_dma_pos;
 		if (up->uart_dma.rx_buf_size + up->uart_dma.rx_buf_dma_phys == curr_dma_pos) {
 			serial_omap_start_rxdma(up);
-		}
-		else
-		mod_timer(&up->uart_dma.rx_timer, jiffies +
-				usecs_to_jiffies(up->uart_dma.rx_timeout));
+		} else
+			mod_timer(&up->uart_dma.rx_timer,
+				  jiffies + usecs_to_jiffies(up->uart_dma.rx_timeout));
 		isr8250_activity = jiffies;
 	}
 }
@@ -1156,8 +1182,8 @@ static void serial_omap_start_rxdma(struct uart_omap_port *up)
 	serial_out(up, UART_OMAP_SYSC, tmp); /* no-idle */
 #endif
 	if (up->uart_dma.rx_dma_channel == 0xFF) {
-		omap_request_dma(uart_dma_rx[up->pdev->id-1],"UART Rx DMA",
-				(void *)uart_rx_dma_callback,up,
+		omap_request_dma(uart_dma_rx[up->pdev->id-1], "UART Rx DMA",
+				(void *)uart_rx_dma_callback, up,
 				&(up->uart_dma.rx_dma_channel));
 		omap_set_dma_src_params(up->uart_dma.rx_dma_channel, 0,
 					OMAP_DMA_AMODE_CONSTANT,
@@ -1184,9 +1210,8 @@ static void serial_omap_continue_tx(struct uart_omap_port *up)
 {
 	struct circ_buf *xmit = &up->port.info->xmit;
 	int start = up->uart_dma.tx_buf_dma_phys + (xmit->tail & (UART_XMIT_SIZE - 1));
-	if (uart_circ_empty(xmit))  {
-			return;
-	}
+	if (uart_circ_empty(xmit))
+		return;
 
 	up->uart_dma.tx_buf_size = uart_circ_chars_pending(xmit);
 	/* It is a circular buffer. See if the buffer has wounded back.
@@ -1198,12 +1223,14 @@ static void serial_omap_continue_tx(struct uart_omap_port *up)
 		up->uart_dma.tx_buf_size =
 			(up->uart_dma.tx_buf_dma_phys + UART_XMIT_SIZE) - start;
 	omap_set_dma_dest_params(up->uart_dma.tx_dma_channel, 0,
-				 OMAP_DMA_AMODE_CONSTANT, UART_BASE(up->pdev->id - 1), 0,0);
+				 OMAP_DMA_AMODE_CONSTANT,
+				 UART_BASE(up->pdev->id - 1), 0, 0);
 	omap_set_dma_src_params(up->uart_dma.tx_dma_channel, 0,
-		OMAP_DMA_AMODE_POST_INC, start, 0,0);
+				OMAP_DMA_AMODE_POST_INC, start, 0, 0);
 
 	omap_set_dma_transfer_params(up->uart_dma.tx_dma_channel,
-				     OMAP_DMA_DATA_TYPE_S8, up->uart_dma.tx_buf_size, 1,
+				     OMAP_DMA_DATA_TYPE_S8,
+				     up->uart_dma.tx_buf_size, 1,
 				     OMAP_DMA_SYNC_ELEMENT,
 				     uart_dma_tx[(up->pdev->id)-1], 0);
 
@@ -1240,10 +1267,21 @@ static void uart_tx_dma_callback(int lch, u16 ch_status, void *data)
 
 static int serial_omap_probe(struct platform_device *pdev)
 {
+	struct plat_serialomap_port *pdata = pdev->dev.platform_data;
 	struct uart_omap_port	*up;
 	struct resource		*mem, *irq;
 	int ret = -ENOSPC;
 	char str[7];
+
+	if (!pdata) {
+		dev_err(&pdev->dev, "no platform data?\n");
+		return -ENODEV;
+	}
+
+	if (pdata->disabled) {
+		dev_err(&pdev->dev, "device disabled\n");
+		return -ENODEV;
+	}
 
 	mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!mem) {
@@ -1287,9 +1325,12 @@ static int serial_omap_probe(struct platform_device *pdev)
 		up->port.regshift = 1;
 	} else {
 		up->port.membase = (void *) io_p2v(mem->start);
-		up->port.flags = UPF_BOOT_AUTOCONF;
+		up->port.flags = pdata->flags;
 		up->port.uartclk = 48000000;
 		up->port.regshift = 2;
+#ifdef CONFIG_SERIAL_OMAP3430_HW_FLOW_CONTROL
+		up->port.unused1 = pdata->rtscts;
+#endif
 	}
 
 
@@ -1325,9 +1366,9 @@ static int serial_omap_probe(struct platform_device *pdev)
 		up->uart_dma.tx_dma_channel = 0xFF;
 		up->uart_dma.rx_dma_channel = 0xFF;
 	}
-        if (console_detect(str)){
-                printk("Invalid console paramter. UART Library Init Failed!\n");
-                return -EPERM;
+	if (console_detect(str)) {
+		printk("Invalid console paramter. UART Library Init Failed!\n");
+		return -EPERM;
 	}
 	up->use_console = 0;
 	fcr[pdev->id - 1] = 0;
@@ -1362,7 +1403,7 @@ static int serial_omap_remove(struct platform_device *dev)
 
 	platform_set_drvdata(dev, NULL);
 	if (up) {
-		uart_remove_one_port(&serial_omap_reg, &sport->port);
+		uart_remove_one_port(&serial_omap_reg, &up->port);
 		kfree(up);
 	}
 	return 0;
@@ -1502,7 +1543,7 @@ int are_driveromap_uarts_active(int *driver8250_managed)
 
 		/* check ownership of port */
 		/* Check only ports managed by this driver and open */
-		if((up->port.dev == NULL) || (up->port.type == PORT_UNKNOWN)){
+		if ((up->port.dev == NULL) || (up->port.type == PORT_UNKNOWN)) {
 			*driver8250_managed &= ~(1 << j);
 			continue;
 		}
@@ -1546,10 +1587,10 @@ int are_driveromap_uarts_active(int *driver8250_managed)
 			tmp = (serial_in(up, UART_OMAP_SYSC) & 0x7);
 			serial_out(up, UART_OMAP_SYSC, tmp); /* force-idle */
 		}
-       }
-	if(*driver8250_managed) {
-		return 0;
 	}
+
+	if (*driver8250_managed)
+		return 0;
 	return 1;
 }
 EXPORT_SYMBOL(are_driveromap_uarts_active);
@@ -1561,9 +1602,9 @@ static void serial_omap_display_reg(struct uart_port *port)
 	struct uart_omap_port *up = (struct uart_omap_port *)port;
 	unsigned int lcr, efr, mcr, dll, dlh, xon1, xon2, xoff1, xoff2;
 	unsigned int tcr, tlr, uasr;
-	DPRINTK("Register dump for UART%d\n",up->pdev->id);
-	DPRINTK("IER_REG=0x%x\n",serial_in(up, UART_IER));
-	DPRINTK("IIR_REG=0x%x\n",serial_in(up, UART_IIR));
+	DPRINTK("Register dump for UART%d\n", up->pdev->id);
+	DPRINTK("IER_REG=0x%x\n", serial_in(up, UART_IER));
+	DPRINTK("IIR_REG=0x%x\n", serial_in(up, UART_IIR));
 	lcr = serial_in(up, UART_LCR);
 	DPRINTK("LCR_REG=0x%x\n", lcr);
 	mcr = serial_in(up, UART_MCR);
@@ -1580,7 +1621,7 @@ static void serial_omap_display_reg(struct uart_port *port)
 	DPRINTK("SYSS_REG=0x%x\n", serial_in(up, UART_OMAP_SYSS));
 	DPRINTK("WER_REG=0x%x\n", serial_in(up, UART_OMAP_WER));
 
-	serial_out(up,UART_LCR, 0xBF);
+	serial_out(up, UART_LCR, 0xBF);
 	dll = serial_in(up, UART_DLL);
 	dlh = serial_in(up, UART_DLM);
 	efr = serial_in(up, UART_EFR);
@@ -1590,14 +1631,14 @@ static void serial_omap_display_reg(struct uart_port *port)
 	serial_out(up, UART_EFR, efr | UART_EFR_ECB);
 	serial_out(up, UART_LCR, lcr);
 	serial_out(up, UART_MCR, mcr | UART_MCR_TCRTLR);
-	serial_out(up,UART_LCR, 0xBF);
+	serial_out(up, UART_LCR, 0xBF);
 
 	tcr = serial_in(up, UART_TI752_TCR);
 	tlr = serial_in(up, UART_TI752_TLR);
 
 	serial_out(up, UART_LCR, lcr);
 	serial_out(up, UART_MCR, mcr);
-	serial_out(up,UART_LCR, 0xBF);
+	serial_out(up, UART_LCR, 0xBF);
 
 	xoff1 = serial_in(up, UART_XOFF1);
 	xoff2 = serial_in(up, UART_XOFF2);
@@ -1609,12 +1650,12 @@ static void serial_omap_display_reg(struct uart_port *port)
 
 	DPRINTK("DLL_REG=0x%x\n", dll);
 	DPRINTK("DLH_REG=0x%x\n", dlh);
-	DPRINTK("EFR_REG=0x%x\n",efr);
+	DPRINTK("EFR_REG=0x%x\n", efr);
 
-	DPRINTK("XON1_ADDR_REG=0x%x\n",xon1);
-	DPRINTK("XON2_ADDR_REG=0x%x\n",xon2);
-	DPRINTK("TCR_REG=0x%x\n",tcr);
-	DPRINTK("TLR_REG=0x%x\n",tlr);
+	DPRINTK("XON1_ADDR_REG=0x%x\n", xon1);
+	DPRINTK("XON2_ADDR_REG=0x%x\n", xon2);
+	DPRINTK("TCR_REG=0x%x\n", tcr);
+	DPRINTK("TLR_REG=0x%x\n", tlr);
 
 
 	DPRINTK("XOFF1_REG=0x%x\n", xoff1);
