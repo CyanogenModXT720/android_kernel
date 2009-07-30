@@ -36,9 +36,6 @@
 
 #define OTG_SYSCONFIG	   0x404
 #define OTG_SYSC_SOFTRESET BIT(1)
-#define DIE_ID_REG_BASE (L4_WK_34XX_PHYS + 0xA000)
-#define DIE_ID_REG_OFFSET 0x218
-#define MAX_USB_SERIAL_NUM 17
 
 static void __init usb_musb_pm_init(void)
 {
