@@ -228,7 +228,7 @@ struct akm8973_platform_data mapphone_akm8973_data = {
 
 	.hxda = 132,
 	.hyda = 134,
-	.hzda = 114,
+	.hzda = 118,
 
 	.orientation = 180,
 	.xy_swap = 1,

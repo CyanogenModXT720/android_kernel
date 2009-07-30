@@ -36,11 +36,6 @@
 
 #define OTG_SYSCONFIG	   0x404
 #define OTG_SYSC_SOFTRESET BIT(1)
-#define DIE_ID_REG_BASE (L4_WK_34XX_PHYS + 0xA000)
-#define DIE_ID_REG_OFFSET 0x218
-#define MAX_USB_SERIAL_NUM 17
-
-static char device_serial[MAX_USB_SERIAL_NUM];
 
 static void __init usb_musb_pm_init(void)
 {
@@ -74,18 +69,6 @@ static struct resource musb_resources[] = {
 		.flags	= IORESOURCE_IRQ,
 	},
 };
-
-static void get_serialnum_from_dieid(unsigned char *serial_num)
-{
-	unsigned int val[2];
-	unsigned int reg;
-
-	reg = DIE_ID_REG_BASE + DIE_ID_REG_OFFSET;
-	val[0] = omap_readl(reg);
-	val[1] = omap_readl(reg + 4);
-
-	snprintf(serial_num, MAX_USB_SERIAL_NUM, "%08x%08x", val[1], val[0]);
-}
 
 static int clk_on;
 
@@ -172,23 +155,6 @@ static struct musb_hdrc_platform_data musb_plat = {
 	.power		= 50,			/* up to 100 mA */
 };
 
-static struct android_usb_platform_data andusb_plat = {
-	.vendor_id	= 0x22b8,
-	.product_id	= 0x41DA,
-	.adb_product_id = 0x41DA,
-	.product_name	= "Sholes",
-	.manufacturer_name	= "Motorola",
-	.serial_number	= device_serial,
-};
-
-static struct platform_device androidusb_device = {
-	.name	= "android_usb",
-	.id	= -1,
-	.dev = {
-		.platform_data	= &andusb_plat,
-	},
-};
-
 static u64 musb_dmamask = DMA_32BIT_MASK;
 
 static struct platform_device musb_device = {
@@ -229,7 +195,6 @@ void __init usb_musb_init(void)
 
 	musb_resources[0].end = musb_resources[0].start + SZ_8K - 1;
 
-	get_serialnum_from_dieid(device_serial);
 
 #ifdef CONFIG_NOP_USB_XCEIV
 	if (platform_device_register(&nop_xceiv_device) < 0) {
@@ -240,11 +205,6 @@ void __init usb_musb_init(void)
 
 	if (platform_device_register(&musb_device) < 0) {
 		printk(KERN_ERR "Unable to register HS-USB (MUSB) device\n");
-		return;
-	}
-
-	if (platform_device_register(&androidusb_device) < 0) {
-		printk(KERN_ERR "Unable to register Android USB device\n");
 		return;
 	}
 
