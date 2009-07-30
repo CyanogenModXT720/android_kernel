@@ -155,6 +155,10 @@ static void __init mapphone_init_irq(void)
 }
 
 static struct android_usb_platform_data andusb_plat = {
+	.vendor_id      = 0x22b8,
+	.product_id     = 0x41DA,
+	.adb_product_id = 0x41DA,
+	.product_name   = "Sholes-UMTS",
 	.manufacturer_name	= "Motorola",
 	.serial_number		= device_serial,
 };
