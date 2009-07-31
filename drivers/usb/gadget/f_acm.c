@@ -899,6 +899,13 @@ struct usb_function *acm_function_enable(int enable, int id)
 	return &g_acm_dev->port.func;
 }
 
+#else
+int __init acm_function_add(struct usb_composite_dev *cdev,
+	struct usb_configuration *c)
+{
+	int ret = acm_bind_config(c, 0);
+	if (ret == 0)
+		gserial_setup(c->cdev->gadget, 1);
+	return ret;
+}
 #endif
-
-

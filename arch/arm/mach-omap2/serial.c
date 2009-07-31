@@ -23,7 +23,7 @@
 #include <linux/platform_device.h>
 #endif
 #include <linux/io.h>
-#include <linux/wakelock.h>
+#include <linux/delay.h>
 
 #include <mach/common.h>
 #include <mach/board.h>
@@ -50,6 +50,10 @@ struct omap_uart_state {
 	u32 wk_mask;
 	u32 padconf;
 
+	u32 rts_padconf;
+	int rts_override;
+	u16 rts_padvalue;
+
 	struct clk *ick;
 	struct clk *fck;
 	int clocked;
@@ -72,7 +76,6 @@ struct omap_uart_state {
 
 static struct omap_uart_state omap_uart[OMAP_MAX_NR_PORTS];
 static LIST_HEAD(uart_list);
-static struct wake_lock omap_uart_wakelock;
 
 #ifdef CONFIG_SERIAL_OMAP
 static struct plat_serialomap_port serial_platform_data[] = {
@@ -310,6 +313,24 @@ static void omap_uart_smart_idle_enable(struct omap_uart_state *uart,
 	serial_write_reg(p, UART_OMAP_SYSC, sysc);
 }
 
+static inline void omap_uart_disable_rtspullup(struct omap_uart_state *uart)
+{
+	if (!uart->rts_padconf || uart->rts_override)
+		return;
+
+	uart->rts_padvalue = omap_ctrl_readw(uart->rts_padconf);
+	omap_ctrl_writew(0x18 | 0x7, uart->rts_padconf);
+	uart->rts_override = 1;
+}
+
+static inline void omap_uart_enable_rtspullup(struct omap_uart_state *uart)
+{
+	if (!uart->rts_padconf || !uart->rts_override)
+		return;
+	omap_ctrl_writew(uart->rts_padvalue, uart->rts_padconf);
+	uart->rts_override = 0;
+}
+
 static inline void omap_uart_restore(struct omap_uart_state *uart)
 {
 	omap_uart_enable_clocks(uart);
@@ -318,36 +339,13 @@ static inline void omap_uart_restore(struct omap_uart_state *uart)
 
 static inline void omap_uart_disable_clocks(struct omap_uart_state *uart)
 {
-	struct plat_serialomap_port *p = uart->p;
-	unsigned char mcr;
-
 	if (!uart->clocked)
 		return;
-
 	omap_uart_save_context(uart);
-
-	/*
-	 * Force RTS inactive before disabling clocks so our peers know not
-	 * to send data to us.
-	 */
-
-	mcr = serial_read_reg(p, UART_MCR);
-	if (mcr & 0x02) {
-		mcr &= ~0x02;
-		serial_write_reg(p, UART_MCR, mcr);
-	}
-
 	uart->clocked = 0;
 	clk_disable(uart->ick);
 	clk_disable(uart->fck);
 }
-
-static void omap_uart_block_suspend(struct omap_uart_state *uart)
-{
-	/* XXX: After driver resume optimization, lower this */
-	wake_lock_timeout(&omap_uart_wakelock, (HZ * 1));
-}
-
 
 static void omap_uart_block_sleep(struct omap_uart_state *uart)
 {
@@ -384,6 +382,7 @@ void omap_uart_prepare_idle(int num)
 
 	list_for_each_entry(uart, &uart_list, node) {
 		if (num == uart->num && uart->can_sleep) {
+			omap_uart_disable_rtspullup(uart);
 			omap_uart_disable_clocks(uart);
 			return;
 		}
@@ -397,21 +396,19 @@ void omap_uart_resume_idle(int num)
 	list_for_each_entry(uart, &uart_list, node) {
 		if (num == uart->num) {
 			omap_uart_restore(uart);
+			omap_uart_enable_rtspullup(uart);
 
 			/* Check for IO pad wakeup */
 			if (cpu_is_omap34xx() && uart->padconf) {
 				u16 p = omap_ctrl_readw(uart->padconf);
 
-				if (p & OMAP3_PADCONF_WAKEUPEVENT0) {
+				if (p & OMAP3_PADCONF_WAKEUPEVENT0)
 					omap_uart_block_sleep(uart);
-					omap_uart_block_suspend(uart);
-				}
 			}
 
 			/* Check for normal UART wakeup */
 			if (__raw_readl(uart->wk_st) & uart->wk_mask) {
 				omap_uart_block_sleep(uart);
-				omap_uart_block_suspend(uart);
 			}
 
 			return;
@@ -492,15 +489,20 @@ static void omap_uart_idle_init(struct omap_uart_state *uart)
 		switch (uart->num) {
 		case 0:
 			wk_mask = OMAP3430_ST_UART1_MASK;
-			padconf = 0x182;
+			padconf = 0x180;
+			uart->rts_padconf = 0x17e;
 			break;
 		case 1:
 			wk_mask = OMAP3430_ST_UART2_MASK;
 			padconf = 0x17a;
+			uart->rts_padconf = 0;
+/*			uart->rts_padconf = 0x176; */
 			break;
 		case 2:
 			wk_mask = OMAP3430_ST_UART3_MASK;
 			padconf = 0x19e;
+/*			uart->rts_padconf = 0x19c; */
+			uart->rts_padconf = 0;
 			break;
 		}
 		uart->wk_mask = wk_mask;
@@ -532,6 +534,7 @@ static void omap_uart_idle_init(struct omap_uart_state *uart)
 		uart->wk_st = 0;
 		uart->wk_mask = 0;
 		uart->padconf = 0;
+		uart->rts_padconf = 0;
 	}
 
 	/* Set wake-enable bit */
@@ -607,14 +610,13 @@ static struct kobj_attribute sleep_timeout_attr =
 static inline void omap_uart_idle_init(struct omap_uart_state *uart) {}
 #endif /* CONFIG_PM */
 
-void __init omap_serial_init(void)
+void __init omap_serial_init(int wake_gpio_strobe,
+			     unsigned int wake_strobe_enable_mask)
 {
 	int i;
 	const struct omap_uart_config *info;
 	char name[16];
 
-	wake_lock_init(&omap_uart_wakelock, WAKE_LOCK_SUSPEND,
-		       "omap_uart");
 	/*
 	 * Make sure the serial ports are muxed on at this point.
 	 * You have to mux them off in device drivers later on
@@ -634,6 +636,9 @@ void __init omap_serial_init(void)
 			p->disabled = 1;
 			continue;
 		}
+
+		if (wake_strobe_enable_mask & (1 << i))
+			p->wake_gpio_strobe = wake_gpio_strobe;
 
 		sprintf(name, "uart%d_ick", i+1);
 		uart->ick = clk_get(NULL, name);
