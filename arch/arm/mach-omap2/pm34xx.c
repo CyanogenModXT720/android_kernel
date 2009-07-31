@@ -141,9 +141,9 @@ static void omap3_enable_io_chain(void)
 				       "activation failed.\n");
 				return;
 			}
-			prm_set_mod_reg_bits(OMAP3430_ST_IO_CHAIN,
-					     WKUP_MOD, PM_WKST);
 		}
+		prm_set_mod_reg_bits(OMAP3430_ST_IO_CHAIN,
+				     WKUP_MOD, PM_WKST);
 	}
 }
 
