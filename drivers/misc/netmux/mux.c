@@ -41,6 +41,7 @@
  *   2008/07/14  Motorola    fix memory leak issue                            *
  *   2008/10/14  Motorola    Panic if receive packet is invalide              *
  *   2008/10/28  Motorola    fix issue in ReceivePartial                      *
+ *   2009/07/23  Motorola    Add wake lock functionality                      *
  ******************************************************************************/
 
 /* mux.c defines all the functionality of the mux. This functionality allows  */
@@ -49,6 +50,13 @@
 #include "mux.h"
 #include "protocol.h"
 #include "debug.h"
+#include <linux/wakelock.h>
+
+extern struct wake_lock netmux_send_wakelock;
+extern struct wake_lock netmux_receive_wakelock;
+
+void check_all_receive_queues_emptiness(MUX *mux);
+void check_all_send_queues_emptiness(MUX *mux);
 
 /*
  * CloseChannel encapsulates the set of actions that are needed to close a
@@ -627,6 +635,10 @@ void ProcessSendQueues (struct work_struct *work)
     if(holding_lock)
         exit_write_criticalsection(&mux->lock);
 
+	enter_write_criticalsection(&mux->lock);
+	check_all_send_queues_emptiness(mux);
+	exit_write_criticalsection(&mux->lock);
+
     enable_task(&mux->send_task);
 }
 
@@ -710,6 +722,7 @@ void ProcessReceiveQueues (struct work_struct *work)
         }
     }
 
+	check_all_receive_queues_emptiness(mux);
     exit_write_criticalsection(&mux->lock);
     enable_task(&mux->receive_task);
 }
@@ -752,6 +765,10 @@ int32 ReceiveFromLink (void* buff, void* param)
     COMMBUFF* commbuff;
 
     DEBUG("ReceiveFromLink(%p, %p)\n", buff, param);
+
+    /* Acquire NM_receive wakelock */
+    DEBUG("Acquire netmux_receive_wakelock\n");
+    wake_lock(&netmux_receive_wakelock);
 
     commbuff = (COMMBUFF*)buff;
     mux      = (MUX*)param;
@@ -2093,6 +2110,10 @@ int32 SendData (int32 channel, COMMBUFF* commbuff, COMMBUFF** split, MUX* mux)
         buffer_length = room;
     }
 
+    /* Acquire NM_send wakelock */
+    DEBUG("Acquire netmux_send_wakelock\n");
+    wake_lock(&netmux_send_wakelock);
+
     /* update the queue counters, note that the */
     /* header is accounted for in ApplyDataHdr  */
     send_channel->qed_data_amount += buffer_length;
@@ -2202,10 +2223,14 @@ int32 ReadData (int32 channel, MUX* mux, COMMBUFF** commbuff, int32 count)
         if(read_channel)
             queuefront_commbuff(split, &read_channel->receive_queue);
 
+		check_all_receive_queues_emptiness(mux);
+
         exit_write_criticalsection(&mux->lock);
 
         return DEBUGERROR(ERROR_NONE);
     }
+
+	check_all_receive_queues_emptiness(mux);
 
     exit_read_criticalsection(&mux->lock);
 
@@ -2272,4 +2297,77 @@ int32 RunSend (MUX* mux)
     task_schedule(&mux->send_task);
 
     return DEBUGERROR(ERROR_NONE);
+}
+
+
+/* MUST be called under critical section */
+void check_all_receive_queues_emptiness(MUX *mux)
+{
+       int32           channel;
+       CHANNEL         *recv_channel;
+       COMMBUFFQUEUE   *queue;
+       CHANNEL         **channels;
+
+       DEBUG("check_all_receive_queues_emptiness\n");
+
+       /* First check netmux receive queue */
+       queue = &mux->receive_queue;
+       if (queue_length(queue) != 0)
+	       return;
+
+       DEBUG("mux receive_queue is empty\n");
+
+       channels = mux->channels;
+
+       /* then process the application receive queues */
+       for (channel = 0; channel < mux->maxchannels; channel++) {
+	       recv_channel = channels[channel];
+	       if (recv_channel) {
+		       queue = &recv_channel->receive_queue;
+		       if (queue_length(queue) != 0) {
+			       DEBUG("Channel %d receive_queue is not empty\n");
+			       return; /* exit wo doing anything */
+		       }
+	       }
+       }
+
+       /* Release NM_receive wakelock */
+       DEBUG("Releasing netmux_receive_wakelock\n");
+       wake_unlock(&netmux_receive_wakelock);
+}
+
+/* MUST be called under critical section */
+void check_all_send_queues_emptiness(MUX *mux)
+{
+       int32           channel;
+       CHANNEL         *send_channel;
+       COMMBUFFQUEUE   *queue;
+       CHANNEL         **channels;
+
+       DEBUG("check_all_send_queues_emptiness\n");
+
+       /* First check netmux send queue */
+       queue = &mux->send_queue;
+       if (queue_length(queue) != 0)
+	       return;
+
+       DEBUG("mux send_queue is empty\n");
+
+       channels = mux->channels;
+
+       /* then process the application receive queues */
+       for (channel = 0; channel < mux->maxchannels; channel++) {
+	       send_channel = channels[channel];
+	       if (send_channel) {
+		       queue = &send_channel->send_queue;
+		       if (queue_length(queue) != 0) {
+			       DEBUG("Channel %d send_queue is not empty\n");
+			       return; /* exit wo doing anything */
+		       }
+	       }
+       }
+
+       /* Release NM_send wakelock */
+       DEBUG("Releasing netmux_send_wakelock\n");
+       wake_unlock(&netmux_send_wakelock);
 }
