@@ -158,7 +158,9 @@ static struct usb_device_descriptor device_desc = {
 	.bLength = sizeof(device_desc),
 	.bDescriptorType = USB_DT_DEVICE,
 	.bcdUSB = __constant_cpu_to_le16(0x0200),
-	.bDeviceClass = USB_CLASS_PER_INTERFACE,
+	.bDeviceClass = USB_CLASS_VENDOR_SPEC,
+	.bDeviceSubClass = USB_CLASS_VENDOR_SPEC,
+	.bDeviceProtocol = USB_CLASS_VENDOR_SPEC,
 	.idVendor = __constant_cpu_to_le16(VENDOR_ID),
 	.idProduct = __constant_cpu_to_le16(PRODUCT_ID),
 	.bcdDevice = __constant_cpu_to_le16(0xffff),
@@ -213,10 +215,71 @@ static struct usb_configuration android_config_driver = {
 	.bMaxPower = 0xFA,	/* 500ma */
 };
 
+int get_func_thru_config(int mode)
+{
+	int i;
+	char name[50];
+
+	memset(name, 0, 50);
+	sprintf(name, "Motorola Config %d", mode);
+	for (i = 0; i < MAX_DEVICE_TYPE_NUM; i++) {
+		if (!mot_android_vid_pid[i].config_name)
+			break;
+		if (!strcmp(mot_android_vid_pid[i].config_name, name))
+			return i;
+	}
+	return -1;
+}
+
+static int pc_mode_switch_flag;
+
+void mode_switch_cb(int mode)
+{
+	pc_mode_switch_flag = mode;
+	wake_up_interruptible(&device_mode_change_wait_q);
+}
+
+static int android_generic_setup(struct usb_configuration *c,
+				const struct usb_ctrlrequest *ctrl)
+{
+	int	value = -EOPNOTSUPP;
+	u16     wIndex = le16_to_cpu(ctrl->wIndex);
+	u16     wValue = le16_to_cpu(ctrl->wValue);
+	u16     wLength = le16_to_cpu(ctrl->wLength);
+	struct usb_composite_dev *cdev = c->cdev;
+	struct usb_request	*req = cdev->req;
+
+	switch (ctrl->bRequestType & USB_TYPE_MASK) {
+	case USB_TYPE_VENDOR:
+		switch (ctrl->bRequest) {
+		case 1:
+			if ((wValue == 0) && (wLength == 0)) {
+				mode_switch_cb(wIndex);
+				value = 0;
+				req->zero = 0;
+				req->length = value;
+				if (usb_ep_queue(cdev->gadget->ep0, req,
+					GFP_ATOMIC))
+					printk(KERN_ERR "ep0 in queue failed\n");
+			}
+		break;
+		default:
+			break;
+		}
+	default:
+		break;
+	}
+	return value;
+}
+
 static int android_setup_config(struct usb_configuration *c,
 				const struct usb_ctrlrequest *ctrl)
 {
 	int i, ret = -EOPNOTSUPP;
+
+	ret = android_generic_setup(c, ctrl);
+	if (ret >= 0)
+		return ret;
 
 	for (i = 0; i < android_config_driver.next_interface_id; i++)
 		if (android_config_driver.interface[i]->setup) {
@@ -347,6 +410,7 @@ static void force_reenumeration(struct android_dev *dev, int dev_type)
 	usb_device_cfg_flag = 0;
 	usb_get_desc_flag   = 0;
 	usb_data_transfer_flag = 0;
+	pc_mode_switch_flag = 0;
 
 	get_device_pid_vid(dev_type, &pid, &vid);
 	device_desc.idProduct = __constant_cpu_to_le16(pid);
@@ -535,17 +599,29 @@ device_mode_change_write(struct file *file, const char __user *buffer,
 	return count;
 }
 
+static int event_pending(void)
+{
+	if ((usb_device_cfg_flag == g_device_type) && (g_device_type != 0))
+		return 1;
+	else if (adb_mode_changed_flag)
+		return 1;
+	else if (usb_get_desc_flag)
+		return 1;
+	else if (pc_mode_switch_flag)
+		return 1;
+	else
+		return 0;
+}
+
 static unsigned int device_mode_change_poll(struct file *file,
 					    struct poll_table_struct *wait)
 {
 	poll_wait(file, &device_mode_change_wait_q, wait);
 
-	if (((usb_device_cfg_flag != g_device_type) ||
-		(g_device_type == 0)) &&
-		(adb_mode_changed_flag == 0) && (usb_get_desc_flag == 0))
+	if (event_pending())
+		return POLLIN | POLLRDNORM;
+	else
 		return 0;
-
-	return POLLIN | POLLRDNORM;
 }
 
 static ssize_t device_mode_change_read(struct file *file, char *buf,
@@ -558,20 +634,34 @@ static ssize_t device_mode_change_read(struct file *file, char *buf,
 	unsigned char adb_dis_str[] = "adb_disable:\0";
 	unsigned char enumerated_str[] = "enumerated\0";
 	unsigned char get_desc_str[] = "get_desc\0";
+	unsigned char modswitch_str[50];
 
 	/* Message format example:
 	* none:adb_enable:enumerated
 	*/
-	/* using one macro/function to replace it ???*/
-	if ((adb_mode_changed_flag == 0) &&
-		((usb_device_cfg_flag != g_device_type) ||
-		(g_device_type == 0)) &&
-		(usb_get_desc_flag == 0))
+
+	if (!event_pending())
 		return 0;
 
 	/* append PC request mode */
-	size = strlen(no_changed);
-	ret = copy_to_user(buf, no_changed, size);
+	if (!pc_mode_switch_flag) {
+		size = strlen(no_changed);
+		ret = copy_to_user(buf, no_changed, size);
+	} else {
+		memset(modswitch_str, 0, 50);
+		ret = get_func_thru_config(pc_mode_switch_flag);
+		pc_mode_switch_flag = 0;
+		if (ret == -1) {
+			size = strlen(no_changed);
+			ret = copy_to_user(buf, no_changed, size);
+		} else {
+			sprintf(modswitch_str, "%s",
+				 mot_android_vid_pid[ret].name);
+			strcat(modswitch_str, ":");
+			size = strlen(modswitch_str);
+			ret = copy_to_user(buf, modswitch_str, size);
+		}
+	}
 	cnt = size;
 	buf += size;
 

@@ -203,6 +203,8 @@ struct bulk_cs_wrap {
 #define SC_WRITE_10			0x2a
 #define SC_WRITE_12			0xaa
 
+#define SC_MOT_MODE_SWITCH	0xD6
+
 /* SCSI Sense Key/Additional Sense Code/ASC Qualifier values */
 #define SS_NO_SENSE				0
 #define SS_COMMUNICATION_FAILURE		0x040800
@@ -1248,6 +1250,11 @@ static int do_verify(struct fsg_dev *fsg)
 static int do_inquiry(struct fsg_dev *fsg, struct fsg_buffhd *bh)
 {
 	u8	*buf = (u8 *) bh->buf;
+	u8 *vend_str = "Motorola";
+	u8 *prod_str = "Sholes";
+
+	fsg->vendor = vend_str;
+	fsg->product = prod_str;
 
 	if (!fsg->curlun) {		/* Unsupported LUNs are okay */
 		fsg->bad_lun_okay = 1;
@@ -1990,6 +1997,16 @@ static int do_scsi_command(struct fsg_dev *fsg)
 				"WRITE(12)")) == 0)
 			reply = do_write(fsg);
 		break;
+
+	case SC_MOT_MODE_SWITCH:
+	{
+		u8 mode;
+		fsg->data_size_from_cmnd = 0;
+		mode = fsg->cmnd[10];
+		mode_switch_cb((int)mode);
+		reply = 0;
+		break;
+	}
 
 	/* Some mandatory commands that we recognize but don't implement.
 	 * They don't mean much in this setting.  It's left as an exercise

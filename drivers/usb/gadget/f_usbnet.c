@@ -447,7 +447,7 @@ static void ether_out_complete(struct usb_ep *ep, struct usb_request *req)
 	}
 
 	/* don't bother requeuing if we just went offline */
-	if (req->status == -ENODEV) {
+	if (req->status == -ESHUTDOWN) {
 		unsigned long flags;
 		spin_lock_irqsave(&g_usbnet_context->lock, flags);
 		list_add_tail(&req->list, &g_usbnet_context->rx_reqs);
