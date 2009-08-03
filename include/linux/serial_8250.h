@@ -8,7 +8,14 @@
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
  * (at your option) any later version.
+ *
+ * Revision History:
+ *
+ * Date         Author    Comment
+ * -----------  --------  ---------------------------------------------
+ * 11-Jun-2009  Motorola  Support OMAP3430 HW flow control
  */
+
 #ifndef _LINUX_SERIAL_8250_H
 #define _LINUX_SERIAL_8250_H
 
@@ -40,6 +47,8 @@ struct plat_serial8250_port {
 #ifdef CONFIG_SERIAL_OMAP3430_HW_FLOW_CONTROL
 	unsigned char   rtscts;     /* bit0: rts, bit1: cts */
 #endif
+	void		(*pm)(struct uart_port *port,
+			      unsigned int state, unsigned int old);
 };
 
 /*

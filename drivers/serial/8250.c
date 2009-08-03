@@ -17,6 +17,12 @@
  *
  *  mapbase is the physical address of the IO port.
  *  membase is an 'ioremapped' cookie.
+ *
+ * Revision History:
+ *
+ * Date         Author    Comment
+ * -----------  --------  ----------------------------------------------
+ * 11-Jun-2009  Motorola  Support OMAP3430 HW flow control
  */
 
 #if defined(CONFIG_SERIAL_8250_CONSOLE) && defined(CONFIG_MAGIC_SYSRQ)
@@ -3227,8 +3233,13 @@ int serial8250_register_port(struct uart_port *port)
 #ifdef CONFIG_SERIAL_OMAP3430_HW_FLOW_CONTROL
 		uart->autortscts    = port->unused1;
 #endif
-		if (port->dev)
+		if (port->dev) {
+			struct plat_serial8250_port *p =
+				port->dev->platform_data;
 			uart->port.dev = port->dev;
+			if (p)
+				uart->pm = p->pm;
+		}
 
 		if (port->flags & UPF_FIXED_TYPE) {
 			uart->port.type = port->type;

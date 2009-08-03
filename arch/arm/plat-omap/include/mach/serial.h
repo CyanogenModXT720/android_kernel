@@ -42,8 +42,7 @@
 			})
 
 #ifndef __ASSEMBLER__
-extern void omap_serial_init(int wake_gpio_strobe,
-			     unsigned int wake_strobe_enable_mask);
+extern void omap_serial_init(void);
 extern int omap_uart_can_sleep(void);
 extern void omap_uart_check_wakeup(void);
 extern void omap_uart_prepare_suspend(void);

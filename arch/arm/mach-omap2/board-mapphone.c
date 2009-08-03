@@ -663,7 +663,7 @@ static void __init mapphone_serial_init(void)
 	omap_cfg_reg(AB25_34XX_UART2_RTS);
 	omap_cfg_reg(AB26_34XX_UART2_CTS);
 
-	omap_serial_init(MAPPHONE_BPWAKE_STROBE_GPIO, 0x01);
+	omap_serial_init();
 }
 
 /* SMPS I2C voltage control register Address for VDD1 */
