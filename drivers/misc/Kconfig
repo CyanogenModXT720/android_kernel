@@ -306,5 +306,6 @@ source "drivers/misc/ts27010mux/Kconfig"
 source "drivers/misc/netmux/Kconfig"
 source "drivers/misc/netmux_linkdriver/Kconfig"
 source "drivers/misc/modem_pm_driver/Kconfig"
+source "drivers/misc/sec/Kconfig"
 
 endif # MISC_DEVICES
