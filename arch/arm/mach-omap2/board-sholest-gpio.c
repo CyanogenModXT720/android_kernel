@@ -1,5 +1,5 @@
 /*
- * board-mapphone-gpio.c
+ * board-sholest-gpio.c
  *
  * Copyright (C) 2009 Motorola, Inc.
  *
@@ -84,11 +84,11 @@ static struct gpio_device gpio_devs[GPIO_DEVICE_SIZE] = {
 };
 
 static struct gpio_device_platform_data gpio_device_data = {
-	.name = "mapphone-gpiodev",
+	.name = "sholest-gpiodev",
 	.info = gpio_devs,
 };
 
-static struct platform_device mapphone_gpiodev_device = {
+static struct platform_device sholest_gpiodev_device = {
 	.name = GPIO_DEVICE_DEV_NAME,
 	.id = 0,
 	.dev = {
@@ -186,7 +186,7 @@ static void gpio_devs_of_init(void)
 }
 #endif
 
-static int __init mapphone_init_gpiodev(void)
+static int __init sholest_init_gpiodev(void)
 {
 	int i;
 
@@ -200,9 +200,9 @@ static int __init mapphone_init_gpiodev(void)
 	}
 	gpio_device_data.info_count = i;
 
-	return platform_device_register(&mapphone_gpiodev_device);
+	return platform_device_register(&sholest_gpiodev_device);
 }
-device_initcall(mapphone_init_gpiodev);
+device_initcall(sholest_init_gpiodev);
 #endif
 
 #ifdef CONFIG_GPIO_MAPPING
@@ -241,7 +241,7 @@ void trim_gpio_map_string(char *s)
 #endif
 #endif
 
-void __init mapphone_gpio_mapping_init(void)
+void __init sholest_gpio_mapping_init(void)
 {
 #ifdef CONFIG_GPIO_MAPPING
 #ifdef CONFIG_ARM_OF

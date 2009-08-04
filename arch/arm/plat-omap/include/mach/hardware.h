@@ -385,6 +385,10 @@
 #include "board-mapphone.h"
 #endif
 
+#ifdef CONFIG_MACH_SHOLEST
+#include "board-sholest.h"
+#endif
+
 #endif /* !__ASSEMBLER__ */
 
 #endif	/* __ASM_ARCH_OMAP_HARDWARE_H */

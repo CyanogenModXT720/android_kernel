@@ -132,14 +132,16 @@ static struct bu52014hfv_platform_data bu52014hfv_platform_data = {
 	.north_is_desk = 1,
 };
 
-static struct regulator *mapphone_lis331dlh_regulator;
+static struct regulator *mapphone_lis331dlh_regulator = NULL;
 static int mapphone_lis331dlh_initialization(void)
 {
 	struct regulator *reg;
+    if (mapphone_lis331dlh_regulator == NULL) {
 	reg = regulator_get(NULL, "vhvio");
 	if (IS_ERR(reg))
 		return PTR_ERR(reg);
 	mapphone_lis331dlh_regulator = reg;
+   }
 	return 0;
 }
 

@@ -84,6 +84,17 @@ obj-$(CONFIG_MACH_SHOLES)		+= board-sholes.o \
 					   board-sholes-hsmmc.o \
 					   board-sholes-keypad.o \
 					   board-sholes-wifi.o
+obj-$(CONFIG_MACH_SHOLEST)		+= board-sholest.o \
+					   board-sholest-camera.o \
+					   board-sholest-flash.o \
+					   board-sholest-padconf.o \
+					   board-sholest-panel.o \
+					   board-sholest-spi.o \
+					   board-sholest-sensors.o \
+					   board-sholest-hsmmc.o \
+					   board-sholest-keypad.o \
+					   board-sholest-wifi.o \
+					   board-sholest-gpio.o
 obj-$(CONFIG_MACH_MAPPHONE)		+= board-mapphone.o \
 					   board-mapphone-camera.o \
 					   board-mapphone-flash.o \

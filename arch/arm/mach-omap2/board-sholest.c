@@ -1,9 +1,9 @@
 /*
- * linux/arch/arm/mach-omap2/board-mapphone.c
+ * linux/arch/arm/mach-omap2/board-sholest.c
  *
  * Copyright (C) 2009 Motorola, Inc.
  *
- * Modified from mach-omap3/board-3430sdp.c
+ * Modified from mach-omap3/board-mapphone.c
  *
  * Copyright (C) 2007 Texas Instruments
  *
@@ -25,7 +25,6 @@
 #include <linux/err.h>
 #include <linux/clk.h>
 #include <linux/mm.h>
-#include <linux/bootmem.h>
 #include <linux/qtouch_obp_ts.h>
 #include <linux/led-cpcap-lm3554.h>
 #include <linux/led-lm3530.h>
@@ -38,7 +37,7 @@
 #include <asm/mach/map.h>
 #include <asm/setup.h>
 
-#include <mach/board-mapphone.h>
+#include <mach/board-sholest.h>
 #include <mach/hardware.h>
 #include <mach/gpio.h>
 #include <mach/mux.h>
@@ -78,21 +77,21 @@
 #endif
 #endif
 
-#define MAPPHONE_IPC_USB_SUSP_GPIO	142
-#define MAPPHONE_AP_TO_BP_FLASH_EN_GPIO	157
-#define MAPPHONE_TOUCH_RESET_N_GPIO	164
-#define MAPPHONE_TOUCH_INT_GPIO		109
-#define MAPPHONE_LM_3530_INT_GPIO	41
-#define MAPPHONE_AKM8973_INT_GPIO	175
-#define MAPPHONE_WL1271_NSHUTDOWN_GPIO	179
-#define MAPPHONE_AUDIO_PATH_GPIO	143
-#define MAPPHONE_BP_READY_AP_GPIO	141
-#define MAPPHONE_BP_READY2_AP_GPIO	59
-#define MAPPHONE_BP_RESOUT_GPIO		139
-#define MAPPHONE_BP_PWRON_GPIO		137
-#define MAPPHONE_AP_TO_BP_PSHOLD_GPIO	138
-#define MAPPHONE_AP_TO_BP_FLASH_EN_GPIO	157
-#define MAPPHONE_POWER_OFF_GPIO		176
+#define SHOLEST_IPC_USB_SUSP_GPIO	142
+#define SHOLEST_AP_TO_BP_FLASH_EN_GPIO	157
+#define SHOLEST_TOUCH_RESET_N_GPIO	164
+#define SHOLEST_TOUCH_INT_GPIO		109
+#define SHOLEST_LM_3530_INT_GPIO	41
+#define SHOLEST_AKM8973_INT_GPIO	175
+#define SHOLEST_WL1271_NSHUTDOWN_GPIO	179
+#define SHOLEST_AUDIO_PATH_GPIO	143
+#define SHOLEST_BP_READY_AP_GPIO	141
+#define SHOLEST_BP_READY2_AP_GPIO	59
+#define SHOLEST_BP_RESOUT_GPIO		139
+#define SHOLEST_BP_PWRON_GPIO		137
+#define SHOLEST_AP_TO_BP_PSHOLD_GPIO	138
+#define SHOLEST_AP_TO_BP_FLASH_EN_GPIO	157
+#define SHOLEST_POWER_OFF_GPIO		176
 #define SHOLEST_HDMI_MUX_SELECT_GPIO    7
 #define SHOLEST_HDMI_MUX_EN_N_GPIO  69
 #define SHOLEST_LM_3530_EN_GPIO     27
@@ -101,9 +100,9 @@
 #define MAX_USB_SERIAL_NUM		17
 
 static char device_serial[MAX_USB_SERIAL_NUM];
-char *bp_model = "CDMA";
+char *bp_model = "UMTS";
 
-static struct omap_opp mapphone_mpu_rate_table[] = {
+static struct omap_opp sholest_mpu_rate_table[] = {
 	{0, 0, 0},
 	/*OPP1*/
 	{S125M, VDD1_OPP1, 0x20},
@@ -117,7 +116,7 @@ static struct omap_opp mapphone_mpu_rate_table[] = {
 	{S600M, VDD1_OPP5, 0x3E},
 };
 
-static struct omap_opp mapphone_l3_rate_table[] = {
+static struct omap_opp sholest_l3_rate_table[] = {
 	{0, 0, 0},
 	/*OPP1*/
 	{0, VDD2_OPP1, 0x20},
@@ -127,7 +126,7 @@ static struct omap_opp mapphone_l3_rate_table[] = {
 	{S166M, VDD2_OPP3, 0x2E},
 };
 
-static struct omap_opp mapphone_dsp_rate_table[] = {
+static struct omap_opp sholest_dsp_rate_table[] = {
 	{0, 0, 0},
 	/*OPP1*/
 	{S90M, VDD1_OPP1, 0x20},
@@ -141,10 +140,10 @@ static struct omap_opp mapphone_dsp_rate_table[] = {
 	{S430M, VDD1_OPP5, 0x3E},
 };
 
-static void __init mapphone_init_irq(void)
+static void __init sholest_init_irq(void)
 {
-	omap2_init_common_hw(NULL, mapphone_mpu_rate_table,
-			mapphone_dsp_rate_table, mapphone_l3_rate_table);
+	omap2_init_common_hw(NULL, sholest_mpu_rate_table,
+			sholest_dsp_rate_table, sholest_l3_rate_table);
 	omap_init_irq();
 #ifdef CONFIG_OMAP3_PM
 	scm_clk_init();
@@ -165,7 +164,7 @@ static struct platform_device androidusb_device = {
 	},
 };
 
-static void mapphone_gadget_init(void)
+static void sholest_gadget_init(void)
 {
 	unsigned int val[2];
 	unsigned int reg;
@@ -178,9 +177,9 @@ static void mapphone_gadget_init(void)
 	platform_device_register(&androidusb_device);
 }
 
-static void mapphone_audio_init(void)
+static void sholest_audio_init(void)
 {
-	gpio_request(MAPPHONE_AUDIO_PATH_GPIO, "mapphone audio path");
+	gpio_request(SHOLEST_AUDIO_PATH_GPIO, "sholest audio path");
 
 	omap_cfg_reg(P21_OMAP34XX_MCBSP2_FSX);
 	omap_cfg_reg(N21_OMAP34XX_MCBSP2_CLKX);
@@ -191,33 +190,33 @@ static void mapphone_audio_init(void)
 	omap_cfg_reg(U21_OMAP34XX_MCBSP3_DR);
 	omap_cfg_reg(V21_OMAP34XX_MCBSP3_DX);
 
-	gpio_direction_output(MAPPHONE_AUDIO_PATH_GPIO, 1);
+	gpio_direction_output(SHOLEST_AUDIO_PATH_GPIO, 1);
 	omap_cfg_reg(AE5_34XX_GPIO143);
 }
 
-static struct omap_uart_config mapphone_uart_config __initdata = {
+static struct omap_uart_config sholest_uart_config __initdata = {
 	.enabled_uarts = ((1 << 0) | (1 << 1) | (1 << 2)),
 };
 
-static struct omap_board_config_kernel mapphone_config[] __initdata = {
-	{OMAP_TAG_UART,		&mapphone_uart_config },
+static struct omap_board_config_kernel sholest_config[] __initdata = {
+	{OMAP_TAG_UART,		&sholest_uart_config },
 };
 
-static int mapphone_touch_reset(void)
+static int sholest_touch_reset(void)
 {
-	gpio_direction_output(MAPPHONE_TOUCH_RESET_N_GPIO, 1);
+	gpio_direction_output(SHOLEST_TOUCH_RESET_N_GPIO, 1);
 	msleep(1);
-	gpio_set_value(MAPPHONE_TOUCH_RESET_N_GPIO, 0);
+	gpio_set_value(SHOLEST_TOUCH_RESET_N_GPIO, 0);
 	msleep(20);
-	gpio_set_value(MAPPHONE_TOUCH_RESET_N_GPIO, 1);
+	gpio_set_value(SHOLEST_TOUCH_RESET_N_GPIO, 1);
 	msleep(20);
 
 	return 0;
 }
 
-static struct qtouch_ts_platform_data mapphone_ts_platform_data;
+static struct qtouch_ts_platform_data sholest_ts_platform_data;
 
-static void mapphone_touch_init(void)
+static void sholest_touch_init(void)
 {
 #ifdef CONFIG_ARM_OF
 	struct device_node *touch_node;
@@ -227,31 +226,31 @@ static void mapphone_touch_init(void)
 	if ((touch_node = of_find_node_by_path(DT_PATH_TOUCH))) {
 		if ((touch_prop = of_get_property(touch_node, DT_PROP_TOUCH_KEYMAP, &len)) \
 			&& len && (0 == len % sizeof(struct vkey))) {
-			mapphone_ts_platform_data.vkeys.count = len / sizeof(struct vkey);
-			mapphone_ts_platform_data.vkeys.keys = (struct vkey *)touch_prop;
+			sholest_ts_platform_data.vkeys.count = len / sizeof(struct vkey);
+			sholest_ts_platform_data.vkeys.keys = (struct vkey *)touch_prop;
 		}
 		of_node_put(touch_node);
 	}
 #endif
 
-	gpio_request(MAPPHONE_TOUCH_RESET_N_GPIO, "mapphone touch reset");
-	gpio_direction_output(MAPPHONE_TOUCH_RESET_N_GPIO, 1);
+	gpio_request(SHOLEST_TOUCH_RESET_N_GPIO, "sholest touch reset");
+	gpio_direction_output(SHOLEST_TOUCH_RESET_N_GPIO, 1);
 	omap_cfg_reg(H19_34XX_GPIO164_OUT);
 
-	gpio_request(MAPPHONE_TOUCH_INT_GPIO, "mapphone touch irq");
-	gpio_direction_input(MAPPHONE_TOUCH_INT_GPIO);
+	gpio_request(SHOLEST_TOUCH_INT_GPIO, "sholest touch irq");
+	gpio_direction_input(SHOLEST_TOUCH_INT_GPIO);
 	omap_cfg_reg(AG17_34XX_GPIO99);
 }
 
-static void mapphone_als_init(void)
+static void sholest_als_init(void)
 {
 	printk(KERN_INFO "%s:Initializing\n", __func__);
-	gpio_request(MAPPHONE_LM_3530_INT_GPIO, "mapphone als int");
-	gpio_direction_input(MAPPHONE_LM_3530_INT_GPIO);
+	gpio_request(SHOLEST_LM_3530_INT_GPIO, "sholest als int");
+	gpio_direction_input(SHOLEST_LM_3530_INT_GPIO);
 	omap_cfg_reg(AC27_34XX_GPIO92);
 }
 
-static void mapphone_misc_init(void)
+static void sholest_misc_init(void)
 {
     printk(KERN_INFO "%s:Initializing\n", __func__);
     if (gpio_request(SHOLEST_HDMI_MUX_SELECT_GPIO, "HDMI-mux-select") >= 0)
@@ -277,7 +276,7 @@ static void mapphone_misc_init(void)
     }
 }
 
-static struct vkey mapphone_touch_vkeys[] = {
+static struct vkey sholest_touch_vkeys[] = {
 	{
 		.min		= 0,
 		.max		= 139,
@@ -303,7 +302,7 @@ static struct vkey mapphone_touch_vkeys[] = {
 #endif
 };
 
-static struct qtouch_ts_platform_data mapphone_ts_platform_data = {
+static struct qtouch_ts_platform_data sholest_ts_platform_data = {
 	.irqflags	= IRQF_TRIGGER_LOW,
 	.flags		= (QTOUCH_SWAP_XY |
 			   QTOUCH_USE_MULTITOUCH |
@@ -321,7 +320,7 @@ static struct qtouch_ts_platform_data mapphone_ts_platform_data = {
 	.fuzz_y		= 0,
 	.fuzz_p		= 2,
 	.fuzz_w		= 2,
-	.hw_reset	= mapphone_touch_reset,
+	.hw_reset	= sholest_touch_reset,
 	.power_cfg	= {
 		.idle_acq_int	= 1,
 		.active_acq_int	= 16,
@@ -378,8 +377,8 @@ static struct qtouch_ts_platform_data mapphone_ts_platform_data = {
 		.shpthr2	= 0x00,
 	},
 	.vkeys			= {
-		.keys		= mapphone_touch_vkeys,
-		.count		= ARRAY_SIZE(mapphone_touch_vkeys),
+		.keys		= sholest_touch_vkeys,
+		.count		= ARRAY_SIZE(sholest_touch_vkeys),
 		.start		= 961,
 	},
 };
@@ -405,7 +404,7 @@ static struct lm3530_platform_data omap3430_als_light_data = {
 	.lower_curr_sel = 2,
 };
 
-static struct lm3554_platform_data mapphone_camera_flash = {
+static struct lm3554_platform_data sholest_camera_flash = {
 	.torch_brightness_def = 0xa0,
 	.flash_brightness_def = 0x78,
 	.flash_duration_def = 0x48,
@@ -415,34 +414,34 @@ static struct lm3554_platform_data mapphone_camera_flash = {
 	.gpio_reg_def = 0x0,
 };
 
-static struct i2c_board_info __initdata mapphone_i2c_bus1_board_info[] = {
+static struct i2c_board_info __initdata sholest_i2c_bus1_board_info[] = {
 	{
 		I2C_BOARD_INFO(QTOUCH_TS_NAME, 0x11),
-		.platform_data = &mapphone_ts_platform_data,
-		.irq = OMAP_GPIO_IRQ(MAPPHONE_TOUCH_INT_GPIO),
+		.platform_data = &sholest_ts_platform_data,
+		.irq = OMAP_GPIO_IRQ(SHOLEST_TOUCH_INT_GPIO),
 	},
 	{
 		I2C_BOARD_INFO(LD_LM3530_NAME, 0x38),
 		.platform_data = &omap3430_als_light_data,
-		.irq = OMAP_GPIO_IRQ(MAPPHONE_LM_3530_INT_GPIO),
+		.irq = OMAP_GPIO_IRQ(SHOLEST_LM_3530_INT_GPIO),
 	},
 };
 
-extern struct akm8973_platform_data mapphone_akm8973_data;
-extern struct lis331dlh_platform_data mapphone_lis331dlh_data;
-static struct i2c_board_info __initdata mapphone_i2c_bus2_board_info[] = {
+extern struct akm8973_platform_data sholest_akm8973_data;
+extern struct lis331dlh_platform_data sholest_lis331dlh_data;
+static struct i2c_board_info __initdata sholest_i2c_bus2_board_info[] = {
 	{
 		I2C_BOARD_INFO("akm8973", 0x1C),
-		.platform_data = &mapphone_akm8973_data,
-		.irq = OMAP_GPIO_IRQ(MAPPHONE_AKM8973_INT_GPIO),
+		.platform_data = &sholest_akm8973_data,
+		.irq = OMAP_GPIO_IRQ(SHOLEST_AKM8973_INT_GPIO),
 	},
 	{
 		I2C_BOARD_INFO("lis331dlh", 0x19),
-		.platform_data = &mapphone_lis331dlh_data,
+		.platform_data = &sholest_lis331dlh_data,
 	},
 };
 
-static struct i2c_board_info __initdata mapphone_i2c_bus3_board_info[] = {
+static struct i2c_board_info __initdata sholest_i2c_bus3_board_info[] = {
 #if defined(CONFIG_VIDEO_MT9P012_HP)
 	{
 #if defined(CONFIG_VIDEO_MT9P012_MT9P013_AUTODETECT)
@@ -450,7 +449,7 @@ static struct i2c_board_info __initdata mapphone_i2c_bus3_board_info[] = {
 #else
 		I2C_BOARD_INFO("mt9p012", MT9P012_I2C_ADDR),
 #endif
-		.platform_data = &mapphone_mt9p012_platform_data,
+		.platform_data = &sholest_mt9p012_platform_data,
 	},
 #endif
 #if defined(CONFIG_VIDEO_MT9P013_HP)
@@ -460,78 +459,78 @@ static struct i2c_board_info __initdata mapphone_i2c_bus3_board_info[] = {
 #else
 		I2C_BOARD_INFO("mt9p013", MT9P013_I2C_ADDR),
 #endif
-		.platform_data = &mapphone_mt9p013_platform_data,
+		.platform_data = &sholest_mt9p013_platform_data,
 	},
 #endif
     {
 		I2C_BOARD_INFO("lm3554_led", 0x53),
-		.platform_data = &mapphone_camera_flash,
+		.platform_data = &sholest_camera_flash,
 	},
 #if defined(CONFIG_VIDEO_MT9P012) || defined(CONFIG_VIDEO_MT9P012_MODULE)
 	{
 		I2C_BOARD_INFO("mt9p012", 0x36),
-		.platform_data = &mapphone_mt9p012_platform_data,
+		.platform_data = &sholest_mt9p012_platform_data,
 	},
 #endif
 #ifdef CONFIG_VIDEO_OMAP3_HPLENS
 	{
 		I2C_BOARD_INFO("HP_GEN_LENS", 0x04),
-		.platform_data = &mapphone_hplens_platform_data,
+		.platform_data = &sholest_hplens_platform_data,
 	},
 #endif
 };
 
-static int __init mapphone_i2c_init(void)
+static int __init sholest_i2c_init(void)
 {
-	omap_register_i2c_bus(1, 400, mapphone_i2c_bus1_board_info,
-			      ARRAY_SIZE(mapphone_i2c_bus1_board_info));
-	omap_register_i2c_bus(2, 400, mapphone_i2c_bus2_board_info,
-			      ARRAY_SIZE(mapphone_i2c_bus2_board_info));
-	omap_register_i2c_bus(3, 400, mapphone_i2c_bus3_board_info,
-			      ARRAY_SIZE(mapphone_i2c_bus3_board_info));
+	omap_register_i2c_bus(1, 400, sholest_i2c_bus1_board_info,
+			      ARRAY_SIZE(sholest_i2c_bus1_board_info));
+	omap_register_i2c_bus(2, 400, sholest_i2c_bus2_board_info,
+			      ARRAY_SIZE(sholest_i2c_bus2_board_info));
+	omap_register_i2c_bus(3, 400, sholest_i2c_bus3_board_info,
+			      ARRAY_SIZE(sholest_i2c_bus3_board_info));
 	return 0;
 }
 
-arch_initcall(mapphone_i2c_init);
+arch_initcall(sholest_i2c_init);
 
-extern void __init mapphone_spi_init(void);
-extern void __init mapphone_flash_init(void);
-extern void __init mapphone_gpio_iomux_init(void);
+extern void __init sholest_spi_init(void);
+extern void __init sholest_flash_init(void);
+extern void __init sholest_gpio_iomux_init(void);
 
 
 #if defined(CONFIG_USB_EHCI_HCD) || defined(CONFIG_USB_EHCI_HCD_MODULE)
 
-static int mapphone_usb_port_startup(struct platform_device *dev, int port)
+static int sholest_usb_port_startup(struct platform_device *dev, int port)
 {
 	int r;
 
 	if (port == 2) {
-		r = gpio_request(MAPPHONE_IPC_USB_SUSP_GPIO, "ipc_usb_susp");
+		r = gpio_request(SHOLEST_IPC_USB_SUSP_GPIO, "ipc_usb_susp");
 		if (r < 0) {
 			printk(KERN_WARNING "Could not request GPIO %d"
 			       " for IPC_USB_SUSP\n",
-			       MAPPHONE_IPC_USB_SUSP_GPIO);
+			       SHOLEST_IPC_USB_SUSP_GPIO);
 			return r;
 		}
-		gpio_direction_output(MAPPHONE_IPC_USB_SUSP_GPIO, 0);
+		gpio_direction_output(SHOLEST_IPC_USB_SUSP_GPIO, 0);
 	} else {
 		return -EINVAL;
 	}
 	return 0;
 }
 
-static void mapphone_usb_port_shutdown(struct platform_device *dev, int port)
+static void sholest_usb_port_shutdown(struct platform_device *dev, int port)
 {
 	if (port == 2)
-		gpio_free(MAPPHONE_IPC_USB_SUSP_GPIO);
+		gpio_free(SHOLEST_IPC_USB_SUSP_GPIO);
 }
 
 
-static void mapphone_usb_port_suspend(struct platform_device *dev,
+static void sholest_usb_port_suspend(struct platform_device *dev,
 				    int port, int suspend)
 {
 	if (port == 2)
-		gpio_set_value(MAPPHONE_IPC_USB_SUSP_GPIO, suspend);
+		gpio_set_value(SHOLEST_IPC_USB_SUSP_GPIO, suspend);
 }
 
 
@@ -543,9 +542,9 @@ static struct omap_usb_port_data usb_port_data[] = {
 			OMAP_USB_PORT_FLAG_AUTOIDLE |
 			OMAP_USB_PORT_FLAG_NOBITSTUFF,
 		.mode = OMAP_USB_PORT_MODE_UTMI_PHY_4PIN,
-		.startup = mapphone_usb_port_startup,
-		.shutdown = mapphone_usb_port_shutdown,
-		.suspend = mapphone_usb_port_suspend,
+		.startup = sholest_usb_port_startup,
+		.shutdown = sholest_usb_port_shutdown,
+		.suspend = sholest_usb_port_suspend,
 	},
 };
 
@@ -553,6 +552,28 @@ static struct omap_usb_platform_data usb_platform_data = {
 	.port_data = usb_port_data,
 	.num_ports = ARRAY_SIZE(usb_port_data),
 };
+
+#ifdef CONFIG_ANDROID_RAM_CONSOLE
+#define RAM_CONSOLE_START   0x8FFE0000
+unsigned long ram_console_start = 0 ;
+static struct resource ram_console_resource = {
+	.start	= RAM_CONSOLE_START,
+	.end	= (RAM_CONSOLE_START + 0x20000 -1),
+	.flags	= IORESOURCE_MEM,
+};
+
+static struct platform_device ram_console_device = {
+	.name = "ram_console",
+	.id = 0,
+	.num_resources  = 1,
+	.resource       = &ram_console_resource,
+};
+
+static void  omap_init_rc(void)
+{
+	platform_device_register(&ram_console_device);
+}	
+#endif
 
 static struct resource ehci_resources[] = {
 	[0] = {
@@ -612,7 +633,7 @@ static struct platform_device ohci_device = {
 #endif /* OHCI specific data */
 
 
-static void __init mapphone_ehci_init(void)
+static void __init sholest_ehci_init(void)
 {
 	omap_cfg_reg(AF5_34XX_GPIO142);		/*  IPC_USB_SUSP      */
 	omap_cfg_reg(AD1_3430_USB3FS_PHY_MM3_RXRCV);
@@ -624,19 +645,18 @@ static void __init mapphone_ehci_init(void)
 	platform_device_register(&ehci_device);
 #endif
 #if defined(CONFIG_USB_OHCI_HCD) || defined(CONFIG_USB_OHCI_HCD_MODULE)
-	if (is_cdma_phone())
-		platform_device_register(&ohci_device);
+    platform_device_register(&ohci_device);
 #endif
 }
 
-static void __init mapphone_sdrc_init(void)
+static void __init sholest_sdrc_init(void)
 {
 	/* Ensure SDRC pins are mux'd for self-refresh */
 	omap_cfg_reg(H16_34XX_SDRC_CKE0);
 	omap_cfg_reg(H17_34XX_SDRC_CKE1);
 }
 
-static void __init mapphone_serial_init(void)
+static void __init sholest_serial_init(void)
 {
 	omap_cfg_reg(AA8_3430_UART1_TX);
 	omap_cfg_reg(Y8_3430_UART1_RX);
@@ -650,19 +670,19 @@ static void __init mapphone_serial_init(void)
 }
 
 /* SMPS I2C voltage control register Address for VDD1 */
-#define MAPPHONE_R_VDD1_SR_CONTROL		0x00
+#define SHOLEST_R_VDD1_SR_CONTROL		0x00
 /* SMPS I2C voltage control register Address for VDD2 */
-#define MAPPHONE_R_VDD2_SR_CONTROL		0x00
+#define SHOLEST_R_VDD2_SR_CONTROL		0x00
 /* SMPS I2C Address for VDD1 */
-#define MAPPHONE_R_SRI2C_SLAVE_ADDR_SA0		0x1
+#define SHOLEST_R_SRI2C_SLAVE_ADDR_SA0		0x1
 /* SMPS I2C Address for VDD2 */
-#define MAPPHONE_R_SRI2C_SLAVE_ADDR_SA1		0x2
+#define SHOLEST_R_SRI2C_SLAVE_ADDR_SA1		0x2
 /* SMPS I2C voltage control register Address for VDD1, used for SR command */
-#define MAPPHONE_R_SMPS_VOL_CNTL_CMDRA0		0x01
+#define SHOLEST_R_SMPS_VOL_CNTL_CMDRA0		0x01
 /* SMPS I2C voltage control register Address for VDD2, used for SR command */
-#define MAPPHONE_R_SMPS_VOL_CNTL_CMDRA1		0x01
+#define SHOLEST_R_SMPS_VOL_CNTL_CMDRA1		0x01
 
-static struct prm_setup_vc mapphone_prm_setup = {
+static struct prm_setup_vc sholest_prm_setup = {
 	.clksetup = 0x52,
 	.voltsetup_time1 = 0x229,
 	.voltsetup_time2 = 0x229,
@@ -676,15 +696,15 @@ static struct prm_setup_vc mapphone_prm_setup = {
 	.vdd1_onlp = 0x45,
 	.vdd1_ret = 0x17,
 	.vdd1_off = 0x00,
-	.i2c_slave_ra = (MAPPHONE_R_SRI2C_SLAVE_ADDR_SA1 <<
+	.i2c_slave_ra = (SHOLEST_R_SRI2C_SLAVE_ADDR_SA1 <<
 			OMAP3430_SMPS_SA1_SHIFT) |
-			(MAPPHONE_R_SRI2C_SLAVE_ADDR_SA0 <<
+			(SHOLEST_R_SRI2C_SLAVE_ADDR_SA0 <<
 			 OMAP3430_SMPS_SA0_SHIFT),
-	.vdd_vol_ra = (MAPPHONE_R_VDD2_SR_CONTROL << OMAP3430_VOLRA1_SHIFT) |
-			(MAPPHONE_R_VDD1_SR_CONTROL << OMAP3430_VOLRA0_SHIFT),
+	.vdd_vol_ra = (SHOLEST_R_VDD2_SR_CONTROL << OMAP3430_VOLRA1_SHIFT) |
+			(SHOLEST_R_VDD1_SR_CONTROL << OMAP3430_VOLRA0_SHIFT),
 	/* vdd_vol_ra controls both cmd and vol, set the address equal */
-	.vdd_cmd_ra = (MAPPHONE_R_SMPS_VOL_CNTL_CMDRA1 << OMAP3430_CMDRA1_SHIFT) |
-		(MAPPHONE_R_SMPS_VOL_CNTL_CMDRA0 << OMAP3430_CMDRA0_SHIFT),
+	.vdd_cmd_ra = (SHOLEST_R_SMPS_VOL_CNTL_CMDRA1 << OMAP3430_CMDRA1_SHIFT) |
+		(SHOLEST_R_SMPS_VOL_CNTL_CMDRA0 << OMAP3430_CMDRA0_SHIFT),
 	.vdd_ch_conf = OMAP3430_CMD1 | OMAP3430_RACEN0 |
 			OMAP3430_PRM_VC_CH_CONF_SA1 | OMAP3430_RACEN1 |
 			OMAP3430_RAV1 | OMAP3430_RAC1, OMAP3430_GR_MOD,
@@ -699,7 +719,7 @@ static struct prm_setup_vc mapphone_prm_setup = {
 #define CPCAP_SMPS_UPDATE_DELAY     170 /* In uSec */
 
 #ifdef CONFIG_OMAP_SMARTREFLEX
-int mapphone_voltagescale_vcbypass(u32 target_opp, u32 current_opp,
+int sholest_voltagescale_vcbypass(u32 target_opp, u32 current_opp,
 					u8 target_vsel, u8 current_vsel)
 {
 
@@ -712,14 +732,14 @@ int mapphone_voltagescale_vcbypass(u32 target_opp, u32 current_opp,
 
 	if (vdd == VDD1_OPP) {
 		sr_status = sr_stop_vddautocomap(SR1);
-		slave_addr = MAPPHONE_R_SRI2C_SLAVE_ADDR_SA0;
-		volt_reg_addr = MAPPHONE_R_VDD1_SR_CONTROL;
+		slave_addr = SHOLEST_R_SRI2C_SLAVE_ADDR_SA0;
+		volt_reg_addr = SHOLEST_R_VDD1_SR_CONTROL;
 		opp_reg_addr = R_SMPS_VOL_OPP2_RA0;
 
 	} else if (vdd == VDD2_OPP) {
 		sr_status = sr_stop_vddautocomap(SR2);
-		slave_addr = MAPPHONE_R_SRI2C_SLAVE_ADDR_SA1;
-		volt_reg_addr = MAPPHONE_R_VDD2_SR_CONTROL;
+		slave_addr = SHOLEST_R_SRI2C_SLAVE_ADDR_SA1;
+		volt_reg_addr = SHOLEST_R_VDD2_SR_CONTROL;
 		opp_reg_addr = R_SMPS_VOL_OPP2_RA1;
 	}
 
@@ -742,27 +762,27 @@ int mapphone_voltagescale_vcbypass(u32 target_opp, u32 current_opp,
 }
 #endif
 
-/* Mapphone specific PM */
-static void mapphone_pm_init(void)
+/* Sholest specific PM */
+static void sholest_pm_init(void)
 {
-	omap3_set_prm_setup_vc(&mapphone_prm_setup);
-	omap3_voltagescale_vcbypass_setup(mapphone_voltagescale_vcbypass);
+	omap3_set_prm_setup_vc(&sholest_prm_setup);
+	omap3_voltagescale_vcbypass_setup(sholest_voltagescale_vcbypass);
 
 	/* Initialize CPCAP SW1&SW2 OPP1&OPP2 registers */
 	/* SW1, OPP1 for RET Voltage --- 1.0V,
 	 * OPP2 for ON Voltge --- 1.225V(OPP3)
 	 */
-	omap3_bypass_cmd(MAPPHONE_R_SRI2C_SLAVE_ADDR_SA0,
+	omap3_bypass_cmd(SHOLEST_R_SRI2C_SLAVE_ADDR_SA0,
 				R_SMPS_VOL_OPP1_RA0, 0x20);
-	omap3_bypass_cmd(MAPPHONE_R_SRI2C_SLAVE_ADDR_SA0,
+	omap3_bypass_cmd(SHOLEST_R_SRI2C_SLAVE_ADDR_SA0,
 				R_SMPS_VOL_OPP2_RA0, 0x32);
 
 	/* SW2, OPP1 for RET Voltage --- 1.0V,
 	 * OPP2 for ON Voltge --- 1.175V(OPP3)
 	 */
-	omap3_bypass_cmd(MAPPHONE_R_SRI2C_SLAVE_ADDR_SA1,
+	omap3_bypass_cmd(SHOLEST_R_SRI2C_SLAVE_ADDR_SA1,
 				R_SMPS_VOL_OPP1_RA1, 0x20);
-	omap3_bypass_cmd(MAPPHONE_R_SRI2C_SLAVE_ADDR_SA1,
+	omap3_bypass_cmd(SHOLEST_R_SRI2C_SLAVE_ADDR_SA1,
 				R_SMPS_VOL_OPP2_RA1, 0x2E);
 }
 
@@ -793,7 +813,7 @@ static void __init config_mmc2_init(void)
 
 /* must match value in drivers/w1/w1_family.h */
 #define W1_EEPROM_DS2502        0x89
-static struct omap2_hdq_platform_config mapphone_hdq_data = {
+static struct omap2_hdq_platform_config sholest_hdq_data = {
 	.mode = OMAP_SDQ_MODE,
 	.id = W1_EEPROM_DS2502,
 };
@@ -801,36 +821,36 @@ static struct omap2_hdq_platform_config mapphone_hdq_data = {
 static int __init omap_hdq_init(void)
 {
 	omap_cfg_reg(J25_34XX_HDQ_SIO);
-	omap_hdq_device.dev.platform_data = &mapphone_hdq_data;
+	omap_hdq_device.dev.platform_data = &sholest_hdq_data;
 	return platform_device_register(&omap_hdq_device);
 }
 
-static struct wl127x_rfkill_platform_data mapphone_wl1271_pdata = {
-	.bt_nshutdown_gpio = MAPPHONE_WL1271_NSHUTDOWN_GPIO,
+static struct wl127x_rfkill_platform_data sholest_wl1271_pdata = {
+	.bt_nshutdown_gpio = SHOLEST_WL1271_NSHUTDOWN_GPIO,
 	.fm_enable_gpio = -1,
 };
 
-static struct platform_device mapphone_wl1271_device = {
+static struct platform_device sholest_wl1271_device = {
 	.name = "wl127x-rfkill",
 	.id = 0,
-	.dev.platform_data = &mapphone_wl1271_pdata,
+	.dev.platform_data = &sholest_wl1271_pdata,
 };
 
-static void __init mapphone_bt_init(void)
+static void __init sholest_bt_init(void)
 {
 	/* Mux setup for Bluetooth chip-enable */
 	omap_cfg_reg(T3_34XX_GPIO_179);
 
-	platform_device_register(&mapphone_wl1271_device);
+	platform_device_register(&sholest_wl1271_device);
 }
 
 static struct omap_mdm_ctrl_platform_data omap_mdm_ctrl_platform_data = {
-	.bp_ready_ap_gpio = MAPPHONE_BP_READY_AP_GPIO,
-	.bp_ready2_ap_gpio = MAPPHONE_BP_READY2_AP_GPIO,
-	.bp_resout_gpio = MAPPHONE_BP_RESOUT_GPIO,
-	.bp_pwron_gpio = MAPPHONE_BP_PWRON_GPIO,
-	.ap_to_bp_pshold_gpio = MAPPHONE_AP_TO_BP_PSHOLD_GPIO,
-	.ap_to_bp_flash_en_gpio = MAPPHONE_AP_TO_BP_FLASH_EN_GPIO,
+	.bp_ready_ap_gpio = SHOLEST_BP_READY_AP_GPIO,
+	.bp_ready2_ap_gpio = SHOLEST_BP_READY2_AP_GPIO,
+	.bp_resout_gpio = SHOLEST_BP_RESOUT_GPIO,
+	.bp_pwron_gpio = SHOLEST_BP_PWRON_GPIO,
+	.ap_to_bp_pshold_gpio = SHOLEST_AP_TO_BP_PSHOLD_GPIO,
+	.ap_to_bp_flash_en_gpio = SHOLEST_AP_TO_BP_FLASH_EN_GPIO,
 };
 
 static struct platform_device omap_mdm_ctrl_platform_device = {
@@ -841,90 +861,55 @@ static struct platform_device omap_mdm_ctrl_platform_device = {
 	},
 };
 
-static int __init mapphone_omap_mdm_ctrl_init(void)
+static int __init sholest_omap_mdm_ctrl_init(void)
 {
-	if (!is_cdma_phone())
-		return -ENODEV;
-
-	gpio_request(MAPPHONE_BP_READY_AP_GPIO, "BP Normal Ready");
-	gpio_direction_input(MAPPHONE_BP_READY_AP_GPIO);
+	gpio_request(SHOLEST_BP_READY_AP_GPIO, "BP Normal Ready");
+	gpio_direction_input(SHOLEST_BP_READY_AP_GPIO);
 	omap_cfg_reg(AE6_34XX_GPIO141_DOWN);
 
-	gpio_request(MAPPHONE_BP_READY2_AP_GPIO, "BP Flash Ready");
-	gpio_direction_input(MAPPHONE_BP_READY2_AP_GPIO);
+	gpio_request(SHOLEST_BP_READY2_AP_GPIO, "BP Flash Ready");
+	gpio_direction_input(SHOLEST_BP_READY2_AP_GPIO);
 	omap_cfg_reg(T4_34XX_GPIO59_DOWN);
 
-	gpio_request(MAPPHONE_BP_RESOUT_GPIO, "BP Reset Output");
-	gpio_direction_input(MAPPHONE_BP_RESOUT_GPIO);
+	gpio_request(SHOLEST_BP_RESOUT_GPIO, "BP Reset Output");
+	gpio_direction_input(SHOLEST_BP_RESOUT_GPIO);
 	omap_cfg_reg(AE3_34XX_GPIO139_DOWN);
 
-	gpio_request(MAPPHONE_BP_PWRON_GPIO, "BP Power On");
-	gpio_direction_output(MAPPHONE_BP_PWRON_GPIO, 0);
+	gpio_request(SHOLEST_BP_PWRON_GPIO, "BP Power On");
+	gpio_direction_output(SHOLEST_BP_PWRON_GPIO, 0);
 	omap_cfg_reg(AH3_34XX_GPIO137_OUT);
 
-	gpio_request(MAPPHONE_AP_TO_BP_PSHOLD_GPIO, "AP to BP PS Hold");
-	gpio_direction_output(MAPPHONE_AP_TO_BP_PSHOLD_GPIO, 0);
+	gpio_request(SHOLEST_AP_TO_BP_PSHOLD_GPIO, "AP to BP PS Hold");
+	gpio_direction_output(SHOLEST_AP_TO_BP_PSHOLD_GPIO, 0);
 	omap_cfg_reg(AF3_34XX_GPIO138_OUT);
 
-	gpio_request(MAPPHONE_AP_TO_BP_FLASH_EN_GPIO, "AP to BP Flash Enable");
-	gpio_direction_output(MAPPHONE_AP_TO_BP_FLASH_EN_GPIO, 0);
+	gpio_request(SHOLEST_AP_TO_BP_FLASH_EN_GPIO, "AP to BP Flash Enable");
+	gpio_direction_output(SHOLEST_AP_TO_BP_FLASH_EN_GPIO, 0);
 	omap_cfg_reg(AA21_34XX_GPIO157_OUT);
 
 	return platform_device_register(&omap_mdm_ctrl_platform_device);
 }
 
 #ifdef CONFIG_FB_OMAP2
-static struct resource mapphone_vout_resource[3 - CONFIG_FB_OMAP2_NUM_FBS] = {
+static struct resource sholest_vout_resource[3 - CONFIG_FB_OMAP2_NUM_FBS] = {
 };
 #else
-static struct resource mapphone_vout_resource[2] = {
+static struct resource sholest_vout_resource[2] = {
 };
 #endif
 
-static struct platform_device mapphone_vout_device = {
+static struct platform_device sholest_vout_device = {
        .name                   = "omap_vout",
-       .num_resources  = ARRAY_SIZE(mapphone_vout_resource),
-       .resource               = &mapphone_vout_resource[0],
+       .num_resources  = ARRAY_SIZE(sholest_vout_resource),
+       .resource               = &sholest_vout_resource[0],
        .id             = -1,
 };
-static void __init mapphone_vout_init(void)
+static void __init sholest_vout_init(void)
 {
-	platform_device_register(&mapphone_vout_device);
+	platform_device_register(&sholest_vout_device);
 }
 
-#ifdef CONFIG_ANDROID_RAM_CONSOLE
-#define RAM_CONSOLE_START   0x8E000000
-#define RAM_CONSOLE_SIZE    0x20000
-static struct resource ram_console_resource = {
-       .start  = RAM_CONSOLE_START,
-       .end    = (RAM_CONSOLE_START + RAM_CONSOLE_SIZE - 1),
-       .flags  = IORESOURCE_MEM,
-};
-
-static struct platform_device ram_console_device = {
-       .name = "ram_console",
-       .id = 0,
-       .num_resources  = 1,
-       .resource       = &ram_console_resource,
-};
-
-static inline void mapphone_ramconsole_init(void)
-{
-	platform_device_register(&ram_console_device);
-}
-
-static inline void omap2_ramconsole_reserve_sdram(void)
-{
-	reserve_bootmem(RAM_CONSOLE_START, RAM_CONSOLE_SIZE, 0);
-}
-#else
-static inline void mapphone_ramconsole_init(void) {}
-
-static inline void omap2_ramconsole_reserve_sdram(void) {}
-#endif
-
-
-static void __init mapphone_bp_model_init(void)
+static void __init sholest_bp_model_init(void)
 {
 #ifdef CONFIG_OMAP_RESET_CLOCKS
 	struct clk *clkp;
@@ -950,74 +935,75 @@ static void __init mapphone_bp_model_init(void)
 #endif
 }
 
-static void mapphone_pm_power_off(void)
+static void sholest_pm_power_off(void)
 {
-	printk(KERN_INFO "mapphone_pm_power_off start...\n");
+	printk(KERN_INFO "sholest_pm_power_off start...\n");
 	local_irq_disable();
 
-	gpio_direction_output(MAPPHONE_POWER_OFF_GPIO, 0);
+	gpio_direction_output(SHOLEST_POWER_OFF_GPIO, 0);
 
 	do {} while (1);
 
 	local_irq_enable();
 }
 
-static void __init mapphone_power_off_init(void)
+static void __init sholest_power_off_init(void)
 {
-	gpio_request(MAPPHONE_POWER_OFF_GPIO, "mapphone power off");
-	gpio_direction_output(MAPPHONE_POWER_OFF_GPIO, 1);
+	gpio_request(SHOLEST_POWER_OFF_GPIO, "sholest power off");
+	gpio_direction_output(SHOLEST_POWER_OFF_GPIO, 1);
 	omap_cfg_reg(AB1_34XX_GPIO176_OUT);
 
-	pm_power_off = mapphone_pm_power_off;
+	pm_power_off = sholest_pm_power_off;
 }
 
-static void __init mapphone_init(void)
+static void __init sholest_init(void)
 {
-	omap_board_config = mapphone_config;
-	omap_board_config_size = ARRAY_SIZE(mapphone_config);
-	mapphone_bp_model_init();
-	mapphone_padconf_init();
-	mapphone_gpio_mapping_init();
-	mapphone_ramconsole_init();
-	mapphone_omap_mdm_ctrl_init();
-	mapphone_spi_init();
-	mapphone_flash_init();
-	mapphone_serial_init();
-	mapphone_als_init();
-	mapphone_panel_init();
-	mapphone_misc_init();
-	mapphone_sensors_init();
-	mapphone_camera_init();
-	mapphone_touch_init();
-	mapphone_audio_init();
+	omap_board_config = sholest_config;
+	omap_board_config_size = ARRAY_SIZE(sholest_config);
+	sholest_bp_model_init();
+	sholest_padconf_init();
+	sholest_gpio_mapping_init();
+	sholest_omap_mdm_ctrl_init();
+	sholest_spi_init();
+	sholest_flash_init();
+	sholest_serial_init();
+	sholest_als_init();
+	sholest_panel_init();
+    sholest_misc_init();
+	sholest_sensors_init();
+	sholest_camera_init();
+	sholest_touch_init();
+	sholest_audio_init();
 	usb_musb_init();
-	mapphone_ehci_init();
-	mapphone_sdrc_init();
-	mapphone_pm_init();
+	sholest_ehci_init();
+	sholest_sdrc_init();
+	sholest_pm_init();
 	config_mmc2_init();
 	config_wlan_gpio();
 	omap_hdq_init();
-	mapphone_bt_init();
-	mapphone_hsmmc_init();
-	mapphone_vout_init();
-	mapphone_power_off_init();
-	mapphone_gadget_init();
+	sholest_bt_init();
+	sholest_hsmmc_init();
+	sholest_vout_init();
+	sholest_power_off_init();
+	sholest_gadget_init();
+#ifdef CONFIG_ANDROID_RAM_CONSOLE	
+	omap_init_rc();
+#endif	
 }
 
-static void __init mapphone_map_io(void)
+static void __init sholest_map_io(void)
 {
-	omap2_ramconsole_reserve_sdram();
 	omap2_set_globals_343x();
 	omap2_map_common_io();
 }
 
-MACHINE_START(MAPPHONE, "mapphone_")
+MACHINE_START(MAPPHONE, "sholest_")
 	/* Maintainer: Motorola, Inc. */
 	.phys_io	= 0x48000000,
 	.io_pg_offst	= ((0xd8000000) >> 18) & 0xfffc,
 	.boot_params	= 0x80C00100,
-	.map_io		= mapphone_map_io,
-	.init_irq	= mapphone_init_irq,
-	.init_machine	= mapphone_init,
+	.map_io		= sholest_map_io,
+	.init_irq	= sholest_init_irq,
+	.init_machine	= sholest_init,
 	.timer		= &omap_timer,
 MACHINE_END

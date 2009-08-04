@@ -1,5 +1,5 @@
 /*
- * linux/arch/arm/mach-omap2/board-mapphone-panel.c
+ * linux/arch/arm/mach-omap2/board-sholest-panel.c
  *
  * Copyright (C) 2009 Google, Inc.
  * Copyright (C) 2009 Motorola, Inc.
@@ -20,11 +20,11 @@
 #include <mach/gpio.h>
 #include <mach/mux.h>
 
-#define MAPPHONE_DISPLAY_RESET_GPIO	136
+#define SHOLEST_DISPLAY_RESET_GPIO	136
 
 struct regulator *display_regulator;
 
-static int mapphone_panel_enable(struct omap_dss_device *dssdev)
+static int sholest_panel_enable(struct omap_dss_device *dssdev)
 {
 	if (!display_regulator) {
 		display_regulator = regulator_get(NULL, "vhvio");
@@ -33,30 +33,30 @@ static int mapphone_panel_enable(struct omap_dss_device *dssdev)
 			return PTR_ERR(display_regulator);
 		}
 	}
-	regulator_enable(display_regulator);
+    regulator_enable(display_regulator);
 	msleep(1);
-	gpio_request(MAPPHONE_DISPLAY_RESET_GPIO, "display reset");
-	gpio_direction_output(MAPPHONE_DISPLAY_RESET_GPIO, 1);
+	gpio_request(SHOLEST_DISPLAY_RESET_GPIO, "display reset");
+	gpio_direction_output(SHOLEST_DISPLAY_RESET_GPIO, 1);
 	msleep(5);
-	gpio_set_value(MAPPHONE_DISPLAY_RESET_GPIO, 0);
+	gpio_set_value(SHOLEST_DISPLAY_RESET_GPIO, 0);
 	msleep(5);
-	gpio_set_value(MAPPHONE_DISPLAY_RESET_GPIO, 1);
+	gpio_set_value(SHOLEST_DISPLAY_RESET_GPIO, 1);
 	msleep(10);
 	return 0;
 }
 
-static void mapphone_panel_disable(struct omap_dss_device *dssdev)
+static void sholest_panel_disable(struct omap_dss_device *dssdev)
 {
-	gpio_direction_output(MAPPHONE_DISPLAY_RESET_GPIO, 1);
-	gpio_set_value(MAPPHONE_DISPLAY_RESET_GPIO, 0);
+	gpio_direction_output(SHOLEST_DISPLAY_RESET_GPIO, 1);
+	gpio_set_value(SHOLEST_DISPLAY_RESET_GPIO, 0);
 	msleep(1);
 	regulator_disable(display_regulator);
 }
 
-static struct omap_dss_device mapphone_lcd_device = {
+static struct omap_dss_device sholest_lcd_device = {
 	.type = OMAP_DISPLAY_TYPE_DSI,
 	.name = "lcd",
-	.driver_name = "sholes-panel",
+	.driver_name = "sholest-panel",
 	.phy.dsi.clk_lane = 3,
 	.phy.dsi.clk_pol = 0,
 	.phy.dsi.data1_lane = 1,
@@ -65,30 +65,30 @@ static struct omap_dss_device mapphone_lcd_device = {
 	.phy.dsi.data2_pol = 0,
 	.phy.dsi.ddr_clk_hz = 160000000,
 	.phy.dsi.lp_clk_hz = 10000000,
-	.reset_gpio = MAPPHONE_DISPLAY_RESET_GPIO,
-	.platform_enable = mapphone_panel_enable,
-	.platform_disable = mapphone_panel_disable,
+	.reset_gpio = SHOLEST_DISPLAY_RESET_GPIO,
+	.platform_enable = sholest_panel_enable,
+	.platform_disable = sholest_panel_disable,
 };
 
-static struct omap_dss_device *mapphone_dss_devices[] = {
-	&mapphone_lcd_device,
+static struct omap_dss_device *sholest_dss_devices[] = {
+	&sholest_lcd_device,
 };
 
-static struct omap_dss_board_info mapphone_dss_data = {
-	.num_devices = ARRAY_SIZE(mapphone_dss_devices),
-	.devices = mapphone_dss_devices,
-	.default_device = &mapphone_lcd_device,
+static struct omap_dss_board_info sholest_dss_data = {
+	.num_devices = ARRAY_SIZE(sholest_dss_devices),
+	.devices = sholest_dss_devices,
+	.default_device = &sholest_lcd_device,
 };
 
-struct platform_device mapphone_dss_device = {
+struct platform_device sholest_dss_device = {
 	.name = "omapdss",
 	.id = -1,
 	.dev = {
-		.platform_data = &mapphone_dss_data,
+		.platform_data = &sholest_dss_data,
 	},
 };
 
-void __init mapphone_panel_init(void)
+void __init sholest_panel_init(void)
 {
 	int ret;
 
@@ -101,17 +101,15 @@ void __init mapphone_panel_init(void)
 	/* disp reset b */
 	omap_cfg_reg(AE4_34XX_GPIO136_OUT);
 
-
-
-	ret = gpio_request(MAPPHONE_DISPLAY_RESET_GPIO, "display reset");
+	ret = gpio_request(SHOLEST_DISPLAY_RESET_GPIO, "display reset");
 	if (ret) {
 		printk(KERN_ERR "failed to get display reset gpio\n");
 		goto error;
 	}
 
-	platform_device_register(&mapphone_dss_device);
+	platform_device_register(&sholest_dss_device);
 	return;
 
 error:
-	gpio_free(MAPPHONE_DISPLAY_RESET_GPIO);
+	gpio_free(SHOLEST_DISPLAY_RESET_GPIO);
 }
