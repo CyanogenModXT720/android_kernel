@@ -38,12 +38,6 @@
 #include "kerneldisplay.h"
 #include "omaplfb.h"
 
-//FIXME: For now disable VSync interrupts until the support is there in the latest BSP with 2.6.29 kernel support
-#undef SYS_USING_INTERRUPTS
-
-/* MIKE_SHOLESPORT added to remove code for k29 port */
-#define MIKE_SHOLESPORT 1
-
 static void *gpvAnchor;
 
 static int fb_idx = 0;
@@ -616,13 +610,14 @@ static PVRSRV_ERROR CreateDCSwapChain(IMG_HANDLE hDevice,
 
 	OMAPLFBEnableDisplayRegisterAccess();
 
-	
+#if !defined(CONFIG_PVR_OMAP_DSS2)
 	psSwapChain->pvRegs = ioremap(psDevInfo->psLINFBInfo->fix.mmio_start, psDevInfo->psLINFBInfo->fix.mmio_len);
 	if (psSwapChain->pvRegs == NULL)
 	{
 		printk(KERN_WARNING DRIVER_PREFIX ": Couldn't map registers needed for flipping\n");
 		goto ErrorDisableDisplayRegisters;
 	}
+#endif
 
 	if (OMAPLFBInstallVSyncISR(psSwapChain) != OMAP_OK)
 	{
@@ -977,13 +972,12 @@ static IMG_BOOL ProcessFlip(IMG_HANDLE  hCmdCookie,
 	OMAPLFB_DEVINFO *psDevInfo;
 	OMAPLFB_BUFFER *psBuffer;
 	OMAPLFB_SWAPCHAIN *psSwapChain;
-#if defined(SYS_USING_INTERRUPTS)
+#if defined(CONFIG_PVR_OMAP_USE_VSYNC)
 	OMAPLFB_VSYNC_FLIP_ITEM* psFlipItem;
 #endif
 	unsigned long ulLockFlags;
 
 	
-	printk("ProcessFip called");
 	if(!hCmdCookie || !pvData)
 	{
 		return IMG_FALSE;
@@ -1002,7 +996,6 @@ static IMG_BOOL ProcessFlip(IMG_HANDLE  hCmdCookie,
 	
 	psBuffer = (OMAPLFB_BUFFER*)psFlipCmd->hExtBuffer;
 	psSwapChain = (OMAPLFB_SWAPCHAIN*) psFlipCmd->hExtSwapChain;
-	printk("ProcessFip before spin lock");
 
 	spin_lock_irqsave(psDevInfo->psSwapChainLock, ulLockFlags);
 
@@ -1013,19 +1006,18 @@ static IMG_BOOL ProcessFlip(IMG_HANDLE  hCmdCookie,
 		goto ExitTrueUnlock;
 	}
 
-#if defined(SYS_USING_INTERRUPTS)
+#if defined(CONFIG_PVR_OMAP_USE_VSYNC)
 	
 	if(psFlipCmd->ui32SwapInterval == 0 || psSwapChain->bFlushCommands == OMAP_TRUE)
 	{
 #endif
 		
-	printk("OMAPLFBFip 1 called");
 		OMAPLFBFlip(psSwapChain, (unsigned long)psBuffer->sSysAddr.uiAddr);
 
 		
 		psSwapChain->psPVRJTable->pfnPVRSRVCmdComplete(hCmdCookie, IMG_TRUE);
 
-#if defined(SYS_USING_INTERRUPTS)
+#if defined(CONFIG_PVR_OMAP_USE_VSYNC)
 		goto ExitTrueUnlock;
 	}
 
@@ -1039,7 +1031,6 @@ static IMG_BOOL ProcessFlip(IMG_HANDLE  hCmdCookie,
 		if(psSwapChain->ulInsertIndex == psSwapChain->ulRemoveIndex)
 		{
 			
-	printk("OMAPLFBFip 2 called");
 			OMAPLFBFlip(psSwapChain, (unsigned long)psBuffer->sSysAddr.uiAddr);
 
 			psFlipItem->bFlipped = OMAP_TRUE;
@@ -1064,7 +1055,6 @@ static IMG_BOOL ProcessFlip(IMG_HANDLE  hCmdCookie,
 	}
 	
 	spin_unlock_irqrestore(psDevInfo->psSwapChainLock, ulLockFlags);
-	printk("ProcessFlip done");
 	return IMG_FALSE;
 #endif
 
@@ -1201,9 +1191,7 @@ static OMAP_ERROR InitDev(OMAPLFB_DEVINFO *psDevInfo)
 	psDevInfo->sFBInfo.sSysAddr.uiAddr = psPVRFBInfo->sSysAddr.uiAddr;
 	psDevInfo->sFBInfo.sCPUVAddr = psPVRFBInfo->sCPUVAddr;
 
-#ifdef MIKE_SHOLESPORT
-    OMAPLFBSetDisplayInfo();
-#endif /* MIKE_SHOLESPORT */
+	OMAPLFBDisplayInit();
 
 	eError = OMAP_OK;
 	goto errRelSem;

@@ -647,6 +647,10 @@ static void cpcap_audio_configure_codec(struct cpcap_audio_state *state,
 		/* CDMA sholes is using Normal mode for uplink */
 		cdai_changes.value |= CPCAP_BIT_CDC_PLL_SEL | CPCAP_BIT_CLK_INV;
 
+		/* Setting I2S mode */
+		cdai_changes.value |= CPCAP_BIT_CDC_DIG_AUD_FS0
+			 | CPCAP_BIT_CDC_DIG_AUD_FS1;
+
 		/* OK, now start paranoid codec sequence */
 		/* FIRST, make sure the frequency config is right... */
 		ret_val = cpcap_regacc_write(state->cpcap, CPCAP_REG_CC,
@@ -849,12 +853,59 @@ static void cpcap_audio_configure_output_gains(
 	}
 }
 
+#define CPCAP_AUDIO_A2_CLOCK_MASK \
+	(CPCAP_BIT_A2_CLK2|CPCAP_BIT_A2_CLK1|CPCAP_BIT_A2_CLK0)
+#define CPCAP_AUDIO_A2_CLOCK_15_36 (CPCAP_BIT_A2_CLK0)
+#define CPCAP_AUDIO_A2_CLOCK_16_80 (CPCAP_BIT_A2_CLK1)
+#define CPCAP_AUDIO_A2_CLOCK_19_20 (CPCAP_BIT_A2_CLK1|CPCAP_BIT_A2_CLK0)
+#define CPCAP_AUDIO_A2_CLOCK_26_00 (CPCAP_BIT_A2_CLK2)
+#define CPCAP_AUDIO_A2_CLOCK_33_60 (CPCAP_BIT_A2_CLK2|CPCAP_BIT_A2_CLK0)
+#define CPCAP_AUDIO_A2_CLOCK_38_40 (CPCAP_BIT_A2_CLK2|CPCAP_BIT_A2_CLK1)
+
+static void cpcap_audio_configure_loudspeaker_headset(
+	struct cpcap_audio_state *previous_state,
+	struct cpcap_audio_state *state)
+{
+	if (state->rat_type != previous_state->rat_type) {
+		int ret_val = 0;
+		struct cpcap_regacc reg_changes = {
+			.value = 0,
+			.mask = CPCAP_BIT_A2_CLK_IN |
+				CPCAP_AUDIO_A2_CLOCK_MASK |
+				CPCAP_BIT_NCP_CLK_SYNC
+		};
+
+		if (state->rat_type == CPCAP_AUDIO_RAT_CDMA) {
+			/* Use 19.2 MHz clock from baseband */
+			reg_changes.value |= CPCAP_BIT_A2_CLK_IN;
+			reg_changes.value |= CPCAP_AUDIO_A2_CLOCK_19_20;
+			/* Use headset negative charge pump */
+			reg_changes.value |= CPCAP_BIT_NCP_CLK_SYNC;
+		} else {
+			/* Use 26 MHz clock from MPU */
+			reg_changes.value |= CPCAP_AUDIO_A2_CLOCK_26_00;
+		}
+
+		CPCAP_AUDIO_DEBUG_LOG("A2LA: value=%#x, mask=%#x\n",
+			reg_changes.value, reg_changes.mask);
+
+		ret_val = cpcap_regacc_write(state->cpcap, CPCAP_REG_A2LA,
+			reg_changes.value, reg_changes.mask);
+
+		if (ret_val != 0)
+			CPCAP_AUDIO_ERROR_LOG("CPCAP_REG_A2LA "
+				"returned error, ret_val = %d\n", ret_val);
+	}
+}
+
 static void cpcap_audio_configure_output(
 	struct cpcap_audio_state *state,
 	struct cpcap_audio_state *previous_state)
 {
 	static unsigned int prev_aud_out_data;
 	int ret_val;
+
+	cpcap_audio_configure_loudspeaker_headset(previous_state, state);
 
 	if (is_output_changed(previous_state, state)) {
 		bool activate_ext_loudspeaker = false;
@@ -897,12 +948,13 @@ static void cpcap_audio_configure_output(
 						 CPCAP_AUDIO_BALANCE_NEUTRAL,
 						 &(reg_changes.value));
 
-		reg_changes.mask = reg_changes.value | prev_aud_out_data;
+		reg_changes.mask = reg_changes.value ^ prev_aud_out_data;
+
+		CPCAP_AUDIO_DEBUG_LOG("rx0: value=%#x, mask=%#x, prev=%#x\n",
+			reg_changes.value, reg_changes.mask,
+			prev_aud_out_data);
 
 		prev_aud_out_data = reg_changes.value;
-
-		CPCAP_AUDIO_DEBUG_LOG("rx0_value = %#x, rx0_mask = %#x\n",
-				  reg_changes.value, reg_changes.mask);
 
 		ret_val = cpcap_regacc_write(state->cpcap, CPCAP_REG_RXOA,
 				reg_changes.value, reg_changes.mask);
@@ -997,14 +1049,16 @@ static void cpcap_audio_configure_power(
 	struct cpcap_audio_state *previous_state,
 	int power)
 {
-	struct cpcap_regacc reg_changes = {0};
 	static int previous_power = -1;
-	int ret_val;
 
-	CPCAP_AUDIO_DEBUG_LOG("%s() called with power= %d\n", __func__, power);
+	CPCAP_AUDIO_DEBUG_LOG("%s() called with power=%d\n", __func__, power);
+
+	if (is_output_bt_only(state)) {
+		CPCAP_AUDIO_DEBUG_LOG("%s() power 0 for BLUETOOTH", __func__);
+		power = 0;
+	}
 
 	if (power != previous_power) {
-		static int regulator_enabled = -1;
 
 		if (IS_ERR(audio_reg)) {
 			CPCAP_AUDIO_ERROR_LOG("audio_reg not valid for"
@@ -1012,79 +1066,15 @@ static void cpcap_audio_configure_power(
 			return;
 		}
 
-		reg_changes.mask = CPCAP_BIT_AUDIO_LOW_PWR |
-					CPCAP_BIT_AUD_LOWPWR_SPEED ;
-		reg_changes.value = 0;
-
-		if (SLEEP_ACTIVATE_POWER == 2)
-			reg_changes.value |= CPCAP_BIT_AUD_LOWPWR_SPEED;
-
 		if (power) {
-			if (regulator_enabled == 0) {
-				regulator_enable(audio_reg);
-				regulator_enabled = 1;
-			}
+			regulator_enable(audio_reg);
+			regulator_set_mode(audio_reg, REGULATOR_MODE_NORMAL);
 		} else {
-			if (regulator_enabled == 1) {
-				reg_changes.value |= CPCAP_BIT_AUDIO_LOW_PWR;
-				regulator_disable(audio_reg);
-				regulator_enabled = 0;
-			}
+			regulator_set_mode(audio_reg, REGULATOR_MODE_STANDBY);
+			regulator_disable(audio_reg);
 		}
 
-		ret_val = cpcap_regacc_write(state->cpcap,
-					CPCAP_REG_VAUDIOC,
-					reg_changes.value,
-					reg_changes.mask);
-		if (ret_val != 0)
-			CPCAP_AUDIO_ERROR_LOG("CPCAP_REG_RXOA "
-				"returned error, ret_val = %d\n", ret_val);
-
 		previous_power = power;
-
-		if (power)
-			msleep(SLEEP_ACTIVATE_POWER);
-	}
-
-	/* Power supply for headset should be controlled at the beginning
-	 * (if enabling) or end (if disabling) of the cpcap_audio setting
-	 * sequence */
-	if (is_output_changed(previous_state, state)) {
-		reg_changes.value = 0;
-		reg_changes.mask = CPCAP_BIT_ST_HS_CP_EN;
-
-		if (is_output_headset(state))
-			reg_changes.value = reg_changes.mask;
-
-		ret_val = cpcap_regacc_write(state->cpcap,
-					CPCAP_REG_RXOA,
-					reg_changes.value,
-					reg_changes.mask);
-
-		if (ret_val != 0)
-			CPCAP_AUDIO_ERROR_LOG("CPCAP_REG_RXOA "
-				"returned error, ret_val = %d\n", ret_val);
-
-		/* If the output type is BT only then put the IC in
-		 * lower power mode */
-		reg_changes.mask = CPCAP_BIT_AUDIO_LOW_PWR |
-					CPCAP_BIT_AUD_LOWPWR_SPEED;
-		reg_changes.value = 0;
-
-		if (is_output_bt_only(state))
-			reg_changes.value = reg_changes.mask;
-
-		CPCAP_AUDIO_DEBUG_LOG("512_value = %#x, 512_mask = %#x\n",
-					reg_changes.value, reg_changes.mask);
-
-		ret_val = cpcap_regacc_write(state->cpcap,
-					CPCAP_REG_VAUDIOC,
-					reg_changes.value,
-					reg_changes.mask);
-
-		if (ret_val != 0)
-			CPCAP_AUDIO_ERROR_LOG("CPCAP_REG_VAUDIOC "
-				"returned error, ret_val = %d\n", ret_val);
 	}
 }
 
@@ -1116,6 +1106,10 @@ static void cpcap_audio_register_dump(struct cpcap_audio_state *state)
 	printk(KERN_INFO "0x20A = %x\n", reg_val);
 	cpcap_regacc_read(state->cpcap, CPCAP_REG_RXEPOA, &reg_val);
 	printk(KERN_INFO "0x20B = %x\n", reg_val);
+	cpcap_regacc_read(state->cpcap, CPCAP_REG_RXLL, &reg_val);
+	printk(KERN_INFO "0x20C = %x\n", reg_val);
+	cpcap_regacc_read(state->cpcap, CPCAP_REG_A2LA, &reg_val);
+	printk(KERN_INFO "0x20D = %x\n", reg_val);
 }
 
 void cpcap_audio_set_audio_state(struct cpcap_audio_state *state)
