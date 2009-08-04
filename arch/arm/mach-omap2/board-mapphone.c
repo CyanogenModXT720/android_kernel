@@ -51,6 +51,8 @@
 #include <mach/hdq.h>
 #include <linux/usb/android.h>
 
+#include "cm-regbits-34xx.h"
+
 #ifdef CONFIG_ARM_OF
 #include <mach/dt_path.h>
 #include <asm/prom.h>
@@ -61,6 +63,8 @@
 #include "smartreflex.h"
 #include "omap3-opp.h"
 #include "sdram-toshiba-hynix-numonyx.h"
+#include "prcm-common.h"
+#include "cm.h"
 
 #ifdef CONFIG_VIDEO_OLDOMAP3
 #include <media/v4l2-int-device.h>
@@ -597,6 +601,17 @@ static struct platform_device ehci_device = {
 #endif
 
 #if defined(CONFIG_USB_OHCI_HCD) || defined(CONFIG_USB_OHCI_HCD_MODULE)
+static int omap_ohci_bus_check_ctrl_standby(void)
+{
+	u32 val;
+
+	val = cm_read_mod_reg(OMAP3430ES2_USBHOST_MOD, CM_IDLEST);
+	if (val & OMAP3430ES2_ST_USBHOST_STDBY_MASK)
+		return 1;
+	else
+		return 0;
+}
+
 static struct resource ohci_resources[] = {
 	[0] = {
 		.start	= OMAP34XX_HSUSB_HOST_BASE + 0x400,
@@ -612,6 +627,7 @@ static struct resource ohci_resources[] = {
 static u64 ohci_dmamask = ~(u32)0;
 
 static struct omap_usb_config dummy_usb_config = {
+	.usbhost_standby_status	= omap_ohci_bus_check_ctrl_standby,
 };
 
 static struct platform_device ohci_device = {
@@ -1071,6 +1087,22 @@ static inline void omap2_ramconsole_reserve_sdram(void) {}
 #endif
 
 
+static struct platform_device mapphone_sgx_device = {
+       .name                   = "pvrsrvkm",
+       .id             = -1,
+};
+static struct platform_device mapphone_omaplfb_device = {
+	.name			= "omaplfb",
+	.id			= -1,
+};
+
+
+static void __init mapphone_sgx_init(void)
+{
+	platform_device_register(&mapphone_sgx_device);
+	platform_device_register(&mapphone_omaplfb_device);
+}
+
 static void __init mapphone_bp_model_init(void)
 {
 #ifdef CONFIG_OMAP_RESET_CLOCKS
@@ -1146,6 +1178,7 @@ static void __init mapphone_init(void)
 	mapphone_bt_init();
 	mapphone_hsmmc_init();
 	mapphone_vout_init();
+	mapphone_sgx_init();
 	mapphone_power_off_init();
 	mapphone_gadget_init();
 }
