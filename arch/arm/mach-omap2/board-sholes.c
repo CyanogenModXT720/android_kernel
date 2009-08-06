@@ -51,11 +51,14 @@
 #include <mach/hdq.h>
 #include <linux/usb/android.h>
 
+#include "cm-regbits-34xx.h"
 #include "pm.h"
 #include "prm-regbits-34xx.h"
 #include "smartreflex.h"
 #include "omap3-opp.h"
-#include "sdram-toshiba-TYA000B801AXHM10.h"
+#include "sdram-toshiba-hynix-numonyx.h"
+#include "prcm-common.h"
+#include "cm.h"
 
 #ifdef CONFIG_VIDEO_OLDOMAP3
 #include <media/v4l2-int-device.h>
@@ -75,6 +78,8 @@
 #define SHOLES_LM_3530_INT_GPIO		92
 #define SHOLES_AKM8973_INT_GPIO		175
 #define SHOLES_WL1271_NSHUTDOWN_GPIO	179
+#define SHOLES_WL1271_WAKE_GPIO		8
+#define SHOLES_WL1271_HOSTWAKE_GPIO	178
 #define SHOLES_AUDIO_PATH_GPIO		143
 #define SHOLES_BP_READY_AP_GPIO		141
 #define SHOLES_BP_READY2_AP_GPIO	59
@@ -83,9 +88,13 @@
 #define SHOLES_AP_TO_BP_PSHOLD_GPIO	138
 #define SHOLES_AP_TO_BP_FLASH_EN_GPIO	157
 #define SHOLES_POWER_OFF_GPIO		176
+#define SHOLES_BPWAKE_STROBE_GPIO	157
+#define SHOLES_APWAKE_TRIGGER_GPIO      141
 #define DIE_ID_REG_BASE			(L4_WK_34XX_PHYS + 0xA000)
 #define DIE_ID_REG_OFFSET		0x218
 #define MAX_USB_SERIAL_NUM		17
+#define FACTORY_VENDOR_ID		0x22B8
+#define FACTORY_PRODUCT_ID		0x41E2
 
 static char device_serial[MAX_USB_SERIAL_NUM];
 
@@ -132,9 +141,8 @@ static struct omap_opp sholes_dsp_rate_table[] = {
 
 static void __init sholes_init_irq(void)
 {
-	omap2_init_common_hw(TYA000B801AXHM10_sdrc_params,
-			sholes_mpu_rate_table, sholes_dsp_rate_table,
-			sholes_l3_rate_table);
+	omap2_init_common_hw(JEDEC_JESD209A_sdrc_params, sholes_mpu_rate_table,
+			sholes_dsp_rate_table, sholes_l3_rate_table);
 	omap_init_irq();
 #ifdef CONFIG_OMAP3_PM
 	scm_clk_init();
@@ -186,6 +194,13 @@ static void sholes_gadget_init(void)
 	val[1] = omap_readl(reg + 4);
 
 	snprintf(device_serial, MAX_USB_SERIAL_NUM, "%08X%08X", val[1], val[0]);
+
+	/* check powerup reason - To be added once kernel support is available*/
+	if (andusb_plat.factory_enabled) {
+		andusb_plat.vendor_id = FACTORY_VENDOR_ID;
+		andusb_plat.product_id = FACTORY_PRODUCT_ID;
+		andusb_plat.adb_product_id = FACTORY_PRODUCT_ID;
+	}
 	platform_device_register(&androidusb_device);
 	platform_driver_register(&cpcap_usb_connected_driver);
 }
@@ -531,6 +546,17 @@ static struct platform_device ehci_device = {
 #endif
 
 #if defined(CONFIG_USB_OHCI_HCD) || defined(CONFIG_USB_OHCI_HCD_MODULE)
+static int omap_ohci_bus_check_ctrl_standby(void)
+{
+	u32 val;
+
+	val = cm_read_mod_reg(OMAP3430ES2_USBHOST_MOD, CM_IDLEST);
+	if (val & OMAP3430ES2_ST_USBHOST_STDBY_MASK)
+		return 1;
+	else
+		return 0;
+}
+
 static struct resource ohci_resources[] = {
 	[0] = {
 		.start	= OMAP34XX_HSUSB_HOST_BASE + 0x400,
@@ -546,6 +572,7 @@ static struct resource ohci_resources[] = {
 static u64 ohci_dmamask = ~(u32)0;
 
 static struct omap_usb_config dummy_usb_config = {
+	.usbhost_standby_status	= omap_ohci_bus_check_ctrl_standby,
 };
 
 static struct platform_device ohci_device = {
@@ -595,7 +622,8 @@ static void __init sholes_serial_init(void)
 	omap_cfg_reg(AD25_34XX_UART2_RX);
 	omap_cfg_reg(AB25_34XX_UART2_RTS);
 	omap_cfg_reg(AB26_34XX_UART2_CTS);
-	omap_serial_init();
+
+	omap_serial_init(SHOLES_BPWAKE_STROBE_GPIO, 0x01);
 }
 
 /* SMPS I2C voltage control register Address for VDD1 */
@@ -653,24 +681,19 @@ int sholes_voltagescale_vcbypass(u32 target_opp, u32 current_opp,
 {
 
 	int sr_status = 0;
-	u32 vdd, target_opp_no, current_opp_no;
+	u32 vdd, target_opp_no;
 	u8 slave_addr = 0, opp_reg_addr = 0, volt_reg_addr = 0;
 
 	vdd = get_vdd(target_opp);
 	target_opp_no = get_opp_no(target_opp);
-	current_opp_no = get_opp_no(current_opp);
 
 	if (vdd == VDD1_OPP) {
-		printk("VDD1_opp:%d->%d,vsel=%02x \n",
-			current_opp_no, target_opp_no);
 		sr_status = sr_stop_vddautocomap(SR1);
 		slave_addr = SHOLES_R_SRI2C_SLAVE_ADDR_SA0;
 		volt_reg_addr = SHOLES_R_VDD1_SR_CONTROL;
 		opp_reg_addr = R_SMPS_VOL_OPP2_RA0;
 
 	} else if (vdd == VDD2_OPP) {
-		printk("VDD2_opp:%d->%d,vsel=%02x \n",
-			current_opp_no, target_opp_no);
 		sr_status = sr_stop_vddautocomap(SR2);
 		slave_addr = SHOLES_R_SRI2C_SLAVE_ADDR_SA1;
 		volt_reg_addr = SHOLES_R_VDD2_SR_CONTROL;
@@ -697,6 +720,80 @@ int sholes_voltagescale_vcbypass(u32 target_opp, u32 current_opp,
 #endif
 
 /* Sholes specific PM */
+
+static int bpwake_irqstate;
+
+static int sholes_bpwake_irqhandler(int irq, void *unused)
+{
+	printk("%s: Baseband wakeup\n", __func__);
+	/*
+	 * Ignore the BP pokes while we're awake
+	 */
+	disable_irq(irq);
+	bpwake_irqstate = 0;
+	return IRQ_HANDLED;
+}
+
+static int sholes_bpwake_probe(struct platform_device *pdev)
+{
+	int rc;
+
+	gpio_request(SHOLES_APWAKE_TRIGGER_GPIO, "BP -> AP wakeup trigger");
+	gpio_direction_input(SHOLES_APWAKE_TRIGGER_GPIO);
+
+	rc = request_irq(gpio_to_irq(SHOLES_APWAKE_TRIGGER_GPIO),
+			 sholes_bpwake_irqhandler,
+			 IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING,
+			 "Remote Wakeup", NULL);
+	if (rc) {
+		printk(KERN_ERR
+		       "Failed requesting APWAKE_TRIGGER irq (%d)\n", rc);
+		return rc;
+	}
+
+	enable_irq_wake(gpio_to_irq(SHOLES_APWAKE_TRIGGER_GPIO));
+	disable_irq(gpio_to_irq(SHOLES_APWAKE_TRIGGER_GPIO));
+	bpwake_irqstate = 0;
+	return 0;
+}
+
+static int sholes_bpwake_remove(struct platform_device *pdev)
+{
+	free_irq(gpio_to_irq(SHOLES_APWAKE_TRIGGER_GPIO), NULL);
+	return 0;
+}
+
+static int sholes_bpwake_suspend(struct platform_device *pdev, pm_message_t state)
+{
+	if (!bpwake_irqstate) {
+		enable_irq(gpio_to_irq(SHOLES_APWAKE_TRIGGER_GPIO));
+		bpwake_irqstate = 1;
+	}
+	return 0;
+}
+
+static int sholes_bpwake_resume(struct platform_device *pdev)
+{
+	return 0;
+}
+
+static struct platform_driver sholes_bpwake_driver = {
+	.probe		= sholes_bpwake_probe,
+	.remove		= sholes_bpwake_remove,
+	.suspend	= sholes_bpwake_suspend,
+	.resume		= sholes_bpwake_resume,
+	.driver		= {
+		.name		= "sholes_bpwake",
+		.owner		= THIS_MODULE,
+	},
+};
+
+static struct platform_device sholes_bpwake_device = {
+	.name		= "sholes_bpwake",
+	.id		= -1,
+	.num_resources	= 0,
+};
+
 static void sholes_pm_init(void)
 {
 	omap3_set_prm_setup_vc(&sholes_prm_setup);
@@ -718,6 +815,13 @@ static void sholes_pm_init(void)
 				R_SMPS_VOL_OPP1_RA1, 0x20);
 	omap3_bypass_cmd(SHOLES_R_SRI2C_SLAVE_ADDR_SA1,
 				R_SMPS_VOL_OPP2_RA1, 0x2E);
+
+	/* Configure BP <-> AP wake pins */
+	omap_cfg_reg(AA21_34XX_GPIO157_OUT);
+	omap_cfg_reg(AE6_34XX_GPIO141_DOWN);
+
+	platform_device_register(&sholes_bpwake_device);
+	platform_driver_register(&sholes_bpwake_driver);
 }
 
 static void __init config_wlan_gpio(void)
@@ -759,9 +863,60 @@ static int __init omap_hdq_init(void)
 	return platform_device_register(&omap_hdq_device);
 }
 
+static int sholes_wl1271_init(void)
+{
+	int rc = 0;
+
+	/* wl1271 BT chip init sequence */
+	gpio_direction_output(SHOLES_WL1271_NSHUTDOWN_GPIO, 0);
+	msleep(5);
+	gpio_set_value(SHOLES_WL1271_NSHUTDOWN_GPIO, 1);
+	msleep(10);
+	gpio_set_value(SHOLES_WL1271_NSHUTDOWN_GPIO, 0);
+	msleep(5);
+
+	/* Reserve BT wake and hostwake GPIOs */
+	rc = gpio_request(SHOLES_WL1271_WAKE_GPIO, "wl127x_wake_gpio");
+	if (unlikely(rc))
+		return rc;
+
+	rc = gpio_request(SHOLES_WL1271_HOSTWAKE_GPIO, "wl127x_hostwake_gpio");
+	if (unlikely(rc))
+		return rc;
+
+	gpio_direction_output(SHOLES_WL1271_WAKE_GPIO, 1);
+	gpio_direction_input(SHOLES_WL1271_HOSTWAKE_GPIO);
+
+	return 0;
+}
+
+static int sholes_wl1271_release(void)
+{
+	gpio_free(SHOLES_WL1271_WAKE_GPIO);
+	gpio_free(SHOLES_WL1271_HOSTWAKE_GPIO);
+
+	return 0;
+}
+
+static int sholes_wl1271_enable(void)
+{
+	gpio_set_value(SHOLES_WL1271_WAKE_GPIO, 0);
+	return 0;
+}
+
+static int sholes_wl1271_disable(void)
+{
+	gpio_set_value(SHOLES_WL1271_WAKE_GPIO, 1);
+	return 0;
+}
+
 static struct wl127x_rfkill_platform_data sholes_wl1271_pdata = {
 	.bt_nshutdown_gpio = SHOLES_WL1271_NSHUTDOWN_GPIO,
 	.fm_enable_gpio = -1,
+	.bt_hw_init = sholes_wl1271_init,
+	.bt_hw_release = sholes_wl1271_release,
+	.bt_hw_enable = sholes_wl1271_enable,
+	.bt_hw_disable = sholes_wl1271_disable,
 };
 
 static struct platform_device sholes_wl1271_device = {
@@ -774,6 +929,10 @@ static void __init sholes_bt_init(void)
 {
 	/* Mux setup for Bluetooth chip-enable */
 	omap_cfg_reg(T3_34XX_GPIO_179);
+
+	/* Mux setup for BT wake GPIO and hostwake GPIO */
+	omap_cfg_reg(AF21_34XX_GPIO8);
+	omap_cfg_reg(W7_34XX_GPIO178_DOWN);
 
 	platform_device_register(&sholes_wl1271_device);
 }
@@ -797,10 +956,6 @@ static struct platform_device omap_mdm_ctrl_platform_device = {
 
 static int __init sholes_omap_mdm_ctrl_init(void)
 {
-	gpio_request(SHOLES_BP_READY_AP_GPIO, "BP Normal Ready");
-	gpio_direction_input(SHOLES_BP_READY_AP_GPIO);
-	omap_cfg_reg(AE6_34XX_GPIO141_DOWN);
-
 	gpio_request(SHOLES_BP_READY2_AP_GPIO, "BP Flash Ready");
 	gpio_direction_input(SHOLES_BP_READY2_AP_GPIO);
 	omap_cfg_reg(T4_34XX_GPIO59_DOWN);
@@ -816,10 +971,6 @@ static int __init sholes_omap_mdm_ctrl_init(void)
 	gpio_request(SHOLES_AP_TO_BP_PSHOLD_GPIO, "AP to BP PS Hold");
 	gpio_direction_output(SHOLES_AP_TO_BP_PSHOLD_GPIO, 0);
 	omap_cfg_reg(AF3_34XX_GPIO138_OUT);
-
-	gpio_request(SHOLES_AP_TO_BP_FLASH_EN_GPIO, "AP to BP Flash Enable");
-	gpio_direction_output(SHOLES_AP_TO_BP_FLASH_EN_GPIO, 0);
-	omap_cfg_reg(AA21_34XX_GPIO157_OUT);
 
 	return platform_device_register(&omap_mdm_ctrl_platform_device);
 }
@@ -875,6 +1026,22 @@ static inline void omap2_ramconsole_reserve_sdram(void) {}
 #endif
 
 
+static struct platform_device sholes_sgx_device = {
+       .name                   = "pvrsrvkm",
+       .id             = -1,
+};
+static struct platform_device sholes_omaplfb_device = {
+	.name			= "omaplfb",
+	.id			= -1,
+};
+
+
+static void __init sholes_sgx_init(void)
+{
+	platform_device_register(&sholes_sgx_device);
+	platform_device_register(&sholes_omaplfb_device);
+}
+
 static void sholes_pm_power_off(void)
 {
 	printk(KERN_INFO "sholes_pm_power_off start...\n");
@@ -921,6 +1088,7 @@ static void __init sholes_init(void)
 	sholes_bt_init();
 	sholes_hsmmc_init();
 	sholes_vout_init();
+	sholes_sgx_init();
 	sholes_power_off_init();
 	sholes_gadget_init();
 }

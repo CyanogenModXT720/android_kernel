@@ -32,6 +32,7 @@
 #include <linux/serial_core.h>
 #include <linux/io.h>
 #include <linux/dma-mapping.h>
+#include <linux/wakelock.h>
 
 #include <asm/irq.h>
 #include <asm/dma.h>
@@ -113,6 +114,7 @@ struct uart_omap_port {
 	unsigned char		mcr;
 	int			use_dma;
 	int			is_buf_dma_alloced;
+	int			restore_autorts;
 	/*
 	 * Some bits in registers are cleared on a read, so they must
 	 * be saved whenever the register is read but the bits will not
@@ -129,6 +131,8 @@ struct uart_omap_port {
 
 static struct uart_omap_port *ui[MAX_UARTS + 1];
 unsigned int fcr[MAX_UARTS];
+
+static struct wake_lock omap_serial_wakelock;
 
 /* Forward declaration of dma callback functions */
 static void uart_tx_dma_callback(int lch, u16 ch_status, void *data);
@@ -252,7 +256,7 @@ static void serial_omap_stop_tx(struct uart_port *port)
 		up->ier &= ~UART_IER_THRI;
 		serial_out(up, UART_IER, up->ier);
 	}
-#ifdef CONFIG_OMAP3_PM
+#ifdef CONFIG_PM
 	if (!up->uart_dma.rx_dma_state) {
 		unsigned int tmp;
 		tmp = (serial_in(up, UART_OMAP_SYSC) & 0x7) | (2 << 3);
@@ -374,7 +378,7 @@ static void transmit_chars(struct uart_omap_port *up)
 static void serial_omap_start_tx(struct uart_port *port)
 {
 	struct uart_omap_port *up = (struct uart_omap_port *)port;
-#ifdef CONFIG_OMAP3_PM
+#ifdef CONFIG_PM
 		/* Disallow OCP bus idle. UART TX irqs are not seen during
 		 * bus idle. Alternative is to set kernel timer at fifo
 		 * drain rate.
@@ -426,6 +430,7 @@ static void serial_omap_start_tx(struct uart_port *port)
 		up->ier |= UART_IER_THRI;
 		serial_out(up, UART_IER, up->ier);
 	}
+
 }
 
 static unsigned int check_modem_status(struct uart_omap_port *up)
@@ -484,6 +489,8 @@ static inline irqreturn_t serial_omap_irq(int irq, void *dev_id)
 		serial_omap_start_rxdma(up);
 	} else if (lsr & UART_LSR_DR) {
 		receive_chars(up, &lsr);
+		/* XXX: After driver resume optimization, lower this */
+		wake_lock_timeout(&omap_serial_wakelock, (HZ * 1));
 	}
 	check_modem_status(up);
 	if ((lsr & UART_LSR_THRE) && (iir & 0x2))
@@ -562,6 +569,53 @@ static void serial_omap_break_ctl(struct uart_port *port, int break_state)
 		up->lcr &= ~UART_LCR_SBC;
 	serial_out(up, UART_LCR, up->lcr);
 	spin_unlock_irqrestore(&up->port.lock, flags);
+}
+
+static void serial_omap_wake_peer(struct uart_port *port)
+{
+	struct uart_omap_port *up = (struct uart_omap_port *)port;
+	struct plat_serialomap_port *pd = up->pdev->dev.platform_data;
+	if (pd->wake_gpio_strobe) {
+		gpio_direction_output(pd->wake_gpio_strobe, 1);
+		udelay(5);
+		gpio_direction_output(pd->wake_gpio_strobe, 0);
+		udelay(5);
+	}
+}
+
+static void serial_omap_set_autorts(struct uart_omap_port *p, int set)
+{
+        u8 lcr_val = 0, mcr_val = 0, efr_val = 0;
+        u8 lcr_backup = 0, mcr_backup = 0, efr_backup = 0;
+
+        lcr_val = serial_in(p, UART_LCR);
+        lcr_backup = lcr_val;
+        serial_out(p, UART_LCR, 0x80);
+
+        mcr_val = serial_in(p, UART_MCR);
+        mcr_backup = mcr_val;
+        serial_out(p, UART_MCR, mcr_val | 0x40);
+
+        serial_out(p, UART_LCR, 0xbf);
+
+        efr_val = serial_in(p, UART_EFR);
+        efr_backup = efr_val;
+        serial_out(p, UART_EFR, efr_val | 0x10);
+
+        serial_out(p, 0x06, 0x5f);
+
+        efr_val = serial_in(p, UART_EFR);
+        if (set)
+                serial_out(p, UART_EFR, (efr_val & ~0xc0) | (1 << 6));
+        else
+                serial_out(p, UART_EFR, efr_val & ~0xc0);
+
+        serial_out(p, UART_LCR, 0x80);
+
+        mcr_val = serial_in(p, UART_MCR);
+        serial_out(p, UART_MCR, (mcr_val & ~0x40) | (mcr_backup & 0x40));
+
+        serial_out(p, UART_LCR, lcr_backup);
 }
 
 static int serial_omap_startup(struct uart_port *port)
@@ -672,6 +726,11 @@ static int serial_omap_startup(struct uart_port *port)
 		serial_out(up, UART_IER, up->ier);
 	}
 
+	if (up->restore_autorts) {
+		serial_omap_set_autorts(up, 1);
+		up->restore_autorts = 0;
+	}
+
 	return 0;
 }
 
@@ -679,6 +738,7 @@ static void serial_omap_shutdown(struct uart_port *port)
 {
 	struct uart_omap_port *up = (struct uart_omap_port *)port;
 	unsigned long flags;
+	u8 lcr, efr;
 
 	DPRINTK("serial_omap_shutdown+%d\n", up->pdev->id);
 	/*
@@ -728,6 +788,22 @@ static void serial_omap_shutdown(struct uart_port *port)
 	}
 
 	free_irq(up->port.irq, up);
+
+	/* If we're using hardware flow control then ensure
+	 * we deassert our RTS line
+	 * */
+	lcr = serial_in(up, UART_LCR);
+	serial_out(up, UART_LCR, 0xbf);
+	efr = serial_in(up, UART_EFR);
+	serial_out(up, UART_LCR, lcr);
+
+	if (efr & UART_EFR_RTS) {
+		/* Ensure MCR_RTS is deasserted for when Auto-RTS is disabled */
+		serial_out(up, UART_MCR,
+			   serial_in(up, UART_MCR) & ~UART_MCR_RTS);
+		serial_omap_set_autorts(up, 0);
+		up->restore_autorts = 0;
+	}
 }
 
 static void
@@ -1087,6 +1163,7 @@ struct uart_ops serial_omap_pops = {
 	.request_port	= serial_omap_request_port,
 	.config_port	= serial_omap_config_port,
 	.verify_port	= serial_omap_verify_port,
+	.wake_peer	= serial_omap_wake_peer,
 };
 
 static struct uart_driver serial_omap_reg = {
@@ -1172,7 +1249,7 @@ static void uart_rx_dma_callback(int lch, u16 ch_status, void *data)
 
 static void serial_omap_start_rxdma(struct uart_omap_port *up)
 {
-#ifdef CONFIG_OMAP3_PM
+#ifdef CONFIG_PM
 	/* Disallow OCP bus idle. UART TX irqs are not seen during
 	 * bus idle. Alternative is to set kernel timer at fifo
 	 * drain rate.
@@ -1391,6 +1468,14 @@ static int serial_omap_probe(struct platform_device *pdev)
 		goto do_release_region;
 	platform_set_drvdata(pdev, up);
 
+	if (pdata->wake_gpio_strobe) {
+		if (gpio_request(pdata->wake_gpio_strobe,
+				 "UART AP -> BP wakeup strobe")) {
+			printk(KERN_ERR "Error requesting GPIO\n");
+		} else
+			gpio_direction_output(pdata->wake_gpio_strobe, 0);
+	}
+		
 	return 0;
 do_release_region:
 	release_mem_region(mem->start, (mem->end - mem->start) + 1);
@@ -1424,6 +1509,8 @@ int __init serial_omap_init(void)
 {
 	int ret;
 
+	wake_lock_init(&omap_serial_wakelock, WAKE_LOCK_SUSPEND,
+		       "omap_serial");
 	ret = uart_register_driver(&serial_omap_reg);
 	if (ret != 0)
 		return ret;

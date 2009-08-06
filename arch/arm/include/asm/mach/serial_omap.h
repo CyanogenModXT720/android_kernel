@@ -34,6 +34,7 @@ struct plat_serialomap_port {
 #ifdef CONFIG_SERIAL_OMAP3430_HW_FLOW_CONTROL
 	unsigned char   rtscts;     /* bit0: rts, bit1: cts */
 #endif
+	int		wake_gpio_strobe;
 };
 
 #endif

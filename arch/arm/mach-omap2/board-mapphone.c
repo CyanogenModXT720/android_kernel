@@ -51,6 +51,8 @@
 #include <mach/hdq.h>
 #include <linux/usb/android.h>
 
+#include "cm-regbits-34xx.h"
+
 #ifdef CONFIG_ARM_OF
 #include <mach/dt_path.h>
 #include <asm/prom.h>
@@ -60,7 +62,9 @@
 #include "prm-regbits-34xx.h"
 #include "smartreflex.h"
 #include "omap3-opp.h"
-#include "sdram-toshiba-TYA000B801AXHM10.h"
+#include "sdram-toshiba-hynix-numonyx.h"
+#include "prcm-common.h"
+#include "cm.h"
 
 #ifdef CONFIG_VIDEO_OLDOMAP3
 #include <media/v4l2-int-device.h>
@@ -86,6 +90,8 @@
 #define MAPPHONE_LM_3530_INT_GPIO	92
 #define MAPPHONE_AKM8973_INT_GPIO	175
 #define MAPPHONE_WL1271_NSHUTDOWN_GPIO	179
+#define MAPPHONE_WL1271_WAKE_GPIO	8
+#define MAPPHONE_WL1271_HOSTWAKE_GPIO	178
 #define MAPPHONE_AUDIO_PATH_GPIO	143
 #define MAPPHONE_BP_READY_AP_GPIO	141
 #define MAPPHONE_BP_READY2_AP_GPIO	59
@@ -94,9 +100,13 @@
 #define MAPPHONE_AP_TO_BP_PSHOLD_GPIO	138
 #define MAPPHONE_AP_TO_BP_FLASH_EN_GPIO	157
 #define MAPPHONE_POWER_OFF_GPIO		176
+#define MAPPHONE_BPWAKE_STROBE_GPIO	157
+#define MAPPHONE_APWAKE_TRIGGER_GPIO	141
 #define DIE_ID_REG_BASE			(L4_WK_34XX_PHYS + 0xA000)
 #define DIE_ID_REG_OFFSET		0x218
 #define MAX_USB_SERIAL_NUM		17
+#define FACTORY_VENDOR_ID		0x22B8
+#define FACTORY_PRODUCT_ID		0x41E2
 
 static char device_serial[MAX_USB_SERIAL_NUM];
 char *bp_model = "CDMA";
@@ -144,7 +154,7 @@ static struct omap_opp mapphone_dsp_rate_table[] = {
 
 static void __init mapphone_init_irq(void)
 {
-	omap2_init_common_hw(TYA000B801AXHM10_sdrc_params,
+	omap2_init_common_hw(JEDEC_JESD209A_sdrc_params,
 			mapphone_mpu_rate_table, mapphone_dsp_rate_table,
 			mapphone_l3_rate_table);
 	omap_init_irq();
@@ -202,6 +212,13 @@ static void mapphone_gadget_init(void)
 	val[1] = omap_readl(reg + 4);
 
 	snprintf(device_serial, MAX_USB_SERIAL_NUM, "%08X%08X", val[1], val[0]);
+
+	/* check powerup reason - To be added once kernel support is available*/
+	if (andusb_plat.factory_enabled) {
+		andusb_plat.vendor_id = FACTORY_VENDOR_ID;
+		andusb_plat.product_id = FACTORY_PRODUCT_ID;
+		andusb_plat.adb_product_id = FACTORY_PRODUCT_ID;
+	}
 	platform_device_register(&androidusb_device);
 	platform_driver_register(&cpcap_usb_connected_driver);
 }
@@ -584,6 +601,17 @@ static struct platform_device ehci_device = {
 #endif
 
 #if defined(CONFIG_USB_OHCI_HCD) || defined(CONFIG_USB_OHCI_HCD_MODULE)
+static int omap_ohci_bus_check_ctrl_standby(void)
+{
+	u32 val;
+
+	val = cm_read_mod_reg(OMAP3430ES2_USBHOST_MOD, CM_IDLEST);
+	if (val & OMAP3430ES2_ST_USBHOST_STDBY_MASK)
+		return 1;
+	else
+		return 0;
+}
+
 static struct resource ohci_resources[] = {
 	[0] = {
 		.start	= OMAP34XX_HSUSB_HOST_BASE + 0x400,
@@ -599,6 +627,7 @@ static struct resource ohci_resources[] = {
 static u64 ohci_dmamask = ~(u32)0;
 
 static struct omap_usb_config dummy_usb_config = {
+	.usbhost_standby_status	= omap_ohci_bus_check_ctrl_standby,
 };
 
 static struct platform_device ohci_device = {
@@ -649,7 +678,8 @@ static void __init mapphone_serial_init(void)
 	omap_cfg_reg(AD25_34XX_UART2_RX);
 	omap_cfg_reg(AB25_34XX_UART2_RTS);
 	omap_cfg_reg(AB26_34XX_UART2_CTS);
-	omap_serial_init();
+
+	omap_serial_init(MAPPHONE_BPWAKE_STROBE_GPIO, 0x01);
 }
 
 /* SMPS I2C voltage control register Address for VDD1 */
@@ -746,6 +776,81 @@ int mapphone_voltagescale_vcbypass(u32 target_opp, u32 current_opp,
 #endif
 
 /* Mapphone specific PM */
+
+static int bpwake_irqstate;
+
+static int mapphone_bpwake_irqhandler(int irq, void *unused)
+{
+	printk("%s: Baseband wakeup\n", __func__);
+	/*
+	 * Ignore the BP pokes while we're awake
+	 */
+	disable_irq(irq);
+	bpwake_irqstate = 0;
+	return IRQ_HANDLED;
+}
+
+static int mapphone_bpwake_probe(struct platform_device *pdev)
+{
+	int rc;
+
+	gpio_request(MAPPHONE_APWAKE_TRIGGER_GPIO, "BP -> AP wakeup trigger");
+	gpio_direction_input(MAPPHONE_APWAKE_TRIGGER_GPIO);
+
+	rc = request_irq(gpio_to_irq(MAPPHONE_APWAKE_TRIGGER_GPIO),
+			 mapphone_bpwake_irqhandler,
+			 IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING,
+			 "Remote Wakeup", NULL);
+	if (rc) {
+		printk(KERN_ERR
+		       "Failed requesting APWAKE_TRIGGER irq (%d)\n", rc);
+		return rc;
+	}
+
+	enable_irq_wake(gpio_to_irq(MAPPHONE_APWAKE_TRIGGER_GPIO));
+	disable_irq(gpio_to_irq(MAPPHONE_APWAKE_TRIGGER_GPIO));
+	bpwake_irqstate = 0;
+	return 0;
+}
+
+static int mapphone_bpwake_remove(struct platform_device *pdev)
+{
+	free_irq(gpio_to_irq(MAPPHONE_APWAKE_TRIGGER_GPIO), NULL);
+	return 0;
+}
+
+static int mapphone_bpwake_suspend(struct platform_device *pdev,
+					pm_message_t state)
+{
+	if (!bpwake_irqstate) {
+		enable_irq(gpio_to_irq(MAPPHONE_APWAKE_TRIGGER_GPIO));
+		bpwake_irqstate = 1;
+	}
+	return 0;
+}
+
+static int mapphone_bpwake_resume(struct platform_device *pdev)
+{
+	return 0;
+}
+
+static struct platform_driver mapphone_bpwake_driver = {
+	.probe		= mapphone_bpwake_probe,
+	.remove		= mapphone_bpwake_remove,
+	.suspend	= mapphone_bpwake_suspend,
+	.resume		= mapphone_bpwake_resume,
+	.driver		= {
+		.name		= "mapphone_bpwake",
+		.owner		= THIS_MODULE,
+	},
+};
+
+static struct platform_device mapphone_bpwake_device = {
+	.name		= "mapphone_bpwake",
+	.id		= -1,
+	.num_resources	= 0,
+};
+
 static void mapphone_pm_init(void)
 {
 	omap3_set_prm_setup_vc(&mapphone_prm_setup);
@@ -767,6 +872,13 @@ static void mapphone_pm_init(void)
 				R_SMPS_VOL_OPP1_RA1, 0x20);
 	omap3_bypass_cmd(MAPPHONE_R_SRI2C_SLAVE_ADDR_SA1,
 				R_SMPS_VOL_OPP2_RA1, 0x2E);
+
+	/* Configure BP <-> AP wake pins */
+	omap_cfg_reg(AA21_34XX_GPIO157_OUT);
+	omap_cfg_reg(AE6_34XX_GPIO141_DOWN);
+
+	platform_device_register(&mapphone_bpwake_device);
+	platform_driver_register(&mapphone_bpwake_driver);
 }
 
 static void __init config_wlan_gpio(void)
@@ -808,9 +920,61 @@ static int __init omap_hdq_init(void)
 	return platform_device_register(&omap_hdq_device);
 }
 
+static int mapphone_wl1271_init(void)
+{
+	int rc = 0;
+
+	/* wl1271 BT chip init sequence */
+	gpio_direction_output(MAPPHONE_WL1271_NSHUTDOWN_GPIO, 0);
+	msleep(5);
+	gpio_set_value(MAPPHONE_WL1271_NSHUTDOWN_GPIO, 1);
+	msleep(10);
+	gpio_set_value(MAPPHONE_WL1271_NSHUTDOWN_GPIO, 0);
+	msleep(5);
+
+	/* Reserve BT wake and hostwake GPIOs */
+	rc = gpio_request(MAPPHONE_WL1271_WAKE_GPIO, "wl127x_wake_gpio");
+	if (unlikely(rc))
+		return rc;
+
+	rc = gpio_request(MAPPHONE_WL1271_HOSTWAKE_GPIO,
+				"wl127x_hostwake_gpio");
+	if (unlikely(rc))
+		return rc;
+
+	gpio_direction_output(MAPPHONE_WL1271_WAKE_GPIO, 1);
+	gpio_direction_input(MAPPHONE_WL1271_HOSTWAKE_GPIO);
+
+	return 0;
+}
+
+static int mapphone_wl1271_release(void)
+{
+	gpio_free(MAPPHONE_WL1271_WAKE_GPIO);
+	gpio_free(MAPPHONE_WL1271_HOSTWAKE_GPIO);
+
+	return 0;
+}
+
+static int mapphone_wl1271_enable(void)
+{
+	gpio_set_value(MAPPHONE_WL1271_WAKE_GPIO, 0);
+	return 0;
+}
+
+static int mapphone_wl1271_disable(void)
+{
+	gpio_set_value(MAPPHONE_WL1271_WAKE_GPIO, 1);
+	return 0;
+}
+
 static struct wl127x_rfkill_platform_data mapphone_wl1271_pdata = {
 	.bt_nshutdown_gpio = MAPPHONE_WL1271_NSHUTDOWN_GPIO,
 	.fm_enable_gpio = -1,
+	.bt_hw_init = mapphone_wl1271_init,
+	.bt_hw_release = mapphone_wl1271_release,
+	.bt_hw_enable = mapphone_wl1271_enable,
+	.bt_hw_disable = mapphone_wl1271_disable,
 };
 
 static struct platform_device mapphone_wl1271_device = {
@@ -823,6 +987,10 @@ static void __init mapphone_bt_init(void)
 {
 	/* Mux setup for Bluetooth chip-enable */
 	omap_cfg_reg(T3_34XX_GPIO_179);
+
+	/* Mux setup for BT wake GPIO and hostwake GPIO */
+	omap_cfg_reg(AF21_34XX_GPIO8);
+	omap_cfg_reg(W7_34XX_GPIO178_DOWN);
 
 	platform_device_register(&mapphone_wl1271_device);
 }
@@ -849,10 +1017,6 @@ static int __init mapphone_omap_mdm_ctrl_init(void)
 	if (!is_cdma_phone())
 		return -ENODEV;
 
-	gpio_request(MAPPHONE_BP_READY_AP_GPIO, "BP Normal Ready");
-	gpio_direction_input(MAPPHONE_BP_READY_AP_GPIO);
-	omap_cfg_reg(AE6_34XX_GPIO141_DOWN);
-
 	gpio_request(MAPPHONE_BP_READY2_AP_GPIO, "BP Flash Ready");
 	gpio_direction_input(MAPPHONE_BP_READY2_AP_GPIO);
 	omap_cfg_reg(T4_34XX_GPIO59_DOWN);
@@ -868,10 +1032,6 @@ static int __init mapphone_omap_mdm_ctrl_init(void)
 	gpio_request(MAPPHONE_AP_TO_BP_PSHOLD_GPIO, "AP to BP PS Hold");
 	gpio_direction_output(MAPPHONE_AP_TO_BP_PSHOLD_GPIO, 0);
 	omap_cfg_reg(AF3_34XX_GPIO138_OUT);
-
-	gpio_request(MAPPHONE_AP_TO_BP_FLASH_EN_GPIO, "AP to BP Flash Enable");
-	gpio_direction_output(MAPPHONE_AP_TO_BP_FLASH_EN_GPIO, 0);
-	omap_cfg_reg(AA21_34XX_GPIO157_OUT);
 
 	return platform_device_register(&omap_mdm_ctrl_platform_device);
 }
@@ -926,6 +1086,22 @@ static inline void mapphone_ramconsole_init(void) {}
 static inline void omap2_ramconsole_reserve_sdram(void) {}
 #endif
 
+
+static struct platform_device mapphone_sgx_device = {
+       .name                   = "pvrsrvkm",
+       .id             = -1,
+};
+static struct platform_device mapphone_omaplfb_device = {
+	.name			= "omaplfb",
+	.id			= -1,
+};
+
+
+static void __init mapphone_sgx_init(void)
+{
+	platform_device_register(&mapphone_sgx_device);
+	platform_device_register(&mapphone_omaplfb_device);
+}
 
 static void __init mapphone_bp_model_init(void)
 {
@@ -1002,6 +1178,7 @@ static void __init mapphone_init(void)
 	mapphone_bt_init();
 	mapphone_hsmmc_init();
 	mapphone_vout_init();
+	mapphone_sgx_init();
 	mapphone_power_off_init();
 	mapphone_gadget_init();
 }

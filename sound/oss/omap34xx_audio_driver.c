@@ -1198,13 +1198,9 @@ static int audio_select_speakers(int spkr)
 		}
 	}
 
-	if ((state.dev_dsp_open_count == 1) ||
-	    (state.dev_dsp1_open_count == 1))
-		cpcap_audio_set_audio_state(&cpcap_audio_state);
-	else {
-		primary_spkr_setting = spkr1;
-		secondary_spkr_setting = spkr2;
-	}
+	cpcap_audio_set_audio_state(&cpcap_audio_state);
+	primary_spkr_setting = spkr1;
+	secondary_spkr_setting = spkr2;
 
 	return 0;
 }
@@ -1701,16 +1697,15 @@ static int audio_ioctl(struct inode *inode, struct file *file,
 				    valid_sample_rates[count].cpcap_audio_rate;
 			} else {
 				/* codec only supports two sampling rates */
-				if (samp_rate == 8000 || samp_rate == 16000) {
-					cpcap_audio_state.codec_rate =
-					    valid_sample_rates[count].
-					    cpcap_audio_rate;
-				} else {
+				if ((file->f_mode & FMODE_WRITE) &&
+				    samp_rate != 8000 && samp_rate != 16000) {
 					AUDIO_ERROR_LOG("[%d] Unsupported "
-							"Codec sample rate!!\n",
-							(u32) samp_rate);
-					return -EPERM;
+						"Codec sample rate!!\n",
+						(u32) samp_rate);
+					return -EINVAL;
 				}
+				cpcap_audio_state.codec_rate =
+				    valid_sample_rates[count].cpcap_audio_rate;
 			}
 
 			cpcap_audio_set_audio_state(&cpcap_audio_state);
@@ -2066,8 +2061,6 @@ static int audio_codec_open(struct inode *inode, struct file *file)
 
 			cpcap_audio_state.codec_mode = CPCAP_AUDIO_CODEC_ON;
 		}
-
-		cpcap_audio_state.rat_type = CPCAP_AUDIO_RAT_NONE;
 	}
 
 	cpcap_audio_set_audio_state(&cpcap_audio_state);
@@ -2096,6 +2089,10 @@ static int audio_codec_release(struct inode *inode, struct file *file)
 							CPCAP_AUDIO_OUT_NONE;
 		cpcap_audio_state.codec_secondary_speaker =
 							CPCAP_AUDIO_OUT_NONE;
+		cpcap_audio_state.ext_primary_speaker = CPCAP_AUDIO_OUT_NONE;
+		cpcap_audio_state.ext_secondary_speaker =
+						CPCAP_AUDIO_OUT_NONE;
+		cpcap_audio_state.rat_type = CPCAP_AUDIO_RAT_NONE;
 	} else {
 		if (file->f_mode & FMODE_WRITE) {
 			audio_stop_ssi(inode, file);
@@ -2231,6 +2228,10 @@ err:
 
 static int audio_mixer_close(struct inode *inode, struct file *file)
 {
+	/* Reset mixer options so cpcap audio can enter low power state */
+	cpcap_audio_state.microphone = CPCAP_AUDIO_IN_NONE;
+	cpcap_audio_set_audio_state(&cpcap_audio_state);
+
 	mutex_lock(&audio_lock);
 	state.dev_mixer_open_count = 0;
 	mutex_unlock(&audio_lock);

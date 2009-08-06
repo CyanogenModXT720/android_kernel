@@ -87,13 +87,14 @@
 #define MT9P012_TST_PAT 			0x0
 
 /* Analog gain values */
-#define MT9P012_MIN_ANALOG_GAIN	0x34
-#define MT9P013_MIN_ANALOG_GAIN	0x2D
-#define MT9P012_MAX_ANALOG_GAIN	0x1FF
-#define MT9P012_MIN_GAIN	0x08
-#define MT9P012_MAX_GAIN	0x7F
-#define MT9P012_GAIN_STEP   	0x1
-#define MT9P012_DEF_LINEAR_GAIN	((u16)(2 * 256))
+#define MT9P012_MIN_ANALOG_GAIN			0x34
+#define MT9P013_MIN_ANALOG_GAIN			0x2D
+#define MT9P012_MAX_ANALOG_GAIN			0x1FF
+#define MT9P012_MIN_GAIN			0x08
+#define MT9P012_MAX_GAIN			0x7F
+#define MT9P012_GAIN_STEP   			0x1
+#define MT9P012_DEF_LINEAR_GAIN			((u16)(2 * 256))
+#define MT9P012_DEF_LINEAR_GAIN_CALIBRATION_ADJ	((u16)(1.75 * 256))
 
 #define MT9P012_GAIN_INDEX	1
 
@@ -176,6 +177,7 @@ enum mt9p012_orientation {
 #define V4L2_CID_PRIVATE_COLOR_BAR		(V4L2_CID_PRIVATE_BASE + 23)
 #define V4L2_CID_PRIVATE_FLASH_NEXT_FRAME	(V4L2_CID_PRIVATE_BASE + 24)
 #define V4L2_CID_PRIVATE_ORIENTATION		(V4L2_CID_PRIVATE_BASE + 25)
+#define V4L2_CID_PRIVATE_CALIBRATION_ADJ	(V4L2_CID_PRIVATE_BASE + 26)
 
 /* Debug functions */
 static int debug;
@@ -214,22 +216,17 @@ const static struct mt9p012_reg stream_on_list[] = {
 
 /* Structure which will set the exposure time */
 static struct mt9p012_reg set_exposure_time[] = {
-	{.length = MT9P012_8BIT, .reg = REG_GROUPED_PAR_HOLD, .val = 0x01},
 	/* less than frame_lines-1 */
 	{.length = MT9P012_16BIT, .reg = REG_COARSE_INT_TIME, .val = 500},
-	 /* updating */
-	{.length = MT9P012_8BIT, .reg = REG_GROUPED_PAR_HOLD, .val = 0x00},
-	{.length = MT9P012_TOK_TERM, .reg = 0, .val = 0}
+	{.length = MT9P012_TOK_TERM, .reg = 0, .val = 0},
 };
 
 /* Structure to set analog gain */
 static struct mt9p012_reg set_analog_gain[] = {
-	{.length = MT9P012_8BIT, .reg = REG_GROUPED_PAR_HOLD, .val = 0x01},
 	{.length = MT9P012_16BIT, .reg = REG_ANALOG_GAIN_GLOBAL,
 		.val = MT9P012_MIN_GAIN},
-	 /* updating */
-	{.length = MT9P012_8BIT, .reg = REG_GROUPED_PAR_HOLD, .val = 0x00},
 	{.length = MT9P012_TOK_TERM, .reg = 0, .val = 0},
+
 };
 
 /*
@@ -682,6 +679,18 @@ static struct vcontrol video_control[] = {
 			.default_value = MT9P012_NO_HORZ_FLIP_OR_VERT_FLIP,
 		},
 		.current_value = MT9P012_NO_HORZ_FLIP_OR_VERT_FLIP,
+	},
+	{
+		{
+			.id = V4L2_CID_PRIVATE_CALIBRATION_ADJ,
+			.type = V4L2_CTRL_TYPE_INTEGER,
+			.name = "Calibration Adjust",
+			.minimum = 0,
+			.maximum = 1,
+			.step = 0,
+			.default_value = 0,
+		},
+		.current_value = MT9P012_NO_HORZ_FLIP_OR_VERT_FLIP,
 	}
 };
 
@@ -1000,7 +1009,7 @@ static int mt9p012_set_exposure_time(u32 exp_time, struct v4l2_int_device *s,
 			"legal range.\n", exp_time);
 		dev_err(&client->dev, "Min time %d us Max time %d us\n",
 			sensor->min_exposure_time, sensor->max_exposure_time);
-		return -EINVAL;
+		exp_time = sensor->min_exposure_time;
 	}
 
 	coarse_int_time = ((((exp_time / 10) *
@@ -1173,6 +1182,43 @@ static int mt9p012_set_orientation(enum mt9p012_orientation val,
 	return err;
 }
 
+static int mt9p012_calibration_adjust(int val, struct v4l2_int_device *s,
+			struct vcontrol *lvc)
+{
+	int err = 0;
+	struct mt9p012_sensor *sensor = s->priv;
+	struct i2c_client *client = to_i2c_client(sensor->dev);
+	struct vcontrol *lvc_gain;
+
+	if (val != 1)  {
+		return 0;
+	}
+
+	/* adj 0x308E to match calibration setting */
+	err = mt9p012_write_reg(client, MT9P012_16BIT,
+				REG_RESERVED_MFR_308E, 0xE060);
+	dev_dbg(&client->dev, "mt9p013_cal_adj:setting " \
+		"0x308E=0xE060\n");
+
+	if (err) {
+		dev_err(&client->dev, "Error setting cal adj: %d", err);
+	} else {
+		lvc->current_value = val;
+		return err;
+	}
+
+	/* adjust minimum gain */
+	err = find_vctrl(sensor, V4L2_CID_GAIN);
+	if (err >= 0) {
+		lvc_gain = &video_control[err];
+		lvc_gain->qc.minimum = MT9P012_DEF_LINEAR_GAIN_CALIBRATION_ADJ;
+		dev_dbg(&client->dev, "mt9p013:setting min gain=%d\n",
+			MT9P012_DEF_LINEAR_GAIN_CALIBRATION_ADJ);
+	}
+
+	return 0;
+}
+
 /**
  * mt9p012_set_framerate - Sets framerate by adjusting frame_length_lines reg.
  * @s: pointer to standard V4L2 device structure
@@ -1195,8 +1241,9 @@ static int mt9p012_set_framerate(struct v4l2_int_device *s,
 
 	ss = &sensor_settings[iframe];
 
-	line_time_q8 = ((u32)ss->frame.line_len_pck * 1000000) /
-		(sensor->vt_pix_clk >> 8); /* usec's */
+	line_time_q8 = (((u32)ss->frame.line_len_pck * 1000 * 256) /
+			(sensor->vt_pix_clk / 1000)); /* usec's (q8) */
+
 	frame_length_lines = (((u32)fper->numerator * 1000000 * 256 /
 			       fper->denominator)) / line_time_q8;
 
@@ -1289,8 +1336,6 @@ int mt9p012_configure_frame(struct v4l2_int_device *s,
 	u16 data;
 	int err = 0;
 
-	err |= mt9p012_write_reg(client, MT9P012_8BIT, REG_MODE_SELECT, 0x00);
-	mdelay(100);
 	 /* hold */
 	err |= mt9p012_write_reg(client, MT9P012_8BIT, REG_GROUPED_PAR_HOLD, 0x01);
 
@@ -1508,6 +1553,13 @@ static int mt9p012_configure(struct v4l2_int_device *s)
 			sensor->v4l2_int_device, lvc);
 	}
 
+	i = find_vctrl(sensor, V4L2_CID_PRIVATE_CALIBRATION_ADJ);
+	if (i >= 0) {
+		lvc = &video_control[i];
+		mt9p012_calibration_adjust(lvc->current_value,
+			sensor->v4l2_int_device, lvc);
+	}
+
 	/* configure streaming ON */
 	err = mt9p012_write_regs(client, stream_on_list);
 	mdelay(1);
@@ -1680,6 +1732,9 @@ static int ioctl_s_ctrl(struct v4l2_int_device *s, struct v4l2_control *vc)
 		break;
 	case V4L2_CID_PRIVATE_ORIENTATION:
 		retval = mt9p012_set_orientation(vc->value, s, lvc);
+		break;
+	case V4L2_CID_PRIVATE_CALIBRATION_ADJ:
+		retval = mt9p012_calibration_adjust(vc->value, s, lvc);
 		break;
 	}
 
