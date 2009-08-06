@@ -223,6 +223,7 @@ static void mapphone_touch_init(void)
 	struct device_node *touch_node;
 	const void *touch_prop;
 	int len = 0;
+	const uint32_t *touch_propt;
 
 	if ((touch_node = of_find_node_by_path(DT_PATH_TOUCH))) {
 		if ((touch_prop = of_get_property(touch_node, DT_PROP_TOUCH_KEYMAP, &len)) \
@@ -230,6 +231,12 @@ static void mapphone_touch_init(void)
 			mapphone_ts_platform_data.vkeys.count = len / sizeof(struct vkey);
 			mapphone_ts_platform_data.vkeys.keys = (struct vkey *)touch_prop;
 		}
+		touch_propt = of_get_property(touch_node, \
+			DT_PROP_TOUCH_REVERSE_X, \
+			&len);
+		if (touch_propt && len)
+			mapphone_ts_platform_data.reverse_x = *touch_propt;
+
 		of_node_put(touch_node);
 	}
 #endif
@@ -281,17 +288,17 @@ static struct vkey mapphone_touch_vkeys[] = {
 	{
 		.min		= 0,
 		.max		= 139,
-		.code		= KEY_BACK,
+		.code		= KEY_MENU,
 	},
 	{
 		.min		= 422,
 		.max		= 602,
-		.code		= KEY_MENU,
+		.code		= KEY_HOME,
 	},
 	{
 		.min		= 884,
 		.max		= 1023,
-		.code		= KEY_HOME,
+		.code		= KEY_BACK,
 	},
 //##SSA
 #if 0 //for p0, p1, p2
@@ -308,6 +315,7 @@ static struct qtouch_ts_platform_data mapphone_ts_platform_data = {
 	.flags		= (QTOUCH_SWAP_XY |
 			   QTOUCH_USE_MULTITOUCH |
 			   QTOUCH_CFG_BACKUPNV),
+	.reverse_x      = 0,
 	.abs_min_x	= 0,
 	.abs_max_x	= 1024,
 	.abs_min_y	= 0,

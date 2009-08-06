@@ -58,6 +58,7 @@
 /* Touch Node */
 #define DT_PATH_TOUCH		"/System@0/I2C@0/TouchOBP@0"
 #define DT_PROP_TOUCH_KEYMAP	"touch_key_map"
+#define DT_PROP_TOUCH_REVERSE_X "reverse_x"
 
 /* GPIO Node */
 #define DT_PATH_GPIO        "/System@0/GPIO@0"

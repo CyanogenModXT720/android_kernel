@@ -274,6 +274,7 @@ struct qtouch_key_array {
 struct qtouch_ts_platform_data {
 	uint32_t		flags;
 	unsigned long		irqflags;
+	uint32_t                reverse_x;
 
 	uint32_t		abs_min_x;
 	uint32_t		abs_max_x;
