@@ -81,32 +81,33 @@ struct device_pid_vid {
 	int vid;
 	int pid;
 	char *config_name;
+	int class_number;
 };
 
 #define MAX_DEVICE_TYPE_NUM   20
 #define MAX_DEVICE_NAME_SIZE  30
 static struct device_pid_vid mot_android_vid_pid[MAX_DEVICE_TYPE_NUM] = {
-	{"msc", MSC_TYPE_FLAG, 0x22b8, 0x41d9, "Motorola Config 14"},
+	{"msc", MSC_TYPE_FLAG, 0x22b8, 0x41d9, "Motorola Config 14", 0},
 	{"msc_adb", MSC_TYPE_FLAG | ADB_TYPE_FLAG, 0x22b8, 0x41db,
-	 "Motorola Config 42"},
-	{"eth", ETH_TYPE_FLAG, 0x22b8, 0x41d4, "Motorola Config 13"},
-	{"mtp", MTP_TYPE_FLAG, 0x22b8, 0x41D6, "Motorola Config 15"},
-	{"acm", ACM_TYPE_FLAG, 0x22b8, 0x6422, "Motorola Config 1"},
+	 "Motorola Config 42", 0},
+	{"eth", ETH_TYPE_FLAG, 0x22b8, 0x41d4, "Motorola Config 13", 0},
+	{"mtp", MTP_TYPE_FLAG, 0x22b8, 0x41D6, "Motorola Config 15", 0},
+	{"acm", ACM_TYPE_FLAG, 0x22b8, 0x6422, "Motorola Config 1", 0},
 	{"eth_adb", ETH_TYPE_FLAG | ADB_TYPE_FLAG, 0x22b8, 0x41d4,
-	 "Motorola Android Composite Device"},
+	 "Motorola Android Composite Device", 0},
 	{"acm_eth_mtp", ACM_TYPE_FLAG | ETH_TYPE_FLAG | MTP_TYPE_FLAG, 0x22b8,
-	 0x41d8, "Motorola Config 30"},
+	 0x41d8, "Motorola Config 30", 0xFF},
 	{"mtp_adb", MTP_TYPE_FLAG | ADB_TYPE_FLAG, 0x22b8, 0x41dc,
-	 "Motorola Config 32"},
+	 "Motorola Config 32", 0xFF},
 	{"acm_eth_mtp_adb",
 	 ACM_TYPE_FLAG | ETH_TYPE_FLAG | MTP_TYPE_FLAG | ADB_TYPE_FLAG, 0x22b8,
-	 0x41da, "Motorola Config 31"},
+	 0x41da, "Motorola Config 31", 0xFF},
 	{"acm_eth_adb", ACM_TYPE_FLAG | ETH_TYPE_FLAG | ADB_TYPE_FLAG, 0x22b8,
-	 0x41e2, "Motorola Android Composite Device"},
+	 0x41e2, "Motorola Android Composite Device", 0},
 	{"msc_eth", MSC_TYPE_FLAG | ETH_TYPE_FLAG, 0x22b8, 0x41d4,
-	 "Motorola Android Composite Device"},
+	 "Motorola Android Composite Device", 0},
 	{"msc_adb_eth", MSC_TYPE_FLAG | ADB_TYPE_FLAG | ETH_TYPE_FLAG, 0x22b8,
-	 0x41d4, "Motorola Android Composite Device"},
+	 0x41d4, "Motorola Android Composite Device", 0},
 	{}
 };
 
@@ -401,10 +402,25 @@ static void get_device_pid_vid(int type, int *pid, int *vid)
 	}
 }
 
+static void get_device_classnumber(int type, int *classnumber)
+{
+	int i;
+
+	*classnumber = 0;
+	for (i = 0; i < MAX_DEVICE_TYPE_NUM; i++) {
+		if (mot_android_vid_pid[i].type == type) {
+			*classnumber = mot_android_vid_pid[i].class_number;
+			break;
+		}
+	}
+}
+
+
 static void force_reenumeration(struct android_dev *dev, int dev_type)
 {
 	int vid, pid, i, temp_enabled;
 	struct usb_function *f;
+	int class_number;
 
 	/* using other namespace ??? */
 	usb_device_cfg_flag = 0;
@@ -413,8 +429,12 @@ static void force_reenumeration(struct android_dev *dev, int dev_type)
 	pc_mode_switch_flag = 0;
 
 	get_device_pid_vid(dev_type, &pid, &vid);
+	get_device_classnumber(dev_type, &class_number);
 	device_desc.idProduct = __constant_cpu_to_le16(pid);
 	device_desc.idVendor = __constant_cpu_to_le16(vid);
+	device_desc.bDeviceClass = __constant_cpu_to_le16(class_number);
+	device_desc.bDeviceSubClass = __constant_cpu_to_le16(class_number);
+	device_desc.bDeviceProtocol = __constant_cpu_to_le16(class_number);
 
 	for (i = 0; i < MAX_CONFIG_INTERFACES; i++)
 		android_config_driver.interface[i] = 0;
@@ -473,6 +493,9 @@ static void force_reenumeration(struct android_dev *dev, int dev_type)
 	if (dev->cdev) {
 		dev->cdev->desc.idProduct = device_desc.idProduct;
 		dev->cdev->desc.idVendor = device_desc.idVendor;
+		dev->cdev->desc.bDeviceClass = device_desc.bDeviceClass;
+		dev->cdev->desc.bDeviceSubClass = device_desc.bDeviceSubClass;
+		dev->cdev->desc.bDeviceProtocol = device_desc.bDeviceProtocol;
 	}
 
 	if (dev->cdev && dev->cdev->gadget)  {
