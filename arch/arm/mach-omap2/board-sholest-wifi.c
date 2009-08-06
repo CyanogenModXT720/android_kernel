@@ -185,7 +185,7 @@ static int __init sholestmmc_dbg_init(void)
 {
 	struct dentry *dent;
 
-	dent = debugfs_create_dir("sholest_mmc_dbg", 0);
+	dent = debugfs_create_dir("mapphone_mmc_dbg", 0);
 	if (IS_ERR(dent))
 		return PTR_ERR(dent);
 

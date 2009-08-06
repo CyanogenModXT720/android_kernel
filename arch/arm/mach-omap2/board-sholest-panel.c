@@ -56,7 +56,7 @@ static void sholest_panel_disable(struct omap_dss_device *dssdev)
 static struct omap_dss_device sholest_lcd_device = {
 	.type = OMAP_DISPLAY_TYPE_DSI,
 	.name = "lcd",
-	.driver_name = "sholest-panel",
+	.driver_name = "sholes-panel",
 	.phy.dsi.clk_lane = 3,
 	.phy.dsi.clk_pol = 0,
 	.phy.dsi.data1_lane = 1,

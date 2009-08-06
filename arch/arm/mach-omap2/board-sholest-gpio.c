@@ -84,7 +84,7 @@ static struct gpio_device gpio_devs[GPIO_DEVICE_SIZE] = {
 };
 
 static struct gpio_device_platform_data gpio_device_data = {
-	.name = "sholest-gpiodev",
+	.name = "mapphone-gpiodev",
 	.info = gpio_devs,
 };
 

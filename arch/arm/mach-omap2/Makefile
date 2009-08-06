@@ -84,7 +84,7 @@ obj-$(CONFIG_MACH_SHOLES)		+= board-sholes.o \
 					   board-sholes-hsmmc.o \
 					   board-sholes-keypad.o \
 					   board-sholes-wifi.o
-obj-$(CONFIG_MACH_SHOLEST)		+= board-sholest.o \
+obj-$(CONFIG_MACH_SHOLEST)             	+= board-sholest.o \
 					   board-sholest-camera.o \
 					   board-sholest-flash.o \
 					   board-sholest-padconf.o \
@@ -95,6 +95,7 @@ obj-$(CONFIG_MACH_SHOLEST)		+= board-sholest.o \
 					   board-sholest-keypad.o \
 					   board-sholest-wifi.o \
 					   board-sholest-gpio.o
+ifeq ($(CONFIG_MACH_SHOLEST),)
 obj-$(CONFIG_MACH_MAPPHONE)		+= board-mapphone.o \
 					   board-mapphone-camera.o \
 					   board-mapphone-flash.o \
@@ -106,6 +107,7 @@ obj-$(CONFIG_MACH_MAPPHONE)		+= board-mapphone.o \
 					   board-mapphone-keypad.o \
 					   board-mapphone-wifi.o \
 					   board-mapphone-gpio.o
+endif
 obj-$(CONFIG_MACH_OMAP_APOLLON)		+= board-apollon.o \
 					   board-apollon-mmc.o	\
 					   board-apollon-keys.o

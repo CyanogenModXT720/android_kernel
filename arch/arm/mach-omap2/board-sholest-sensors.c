@@ -147,8 +147,7 @@ static int sholest_lis331dlh_initialization(void)
 
 static void sholest_lis331dlh_exit(void)
 {
-    /* Do NOT make VHVIO freed if once powered on
-     */
+	regulator_put(sholest_lis331dlh_regulator);
 }
 
 static int sholest_lis331dlh_power_on(void)
@@ -158,7 +157,8 @@ static int sholest_lis331dlh_power_on(void)
 
 static int sholest_lis331dlh_power_off(void)
 {
-    /* Keep VHVIO turned on */
+	if (sholest_lis331dlh_regulator)
+		return regulator_disable(sholest_lis331dlh_regulator);
 	return 0;
 }
 
@@ -228,9 +228,9 @@ struct akm8973_platform_data sholest_akm8973_data = {
 	.cal_min_threshold = 8,
 	.cal_max_threshold = 247,
 
-	.hxda = 0x02,
-	.hyda = 0x86,
-	.hzda = 0x07,
+	.hxda = 132,
+	.hyda = 134,
+	.hzda = 114,
 
 	.orientation = 270,
 	.xy_swap = 1,
@@ -279,11 +279,11 @@ static struct platform_device *sholest_sensors[] __initdata = {
 
 static void sholest_hall_effect_init(void)
 {
-	gpio_request(SHOLEST_HF_NORTH_GPIO, "sholest dock north");
+	gpio_request(SHOLEST_HF_NORTH_GPIO, "mapphone dock north");
 	gpio_direction_input(SHOLEST_HF_NORTH_GPIO);
 	omap_cfg_reg(AG25_34XX_GPIO10);
 
-	gpio_request(SHOLEST_HF_SOUTH_GPIO, "sholest dock south");
+	gpio_request(SHOLEST_HF_SOUTH_GPIO, "mapphone dock south");
 	gpio_direction_input(SHOLEST_HF_SOUTH_GPIO);
 	omap_cfg_reg(B26_34XX_GPIO111);
 }

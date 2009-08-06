@@ -25,6 +25,7 @@
 #include <linux/err.h>
 #include <linux/clk.h>
 #include <linux/mm.h>
+#include <linux/bootmem.h>
 #include <linux/qtouch_obp_ts.h>
 #include <linux/led-cpcap-lm3554.h>
 #include <linux/led-lm3530.h>
@@ -179,7 +180,7 @@ static void sholest_gadget_init(void)
 
 static void sholest_audio_init(void)
 {
-	gpio_request(SHOLEST_AUDIO_PATH_GPIO, "sholest audio path");
+	gpio_request(SHOLEST_AUDIO_PATH_GPIO, "mapphone audio path");
 
 	omap_cfg_reg(P21_OMAP34XX_MCBSP2_FSX);
 	omap_cfg_reg(N21_OMAP34XX_MCBSP2_CLKX);
@@ -233,11 +234,11 @@ static void sholest_touch_init(void)
 	}
 #endif
 
-	gpio_request(SHOLEST_TOUCH_RESET_N_GPIO, "sholest touch reset");
+	gpio_request(SHOLEST_TOUCH_RESET_N_GPIO, "mapphone touch reset");
 	gpio_direction_output(SHOLEST_TOUCH_RESET_N_GPIO, 1);
 	omap_cfg_reg(H19_34XX_GPIO164_OUT);
 
-	gpio_request(SHOLEST_TOUCH_INT_GPIO, "sholest touch irq");
+	gpio_request(SHOLEST_TOUCH_INT_GPIO, "mapphone touch irq");
 	gpio_direction_input(SHOLEST_TOUCH_INT_GPIO);
 	omap_cfg_reg(AG17_34XX_GPIO99);
 }
@@ -245,7 +246,7 @@ static void sholest_touch_init(void)
 static void sholest_als_init(void)
 {
 	printk(KERN_INFO "%s:Initializing\n", __func__);
-	gpio_request(SHOLEST_LM_3530_INT_GPIO, "sholest als int");
+	gpio_request(SHOLEST_LM_3530_INT_GPIO, "mapphone als int");
 	gpio_direction_input(SHOLEST_LM_3530_INT_GPIO);
 	omap_cfg_reg(AC27_34XX_GPIO92);
 }
@@ -552,28 +553,6 @@ static struct omap_usb_platform_data usb_platform_data = {
 	.port_data = usb_port_data,
 	.num_ports = ARRAY_SIZE(usb_port_data),
 };
-
-#ifdef CONFIG_ANDROID_RAM_CONSOLE
-#define RAM_CONSOLE_START   0x8FFE0000
-unsigned long ram_console_start = 0 ;
-static struct resource ram_console_resource = {
-	.start	= RAM_CONSOLE_START,
-	.end	= (RAM_CONSOLE_START + 0x20000 -1),
-	.flags	= IORESOURCE_MEM,
-};
-
-static struct platform_device ram_console_device = {
-	.name = "ram_console",
-	.id = 0,
-	.num_resources  = 1,
-	.resource       = &ram_console_resource,
-};
-
-static void  omap_init_rc(void)
-{
-	platform_device_register(&ram_console_device);
-}	
-#endif
 
 static struct resource ehci_resources[] = {
 	[0] = {
@@ -909,6 +888,37 @@ static void __init sholest_vout_init(void)
 	platform_device_register(&sholest_vout_device);
 }
 
+#ifdef CONFIG_ANDROID_RAM_CONSOLE
+#define RAM_CONSOLE_START   0x8E000000
+#define RAM_CONSOLE_SIZE    0x20000
+static struct resource ram_console_resource = {
+       .start  = RAM_CONSOLE_START,
+       .end    = (RAM_CONSOLE_START + RAM_CONSOLE_SIZE - 1),
+       .flags  = IORESOURCE_MEM,
+};
+
+static struct platform_device ram_console_device = {
+       .name = "ram_console",
+       .id = 0,
+       .num_resources  = 1,
+       .resource       = &ram_console_resource,
+};
+
+static inline void sholest_ramconsole_init(void)
+{
+	platform_device_register(&ram_console_device);
+}
+
+static inline void omap2_ramconsole_reserve_sdram(void)
+{
+	reserve_bootmem(RAM_CONSOLE_START, RAM_CONSOLE_SIZE, 0);
+}
+#else
+static inline void sholest_ramconsole_init(void) {}
+
+static inline void omap2_ramconsole_reserve_sdram(void) {}
+#endif
+
 static void __init sholest_bp_model_init(void)
 {
 #ifdef CONFIG_OMAP_RESET_CLOCKS
@@ -949,7 +959,7 @@ static void sholest_pm_power_off(void)
 
 static void __init sholest_power_off_init(void)
 {
-	gpio_request(SHOLEST_POWER_OFF_GPIO, "sholest power off");
+	gpio_request(SHOLEST_POWER_OFF_GPIO, "mapphone power off");
 	gpio_direction_output(SHOLEST_POWER_OFF_GPIO, 1);
 	omap_cfg_reg(AB1_34XX_GPIO176_OUT);
 
@@ -963,6 +973,7 @@ static void __init sholest_init(void)
 	sholest_bp_model_init();
 	sholest_padconf_init();
 	sholest_gpio_mapping_init();
+    sholest_ramconsole_init();
 	sholest_omap_mdm_ctrl_init();
 	sholest_spi_init();
 	sholest_flash_init();
@@ -986,18 +997,16 @@ static void __init sholest_init(void)
 	sholest_vout_init();
 	sholest_power_off_init();
 	sholest_gadget_init();
-#ifdef CONFIG_ANDROID_RAM_CONSOLE	
-	omap_init_rc();
-#endif	
 }
 
 static void __init sholest_map_io(void)
 {
+	omap2_ramconsole_reserve_sdram();
 	omap2_set_globals_343x();
 	omap2_map_common_io();
 }
 
-MACHINE_START(MAPPHONE, "sholest_")
+MACHINE_START(MAPPHONE, "mapphone_")
 	/* Maintainer: Motorola, Inc. */
 	.phys_io	= 0x48000000,
 	.io_pg_offst	= ((0xd8000000) >> 18) & 0xfffc,

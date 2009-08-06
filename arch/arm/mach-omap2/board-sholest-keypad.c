@@ -43,7 +43,7 @@ static const unsigned short sholest_keymap[ARRAY_SIZE(sholest_col_gpios) *
 	[KEYMAP_INDEX(1, 1)] = KEY_CAMERA,      /* "camera 2" key */
 
 	[KEYMAP_INDEX(2, 0)] = KEY_RESERVED,
-	[KEYMAP_INDEX(2, 1)] = KEY_EMAIL,       /* @ */
+	[KEYMAP_INDEX(2, 1)] = KEY_MACRO
 };
 
 static struct gpio_event_matrix_info sholest_keypad_matrix_info = {
@@ -78,7 +78,7 @@ static struct gpio_event_info *sholest_keypad_info[] = {
 };
 
 static struct gpio_event_platform_data sholest_keypad_data = {
-	.name = "sholest-keypad",
+	.name = "mapphone-keypad",
 	.info = sholest_keypad_info,
 	.info_count = ARRAY_SIZE(sholest_keypad_info)
 };
