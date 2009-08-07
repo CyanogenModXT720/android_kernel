@@ -560,6 +560,9 @@ static int do_touch_multi_msg(struct qtouch_ts_data *ts, struct qtm_object *obj,
 	if (ts->pdata->flags & QTOUCH_SWAP_XY)
 		swap(x, y);
 
+	if (ts->pdata->reverse_x == 1)
+		x = (ts->pdata->abs_max_x-1)-x;
+
 	if (qtouch_tsdebug & 2)
 		pr_info("%s: stat=%02x, f=%d x=%d y=%d p=%d w=%d\n", __func__,
 			msg->status, finger, x, y, pressure, width);
