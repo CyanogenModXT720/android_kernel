@@ -53,6 +53,8 @@
  *   2008/12/25  Motorola    change init_module, call IPC register func       *
  *   2009/05/20  Motorola    Add mini trace functionality                     *
  *   2009/07/23  Motorola    Add wake lock functionality                      *
+ *   2009/08/06  Motorola    Change permissions for /proc/linkdriver to 660   *
+ *   2009/08/07  Motorola    Fix minitrace functionality                      *
  ******************************************************************************/
  
 /* netmux_usb_linkdriver.c is responsible for communicating with the NetMUX  *
@@ -657,6 +659,8 @@ static int GetLinkdriverInfo(char *buf, char**start, off_t offset, int count,
         return len;
     }
 
+    len = 0;
+
     len += sprintf(&ld_info[len], "Linkdriver Status:\n");
     len += sprintf(&ld_info[len], "\tmux_deferred:      %lu\n", mux_deferred);
     len += sprintf(&ld_info[len], "\tqueue_len: %d\n", SEND_QUEUE_LEN);
@@ -676,6 +680,12 @@ static int GetLinkdriverInfo(char *buf, char**start, off_t offset, int count,
 	    index_offset = (index_offset+1)%LD_MINI_TRACE_LENGTH;
         }
     }
+
+    if (len > count) {
+	    len = count;
+    }
+    memcpy(buf, &ld_info[offset], len);
+    *start = buf;
 
     return len;
 }
@@ -737,7 +747,7 @@ void LDInit(void)
     LDLogState[0] = '0';
     LDLogState[1] = '\0';
                                                                                                                              
-    proc_linkdriver_entry = create_proc_entry("linkdriver", 0x666, 0);
+    proc_linkdriver_entry = create_proc_entry("linkdriver", 0x660, 0);
     if (!proc_linkdriver_entry)
     {
         remove_proc_entry("linkdriver", 0);
