@@ -39,6 +39,7 @@
  *   2008/04/15  Motorola    add DeactivateConfigInterface in DeactivateMUX   *
  *   2008/07/15  Motorola    add NetmuxLogInit for AP config log              *
  *   2009/07/10  Motorola    Update send buffers number                       *
+ *   2009/08/06  Motorola    Change permission for /proc/netmuxlog to 660     *
  ******************************************************************************/
 
 /* register.c handles the communication process between a link driver and a   */
@@ -325,7 +326,7 @@ void NetmuxLogInit(void)
     NetmuxLogState[0] = '0';
     NetmuxLogState[1] = '\0';
                                                                                                                              
-    proc_netmux_log_entry = create_proc_entry("netmuxlog", 0x666, 0);
+    proc_netmux_log_entry = create_proc_entry("netmuxlog", 0x660, 0);
     if ((!proc_netmux_log_entry) || (!NetmuxLogState))
     {
         remove_proc_entry("netmuxlog", 0);
