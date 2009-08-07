@@ -429,7 +429,6 @@ static void force_reenumeration(struct android_dev *dev, int dev_type)
 {
 	int vid, pid, i, temp_enabled;
 	struct usb_function *f;
-	int class_number;
 
 	/* using other namespace ??? */
 	usb_device_cfg_flag = 0;
