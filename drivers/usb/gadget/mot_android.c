@@ -81,33 +81,45 @@ struct device_pid_vid {
 	int vid;
 	int pid;
 	char *config_name;
-	int class_number;
+	int class;
+	int subclass;
+	int protocol;
 };
 
 #define MAX_DEVICE_TYPE_NUM   20
 #define MAX_DEVICE_NAME_SIZE  30
 static struct device_pid_vid mot_android_vid_pid[MAX_DEVICE_TYPE_NUM] = {
-	{"msc", MSC_TYPE_FLAG, 0x22b8, 0x41d9, "Motorola Config 14", 0},
+	{"msc", MSC_TYPE_FLAG, 0x22b8, 0x41d9, "Motorola Config 14",
+	 USB_CLASS_PER_INTERFACE, USB_CLASS_PER_INTERFACE,
+	 USB_CLASS_PER_INTERFACE},
 	{"msc_adb", MSC_TYPE_FLAG | ADB_TYPE_FLAG, 0x22b8, 0x41db,
-	 "Motorola Config 42", 0},
-	{"eth", ETH_TYPE_FLAG, 0x22b8, 0x41d4, "Motorola Config 13", 0},
-	{"mtp", MTP_TYPE_FLAG, 0x22b8, 0x41D6, "Motorola Config 15", 0},
-	{"acm", ACM_TYPE_FLAG, 0x22b8, 0x6422, "Motorola Config 1", 0},
+	 "Motorola Config 42", USB_CLASS_PER_INTERFACE,
+	 USB_CLASS_PER_INTERFACE, USB_CLASS_PER_INTERFACE},
+	{"eth", ETH_TYPE_FLAG, 0x22b8, 0x41d4, "Motorola Config 13",
+	 USB_CLASS_COMM, USB_CLASS_COMM, USB_CLASS_PER_INTERFACE},
+	{"mtp", MTP_TYPE_FLAG, 0x22b8, 0x41D6, "Motorola Config 15",
+	 USB_CLASS_PER_INTERFACE,
+	 USB_CLASS_PER_INTERFACE, USB_CLASS_PER_INTERFACE},
+	{"acm", ACM_TYPE_FLAG, 0x22b8, 0x6422, "Motorola Config 1",
+	 USB_CLASS_COMM, USB_CLASS_COMM, USB_CLASS_PER_INTERFACE},
 	{"eth_adb", ETH_TYPE_FLAG | ADB_TYPE_FLAG, 0x22b8, 0x41d4,
-	 "Motorola Android Composite Device", 0},
+	 "Motorola Android Composite Device"},
 	{"acm_eth_mtp", ACM_TYPE_FLAG | ETH_TYPE_FLAG | MTP_TYPE_FLAG, 0x22b8,
-	 0x41d8, "Motorola Config 30", 0xFF},
+	 0x41d8, "Motorola Config 30", USB_CLASS_VENDOR_SPEC,
+	 USB_CLASS_VENDOR_SPEC, USB_CLASS_VENDOR_SPEC},
 	{"mtp_adb", MTP_TYPE_FLAG | ADB_TYPE_FLAG, 0x22b8, 0x41dc,
-	 "Motorola Config 32", 0xFF},
+	 "Motorola Config 32", USB_CLASS_VENDOR_SPEC,
+	 USB_CLASS_VENDOR_SPEC, USB_CLASS_VENDOR_SPEC},
 	{"acm_eth_mtp_adb",
 	 ACM_TYPE_FLAG | ETH_TYPE_FLAG | MTP_TYPE_FLAG | ADB_TYPE_FLAG, 0x22b8,
-	 0x41da, "Motorola Config 31", 0xFF},
+	 0x41da, "Motorola Config 31", USB_CLASS_VENDOR_SPEC,
+	 USB_CLASS_VENDOR_SPEC, USB_CLASS_VENDOR_SPEC},
 	{"acm_eth_adb", ACM_TYPE_FLAG | ETH_TYPE_FLAG | ADB_TYPE_FLAG, 0x22b8,
-	 0x41e2, "Motorola Android Composite Device", 0},
+	 0x41e2, "Motorola Android Composite Device"},
 	{"msc_eth", MSC_TYPE_FLAG | ETH_TYPE_FLAG, 0x22b8, 0x41d4,
-	 "Motorola Android Composite Device", 0},
+	 "Motorola Android Composite Device"},
 	{"msc_adb_eth", MSC_TYPE_FLAG | ADB_TYPE_FLAG | ETH_TYPE_FLAG, 0x22b8,
-	 0x41d4, "Motorola Android Composite Device", 0},
+	 0x41d4, "Motorola Android Composite Device"},
 	{}
 };
 
@@ -402,19 +414,16 @@ static void get_device_pid_vid(int type, int *pid, int *vid)
 	}
 }
 
-static void get_device_classnumber(int type, int *classnumber)
+int get_func_thru_type(int type)
 {
 	int i;
 
-	*classnumber = 0;
 	for (i = 0; i < MAX_DEVICE_TYPE_NUM; i++) {
-		if (mot_android_vid_pid[i].type == type) {
-			*classnumber = mot_android_vid_pid[i].class_number;
-			break;
-		}
+		if (mot_android_vid_pid[i].type == type)
+			return i;
 	}
+	return -1;
 }
-
 
 static void force_reenumeration(struct android_dev *dev, int dev_type)
 {
@@ -429,12 +438,8 @@ static void force_reenumeration(struct android_dev *dev, int dev_type)
 	pc_mode_switch_flag = 0;
 
 	get_device_pid_vid(dev_type, &pid, &vid);
-	get_device_classnumber(dev_type, &class_number);
 	device_desc.idProduct = __constant_cpu_to_le16(pid);
 	device_desc.idVendor = __constant_cpu_to_le16(vid);
-	device_desc.bDeviceClass = __constant_cpu_to_le16(class_number);
-	device_desc.bDeviceSubClass = __constant_cpu_to_le16(class_number);
-	device_desc.bDeviceProtocol = __constant_cpu_to_le16(class_number);
 
 	for (i = 0; i < MAX_CONFIG_INTERFACES; i++)
 		android_config_driver.interface[i] = 0;
@@ -493,9 +498,16 @@ static void force_reenumeration(struct android_dev *dev, int dev_type)
 	if (dev->cdev) {
 		dev->cdev->desc.idProduct = device_desc.idProduct;
 		dev->cdev->desc.idVendor = device_desc.idVendor;
-		dev->cdev->desc.bDeviceClass = device_desc.bDeviceClass;
-		dev->cdev->desc.bDeviceSubClass = device_desc.bDeviceSubClass;
-		dev->cdev->desc.bDeviceProtocol = device_desc.bDeviceProtocol;
+		i = get_func_thru_type(dev_type);
+		if (i != -1) {
+			dev->cdev->desc.bDeviceClass =
+				mot_android_vid_pid[i].class;
+			dev->cdev->desc.bDeviceSubClass =
+				mot_android_vid_pid[i].subclass;
+			dev->cdev->desc.bDeviceProtocol =
+				mot_android_vid_pid[i].protocol;
+		}
+
 	}
 
 	if (dev->cdev && dev->cdev->gadget)  {
