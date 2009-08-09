@@ -1,4 +1,5 @@
 #
+#
 # Automatically generated make config: don't edit
 # Linux kernel version: 2.6.29-omap1
 # Mon Jul 20 17:29:06 2009
@@ -777,7 +778,7 @@ CONFIG_OMAP_MODEM_CONTROL=y
 # CONFIG_ENCLOSURE_SERVICES is not set
 # CONFIG_KERNEL_DEBUGGER_CORE is not set
 # CONFIG_UID_STAT is not set
-# CONFIG_VIB_OMAP_PWM is not set
+CONFIG_VIB_PWM=y
 CONFIG_VIB_GPIO=y
 CONFIG_SENSORS_AKM8973=y
 CONFIG_SENSORS_LIS331DLH=y
