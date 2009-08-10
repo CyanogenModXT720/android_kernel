@@ -134,7 +134,6 @@ NORET_TYPE void panic(const char * fmt, ...)
 		touch_softlockup_watchdog();
 		i += panic_blink(i);
 		mdelay(1);
-		emergency_restart();
 		i++;
 	}
 }
