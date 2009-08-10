@@ -29,6 +29,7 @@ struct vib_pwm_data {
 	struct timed_output_dev dev;
 	struct work_struct vib_work;
 	struct hrtimer timer;
+	/* Ensure only one vibration at a time */
 	spinlock_t lock;
 
 	struct vib_pwm_platform_data *pdata;
