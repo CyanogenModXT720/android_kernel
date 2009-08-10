@@ -683,7 +683,6 @@ CONFIG_MTD_BLOCK=y
 # CONFIG_RFD_FTL is not set
 # CONFIG_SSFDC is not set
 # CONFIG_MTD_OOPS is no set
-
 #
 # RAM/ROM/Flash chip drivers
 #
@@ -1241,7 +1240,6 @@ CONFIG_VIDEO_CAPTURE_DRIVERS=y
 CONFIG_VIDEO_FIXED_MINOR_RANGES=y
 # CONFIG_VIDEO_HELPER_CHIPS_AUTO is not set
 CONFIG_VIDEO_OMAP3_HP3A=y
-
 #
 # Encoders/decoders and other helper chips
 #
