@@ -316,30 +316,6 @@ config VIDEO_MT9P012
 	  MT9P012 camera.  It is currently working with the TI OMAP3
 	  camera controller.
 
-config VIDEO_MT9P012_HP
-	tristate "Micron MT9P012 raw sensor driver (5MP)"
-	depends on I2C && VIDEO_V4L2
-	---help---
-	  This is a Video4Linux2 sensor-level driver for the Micron
-	  MT9P012 camera.  It is currently working with the TI OMAP3
-	  camera controller.
-
-config VIDEO_MT9P013_HP
-	tristate "Micron MT9P013 raw sensor driver (5MP)"
-	depends on I2C && VIDEO_V4L2
-	---help---
-	  This is a Video4Linux2 sensor-level driver for the Micron
-	  MT9P013 camera.  It is currently working with the TI OMAP3
-	  camera controller.
-
-config VIDEO_MT9P012_MT9P013_AUTODETECT
-	bool "Allow Micron mt9p012 and mt9p013 to register on same i2c bus"
-	depends on VIDEO_MT9P012_HP && VIDEO_MT9P013_HP
-	default n
-	---help---
-	  This option enables both the mt9p012 and mt9p013 to register at bootup. Later, only
-	  one sensor will be used depending on the HW.
-
 config VIDEO_OMAP3_HPLENS
 	tristate "HP generic lens driver"
 	depends on I2C && VIDEO_V4L2

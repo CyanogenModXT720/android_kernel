@@ -72,12 +72,6 @@
 #include <media/mt9p012.h>
 
 #endif
-#if defined(CONFIG_VIDEO_MT9P012_HP)
-#include <../drivers/media/video/mt9p012_hp.h>
-#endif
-#if defined(CONFIG_VIDEO_MT9P013_HP)
-#include <../drivers/media/video/mt9p013_hp.h>
-#endif
 #ifdef CONFIG_VIDEO_OMAP3_HPLENS
 #include <../drivers/media/video/hplens.h>
 #endif
@@ -492,27 +486,7 @@ static struct i2c_board_info __initdata mapphone_i2c_bus2_board_info[] = {
 };
 
 static struct i2c_board_info __initdata mapphone_i2c_bus3_board_info[] = {
-#if defined(CONFIG_VIDEO_MT9P012_HP)
 	{
-#if defined(CONFIG_VIDEO_MT9P012_MT9P013_AUTODETECT)
-		I2C_BOARD_INFO("mt9p012", 0x10),
-#else
-		I2C_BOARD_INFO("mt9p012", MT9P012_I2C_ADDR),
-#endif
-		.platform_data = &mapphone_mt9p012_platform_data,
-	},
-#endif
-#if defined(CONFIG_VIDEO_MT9P013_HP)
-	{
-#if defined(CONFIG_VIDEO_MT9P012_MT9P013_AUTODETECT)
-		I2C_BOARD_INFO("mt9p013", 0x1F),
-#else
-		I2C_BOARD_INFO("mt9p013", MT9P013_I2C_ADDR),
-#endif
-		.platform_data = &mapphone_mt9p013_platform_data,
-	},
-#endif
-    {
 		I2C_BOARD_INFO("lm3554_led", 0x53),
 		.platform_data = &mapphone_camera_flash,
 	},
