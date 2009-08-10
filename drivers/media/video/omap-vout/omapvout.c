@@ -25,55 +25,16 @@
 #include <linux/vmalloc.h>
 #include <media/v4l2-dev.h>
 #include <media/v4l2-ioctl.h>
-
 #include <mach/io.h>
+#include <mach/board.h>
 
 #include "omapvout.h"
 #include "omapvout-dss.h"
 #include "omapvout-mem.h"
 #include "omapvout-vbq.h"
-
-#ifdef CONFIG_VIDEO_OMAP_VIDEOOUT_BUFPOOL
 #include "omapvout-bp.h"
-#endif
-
-/*=====================================================*/
-/* These should be defined in a platform specific file */
-#ifndef OMAPVOUT_VIDEO_1_DEVICE_ID
-#define OMAPVOUT_VIDEO_1_DEVICE_ID	1
-#endif
-
-#ifndef OMAPVOUT_VIDEO_2_DEVICE_ID
-#define OMAPVOUT_VIDEO_2_DEVICE_ID	2
-#endif
-
-#ifndef OMAPVOUT_VIDEO_MAX_WIDTH
-#define OMAPVOUT_VIDEO_MAX_WIDTH	864
-#endif
-
-#ifndef OMAPVOUT_VIDEO_MAX_HEIGHT
-#define OMAPVOUT_VIDEO_MAX_HEIGHT	648
-#endif
-
-#ifndef OMAPVOUT_VIDEO_MAX_BPP
-#define OMAPVOUT_VIDEO_MAX_BPP		2
-#endif
-
-#ifndef OMAPVOUT_VIDEO_BP_BUF_COUNT
-#define OMAPVOUT_VIDEO_BP_BUF_COUNT	6
-#endif
-
-#ifndef OMAPVOUT_VIDEO_BP_BUF_SIZE
-#define OMAPVOUT_VIDEO_BP_BUF_SIZE	\
-	PAGE_ALIGN(OMAPVOUT_VIDEO_MAX_WIDTH * \
-		   OMAPVOUT_VIDEO_MAX_HEIGHT * 2)
-#endif
-/*=====================================================*/
-
 
 #define MODULE_NAME "omapvout"
-#define VOUT1_NAME  "omapvout1"
-#define VOUT2_NAME  "omapvout2"
 
 #define V4L2_CID_PRIV_OFFSET		0x00530000 /* Arbitrary, semi-unique */
 #define V4L2_CID_PRIV_ROTATION		(V4L2_CID_PRIVATE_BASE \
@@ -118,17 +79,49 @@ const static struct v4l2_fmtdesc omap2_formats[] = {
 
 /*=== Local Functions ==================================================*/
 
+static int omapvout_crop_to_size(struct v4l2_rect *rect, int w, int h)
+{
+	struct v4l2_rect try;
+	int t;
+
+	try = *rect;
+
+	if (try.left < 0)
+		try.left = 0;
+	if (try.top < 0)
+		try.top = 0;
+	if (try.width > w)
+		try.width = w;
+	if (try.height > h)
+		try.height = h;
+	t = ((try.left + try.width) - w);
+	if (t > 0)
+		try.width = w - t;
+	t = ((try.top + try.height) - h);
+	if (t > 0)
+		try.height = h - t;
+	try.width &= ~1;
+	try.height &= ~1;
+
+	if (try.width <= 0 || try.height <= 0)
+		return -EINVAL;
+
+	*rect = try;
+
+	return 0;
+}
+
 static int omapvout_try_pixel_format(struct omapvout_device *vout,
 				struct v4l2_pix_format *pix)
 {
 	int ifmt;
 	int bpp = 0;
 
-	if (pix->width > OMAPVOUT_VIDEO_MAX_WIDTH)
-		pix->width = OMAPVOUT_VIDEO_MAX_WIDTH;
+	if (pix->width > vout->max_video_width)
+		pix->width = vout->max_video_width;
 
-	if (pix->height > OMAPVOUT_VIDEO_MAX_HEIGHT)
-		pix->height = OMAPVOUT_VIDEO_MAX_HEIGHT;
+	if (pix->height > vout->max_video_height)
+		pix->height = vout->max_video_height;
 
 	for (ifmt = 0; ifmt < NUM_OUTPUT_FORMATS; ifmt++) {
 		if (pix->pixelformat == omap2_formats[ifmt].pixelformat)
@@ -165,135 +158,70 @@ static int omapvout_try_pixel_format(struct omapvout_device *vout,
 	return 0;
 }
 
-/* Given a new render window in new_win, adjust the window to the
- * nearest supported configuration.  The adjusted window parameters are
- * returned in new_win.
- * Returns zero if succesful, or -EINVAL if the requested window is
- * impossible and cannot reasonably be adjusted.
- */
 static int omapvout_try_window(struct omapvout_device *vout,
-				struct v4l2_window *win)
+					struct v4l2_window *win)
 {
-	struct v4l2_rect try_win;
+	int rc = 0;
 
-	/* make a working copy of the new_win rectangle */
-	try_win = win->w;
+	rc = omapvout_crop_to_size(&win->w, vout->disp_width,
+							vout->disp_height);
+	if (rc == 0)
+		win->field = V4L2_FIELD_NONE;
 
-	/* adjust the preview window so it fits on the display by clipping any
-	 * offscreen areas
-	 */
-	if (try_win.left < 0) {
-		try_win.width += try_win.left;
-		try_win.left = 0;
-	}
-	if (try_win.top < 0) {
-		try_win.height += try_win.top;
-		try_win.top = 0;
-	}
-
-	try_win.width = (try_win.width < vout->disp_width) ?
-	    try_win.width : vout->disp_width;
-	try_win.height = (try_win.height < vout->disp_height) ?
-	    try_win.height : vout->disp_height;
-
-	if (try_win.left + try_win.width > vout->disp_width)
-		try_win.width = vout->disp_width - try_win.left;
-	if (try_win.top + try_win.height > vout->disp_height)
-		try_win.height = vout->disp_height - try_win.top;
-
-	try_win.width &= ~1;
-	try_win.height &= ~1;
-
-	if (try_win.width <= 0 || try_win.height <= 0)
-		return -EINVAL;
-
-	/* We now have a valid preview window, so go with it */
-	win->w = try_win;
-	win->field = V4L2_FIELD_NONE;
-
-	return 0;
+	return rc;
 }
 
-/* Return the default overlay cropping rectangle in crop given the image
- * size in pix and the video display size in fbuf.  The default
- * cropping rectangle is the largest rectangle no larger than the capture size
- * that will fit on the display.  The default cropping rectangle is centered in
- * the image.  All dimensions and offsets are rounded down to even numbers.
- */
-static void omapvout_default_crop(struct omapvout_device *vout,
-						struct v4l2_rect *crop)
-{
-	crop->width = (vout->pix.width < vout->disp_width) ?
-		vout->pix.width : vout->disp_width;
-	crop->height = (vout->pix.height < vout->disp_height) ?
-		vout->pix.height : vout->disp_height;
-	crop->width &= ~1;
-	crop->height &= ~1;
-	crop->left = ((vout->pix.width - crop->width) >> 1) & ~1;
-	crop->top = ((vout->pix.height - crop->height) >> 1) & ~1;
-}
-
-/* Given a new cropping rectangle in new_crop, adjust the cropping rectangle to
- * the nearest supported configuration.  The image render window in win will
- * also be adjusted if necessary.  The preview window is adjusted such that the
- * horizontal and vertical rescaling ratios stay constant.  If the render
- * window would fall outside the display boundaries, the cropping rectangle will
- * also be adjusted to maintain the rescaling ratios.  If successful, crop
- * and win are updated.
- * Returns zero if succesful, or -EINVAL if the requested cropping rectangle is
- * impossible and cannot reasonably be adjusted.
- */
 static int omapvout_try_crop(struct omapvout_device *vout,
 					struct v4l2_rect *crop)
 {
-	struct v4l2_rect try;
+	return omapvout_crop_to_size(crop, vout->pix.width, vout->pix.height);
+}
 
-	/* make a working copy of the new_crop rectangle */
-	try = *crop;
+/* Make sure the input size, window rectangle, crop rectangle, and rotation
+ * parameters together make up a valid configuration for the hardware
+ */
+static int omapvout_validate_cfg(struct omapvout_device *vout)
+{
+	int rc = 0;
+	int win_w, win_h;
+	int crp_w, crp_h;
 
-	/* adjust the cropping rectangle so it fits in the image */
-	if (try.left < 0) {
-		try.width += try.left;
-		try.left = 0;
-	}
-	if (try.top < 0) {
-		try.height += try.top;
-		try.top = 0;
-	}
-	try.width = (try.width < vout->pix.width) ?
-		try.width : vout->pix.width;
-	try.height = (try.height < vout->pix.height) ?
-		try.height : vout->pix.height;
-	if (try.left + try.width > vout->pix.width)
-		try.width = vout->pix.width - try.left;
-	if (try.top + try.height > vout->pix.height)
-		try.height = vout->pix.height - try.top;
-	try.width &= ~1;
-	try.height &= ~1;
+	/* Is it assumed:
+	 * - The rotation value denotes 0, 90, 180, or 270
+	 * - The input size is valid based on the platform limits
+	 * - The output rectangle is within the display area
+	 * - The crop rectangle is within the input frame
+	 */
 
-	if (try.width <= 0 || try.height <= 0)
-		return -EINVAL;
+	/* Validate scaling */
+	win_w = vout->win.w.width;
+	win_h = vout->win.w.height;
+	crp_w = vout->crop.width;
+	crp_h = vout->crop.height;
 
-	/* Check for resizing constraints */
-	if (try.height / vout->win.w.height >= 16) {
-		/* The maximum vertical downsizing ratio is 16:1 */
-		try.height = vout->win.w.height * 16;
-	}
-	if (try.width / vout->win.w.width >= 16) {
-		/* The maximum vertical downsizing ratio is 16:1 */
-		try.width = vout->win.w.width * 16;
+	if ( vout->rotation == 0 || vout->rotation == 2 ) {
+		win_w = vout->win.w.width;
+		win_h = vout->win.w.height;
+	} else {
+		win_w = vout->win.w.height;
+		win_h = vout->win.w.width;
 	}
 
-	/* update our cropping rectangle and we're done */
-	*crop = try;
+	/* Down-scaling */
+	if (((win_w < crp_w) && ((win_w * 4) < crp_w)) ||
+	    ((win_h < crp_w) && ((win_h * 4) < crp_h)))
+		rc = -EINVAL;
 
-	return 0;
+	/* Up-scaling */
+	if (((win_w > crp_w) && ((crp_w * 8) < win_w)) ||
+	    ((win_h > crp_h) && ((crp_h * 8) < win_h)))
+		rc = -EINVAL;
+
+	return rc;
 }
 
 static void omapvout_free_resources(struct omapvout_device *vout)
 {
-	DBG("free_resources\n");
-
 	if (vout == NULL)
 		return;
 
@@ -686,8 +614,11 @@ static int omapvout_vidioc_s_fmt_vid_out(struct file *file, void *priv,
 
 	memcpy(&vout->pix, pix, sizeof(*pix));
 
-	/* Don't allow the crop window to be larger than the video */
-	omapvout_try_crop(vout, &vout->crop);
+	/* Default the cropping rectangle to the input frame size */
+	vout->crop.left = 0;
+	vout->crop.top = 0;
+	vout->crop.width = vout->pix.width;
+	vout->crop.height = vout->pix.height;
 
 	/* Streaming has to be disabled, so config the hardware
 	 * later when streaming is enabled
@@ -719,7 +650,10 @@ static int omapvout_vidioc_cropcap(struct file *file, void *priv,
 	ccap->type = type;
 	ccap->bounds.width = vout->pix.width & ~1;
 	ccap->bounds.height = vout->pix.height & ~1;
-	omapvout_default_crop(vout, &ccap->defrect);
+	ccap->defrect.left = 0;
+	ccap->defrect.top = 0;
+	ccap->defrect.width = ccap->bounds.width;
+	ccap->defrect.left = ccap->bounds.height;
 	ccap->pixelaspect.numerator = 1;
 	ccap->pixelaspect.denominator = 1;
 
@@ -888,15 +822,32 @@ static int omapvout_vidioc_streamon(struct file *file, void *priv,
 
 	mutex_lock(&vout->mtx);
 
-	omapvout_dss_enable(vout);
+	/* Not sure how else to do this.  We can't truly validate the
+	 * configuration until all of the pieces have been provided, like
+	 * input, output, crop sizes and rotation.  This is the only point
+	 * where we can be sure the client has provided all the data, thus
+	 * the only place to make sure we don't cause a DSS failure.
+	 */
+	rc = omapvout_validate_cfg(vout);
+	if (rc) {
+		DBG("Configuration Validation Failed\n");
+		goto failed;
+	}
+
+	rc = omapvout_dss_enable(vout);
+	if (rc) {
+		DBG("DSS Enable Failed\n");
+		goto failed;
+	}
 
 	rc = videobuf_streamon(&vout->queue);
 	if (rc)
 		omapvout_dss_disable(vout);
 
+failed:
 	mutex_unlock(&vout->mtx);
 
-	return 0;
+	return rc;
 }
 
 static int omapvout_vidioc_streamoff(struct file *file, void *priv,
@@ -1058,13 +1009,14 @@ static struct video_device omapvout_devdata = {
 	.minor = -1,
 };
 
-static int __init omapvout_probe(struct platform_device *pdev,
-				enum omap_plane plane, int vid)
+static int __init omapvout_probe_device(struct omap_vout_config *cfg,
+					struct omapvout_bp *bp,
+					enum omap_plane plane, int vid)
 {
 	struct omapvout_device *vout = NULL;
 	int rc = 0;
 
-	DBG("omapvout_probe %d %d\n", plane, vid);
+	DBG("omapvout_probe_device %d %d\n", plane, vid);
 
 	vout = kzalloc(sizeof(struct omapvout_device), GFP_KERNEL);
 	if (vout == NULL) {
@@ -1074,18 +1026,19 @@ static int __init omapvout_probe(struct platform_device *pdev,
 
 	mutex_init(&vout->mtx);
 
-	vout->max_video_width = OMAPVOUT_VIDEO_MAX_WIDTH;
-	vout->max_video_height = OMAPVOUT_VIDEO_MAX_HEIGHT;
-	vout->max_video_bytespp = OMAPVOUT_VIDEO_MAX_BPP;
+	vout->max_video_width = cfg->max_width;
+	vout->max_video_height = cfg->max_height;
+	vout->max_video_buffer_size = cfg->max_buffer_size;
 
 	rc = omapvout_dss_init(vout, plane);
 	if (rc != 0) {
 		printk(KERN_INFO "DSS init failed\n");
-		goto cleanup;
+		kfree(vout);
+		goto err0;
 	}
 
 #ifdef CONFIG_VIDEO_OMAP_VIDEOOUT_BUFPOOL
-	vout->bp = dev_get_drvdata(&pdev->dev);
+	vout->bp = bp;
 	omapvout_bp_init(vout);
 #endif
 
@@ -1105,20 +1058,63 @@ static int __init omapvout_probe(struct platform_device *pdev,
 cleanup:
 	omapvout_free_resources(vout);
 err0:
-	dev_err(&pdev->dev, "failed to setup omapvout\n");
 	return rc;
 }
 
-static int __init omapvout1_probe(struct platform_device *pdev)
-{
-	return omapvout_probe(pdev, OMAP_DSS_VIDEO1,
-				OMAPVOUT_VIDEO_1_DEVICE_ID);
-}
+/* Some reasonable defaults if the platform does not supply a config */
+static struct omap_vout_config default_cfg = {
+	.max_width = 864,
+	.max_height = 648,
+	.max_buffer_size = 0x112000, /* (w * h * 2) page aligned */
+	.num_buffers = 6,
+	.num_devices = 2,
+	.device_ids = {1, 2},
+};
 
-static int __init omapvout2_probe(struct platform_device *pdev)
+static int __init omapvout_probe(struct platform_device *pdev)
 {
-	return omapvout_probe(pdev, OMAP_DSS_VIDEO2,
-				OMAPVOUT_VIDEO_2_DEVICE_ID);
+	struct omapvout_bp *bp = NULL;
+	struct omap_vout_config *cfg;
+	int i;
+	int rc = 0;
+	static const enum omap_plane planes[] = {
+		OMAP_DSS_VIDEO1,
+		OMAP_DSS_VIDEO2,
+	};
+
+	if (pdev->dev.platform_data) {
+		cfg = pdev->dev.platform_data;
+	} else {
+		DBG("omapvout_probe - using default configuration\n");
+		cfg = &default_cfg;
+	}
+
+	if (cfg->max_width > 2048) /* Hardware limitation */
+		cfg->max_width = 2048;
+	if (cfg->max_height > 2048) /* Hardware limitation */
+		cfg->max_height = 2048;
+	if (cfg->num_buffers > 16) /* Arbitrary limitation */
+		cfg->num_buffers = 16;
+	if (cfg->num_devices > 2) /* Hardware limitation */
+		cfg->num_devices = 2;
+	for (i = 0; i < cfg->num_devices; i++)
+		if (cfg->device_ids[i] > 64)
+			cfg->device_ids[i] = -1;
+
+#ifdef CONFIG_VIDEO_OMAP_VIDEOOUT_BUFPOOL
+	bp = omapvout_bp_create(cfg->num_buffers, cfg->max_buffer_size);
+#endif
+
+	for (i = 0; i < cfg->num_devices; i++) {
+		rc = omapvout_probe_device(cfg, bp, planes[i],
+						cfg->device_ids[i]);
+		if (rc) {
+			DBG("omapvout_probe %d failed\n", (i + 1));
+			return rc;
+		}
+	}
+
+	return 0;
 }
 
 static int omapvout_remove(struct platform_device *pdev)
@@ -1133,90 +1129,32 @@ static int omapvout_remove(struct platform_device *pdev)
 	return 0;
 }
 
-static struct platform_device omapvout1_dev = {
-	.name = VOUT1_NAME,
-	.id = 11,
-};
-
-static struct platform_device omapvout2_dev = {
-	.name = VOUT2_NAME,
-	.id = 12,
-};
-
-static struct platform_driver omapvout1_driver = {
+static struct platform_driver omapvout_driver = {
 	.remove         = omapvout_remove,
 	.driver         = {
-		.name   = VOUT1_NAME,
-		.owner  = THIS_MODULE,
-	},
-};
-
-static struct platform_driver omapvout2_driver = {
-	.remove         = omapvout_remove,
-	.driver         = {
-		.name   = VOUT2_NAME,
-		.owner  = THIS_MODULE,
+		.name   = MODULE_NAME,
 	},
 };
 
 static int __init omapvout_init(void)
 {
-	struct omapvout_bp *bp;
 	int rc;
 
 	DBG("omapvout_init\n");
 
-#ifdef CONFIG_VIDEO_OMAP_VIDEOOUT_BUFPOOL
-	/* Create a buffer pool and pass it to both driver probes */
-	bp = omapvout_bp_create(OMAPVOUT_VIDEO_BP_BUF_COUNT,
-				OMAPVOUT_VIDEO_BP_BUF_SIZE);
-	omapvout1_dev.dev.driver_data = bp;
-	omapvout2_dev.dev.driver_data = bp;
-#endif
-
-	rc = platform_device_register(&omapvout1_dev);
+	rc = platform_driver_probe(&omapvout_driver, omapvout_probe);
 	if (rc != 0) {
-		printk(KERN_ERR "failed omapvout1 device register %d\n", rc);
-		goto faildev1;
-	}
-
-	rc = platform_driver_probe(&omapvout1_driver, omapvout1_probe);
-	if (rc != 0) {
-		printk(KERN_ERR "failed omapvout1 register/probe %d\n", rc);
-		goto faildrv1;
-	}
-
-	rc = platform_device_register(&omapvout2_dev);
-	if (rc != 0) {
-		printk(KERN_ERR "failed omapvout2 device register %d\n", rc);
-		goto faildev2;
-	}
-
-	rc = platform_driver_probe(&omapvout2_driver, omapvout2_probe);
-	if (rc != 0) {
-		printk(KERN_ERR "failed omapvout2 register/probe %d\n", rc);
-		goto faildrv2;
+		printk(KERN_ERR "failed omapvout register/probe %d\n", rc);
+		return -ENODEV;
 	}
 
 	return 0;
-
-faildrv2:
-	platform_device_unregister(&omapvout2_dev);
-faildev2:
-	platform_driver_unregister(&omapvout1_driver);
-faildrv1:
-	platform_device_unregister(&omapvout1_dev);
-faildev1:
-	return -ENODEV;
 }
 
 static void __exit omapvout_exit(void)
 {
 	DBG("omapvout_exit\n");
-	platform_driver_unregister(&omapvout1_driver);
-	platform_driver_unregister(&omapvout2_driver);
-	platform_device_unregister(&omapvout1_dev);
-	platform_device_unregister(&omapvout2_dev);
+	platform_driver_unregister(&omapvout_driver);
 }
 
 module_init(omapvout_init);
