@@ -15,11 +15,6 @@
  * published by the Free Software Foundation.
  */
 
-/* Date	 Author	  Comment
- * ===========  ==============  ==============================================
- * 20-May-2009  Motorola	Initial revision.
- */
-
 #include <linux/kernel.h>
 #include <linux/platform_device.h>
 #include <linux/mtd/mtd.h>
@@ -100,10 +95,9 @@ static struct platform_device sdp_nand_device = {
 	.resource	= &sdp_nand_resource,
 };
 
-
 static int omap_nand_dev_ready(struct omap_nand_platform_data *data)
 {
-	printk(KERN_INFO " RDY/BSY line is connected!\n");
+	printk(KERN_INFO "RDY/BSY line is connected!\n");
 	return 0;
 }
 

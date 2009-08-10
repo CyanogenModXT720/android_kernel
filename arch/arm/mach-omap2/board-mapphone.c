@@ -105,8 +105,13 @@
 #define DIE_ID_REG_BASE			(L4_WK_34XX_PHYS + 0xA000)
 #define DIE_ID_REG_OFFSET		0x218
 #define MAX_USB_SERIAL_NUM		17
-#define FACTORY_VENDOR_ID		0x22B8
-#define FACTORY_PRODUCT_ID		0x41E2
+#define MAPPHONE_VENDOR_ID		0x22B8
+#define MAPPHONE_PRODUCT_ID		0x41D9
+#define MAPPHONE_ADB_PRODUCT_ID		0x41DB
+#define FACTORY_PRODUCT_ID		0x41E3
+#define FACTORY_ADB_PRODUCT_ID		0x41E2
+
+extern void mapphone_panic_init(void);
 
 static char device_serial[MAX_USB_SERIAL_NUM];
 char *bp_model = "CDMA";
@@ -228,11 +233,20 @@ static void mapphone_gadget_init(void)
 
 	snprintf(device_serial, MAX_USB_SERIAL_NUM, "%08X%08X", val[1], val[0]);
 
+	if (!strcmp(boot_mode, "factorycable"))
+		andusb_plat.factory_enabled = 1;
+	else
+		andusb_plat.factory_enabled = 0;
+
+	andusb_plat.vendor_id = MAPPHONE_VENDOR_ID;
+
 	/* check powerup reason - To be added once kernel support is available*/
 	if (andusb_plat.factory_enabled) {
-		andusb_plat.vendor_id = FACTORY_VENDOR_ID;
 		andusb_plat.product_id = FACTORY_PRODUCT_ID;
-		andusb_plat.adb_product_id = FACTORY_PRODUCT_ID;
+		andusb_plat.adb_product_id = FACTORY_ADB_PRODUCT_ID;
+	} else {
+		andusb_plat.product_id = MAPPHONE_PRODUCT_ID;
+		andusb_plat.adb_product_id = MAPPHONE_ADB_PRODUCT_ID;
 	}
 	platform_device_register(&androidusb_device);
 	platform_driver_register(&cpcap_usb_connected_driver);
@@ -1051,19 +1065,21 @@ static int __init mapphone_omap_mdm_ctrl_init(void)
 	return platform_device_register(&omap_mdm_ctrl_platform_device);
 }
 
-#ifdef CONFIG_FB_OMAP2
-static struct resource mapphone_vout_resource[3 - CONFIG_FB_OMAP2_NUM_FBS] = {
+static struct omap_vout_config mapphone_vout_platform_data = {
+	.max_width = 864,
+	.max_height = 648,
+	.max_buffer_size = 0x112000,
+	.num_buffers = 6,
+	.num_devices = 2,
+	.device_ids = {1, 2},
 };
-#else
-static struct resource mapphone_vout_resource[2] = {
-};
-#endif
 
 static struct platform_device mapphone_vout_device = {
-       .name                   = "omap_vout",
-       .num_resources  = ARRAY_SIZE(mapphone_vout_resource),
-       .resource               = &mapphone_vout_resource[0],
-       .id             = -1,
+	.name = "omapvout",
+	.id = -1,
+	.dev = {
+		.platform_data = &mapphone_vout_platform_data,
+	},
 };
 static void __init mapphone_vout_init(void)
 {
@@ -1176,6 +1192,7 @@ static void __init mapphone_init(void)
 	mapphone_omap_mdm_ctrl_init();
 	mapphone_spi_init();
 	mapphone_flash_init();
+	mapphone_panic_init();
 	mapphone_serial_init();
 	mapphone_als_init();
 	mapphone_panel_init();
