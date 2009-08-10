@@ -1133,7 +1133,7 @@ static int mt9p012_set_gain(u16 gain, struct v4l2_int_device *s,
 int mt9p012_set_flash_next_frame(u16 enable, struct v4l2_int_device *s,
 					     struct vcontrol *lvc)
 {
-	int err;
+	int err = 0;
 	struct mt9p012_sensor *sensor = s->priv;
 	struct i2c_client *client = to_i2c_client(sensor->dev);
 	u16 flash;
@@ -1163,7 +1163,7 @@ int mt9p012_set_flash_next_frame(u16 enable, struct v4l2_int_device *s,
 static int mt9p012_set_orientation(enum mt9p012_orientation val,
 			struct v4l2_int_device *s, struct vcontrol *lvc)
 {
-	int err;
+	int err = 0;
 	u8 orient;
 	struct mt9p012_sensor *sensor = s->priv;
 	struct i2c_client *client = to_i2c_client(sensor->dev);
