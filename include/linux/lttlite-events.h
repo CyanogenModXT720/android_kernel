@@ -90,6 +90,10 @@ enum {
 	LTT_LITE_EV_TIMER_RUN,
 	/* keep LTT_LITE_EV_REPORT as the last event type */
 	LTT_LITE_EV_REPORT,
+	LTT_LITE_EV_ANDROID_LOG,      /* /dev/log/main  */
+	LTT_LITE_EV_ANDROID_EVENTLOG, /* /dev/log/event */
+	LTT_LITE_EV_ANDROID_RADIO,    /* /dev/log/radio */
+	LTT_LITE_EV_PRINTK,
 	/* the item below is used as array length */
 	LTT_LITE_EV_LAST,
 };
@@ -155,6 +159,10 @@ void ltt_lite_printf(char *fmt, ...);
 void ltt_lite_syscall_param(int scno, char *string, int size);
 int ltt_lite_get_ms_time(struct timeval *ktv);
 int ltt_lite_log_string(char *string, int size);
+int  ltt_lite_log_android(const struct iovec *iov,
+						unsigned long nr_segs,
+						char logchar);
+void ltt_lite_log_printk(char *string, int size);
 
 #endif /* __KERNEL__ */
 #endif /* _LINUX_TRACE_H */

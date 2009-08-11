@@ -32,6 +32,9 @@
 #include <linux/security.h>
 #include <linux/bootmem.h>
 #include <linux/syscalls.h>
+#ifdef CONFIG_LTT_LITE
+#include <linux/lttlite-events.h>
+#endif
 
 #include <asm/uaccess.h>
 
@@ -720,6 +723,9 @@ asmlinkage int vprintk(const char *fmt, va_list args)
 
 #ifdef	CONFIG_DEBUG_LL
 	printascii(printk_buf);
+#endif
+#ifdef CONFIG_LTT_LITE
+	ltt_lite_log_printk(printk_buf, printed_len);
 #endif
 
 	/*
