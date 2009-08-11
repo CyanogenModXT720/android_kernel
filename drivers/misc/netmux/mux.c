@@ -2130,6 +2130,7 @@ int32 SendData (int32 channel, COMMBUFF* commbuff, COMMBUFF** split, MUX* mux)
 
     exit_write_criticalsection(&mux->lock);
 
+    enable_task(&mux->send_task);
     task_schedule(&mux->send_task);
 
     if(split && (*split))
