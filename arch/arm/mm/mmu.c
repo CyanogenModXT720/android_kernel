@@ -750,6 +750,7 @@ static inline void prepare_page_table(void)
 {
 	unsigned long addr;
 
+
 	/*
 	 * Clear out all the mappings below the kernel image.
 	 */
@@ -778,6 +779,9 @@ static inline void prepare_page_table(void)
 void __init reserve_node_zero(pg_data_t *pgdat)
 {
 	unsigned long res_size = 0;
+#ifdef CONFIG_LTT_LITE
+	int res;
+#endif
 
 	/*
 	 * Register the kernel text and data with bootmem.
@@ -837,9 +841,12 @@ void __init reserve_node_zero(pg_data_t *pgdat)
 	if (ltt_lite_res.start) {
 		printk(KERN_DEBUG "LTT-LITE: reserve 0x%lx\n",
 			(unsigned long)ltt_lite_res.start);
-		reserve_bootmem_node(pgdat, ltt_lite_res.start,
+		res = reserve_bootmem_node(pgdat, ltt_lite_res.start,
 			ltt_lite_res.end - ltt_lite_res.start+1,
 			BOOTMEM_DEFAULT);
+		if (res)
+			printk(KERN_ERR "LTT-LITE: reserve memory failed, err=%d\n",
+					res);
 	}
 #endif
 	if (res_size)

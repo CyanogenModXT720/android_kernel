@@ -23,6 +23,9 @@
 #include <linux/uaccess.h>
 #include <linux/poll.h>
 #include <linux/time.h>
+#ifdef CONFIG_LTT_LITE
+#include <linux/lttlite-events.h>
+#endif
 #include "logger.h"
 
 #include <asm/ioctls.h>
@@ -342,6 +345,18 @@ ssize_t logger_aio_write(struct kiocb *iocb, const struct iovec *iov,
 	struct timespec now;
 	ssize_t ret = 0;
 
+#ifdef CONFIG_LTT_LITE
+	/*
+	 * If LTT-lite logging for Android messages is enabled, the LTT Lite
+	 * driver will aggregate the Android log message with LTT-lite kernel
+	 * trace data.
+	 * The 5th character of the log name is an indicator of a specific
+	 * Android log, stream, each of which has a different payload format
+	 * and must be differentiated.
+	 */
+	if (ltt_lite_log_android(iov, nr_segs, log->misc.name[4]))
+		return 0;
+#endif
 	now = current_kernel_time();
 
 	header.pid = current->tgid;

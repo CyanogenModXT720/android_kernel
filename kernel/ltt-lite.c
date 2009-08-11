@@ -240,7 +240,6 @@
 #include <linux/mm.h>
 #include <linux/syscalls.h>
 #include <linux/ioport.h>
-#include <linux/mutex.h>
 #include <mach/system.h>
 
 /* debug printk macro */
@@ -423,6 +422,20 @@ struct ltt_lite_report_event {
 	unsigned long reports[LTT_LITE_EV_LAST - 2];
 };
 
+#define LTT_LITE_SMALL_BUFFER_SIZE 1024
+
+static char ltt_lite_small_buffer[LTT_LITE_SMALL_BUFFER_SIZE];
+
+/* this interface is for custom events used for the
+ * Taskview-LTTLite android extensions.
+ * */
+struct ltt_lite_android_event {
+	struct record_header_t header;
+	unsigned short  pid;
+	unsigned short  reserved;
+	unsigned long   data;
+};
+
 static void commit_log(void *addr, int size, unsigned short type);
 
 /* get /proc/<pid>/cmdline valude */
@@ -488,10 +501,19 @@ enum ltt_lite_mode_t {
 	LTT_LITE_MODE_SOFTIRQ = 1 << 5,
 	LTT_LITE_MODE_SIG = 1 << 6,
 	LTT_LITE_MODE_TMR = 1 << 7,
+	LTT_LITE_MODE_PRINTK  = 1 << 8,
+	LTT_LITE_MODE_ANDROID_RADIO = 1 << 9,
+	LTT_LITE_MODE_ANDROID = 1 << 10,
 };
 
 /*indicate ltt lite working mode */
 static enum ltt_lite_mode_t ltt_lite_mode;
+
+/* indicate Android message stream logigng mode
+ * 0 = Log Android message via existing method and into the LTT-Lite log file
+ * 1 = Log Android message into the LTT-Lite log file only
+ */
+static int android_logging_mode = 1;
 
 #define MASK_ARRAY_LEN 18
 
@@ -511,8 +533,8 @@ static enum syscall_group_t syscall_mask_group_id;
 /* we user MASK_ARRAY_LEN numbers to record bit mask map for system calls
    in each group. 16bits (from bit0 to bit15) are used in each number. */
 static unsigned short ltt_lite_syscall_mask[SYSCALL_GROUP_IPC +
-					    1][MASK_ARRAY_LEN]
-    = {
+						1][MASK_ARRAY_LEN]
+	= {
 /* syscall group code for all syscalls */
 /* when syscall_mask_group_id is SYSCALL_GROUP_ALL, we won't check
    this array, so keep it empty for SYSCALL_GROUP_ALL group is ok */
@@ -567,6 +589,7 @@ enum ltt_lite_config_cmd {
 	CMD_RAM_FILE,		/* set private ram and writing file mode */
 	CMD_FILE_SIZE,		/* set file size */
 	CMD_INT_FILTER,		/* set intterrupt number filter */
+	CMD_ANDROID_LOGMODE, /* set logging mode for Android streams */
 };
 
 /*
@@ -595,8 +618,8 @@ static void __init ltt_lite_cmdline_setup(char **arg)
 	ltt_lite_early_page_num = min_t(unsigned long, pagenum, 5120);
 	early_tracing_is_allowed = true;
 	printk(KERN_ERR
-	       "Ltt-lite early mode enabled: bootlog = %lu pages\n",
-	       ltt_lite_early_page_num);
+		   "Ltt-lite early mode enabled: bootlog = %lu pages\n",
+		   ltt_lite_early_page_num);
 }
 
 __early_param("bootlog=", ltt_lite_cmdline_setup);
@@ -619,8 +642,8 @@ static char *get_privateram_address(void)
 {
 	if (ltt_lite_res.start && !ltt_lite_privateram_virtaddr) {
 		ltt_lite_privateram_virtaddr =
-		    (char *) ioremap(ltt_lite_res.start,
-				     ltt_lite_privateram_size);
+			(char *) ioremap(ltt_lite_res.start,
+					 ltt_lite_privateram_size);
 	}
 	return ltt_lite_privateram_virtaddr;
 }
@@ -645,7 +668,7 @@ static void __init ltt_lite_parser_mem(char **arg)
 		ltt_lite_privateram_size = size;
 	}
 	printk(KERN_DEBUG "ltt_lite_parser_mem:base 0x%lx, %lu\n",
-	       (unsigned long) ltt_lite_res.start, size);
+		   (unsigned long) ltt_lite_res.start, size);
 }
 
 __early_param("lttpriram=", ltt_lite_parser_mem);
@@ -786,7 +809,7 @@ static void wq_init(struct work_struct *ignore)
 					0600);
 	if (log_file_fd  < 0) {
 		printk(KERN_ERR "cannot open %s, %lu\n", log_file,
-		       log_file_fd);
+			   log_file_fd);
 		return;
 	}
 
@@ -798,17 +821,17 @@ static void wq_init(struct work_struct *ignore)
 						   LTT_LITE_PAGE_ORDER);
 			if (!buf) {
 				printk(KERN_ERR
-				       "cannot get pages for ltt_lite_buf\n");
+					"cannot get pages for ltt_lite_buf\n");
 			} else {
 				ltt_lite_buf_size =
-				    PAGE_SIZE *
-				    (1 << LTT_LITE_PAGE_ORDER) -
-				    sizeof(struct buf_info_t);
+					PAGE_SIZE *
+					(1 << LTT_LITE_PAGE_ORDER) -
+					sizeof(struct buf_info_t);
 			}
 		} else {
 			if (!is_privateram_reserved()) {
 				printk(KERN_ERR
-				       "no ltt-lite private ram!\n");
+					   "no ltt-lite private ram!\n");
 				log_file_fd = -1;
 				return;
 			}
@@ -820,7 +843,7 @@ static void wq_init(struct work_struct *ignore)
 		if (!buf) {
 			if (sys_close(log_file_fd))
 				printk(KERN_ERR "%s: close error\n",
-				       __func__);
+					   __func__);
 			ltt_lite_buf_size = 0;
 			return;
 		}
@@ -869,10 +892,10 @@ static void ltt_lite_write_privateram(void)
 		return;
 	}
 	log_file_fd = sys_open((const char __user *) log_file,
-			       O_RDWR | O_CREAT | O_TRUNC, 0600);
+				   O_RDWR | O_CREAT | O_TRUNC, 0600);
 	if (log_file_fd < 0) {
 		printk(KERN_ERR "cannot open %s, %ld\n", log_file,
-		       log_file_fd);
+			   log_file_fd);
 		log_file_fd = -1;
 		return;
 	}
@@ -886,7 +909,7 @@ static void ltt_lite_write_privateram(void)
 	buf = get_privateram_address();
 	if (buf == NULL) {
 		DPRINT(KERN_ALERT
-		       "Error in mapping LTTLITE partition offset\n");
+			   "Error in mapping LTTLITE partition offset\n");
 		if (sys_close(log_file_fd))
 			printk(KERN_ERR "%s: close error\n", __func__);
 		return;
@@ -899,7 +922,7 @@ static void ltt_lite_write_privateram(void)
 						total_buf_head_size;
 	if (buf_info->size != ltt_lite_buf_size) {
 		DPRINT(KERN_ALERT "Buf info not correct! %ld\n",
-		       buf_info->size);
+			   buf_info->size);
 	}
 
 	/* dump ram from three parts */
@@ -958,10 +981,10 @@ static void ltt_lite_append_log()
 		return;
 	}
 	log_file_fd = sys_open((const char __user *) log_file,
-			       O_WRONLY | O_APPEND, 0600);
+				   O_WRONLY | O_APPEND, 0600);
 	if (log_file_fd < 0) {
 		printk(KERN_ERR "cannot open %s, %lu\n", log_file,
-		       log_file_fd);
+			   log_file_fd);
 		log_file_fd = -1;
 		return;
 	}
@@ -981,13 +1004,13 @@ static void ltt_lite_append_log()
 	ltt_lite_half_buf_size = ltt_lite_buf_size / 2;
 	/* Verify the private ram content is right */
 	if ((buf_info->size != ltt_lite_buf_size) ||
-	    (buf_info->is_top
-	     && (buf_info->buf_pos > ltt_lite_half_buf_size))
-	    || (!buf_info->is_top
+		(buf_info->is_top
+		 && (buf_info->buf_pos > ltt_lite_half_buf_size))
+		|| (!buf_info->is_top
 		&& (buf_info->buf_pos <= ltt_lite_half_buf_size))) {
 		DPRINT(KERN_ALERT
-		       "Buf info not correct, will not append!%lu, %lu\n",
-		       buf_info->size, buf_info->buf_pos);
+			   "Buf info not correct, will not append!%lu, %lu\n",
+			   buf_info->size, buf_info->buf_pos);
 		if (sys_close(log_file_fd))
 			printk(KERN_ERR "%s: close error\n", __func__);
 		log_file_fd = -1;
@@ -995,37 +1018,37 @@ static void ltt_lite_append_log()
 	}
 	if (buf_info->log_file_pos != -1) {
 		result =
-		    sys_lseek(log_file_fd, buf_info->log_file_pos,
-			      SEEK_SET);
+			sys_lseek(log_file_fd, buf_info->log_file_pos,
+				  SEEK_SET);
 		if (result < 0) {
 			printk(KERN_ERR "%s: seek error - %d\n",
-			       __func__, result);
+				   __func__, result);
 			goto err_out;
 		}
 	}
 	if (buf_info->is_top) {
 		if (buf_info->buf_bottom_full) {
 			result =
-			    sys_write(log_file_fd,
-				      ltt_lite_buf +
-				      ltt_lite_half_buf_size,
-				      ltt_lite_half_buf_size);
+				sys_write(log_file_fd,
+					  ltt_lite_buf +
+					  ltt_lite_half_buf_size,
+					  ltt_lite_half_buf_size);
 			if (result < 0) {
 				printk(KERN_ERR "%s: write error - %d\n",
-				       __func__, result);
+					   __func__, result);
 				goto err_out;
 			}
 		}
 		result =
-		    sys_write(log_file_fd, ltt_lite_buf,
-			      buf_info->buf_pos);
+			sys_write(log_file_fd, ltt_lite_buf,
+				  buf_info->buf_pos);
 	} else {
 		if (buf_info->buf_top_full) {
 			result = sys_write(log_file_fd, ltt_lite_buf,
 					   ltt_lite_half_buf_size);
 			if (result < 0) {
 				printk(KERN_ERR "%s: write error - %d\n",
-				       __func__, result);
+					   __func__, result);
 				goto err_out;
 			}
 		}
@@ -1036,20 +1059,20 @@ static void ltt_lite_append_log()
 	}
 	if (result < 0) {
 		printk(KERN_ERR "%s: write error - %d\n", __func__,
-		       result);
+			   result);
 		goto err_out;
 	}
 	memset(&lreport.header, 0, sizeof(struct record_header_t));
 	lreport.header.type = LTT_LITE_EV_REPORT;
 	lreport.header.ssize = sizeof(struct ltt_lite_report_event);
 	memcpy(&lreport.reports,
-	       &buf_info->unlogged_count[LTT_LITE_EV_SYSCALL_ENTRY],
-	       REPORT_ITEM_LEN);
+		   &buf_info->unlogged_count[LTT_LITE_EV_SYSCALL_ENTRY],
+		   REPORT_ITEM_LEN);
 	result =
-	    sys_write(log_file_fd, (char *) &lreport, sizeof(lreport));
+		sys_write(log_file_fd, (char *) &lreport, sizeof(lreport));
 	if (result < 0) {
 		printk(KERN_ERR "%s: write report error - %d\n",
-		       __func__, result);
+			   __func__, result);
 		goto err_out;
 	}
 	memset(buf_info, 0, sizeof(struct buf_info_t));
@@ -1070,14 +1093,14 @@ void ltt_lite_early_init(void)
 	if (!early_tracing_is_allowed)
 		return;
 	ltt_lite_early_buf =
-	    (char *) alloc_reserved_pages(&early_page_array,
+		(char *) alloc_reserved_pages(&early_page_array,
 					  ltt_lite_early_page_num);
 	if (!ltt_lite_early_buf) {
 		printk(KERN_ERR "cannot get pages for early ltt-lite\n");
 		return;
 	}
 	ltt_lite_mode = LTT_LITE_MODE_SCHD | LTT_LITE_MODE_SYSC
-	    | LTT_LITE_MODE_TRAP;
+		| LTT_LITE_MODE_TRAP;
 	early_enabled_mode = true;
 }
 
@@ -1112,11 +1135,11 @@ static void wq_close_file(struct work_struct *ignore)
 	lreport.header.type = LTT_LITE_EV_REPORT;
 	lreport.header.ssize = sizeof(struct ltt_lite_report_event);
 	memcpy(&lreport.reports,
-	       &buf_info->unlogged_count[LTT_LITE_EV_SYSCALL_ENTRY],
-	       REPORT_ITEM_LEN);
+		   &buf_info->unlogged_count[LTT_LITE_EV_SYSCALL_ENTRY],
+		   REPORT_ITEM_LEN);
 
 	result =
-	    sys_write(log_file_fd, (char *) &lreport, sizeof(lreport));
+		sys_write(log_file_fd, (char *) &lreport, sizeof(lreport));
 	if (result < 0)
 		printk(KERN_ERR "%s: write error\n", __func__);
 	memset(buf_info, 0, sizeof(struct buf_info_t));
@@ -1134,7 +1157,7 @@ static void wq_close_file(struct work_struct *ignore)
 		return;
 	if (!use_private_ram_file) {
 		free_reserved_pages(buf_info, page_array,
-				    1 << LTT_LITE_PAGE_ORDER);
+					1 << LTT_LITE_PAGE_ORDER);
 	} else {
 		release_privateram_address(ltt_lite_buf);
 	}
@@ -1173,7 +1196,7 @@ static int init_private_ram(void)
 	}
 
 	ltt_lite_buf_size = ltt_lite_privateram_size - sizeof(struct buf_info_t)
-	    - PEVENT_COUNT_MAX * sizeof(struct process_table_log);
+		- PEVENT_COUNT_MAX * sizeof(struct process_table_log);
 	if (ltt_lite_buf_size < 0) {
 		printk(KERN_ERR "ltt-lite private ram not enough!\n");
 		return 0;
@@ -1228,8 +1251,8 @@ static inline int proc_init_char_command(char *str)
  * write 0: disable logging
  */
 static int ltt_lite_proc_write_init(struct file *filp,
-				    const char *buffer, size_t count,
-				    loff_t *data)
+					const char *buffer, size_t count,
+					loff_t *data)
 {
 	int buf, mode;
 	int res;
@@ -1250,9 +1273,10 @@ static int ltt_lite_proc_write_init(struct file *filp,
 		return -EFAULT;
 
 	mode =
-	    LTT_LITE_MODE_SCHD | LTT_LITE_MODE_SYSC | LTT_LITE_MODE_MEM |
-	    LTT_LITE_MODE_TRAP | LTT_LITE_MODE_INT | LTT_LITE_MODE_SOFTIRQ
-	    | LTT_LITE_MODE_SIG | LTT_LITE_MODE_TMR;
+		LTT_LITE_MODE_SCHD | LTT_LITE_MODE_SYSC | LTT_LITE_MODE_MEM |
+		LTT_LITE_MODE_TRAP | LTT_LITE_MODE_INT | LTT_LITE_MODE_SOFTIRQ
+		| LTT_LITE_MODE_SIG | LTT_LITE_MODE_TMR | LTT_LITE_MODE_PRINTK
+		| LTT_LITE_MODE_ANDROID | LTT_LITE_MODE_ANDROID_RADIO;
 	if (buf < 0 || buf > mode)
 		return count;
 
@@ -1280,8 +1304,8 @@ static int ltt_lite_proc_write_init(struct file *filp,
 			if (!ltt_lite_wq) {
 				/* enable ltt lite at first time */
 				ltt_lite_wq =
-				    create_singlethread_workqueue
-				    ("lttliter");
+					create_singlethread_workqueue
+					("lttliter");
 				BUG_ON(!ltt_lite_wq);
 				queue_work(ltt_lite_wq, &wq_init_work);
 			} else if (log_file_fd < 0) {
@@ -1301,10 +1325,10 @@ static int ltt_lite_proc_write_init(struct file *filp,
 
 			if (use_private_ram_file || use_private_ram) {
 				if ((ltt_lite_file_size * SZ_1M) <
-				    (ltt_lite_privateram_size / 2)) {
+					(ltt_lite_privateram_size / 2)) {
 					ltt_lite_file_size =
-					    ltt_lite_privateram_size / 2 /
-					    SZ_1M + 1;
+						ltt_lite_privateram_size / 2 /
+						SZ_1M + 1;
 				}
 			}
 		}
@@ -1313,7 +1337,7 @@ static int ltt_lite_proc_write_init(struct file *filp,
 	else if (buf && ltt_lite_is_enabled) {
 		/* start memory profiling */
 		if (!(ltt_lite_mode & LTT_LITE_MODE_MEM) &&
-		    (buf & LTT_LITE_MODE_MEM)) {
+			(buf & LTT_LITE_MODE_MEM)) {
 			init_timer(&mem_profile_timer);
 			mem_profile_timer.function = log_mem_status;
 			mod_timer(&mem_profile_timer, jiffies +
@@ -1339,7 +1363,7 @@ static const struct file_operations proc_ltt_lite_init_operations = {
  * open interface for proc file config
  */
 static int ltt_lite_proc_config_open(struct inode *inode,
-				     struct file *file)
+					 struct file *file)
 {
 	if ((file->f_mode & FMODE_WRITE) && !(inode->i_mode & S_IWUSR))
 		return -EPERM;
@@ -1369,33 +1393,34 @@ static ssize_t ltt_lite_proc_config_read(struct file *file,
 	}
 
 	len = snprintf(config_buf, OUT_STR_LEN,
-		       "filesz:%luM\npriram: %d\nramfil: %d\nmemint: \
-			   %d\nsysftg: %d\nlogfil: %s\npidflt: ",
-		       ltt_lite_file_size, use_private_ram,
-		       use_private_ram_file, mem_profile_interval,
-		       syscall_mask_group_id, log_file);
+			   "filesz:%luM\npriram: %d\nramfil: %d\nmemint: \
+			   %d\nsysftg: %d\nlogfil: %s\nlogmod: %d\npidflt: ",
+				ltt_lite_file_size, use_private_ram,
+				use_private_ram_file, mem_profile_interval,
+				syscall_mask_group_id, log_file,
+				android_logging_mode);
 	for (i = 0; i < ltt_lite_pid_filter_num; i++) {
 		if (ltt_lite_pid_filter[i][0] == ltt_lite_pid_filter[i][1])
 			len +=
-			    snprintf(config_buf + len, OUT_STR_LEN - len,
-				     "%d ", ltt_lite_pid_filter[i][0]);
+				snprintf(config_buf + len, OUT_STR_LEN - len,
+					 "%d ", ltt_lite_pid_filter[i][0]);
 		else
 			len +=
-			    snprintf(config_buf + len, OUT_STR_LEN - len,
-				     "%d-%d ", ltt_lite_pid_filter[i][0],
-				     ltt_lite_pid_filter[i][1]);
+				snprintf(config_buf + len, OUT_STR_LEN - len,
+					 "%d-%d ", ltt_lite_pid_filter[i][0],
+					 ltt_lite_pid_filter[i][1]);
 	}
 	len += snprintf(config_buf + len, OUT_STR_LEN - len, "\nintflt:");
 	for (i = 0; i < ltt_lite_int_filter_num; i++) {
 		if (ltt_lite_int_filter[i][0] == ltt_lite_int_filter[i][1])
 			len +=
-			    snprintf(config_buf + len, OUT_STR_LEN - len,
-				     "%d ", ltt_lite_int_filter[i][0]);
+				snprintf(config_buf + len, OUT_STR_LEN - len,
+					 "%d ", ltt_lite_int_filter[i][0]);
 		else
 			len +=
-			    snprintf(config_buf + len, OUT_STR_LEN - len,
-				     "%d-%d ", ltt_lite_int_filter[i][0],
-				     ltt_lite_int_filter[i][1]);
+				snprintf(config_buf + len, OUT_STR_LEN - len,
+					 "%d-%d ", ltt_lite_int_filter[i][0],
+					 ltt_lite_int_filter[i][1]);
 	}
 	len += snprintf(config_buf + len, OUT_STR_LEN - len, "\n");
 	len = len < (int) count ? len : (int) count;
@@ -1482,7 +1507,7 @@ static void do_cmd_filter(char *params, unsigned short *array,
 	unsigned short temp_pid_filter[LTT_LITE_PID_FILTER_MAX][2];
 
 	param_num =
-	    split(params, substr_index, ' ', LTT_LITE_PID_FILTER_MAX);
+		split(params, substr_index, ' ', LTT_LITE_PID_FILTER_MAX);
 	if (!param_num) {
 		/* clear filters if no parameter */
 		*filter_num = 0;
@@ -1521,7 +1546,7 @@ static void do_cmd_filter(char *params, unsigned short *array,
 		/* string2pid do pid valid checking,
 		   when invalid string, return a -1 on the pid */
 		if (input_pid1 != -1 && input_pid2 != -1 &&
-		    input_pid1 <= input_pid2) {
+			input_pid1 <= input_pid2) {
 			temp_pid_filter[i][0] = input_pid1;
 			temp_pid_filter[i][1] = input_pid2;
 		} else
@@ -1531,12 +1556,12 @@ static void do_cmd_filter(char *params, unsigned short *array,
 	if (i == param_num) {
 		for (i = 0; i < param_num - 1; i++) {
 			if (temp_pid_filter[i][1] >=
-			    temp_pid_filter[i + 1][0])
+				temp_pid_filter[i + 1][0])
 				break;
 		}
 		if (i == param_num - 1) {
 			memcpy(array, temp_pid_filter,
-			       param_num * sizeof(unsigned short) * 2);
+				   param_num * sizeof(unsigned short) * 2);
 			*filter_num = param_num;
 			return;
 		}
@@ -1558,7 +1583,7 @@ static void do_cmd(char *cmd_line, int cmd_type)
 	case CMD_MEM_PROF_INTERVAL:
 		param_num = split(cmd_line, &char_sub_pos, ' ', 1);
 		if (param_num && strlen(char_sub_pos) == 1 &&
-		    *char_sub_pos >= '1' && *char_sub_pos <= '9') {
+			*char_sub_pos >= '1' && *char_sub_pos <= '9') {
 			mem_profile_interval = *char_sub_pos - '0';
 		}
 		break;
@@ -1566,27 +1591,27 @@ static void do_cmd(char *cmd_line, int cmd_type)
 		param_num = split(cmd_line, &char_sub_pos, ' ', 1);
 		/* do not change log file name during logging */
 		if (param_num && !ltt_lite_is_enabled &&
-		    strlen(char_sub_pos) < LTT_LITE_CMD_LEN) {
+			strlen(char_sub_pos) < LTT_LITE_CMD_LEN) {
 			memcpy(log_file, char_sub_pos,
-			       strlen(char_sub_pos) + 1);
+				   strlen(char_sub_pos) + 1);
 		}
 		break;
 	case CMD_SYSCALL_FILTER_GROUP:
 		param_num = split(cmd_line, &char_sub_pos, ' ', 1);
 		if (param_num && strlen(char_sub_pos) == 1 &&
-		    *char_sub_pos >= '0' && *char_sub_pos <= '5') {
+			*char_sub_pos >= '0' && *char_sub_pos <= '5') {
 			syscall_mask_group_id = *char_sub_pos - '0';
 		}
 		break;
 	case CMD_PID_FILTER:
 		do_cmd_filter(cmd_line,
-			      (unsigned short *) ltt_lite_pid_filter,
-			      &ltt_lite_pid_filter_num);
+				  (unsigned short *) ltt_lite_pid_filter,
+				  &ltt_lite_pid_filter_num);
 		break;
 	case CMD_INT_FILTER:
 		do_cmd_filter(cmd_line,
-			      (unsigned short *) ltt_lite_int_filter,
-			      &ltt_lite_int_filter_num);
+				  (unsigned short *) ltt_lite_int_filter,
+				  &ltt_lite_int_filter_num);
 		break;
 		/*
 		 * PRIRAM and RAMFIL can not be set in meanwhile
@@ -1599,7 +1624,7 @@ static void do_cmd(char *cmd_line, int cmd_type)
 		param_num = split(cmd_line, &char_sub_pos, ' ', 1);
 		/* do not change buffer during logging */
 		if (param_num && strlen(char_sub_pos) == 1 &&
-		    *char_sub_pos >= '0' && *char_sub_pos <= '1') {
+			*char_sub_pos >= '0' && *char_sub_pos <= '1') {
 			if (*char_sub_pos == '0' && use_private_ram == 1)
 				ltt_lite_buf = NULL;
 
@@ -1614,7 +1639,7 @@ static void do_cmd(char *cmd_line, int cmd_type)
 		param_num = split(cmd_line, &char_sub_pos, ' ', 1);
 		/* do not change buffer during logging */
 		if (param_num && strlen(char_sub_pos) == 1 &&
-		    *char_sub_pos >= '0' && *char_sub_pos <= '1') {
+			*char_sub_pos >= '0' && *char_sub_pos <= '1') {
 			use_private_ram_file = *char_sub_pos - '0';
 		}
 		break;
@@ -1639,14 +1664,18 @@ static void do_cmd(char *cmd_line, int cmd_type)
 
 			if (use_private_ram_file || use_private_ram) {
 				if ((file_size * SZ_1M) <
-				    (ltt_lite_privateram_size / 2)) {
+					(ltt_lite_privateram_size / 2)) {
 					file_size =
-					    ltt_lite_privateram_size / 2 /
-					    SZ_1M + 1;
+						ltt_lite_privateram_size / 2 /
+						SZ_1M + 1;
 				}
 			}
 			ltt_lite_file_size = file_size;
 		}
+		break;
+	case CMD_ANDROID_LOGMODE:
+		param_num = split(cmd_line, &char_sub_pos, ' ', 1);
+		android_logging_mode = *char_sub_pos - '0';
 		break;
 	}
 }
@@ -1691,6 +1720,8 @@ static ssize_t ltt_lite_proc_config_write(struct file *file,
 		cmd_type = CMD_FILE_SIZE;
 	else if (strncmp(cmd_line, "intflt", CFG_SELECTOR_LEN) == 0)
 		cmd_type = CMD_INT_FILTER;
+	else if (strncmp(cmd_line, "logmod", CFG_SELECTOR_LEN) == 0)
+		cmd_type = CMD_ANDROID_LOGMODE;
 
 	if (cmd_type != NONCMD) {
 		for (i = 0; i < count; i++) {
@@ -1731,7 +1762,7 @@ static void log_mem_status(unsigned long ignore)
 		if (!p->mm)
 			continue;
 		memset((void *) &mem_log, 0,
-		       sizeof(struct process_mem_log));
+			   sizeof(struct process_mem_log));
 		mem_log.pid = p->pid;
 		mem_log.start_time_sec = p->start_time.tv_sec;
 		mem_log.start_time_usec = p->start_time.tv_nsec;
@@ -1740,9 +1771,9 @@ static void log_mem_status(unsigned long ignore)
 		mem_log.vmlck = mm->locked_vm;
 		mem_log.vmrss = get_mm_rss(mm);
 		mem_log.vmshr =
-		    mem_log.vmrss - get_mm_counter(mm, anon_rss);
+			mem_log.vmrss - get_mm_counter(mm, anon_rss);
 		mem_log.vmdata =
-		    mm->total_vm - mm->shared_vm - mm->stack_vm;
+			mm->total_vm - mm->shared_vm - mm->stack_vm;
 		mem_log.vmstk = mm->stack_vm;
 		mem_log.vmexe = (PAGE_ALIGN(mm->end_code) -
 				 (mm->
@@ -1820,10 +1851,10 @@ static int write_early_buf(void *ignore)
 	strncat(early_log_file, ".early",
 		LTT_LITE_CMD_LEN - strlen(log_file));
 	early_log_file_fd = sys_open((const char __user *) early_log_file,
-				     O_RDWR | O_CREAT | O_TRUNC, 0600);
+					 O_RDWR | O_CREAT | O_TRUNC, 0600);
 	if (early_log_file_fd < 0) {
 		printk(KERN_ERR "cannot open %s, %ld\n", early_log_file,
-		       early_log_file_fd);
+			   early_log_file_fd);
 		early_log_file_fd = -1;
 		return 0;
 	}
@@ -1835,17 +1866,17 @@ static int write_early_buf(void *ignore)
 	lreport.header.type = LTT_LITE_EV_REPORT;
 	lreport.header.ssize = sizeof(struct ltt_lite_report_event);
 	memcpy(&lreport.reports,
-	       &early_unlogged_count[LTT_LITE_EV_SYSCALL_ENTRY],
-	       REPORT_ITEM_LEN);
+		   &early_unlogged_count[LTT_LITE_EV_SYSCALL_ENTRY],
+		   REPORT_ITEM_LEN);
 	result +=
-	    sys_write(early_log_file_fd, (char *) &lreport,
-		      sizeof(lreport));
+		sys_write(early_log_file_fd, (char *) &lreport,
+			  sizeof(lreport));
 	if (result < 0)
 		printk(KERN_ERR "%s: write error\n", __func__);
 	sys_close(early_log_file_fd);
 
 	free_reserved_pages(ltt_lite_early_buf, early_page_array,
-			    ltt_lite_early_page_num);
+				ltt_lite_early_page_num);
 	ltt_lite_early_buf = NULL;
 
 	return 0;
@@ -1860,16 +1891,16 @@ static void wq_log_top_half(struct work_struct *ignore)
 	UNUSED_PARAM(ignore);
 	if (ltt_lite_file_size) {
 		printk(KERN_DEBUG "bottom: buf_info->log_file_pos %lu\n",
-		       buf_info->log_file_pos);
+			   buf_info->log_file_pos);
 		if ((buf_info->log_file_pos + ltt_lite_half_buf_size) >=
-		    ltt_lite_file_size * SZ_1M) {
+			ltt_lite_file_size * SZ_1M) {
 			buf_info->log_file_pos = 0;
 			result =
-			    sys_lseek(log_file_fd, buf_info->log_file_pos,
-				      SEEK_SET);
+				sys_lseek(log_file_fd, buf_info->log_file_pos,
+					  SEEK_SET);
 			if (result < 0) {
 				printk(KERN_ERR "%s: seek error - %d\n",
-				       __func__, result);
+					   __func__, result);
 			}
 		}
 	}
@@ -1893,17 +1924,17 @@ static void wq_log_bottom_half(struct work_struct *ignore)
 
 	if (ltt_lite_file_size) {
 		printk(KERN_DEBUG "bottom: buf_info->log_file_pos %lu\n",
-		       buf_info->log_file_pos);
+			   buf_info->log_file_pos);
 		if ((buf_info->log_file_pos + ltt_lite_half_buf_size -
-		     buf_empty_size)
-		    >= ltt_lite_file_size * SZ_1M) {
+			 buf_empty_size)
+			>= ltt_lite_file_size * SZ_1M) {
 			buf_info->log_file_pos = 0;
 			result =
-			    sys_lseek(log_file_fd, buf_info->log_file_pos,
-				      SEEK_SET);
+				sys_lseek(log_file_fd, buf_info->log_file_pos,
+					  SEEK_SET);
 			if (result < 0) {
 				printk(KERN_ERR "%s: seek error - %d\n",
-				       __func__, result);
+					   __func__, result);
 			}
 		}
 	}
@@ -1914,7 +1945,7 @@ static void wq_log_bottom_half(struct work_struct *ignore)
 		printk(KERN_ERR "%s: write error\n", __func__);
 	if (ltt_lite_file_size) {
 		buf_info->log_file_pos +=
-		    (ltt_lite_half_buf_size - buf_empty_size);
+			(ltt_lite_half_buf_size - buf_empty_size);
 	}
 	buf_info->buf_bottom_full = 0;
 }
@@ -1948,17 +1979,10 @@ static inline void count_lost_event(unsigned short type)
  */
 static void commit_log(void *addr, int size, unsigned short type)
 {
-	/* avoid race condition when commit log */
-	struct mutex log_mutex;
-
 	struct record_header_t *header = addr;
 	char in_irq_handler = 0;
 	header->type = type;
 	header->ssize = size;
-
-	mutex_init(&log_mutex);
-	if (mutex_lock_interruptible(&log_mutex))
-		printk(KERN_WARNING "LTT-Lite accquire mutex fail!\n");
 
 	if (irqs_disabled())
 		in_irq_handler = 1;
@@ -1967,7 +1991,7 @@ static void commit_log(void *addr, int size, unsigned short type)
 	DPRINT(KERN_ERR "bj:%d,%d\n", type, in_irq_handler);
 	if (early_enabled_mode) {
 		if ((early_buf_pos + size) >
-		    ((PAGE_SIZE * ltt_lite_early_page_num) - 1)) {
+			((PAGE_SIZE * ltt_lite_early_page_num) - 1)) {
 			count_lost_event(type);
 			goto complete;
 		}
@@ -1989,14 +2013,14 @@ static void commit_log(void *addr, int size, unsigned short type)
 		get_time_stamp((struct timeval *) &header->timestamp_sec);
 
 		if (*pevent_count <= PEVENT_COUNT_MAX &&
-		    header->type == LTT_LITE_EV_PROCESS) {
+			header->type == LTT_LITE_EV_PROCESS) {
 			memcpy(pevent_table + *pevent_count *
-			       sizeof(struct process_table_log), addr,
-			       size);
+				   sizeof(struct process_table_log), addr,
+				   size);
 			(*pevent_count)++;
 		} else {
 			memcpy(ltt_lite_buf + buf_info->buf_pos, addr,
-			       size);
+				   size);
 			buf_info->buf_pos += 64;
 		}
 		goto complete;
@@ -2022,7 +2046,7 @@ static void commit_log(void *addr, int size, unsigned short type)
 	}
 
 	if (((buf_info->buf_pos + size) > ltt_lite_half_buf_size) &&
-	    buf_info->buf_bottom_full && buf_info->is_top) {
+		buf_info->buf_bottom_full && buf_info->is_top) {
 		count_lost_event(type);
 		goto complete;
 	}
@@ -2036,7 +2060,7 @@ static void commit_log(void *addr, int size, unsigned short type)
 	 * to write top half buffer.
 	 */
 	if ((buf_info->buf_pos > ltt_lite_half_buf_size)
-	    && buf_info->is_top) {
+		&& buf_info->is_top) {
 		buf_info->is_top = 0;
 		buf_info->buf_top_full = 1;
 		if (!ltt_lite_wq)
@@ -2050,7 +2074,6 @@ static void commit_log(void *addr, int size, unsigned short type)
 complete:
 	if (!in_irq_handler)
 		local_irq_enable();
-	mutex_unlock(&log_mutex);
 	return;
 }
 
@@ -2135,13 +2158,13 @@ void ltt_lite_ev_schedchange(struct ltt_lite_schedchange *schedchange)
 	 * and ltt lite is in log scheduling mode
 	 */
 	if (!(ltt_lite_is_enabled | early_enabled_mode) ||
-	    !(ltt_lite_mode & LTT_LITE_MODE_SCHD))
+		!(ltt_lite_mode & LTT_LITE_MODE_SCHD))
 		return;
 
 	if (!check_in_filter
-	    (schedchange->ipid, ltt_lite_pid_filter,
-	     ltt_lite_pid_filter_num)
-	    && !check_in_filter(schedchange->opid, ltt_lite_pid_filter,
+		(schedchange->ipid, ltt_lite_pid_filter,
+		 ltt_lite_pid_filter_num)
+		&& !check_in_filter(schedchange->opid, ltt_lite_pid_filter,
 				ltt_lite_pid_filter_num))
 		return;
 
@@ -2155,20 +2178,20 @@ static inline int if_log_syscall(unsigned short syscall_pid,
 				 short syscallid)
 {
 	if (!(ltt_lite_is_enabled | early_enabled_mode) ||
-	    !(ltt_lite_mode & LTT_LITE_MODE_SYSC))
+		!(ltt_lite_mode & LTT_LITE_MODE_SYSC))
 		return 0;
 
 	if (syscall_mask_group_id != SYSCALL_GROUP_ALL && syscallid >= 0) {
 		/* use scno / 16 to get the index in the mask array,
 		   use scno % 16 to get the bit in the mask variable */
 		if ((ltt_lite_syscall_mask[syscall_mask_group_id]
-		     [(int) (syscallid / BITS_IN_SHORT)]
-		     & (1 << syscallid % BITS_IN_SHORT)) == 0)
+			 [(int) (syscallid / BITS_IN_SHORT)]
+			 & (1 << syscallid % BITS_IN_SHORT)) == 0)
 			return 0;
 	}
 
 	if (!check_in_filter
-	    (syscall_pid, ltt_lite_pid_filter, ltt_lite_pid_filter_num))
+		(syscall_pid, ltt_lite_pid_filter, ltt_lite_pid_filter_num))
 		return 0;
 
 	return 1;
@@ -2191,7 +2214,7 @@ void ltt_lite_log_syscall(char sign, int scno)
 		return;
 
 	syscall_event.syscall_id = (sign == LTT_LITE_EVENT_ENTER) ?
-	    syscallid : LTT_LITE_SYSCALL_RETURN_ID;
+		syscallid : LTT_LITE_SYSCALL_RETURN_ID;
 	syscall_event.pid = syscall_pid;
 
 	commit_log(&syscall_event, sizeof(syscall_event),
@@ -2236,11 +2259,11 @@ void ltt_lite_ev_trap_entry(unsigned short trapid, unsigned long address)
 	UNUSED_PARAM(address);
 
 	if (!(ltt_lite_is_enabled | early_enabled_mode) ||
-	    !(ltt_lite_mode & LTT_LITE_MODE_TRAP))
+		!(ltt_lite_mode & LTT_LITE_MODE_TRAP))
 		return;
 	pid = current->pid;
 	if (!check_in_filter
-	    (pid, ltt_lite_pid_filter, ltt_lite_pid_filter_num))
+		(pid, ltt_lite_pid_filter, ltt_lite_pid_filter_num))
 		return;
 
 	trap_log.subtype = trapid;
@@ -2257,12 +2280,12 @@ void ltt_lite_ev_trap_exit(void)
 	unsigned short pid;
 
 	if (!(ltt_lite_is_enabled | early_enabled_mode) ||
-	    !(ltt_lite_mode & LTT_LITE_MODE_TRAP))
+		!(ltt_lite_mode & LTT_LITE_MODE_TRAP))
 		return;
 
 	pid = current->pid;
 	if (!check_in_filter
-	    (pid, ltt_lite_pid_filter, ltt_lite_pid_filter_num))
+		(pid, ltt_lite_pid_filter, ltt_lite_pid_filter_num))
 		return;
 
 	trap_log.pid = pid;
@@ -2278,10 +2301,10 @@ void ltt_lite_int_entry(unsigned short intid, char kmod)
 	struct ltt_lite_intlog int_log;
 
 	if (!(ltt_lite_is_enabled | early_enabled_mode)
-	    || !(ltt_lite_mode & LTT_LITE_MODE_INT))
+		|| !(ltt_lite_mode & LTT_LITE_MODE_INT))
 		return;
 	if (!check_in_filter
-	    (intid, ltt_lite_int_filter, ltt_lite_int_filter_num))
+		(intid, ltt_lite_int_filter, ltt_lite_int_filter_num))
 		return;
 
 	int_log.intid = intid;
@@ -2298,11 +2321,11 @@ void ltt_lite_int_exit(unsigned short intid)
 	struct ltt_lite_intlog int_log;
 
 	if (!(ltt_lite_is_enabled | early_enabled_mode) ||
-	    !(ltt_lite_mode & LTT_LITE_MODE_INT))
+		!(ltt_lite_mode & LTT_LITE_MODE_INT))
 		return;
 
 	if (!check_in_filter
-	    (intid, ltt_lite_int_filter, ltt_lite_int_filter_num))
+		(intid, ltt_lite_int_filter, ltt_lite_int_filter_num))
 		return;
 
 	int_log.intid = intid;
@@ -2315,7 +2338,7 @@ void ltt_lite_log_softirq(unsigned short type, unsigned int sub_type,
 {
 	struct ltt_lite_soft_irq soft_irq_log;
 	if (!(ltt_lite_is_enabled | early_enabled_mode)
-	    || !(ltt_lite_mode & LTT_LITE_MODE_SOFTIRQ))
+		|| !(ltt_lite_mode & LTT_LITE_MODE_SOFTIRQ))
 		return;
 
 	soft_irq_log.sub_type = sub_type, soft_irq_log.data = data;
@@ -2330,7 +2353,7 @@ void ltt_lite_log_softirq(unsigned short type, unsigned int sub_type,
 int ltt_lite_log_string(char *string, int size)
 {
 	char userinfo[sizeof(struct record_header_t) +
-		      LTT_LITE_MAX_LOG_STRING_SIZE];
+			  LTT_LITE_MAX_LOG_STRING_SIZE];
 
 	/* we don't need ioctl parameters on bootup log */
 	if (!(ltt_lite_is_enabled | early_enabled_mode))
@@ -2342,7 +2365,7 @@ int ltt_lite_log_string(char *string, int size)
 			   LTT_LITE_EV_STRING);
 	} else {
 		memcpy(userinfo + sizeof(struct record_header_t), string,
-		       LTT_LITE_MAX_LOG_STRING_SIZE);
+			   LTT_LITE_MAX_LOG_STRING_SIZE);
 		commit_log(userinfo, sizeof(userinfo), LTT_LITE_EV_STRING);
 	}
 	return 0;
@@ -2381,19 +2404,19 @@ void ltt_lite_syscall_param(int scno, char *string, int size)
 	 * for early log mode, we only let __NR_lttlite go through
 	 */
 	if (!if_log_syscall(syscall_pid, syscallid)
-	    || (early_enabled_mode && (scno != __NR_lttlite)))
+		|| (early_enabled_mode && (scno != __NR_lttlite)))
 		return;
 
 	ltt_lite_log_string(string, size);
 }
 
 void ltt_lite_ev_sig(unsigned short s_pid, unsigned short r_pid,
-		     unsigned short sig)
+			 unsigned short sig)
 {
 	struct sig_send_log slog;
 
 	if (!(ltt_lite_is_enabled | early_enabled_mode) ||
-	    !(ltt_lite_mode & LTT_LITE_MODE_SIG))
+		!(ltt_lite_mode & LTT_LITE_MODE_SIG))
 		return;
 
 	slog.s_pid = s_pid;
@@ -2403,12 +2426,12 @@ void ltt_lite_ev_sig(unsigned short s_pid, unsigned short r_pid,
 }
 
 void ltt_lite_ev_handle_sig(unsigned short pid, unsigned short sig,
-			    unsigned long handler)
+				unsigned long handler)
 {
 	struct sig_handle_log slog;
 
 	if (!(ltt_lite_is_enabled | early_enabled_mode) ||
-	    !(ltt_lite_mode & LTT_LITE_MODE_SIG))
+		!(ltt_lite_mode & LTT_LITE_MODE_SIG))
 		return;
 
 	slog.sig = sig;
@@ -2422,7 +2445,7 @@ void ltt_lite_log_timer(struct timer_list *timer, unsigned short type)
 	struct timer_log tlog;
 
 	if (!(ltt_lite_is_enabled | early_enabled_mode) ||
-	    !(ltt_lite_mode & LTT_LITE_MODE_TMR))
+		!(ltt_lite_mode & LTT_LITE_MODE_TMR))
 		return;
 
 	tlog.pid = current->pid;
@@ -2440,7 +2463,7 @@ void ltt_lite_run_timer(unsigned short timer_type, unsigned long fn,
 	struct timer_run_log tlog;
 
 	if (!(ltt_lite_is_enabled | early_enabled_mode) ||
-	    !(ltt_lite_mode & LTT_LITE_MODE_TMR))
+		!(ltt_lite_mode & LTT_LITE_MODE_TMR))
 		return;
 
 	tlog.timer_type = timer_type;
@@ -2459,7 +2482,7 @@ asmlinkage long sys_lttlite(unsigned int cmd, unsigned long arg)
 				 "User event:pid=%d,eventid=%d\n",
 				 current->pid, (unsigned int) arg);
 			ltt_lite_syscall_param(__NR_lttlite, ltt_string,
-					       strlen(ltt_string));
+						   strlen(ltt_string));
 
 			break;
 		}
@@ -2468,14 +2491,14 @@ asmlinkage long sys_lttlite(unsigned int cmd, unsigned long arg)
 			int len;
 
 			len =
-			    strncpy_from_user(ltt_string, (char *) arg,
-					      LTT_LITE_MAX_LOG_STRING_SIZE
-					      - 1);
-			    if (len < 0)
+				strncpy_from_user(ltt_string, (char *) arg,
+						  LTT_LITE_MAX_LOG_STRING_SIZE
+						  - 1);
+				if (len < 0)
 					return -EFAULT;
 
 			ltt_string[LTT_LITE_MAX_LOG_STRING_SIZE - 1] =
-			    '\0';
+				'\0';
 
 			ltt_lite_log_string(ltt_string, len);
 
@@ -2539,7 +2562,7 @@ out:
  */
 static int set_ltt_version(void)
 {
-    char ltt_string[LTT_LITE_MAX_LOG_STRING_SIZE];
+	char ltt_string[LTT_LITE_MAX_LOG_STRING_SIZE];
 	int len;
 
 	if (ltt_version_tag)
@@ -2557,4 +2580,111 @@ static int set_ltt_version(void)
 	}
 
 	return 0;
+}
+
+/*
+ * This interface is for logging custom LTT-lite events from
+ * Android userspace (/dev/log/xxx), for graphical interpretation
+ * by the Taskview postprocessing tool.
+ */
+int ltt_lite_log_android(const struct iovec *iov,
+						unsigned long nr_segs,
+						char logchar)
+{
+	struct ltt_lite_android_event *record;
+	char *recptr;
+	int   reclen;
+	int   type;
+	int   vecs;
+
+	if (!ltt_lite_is_enabled)
+		return 0;
+
+	/* Select record type based on unique log name character */
+	switch (logchar) {
+			/* /dev/log/main   = android.util.Log      */
+	case 'm':
+		type = LTT_LITE_EV_ANDROID_LOG;
+		break;
+
+	/* /dev/log/events = android.util.EventLog */
+	case 'e':
+		type = LTT_LITE_EV_ANDROID_EVENTLOG;
+		break;
+
+	/* /dev/log/radio                          */
+	case 'r':
+		type = LTT_LITE_EV_ANDROID_RADIO;
+		break;
+
+	/* Undefined log type - just exit          */
+	default:
+		return 0;
+	}
+
+	/* Log only if the mode mask allows */
+	if (type == LTT_LITE_EV_ANDROID_RADIO) {
+		if (!(ltt_lite_mode & LTT_LITE_MODE_ANDROID_RADIO))
+			return 0;
+	} else {
+		if (!(ltt_lite_mode & LTT_LITE_MODE_ANDROID))
+			return 0;
+	}
+
+	/* Setup local buffer parameters for copy from userspace vectors */
+	record = (struct ltt_lite_android_event *) ltt_lite_small_buffer;
+	recptr = (char *) &(record->data);
+	/* offsetof(ltt_lite_android_event, data)? */
+	reclen = sizeof(record_header_t) + 4;
+	record->pid = current->pid;   /* Record the PID for the event */
+
+	/* Get the vector data from userspace */
+	for (vecs = 0; vecs < nr_segs; vecs++)	{
+		/* Discard the event if it exceeds the static buffer size */
+		if ((reclen + iov->iov_len) > LTT_LITE_SMALL_BUFFER_SIZE)
+			return 0;
+
+		/* Discard the event if all data was not copied */
+		if (copy_from_user(recptr, iov->iov_base, iov->iov_len))
+			return 0;
+
+		/* Advance the pointer in the record buffer  */
+		recptr += iov->iov_len;
+		/* Increment the size of the record buffer payload portion */
+		reclen += iov->iov_len;
+		/* Point to the next vector (userspace data) */
+		iov++;
+	}
+
+	/* Write populated record buffer into main LTT-lite log buffer */
+	commit_log(record, reclen, type);
+	return android_logging_mode;
+}
+
+/*
+ * This interface is for logging the printk message stream,
+ * for graphical interpretation by the Taskview postprocessing tool.
+ */
+void ltt_lite_log_printk(char *string, int size)
+{
+	if (!(ltt_lite_is_enabled | early_enabled_mode) ||
+			!(ltt_lite_mode & LTT_LITE_MODE_PRINTK))
+		return;
+
+	if ((sizeof(record_header_t) + size) <
+					LTT_LITE_SMALL_BUFFER_SIZE) {
+		memcpy(ltt_lite_small_buffer + sizeof(record_header_t),
+						string, size);
+		commit_log(ltt_lite_small_buffer, sizeof(record_header_t) +
+						size,
+						LTT_LITE_EV_PRINTK);
+	} else {
+		memcpy(ltt_lite_small_buffer + sizeof(record_header_t),
+					string, LTT_LITE_SMALL_BUFFER_SIZE);
+		/* Truncate/terminate string */
+		ltt_lite_small_buffer[LTT_LITE_SMALL_BUFFER_SIZE] = 0;
+		commit_log(ltt_lite_small_buffer,
+						LTT_LITE_SMALL_BUFFER_SIZE,
+						LTT_LITE_EV_PRINTK);
+	}
 }

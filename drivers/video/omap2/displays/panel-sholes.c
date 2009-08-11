@@ -199,7 +199,7 @@ static int sholes_panel_enable_te(struct omap_dss_device *dssdev, bool enable)
 
 	data[0] = EDISCO_CMD_SET_TEAR_SCANLINE;
 	data[1] = 0x03;
-	data[2] = 0x56;
+	data[2] = 0x00;
 	ret = dsi_vc_dcs_write(EDISCO_CMD_VC, data, 3);
 	if (ret)
 		goto error;

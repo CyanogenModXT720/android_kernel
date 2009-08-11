@@ -72,12 +72,6 @@
 #include <media/mt9p012.h>
 
 #endif
-#if defined(CONFIG_VIDEO_MT9P012_HP)
-#include <../drivers/media/video/mt9p012_hp.h>
-#endif
-#if defined(CONFIG_VIDEO_MT9P013_HP)
-#include <../drivers/media/video/mt9p013_hp.h>
-#endif
 #ifdef CONFIG_VIDEO_OMAP3_HPLENS
 #include <../drivers/media/video/hplens.h>
 #endif
@@ -105,8 +99,13 @@
 #define DIE_ID_REG_BASE			(L4_WK_34XX_PHYS + 0xA000)
 #define DIE_ID_REG_OFFSET		0x218
 #define MAX_USB_SERIAL_NUM		17
-#define FACTORY_VENDOR_ID		0x22B8
-#define FACTORY_PRODUCT_ID		0x41E2
+#define MAPPHONE_VENDOR_ID		0x22B8
+#define MAPPHONE_PRODUCT_ID		0x41D9
+#define MAPPHONE_ADB_PRODUCT_ID		0x41DB
+#define FACTORY_PRODUCT_ID		0x41E3
+#define FACTORY_ADB_PRODUCT_ID		0x41E2
+
+extern void mapphone_panic_init(void);
 
 static char device_serial[MAX_USB_SERIAL_NUM];
 char *bp_model = "CDMA";
@@ -164,6 +163,21 @@ static void __init mapphone_init_irq(void)
 	omap_gpio_init();
 }
 
+#define BOOT_MODE_MAX_LEN 30
+static char boot_mode[BOOT_MODE_MAX_LEN+1];
+int __init board_boot_mode_init(char *s)
+
+{
+	strncpy(boot_mode, s, BOOT_MODE_MAX_LEN);
+
+	printk(KERN_INFO "boot_mode=%s\n", boot_mode);
+
+	return 1;
+}
+__setup("androidboot.mode=", board_boot_mode_init);
+
+
+
 static struct android_usb_platform_data andusb_plat = {
 	.vendor_id      = 0x22b8,
 	.product_id     = 0x41DA,
@@ -213,11 +227,20 @@ static void mapphone_gadget_init(void)
 
 	snprintf(device_serial, MAX_USB_SERIAL_NUM, "%08X%08X", val[1], val[0]);
 
+	if (!strcmp(boot_mode, "factorycable"))
+		andusb_plat.factory_enabled = 1;
+	else
+		andusb_plat.factory_enabled = 0;
+
+	andusb_plat.vendor_id = MAPPHONE_VENDOR_ID;
+
 	/* check powerup reason - To be added once kernel support is available*/
 	if (andusb_plat.factory_enabled) {
-		andusb_plat.vendor_id = FACTORY_VENDOR_ID;
 		andusb_plat.product_id = FACTORY_PRODUCT_ID;
-		andusb_plat.adb_product_id = FACTORY_PRODUCT_ID;
+		andusb_plat.adb_product_id = FACTORY_ADB_PRODUCT_ID;
+	} else {
+		andusb_plat.product_id = MAPPHONE_PRODUCT_ID;
+		andusb_plat.adb_product_id = MAPPHONE_ADB_PRODUCT_ID;
 	}
 	platform_device_register(&androidusb_device);
 	platform_driver_register(&cpcap_usb_connected_driver);
@@ -463,27 +486,7 @@ static struct i2c_board_info __initdata mapphone_i2c_bus2_board_info[] = {
 };
 
 static struct i2c_board_info __initdata mapphone_i2c_bus3_board_info[] = {
-#if defined(CONFIG_VIDEO_MT9P012_HP)
 	{
-#if defined(CONFIG_VIDEO_MT9P012_MT9P013_AUTODETECT)
-		I2C_BOARD_INFO("mt9p012", 0x10),
-#else
-		I2C_BOARD_INFO("mt9p012", MT9P012_I2C_ADDR),
-#endif
-		.platform_data = &mapphone_mt9p012_platform_data,
-	},
-#endif
-#if defined(CONFIG_VIDEO_MT9P013_HP)
-	{
-#if defined(CONFIG_VIDEO_MT9P012_MT9P013_AUTODETECT)
-		I2C_BOARD_INFO("mt9p013", 0x1F),
-#else
-		I2C_BOARD_INFO("mt9p013", MT9P013_I2C_ADDR),
-#endif
-		.platform_data = &mapphone_mt9p013_platform_data,
-	},
-#endif
-    {
 		I2C_BOARD_INFO("lm3554_led", 0x53),
 		.platform_data = &mapphone_camera_flash,
 	},
@@ -1036,19 +1039,21 @@ static int __init mapphone_omap_mdm_ctrl_init(void)
 	return platform_device_register(&omap_mdm_ctrl_platform_device);
 }
 
-#ifdef CONFIG_FB_OMAP2
-static struct resource mapphone_vout_resource[3 - CONFIG_FB_OMAP2_NUM_FBS] = {
+static struct omap_vout_config mapphone_vout_platform_data = {
+	.max_width = 864,
+	.max_height = 648,
+	.max_buffer_size = 0x112000,
+	.num_buffers = 6,
+	.num_devices = 2,
+	.device_ids = {1, 2},
 };
-#else
-static struct resource mapphone_vout_resource[2] = {
-};
-#endif
 
 static struct platform_device mapphone_vout_device = {
-       .name                   = "omap_vout",
-       .num_resources  = ARRAY_SIZE(mapphone_vout_resource),
-       .resource               = &mapphone_vout_resource[0],
-       .id             = -1,
+	.name = "omapvout",
+	.id = -1,
+	.dev = {
+		.platform_data = &mapphone_vout_platform_data,
+	},
 };
 static void __init mapphone_vout_init(void)
 {
@@ -1161,6 +1166,7 @@ static void __init mapphone_init(void)
 	mapphone_omap_mdm_ctrl_init();
 	mapphone_spi_init();
 	mapphone_flash_init();
+	mapphone_panic_init();
 	mapphone_serial_init();
 	mapphone_als_init();
 	mapphone_panel_init();
