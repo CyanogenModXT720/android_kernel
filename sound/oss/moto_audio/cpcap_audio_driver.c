@@ -917,18 +917,13 @@ static void cpcap_audio_configure_input(
 	}
 }
 
-static void cpcap_audio_configure_power(
-	struct cpcap_audio_state *state,
-	struct cpcap_audio_state *previous_state,
-	int power)
+static void cpcap_audio_configure_power(int power)
 {
-	struct cpcap_regacc reg_changes = {0};
 	static int previous_power = -1;
 
 	CPCAP_AUDIO_DEBUG_LOG("%s() called with power= %d\n", __func__, power);
 
 	if (power != previous_power) {
-		static int regulator_enabled = -1;
 
 		if (IS_ERR(audio_reg)) {
 			CPCAP_AUDIO_ERROR_LOG("audio_reg not valid for"
@@ -936,51 +931,18 @@ static void cpcap_audio_configure_power(
 			return;
 		}
 
-		reg_changes.mask = CPCAP_BIT_AUDIO_LOW_PWR |
-					CPCAP_BIT_AUD_LOWPWR_SPEED ;
-		reg_changes.value = 0;
-
-		if (SLEEP_ACTIVATE_POWER < 100)
-			reg_changes.value |= CPCAP_BIT_AUD_LOWPWR_SPEED;
-
 		if (power) {
-			if (regulator_enabled <= 0) {
-				regulator_enable(audio_reg);
-				regulator_enabled = 1;
-			}
-			/*TODO: clear audio_low_power*/
+			regulator_enable(audio_reg);
+			regulator_set_mode(audio_reg, REGULATOR_MODE_NORMAL);
 		} else {
-			if (regulator_enabled == 1) {
-				reg_changes.value |= CPCAP_BIT_AUDIO_LOW_PWR;
-				regulator_disable(audio_reg);
-				regulator_enabled = 0;
-			}
-			/*TODO: set audio_low_power*/
+			regulator_set_mode(audio_reg, REGULATOR_MODE_STANDBY);
+			regulator_disable(audio_reg);
 		}
-
-		logged_cpcap_write(state->cpcap, CPCAP_REG_VAUDIOC,
-				reg_changes.value, reg_changes.mask);
 
 		previous_power = power;
 
 		if (power)
 			msleep(SLEEP_ACTIVATE_POWER);
-	}
-
-	/* Power supply for headset should be controlled at the beginning
-	 * (if enabling) or end (if disabling) of the cpcap_audio setting
-	 * sequence */
-	 /*TODO: for pop control, this should be based on whether headset
-	   is connected, not whether it's in use */
-	if (is_output_changed(previous_state, state)) {
-		reg_changes.value = 0;
-		reg_changes.mask = CPCAP_BIT_ST_HS_CP_EN;
-
-		if (is_output_headset(state))
-			reg_changes.value = reg_changes.mask;
-
-		logged_cpcap_write(state->cpcap, CPCAP_REG_RXOA,
-				reg_changes.value, reg_changes.mask);
 	}
 }
 
@@ -1043,7 +1005,7 @@ void cpcap_audio_set_audio_state(struct cpcap_audio_state *state)
 	    state->stdac_primary_speaker != CPCAP_AUDIO_OUT_NONE ||
 	    state->ext_primary_speaker != CPCAP_AUDIO_OUT_NONE ||
 	    state->microphone != CPCAP_AUDIO_IN_NONE)
-		cpcap_audio_configure_power(state, previous_state, 1);
+		cpcap_audio_configure_power(1);
 
 	if (is_speaker_turning_off(previous_state, state))
 		cpcap_audio_configure_output(state, previous_state);
@@ -1090,7 +1052,7 @@ void cpcap_audio_set_audio_state(struct cpcap_audio_state *state)
 	    state->stdac_primary_speaker == CPCAP_AUDIO_OUT_NONE &&
 	    state->ext_primary_speaker == CPCAP_AUDIO_OUT_NONE &&
 	    state->microphone == CPCAP_AUDIO_IN_NONE)
-		cpcap_audio_configure_power(state, previous_state, 0);
+		cpcap_audio_configure_power(0);
 
 	previous_state_struct = *state;
 
