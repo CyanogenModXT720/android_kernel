@@ -102,8 +102,6 @@ static void vib_pwm_enable(struct timed_output_dev *dev, int value)
 	schedule_work(&data->vib_work);
 }
 
-/* This is a temporary solution until a more global haptics soltion is
- * available for haptics that need to occur in any application */
 void pwm_vibrator_haptic_fire(int value)
 {
 	vib_pwm_enable(&misc_data->dev, value);
@@ -155,7 +153,9 @@ static int vib_pwm_probe(struct platform_device *pdev)
 	misc_data = pwm_data;
 	platform_set_drvdata(pdev, pwm_data);
 
+#ifndef CONFIG_VIB_GPIO
 	vib_pwm_enable(&pwm_data->dev, pwm_data->pdata->initial_vibrate);
+#endif
 
 	printk(KERN_ERR "vib-pwm probed\n");
 	return 0;
@@ -164,7 +164,6 @@ err3:
 	timed_output_dev_unregister(&pwm_data->dev);
 	printk(KERN_ERR "vib-pwm err3\n");
 err2:
-	kfree(pwm_data->pdata);
 	printk(KERN_ERR "vib-pwm err2\n");
 err1:
 	kfree(pwm_data);

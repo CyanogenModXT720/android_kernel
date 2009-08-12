@@ -22,14 +22,11 @@
 #include <linux/regulator/consumer.h>
 #include <linux/vib-gpio.h>
 #include <linux/vib-pwm.h>
-#include <linux/clk.h>
 
 #include <mach/mux.h>
 #include <mach/gpio.h>
 #include <mach/keypad.h>
 #include <mach/dmtimer.h>
-
-/*#include <linux/time.h>*/
 
 #define SHOLEST_PROX_INT_GPIO		180
 #define SHOLEST_HF_NORTH_GPIO		10
@@ -327,7 +324,6 @@ static struct platform_device omap3430_hall_effect_dock = {
 
 static void sholest_vibrator_init(void)
 {
-	printk(KERN_ERR "sholest_vibrator_init is called\n");
 	gpio_request(SHOLEST_VIBRATOR_GPIO, "vibrator");
 	gpio_direction_output(SHOLEST_VIBRATOR_GPIO, 0);
 	omap_cfg_reg(Y4_34XX_GPIO181);

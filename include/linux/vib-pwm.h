@@ -1,6 +1,6 @@
 /* include/linux/vib-omap-pwm.h
  *
- * Copyright (C) 2008 Motorola, Inc.
+ * Copyright (C) 2009 Motorola, Inc.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
