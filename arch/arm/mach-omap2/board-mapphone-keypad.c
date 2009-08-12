@@ -18,6 +18,7 @@
 #include <linux/platform_device.h>
 #include <linux/input.h>
 #include <linux/gpio_event.h>
+#include <linux/keyreset.h>
 
 #include <mach/mux.h>
 #include <mach/gpio.h>
@@ -154,6 +155,26 @@ static struct platform_device mapphone_keypad_device = {
 	},
 };
 
+static int mapphone_reset_keys_up[] = {
+	BTN_MOUSE,		/* XXX */
+	0
+};
+
+static struct keyreset_platform_data mapphone_reset_keys_pdata = {
+	.keys_up = mapphone_reset_keys_up,
+	.keys_down = {
+		KEY_LEFTSHIFT,
+		KEY_LEFTALT,
+		KEY_BACKSPACE,
+		0
+	},
+};
+
+struct platform_device mapphone_reset_keys_device = {
+	.name = KEYRESET_NAME,
+	.dev.platform_data = &mapphone_reset_keys_pdata,
+};
+
 #ifdef CONFIG_ARM_OF
 static int __init mapphone_dt_kp_init(void)
 {
@@ -228,6 +249,7 @@ static int __init mapphone_init_keypad(void)
 	omap_cfg_reg(AB2_34XX_GPIO177);
 	omap_cfg_reg(AH17_34XX_GPIO100);
 
+	platform_device_register(&mapphone_reset_keys_device);
 	return platform_device_register(&mapphone_keypad_device);
 }
 
