@@ -1255,6 +1255,17 @@ void vfree(const void *addr)
 }
 EXPORT_SYMBOL(vfree);
 
+#ifdef CONFIG_DEBUG_MEMLEAK
+void memleak_vfree(void *addr)
+{
+	BUG_ON(in_interrupt());
+
+	memleak_free(addr);
+
+	__vunmap(addr, 1);
+}
+EXPORT_SYMBOL(memleak_vfree);
+#endif
 /**
  *	vunmap  -  release virtual mapping obtained by vmap()
  *	@addr:		memory base address
