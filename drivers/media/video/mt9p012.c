@@ -212,7 +212,10 @@ const static struct mt9p012_reg stream_on_list[] = {
 static struct mt9p012_reg set_exposure_time[] = {
 	/* less than frame_lines-1 */
 	{.length = MT9P012_8BIT, .reg = REG_GROUPED_PAR_HOLD, .val = 0x01},
+	{.length = MT9P012_16BIT, .reg = REG_COARSE_INT_TIME, .val = 500},
 	{.length = MT9P012_8BIT, .reg = REG_GROUPED_PAR_HOLD, .val = 0x00},
+	{.length = MT9P012_TOK_TERM, .reg = 0, .val = 0},
+
 };
 
 /*
@@ -726,6 +729,8 @@ static int mt9p012_read_reg(struct i2c_client *client, u16 data_length,
 	data[0] = (u8) (reg >> 8);;
 	data[1] = (u8) (reg & 0xff);
 	err = i2c_transfer(client->adapter, msg, 1);
+	udelay(50);
+
 	if (err >= 0) {
 		msg->len = data_length;
 		msg->flags = I2C_M_RD;
@@ -1547,7 +1552,7 @@ static int mt9p012_configure(struct v4l2_int_device *s)
 	/* Set initial flash mode */
 	i = find_vctrl(sensor, V4L2_CID_PRIVATE_FLASH_NEXT_FRAME);
 	if (i >= 0) {
-		lvc = &video_control[i];
+		lvc = &sensor->video_control[i];
 		mt9p012_set_flash_next_frame(lvc->current_value,
 			sensor->v4l2_int_device, lvc);
 	}
@@ -1555,7 +1560,7 @@ static int mt9p012_configure(struct v4l2_int_device *s)
 	/* Set initial orientation */
 	i = find_vctrl(sensor, V4L2_CID_PRIVATE_ORIENTATION);
 	if (i >= 0) {
-		lvc = &video_control[i];
+		lvc = &sensor->video_control[i];
 		mt9p012_set_orientation(lvc->current_value,
 			sensor->v4l2_int_device, lvc);
 	}
