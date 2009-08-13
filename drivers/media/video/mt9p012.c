@@ -955,12 +955,12 @@ static int mt9p012_set_exposure_time(u32 exp_time, struct v4l2_int_device *s,
 	if (!sensor->power_on)
 		goto end;
 
-	} else if (exp_time > sensor->abs_max_exposure_time) {
-		dev_err(&client->dev, "Exposure time %d too high.\n",
-			exp_time);
-		dev_err(&client->dev, "Abs Max time %d us\n",
-			sensor->abs_max_exposure_time);
-		exp_time = sensor->abs_max_exposure_time;
+	if (exp_time < 15000)
+		scale_factor = 1;
+	else if (exp_time < 150000)
+		scale_factor = 10;
+	else
+		scale_factor = 100;
 
 	coarse_int_time = ((((exp_time / scale_factor) *
 		(sensor->vt_pix_clk / 1000)) / 1000) -
