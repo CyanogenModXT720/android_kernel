@@ -360,8 +360,6 @@ static int __init android_bind(struct usb_composite_dev *cdev)
 	strings_dev[STRING_CONFIG_IDX].id = id;
 	android_config_driver.iConfiguration = id;
 
-	if (gadget->ops->wakeup)
-		android_config_driver.bmAttributes |= USB_CONFIG_ATT_WAKEUP;
 
 	/* double check to move this call to f_acm.c??? */
 	gserial_setup(gadget, 1);

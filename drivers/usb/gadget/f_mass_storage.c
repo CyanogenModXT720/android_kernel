@@ -1268,7 +1268,7 @@ static int do_inquiry(struct fsg_dev *fsg, struct fsg_buffhd *bh)
 
 #ifdef CONFIG_USB_MOT_ANDROID
 	u8 *vend_str = "Motorola";
-	u8 *prod_str = "Moto MS";
+	u8 *prod_str = "A853";
 
 	fsg->vendor = vend_str;
 	fsg->product = prod_str;
@@ -2293,6 +2293,19 @@ static int do_set_interface(struct fsg_dev *fsg, int altsetting)
 		DBG(fsg, "reset interface\n");
 
 reset:
+
+	/* Disable the endpoints */
+	if (fsg->bulk_in_enabled) {
+		DBG(fsg, "usb_ep_disable %s\n", fsg->bulk_in->name);
+		usb_ep_disable(fsg->bulk_in);
+		fsg->bulk_in_enabled = 0;
+	}
+	if (fsg->bulk_out_enabled) {
+		DBG(fsg, "usb_ep_disable %s\n", fsg->bulk_out->name);
+		usb_ep_disable(fsg->bulk_out);
+		fsg->bulk_out_enabled = 0;
+	}
+
 	/* Deallocate the requests */
 	for (i = 0; i < NUM_BUFFERS; ++i) {
 		struct fsg_buffhd *bh = &fsg->buffhds[i];
@@ -2305,18 +2318,6 @@ reset:
 			usb_ep_free_request(fsg->bulk_out, bh->outreq);
 			bh->outreq = NULL;
 		}
-	}
-
-	/* Disable the endpoints */
-	if (fsg->bulk_in_enabled) {
-		DBG(fsg, "usb_ep_disable %s\n", fsg->bulk_in->name);
-		usb_ep_disable(fsg->bulk_in);
-		fsg->bulk_in_enabled = 0;
-	}
-	if (fsg->bulk_out_enabled) {
-		DBG(fsg, "usb_ep_disable %s\n", fsg->bulk_out->name);
-		usb_ep_disable(fsg->bulk_out);
-		fsg->bulk_out_enabled = 0;
 	}
 
 	fsg->running = 0;
@@ -2401,18 +2402,11 @@ static int do_set_config(struct fsg_dev *fsg, u8 new_config)
 	if (fsg->config != 0) {
 		DBG(fsg, "reset config\n");
 		fsg->config = 0;
-		rc = do_set_interface(fsg, -1);
 	}
 
 	/* Enable the interface */
-	if (new_config != 0) {
+	if (new_config != 0)
 		fsg->config = new_config;
-		rc = do_set_interface(fsg, 0);
-		if (rc != 0)
-			fsg->config = 0;	/* Reset on errors */
-		else
-			INFO(fsg, "config #%d\n", fsg->config);
-	}
 
 	switch_set_state(&fsg->sdev, new_config);
 	adjust_wake_lock(fsg);
@@ -2511,6 +2505,7 @@ static void handle_exception(struct fsg_dev *fsg)
 
 	case FSG_STATE_EXIT:
 	case FSG_STATE_TERMINATED:
+		do_set_interface(fsg, -1);
 		do_set_config(fsg, 0);			/* Free resources */
 		spin_lock_irq(&fsg->lock);
 		fsg->state = FSG_STATE_TERMINATED;	/* Stop the thread */
@@ -3036,6 +3031,7 @@ static int fsg_function_set_alt(struct usb_function *f,
 	struct fsg_dev	*fsg = func_to_dev(f);
 	DBG(fsg, "fsg_function_set_alt intf: %d alt: %d\n", intf, alt);
 	fsg->new_config = 1;
+	do_set_interface(fsg, 0);
 	raise_exception(fsg, FSG_STATE_CONFIG_CHANGE);
 
 #ifdef CONFIG_USB_MOT_ANDROID
@@ -3048,6 +3044,8 @@ static void fsg_function_disable(struct usb_function *f)
 {
 	struct fsg_dev	*fsg = func_to_dev(f);
 	DBG(fsg, "fsg_function_disable\n");
+	if (fsg->new_config)
+		do_set_interface(fsg, -1);
 	fsg->new_config = 0;
 	raise_exception(fsg, FSG_STATE_CONFIG_CHANGE);
 }
