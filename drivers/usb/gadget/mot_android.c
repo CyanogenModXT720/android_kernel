@@ -92,6 +92,9 @@ static struct device_pid_vid mot_android_vid_pid[MAX_DEVICE_TYPE_NUM] = {
 	{"msc", MSC_TYPE_FLAG, 0x22b8, 0x41d9, "Motorola Config 14",
 	 USB_CLASS_PER_INTERFACE, USB_CLASS_PER_INTERFACE,
 	 USB_CLASS_PER_INTERFACE},
+	{"cdrom", CDROM_TYPE_FLAG, 0x22b8, 0x41de, "Motorola CDROM Device",
+	 USB_CLASS_PER_INTERFACE, USB_CLASS_PER_INTERFACE,
+	 USB_CLASS_PER_INTERFACE},
 	{"msc_adb", MSC_TYPE_FLAG | ADB_TYPE_FLAG, 0x22b8, 0x41db,
 	 "Motorola Config 42", USB_CLASS_PER_INTERFACE,
 	 USB_CLASS_PER_INTERFACE, USB_CLASS_PER_INTERFACE},
@@ -446,7 +449,7 @@ static void force_reenumeration(struct android_dev *dev, int dev_type)
 	/* clear all intefaces */
 	android_config_driver.next_interface_id = 0;
 
-	temp_enabled = dev_type & MSC_TYPE_FLAG;
+	temp_enabled = dev_type & (MSC_TYPE_FLAG | CDROM_TYPE_FLAG);
 	f = msc_function_enable(temp_enabled,
 				android_config_driver.next_interface_id);
 	if (temp_enabled) {
