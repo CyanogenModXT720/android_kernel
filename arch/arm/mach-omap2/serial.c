@@ -315,20 +315,21 @@ static void omap_uart_smart_idle_enable(struct omap_uart_state *uart,
 
 static inline void omap_uart_disable_rtspullup(struct omap_uart_state *uart)
 {
+	if (!uart->rts_padconf || !uart->rts_override)
+		return;
+	mdelay(10);
+	omap_ctrl_writew(uart->rts_padvalue, uart->rts_padconf);
+	uart->rts_override = 0;
+}
+
+static inline void omap_uart_enable_rtspullup(struct omap_uart_state *uart)
+{
 	if (!uart->rts_padconf || uart->rts_override)
 		return;
 
 	uart->rts_padvalue = omap_ctrl_readw(uart->rts_padconf);
 	omap_ctrl_writew(0x18 | 0x7, uart->rts_padconf);
 	uart->rts_override = 1;
-}
-
-static inline void omap_uart_enable_rtspullup(struct omap_uart_state *uart)
-{
-	if (!uart->rts_padconf || !uart->rts_override)
-		return;
-	omap_ctrl_writew(uart->rts_padvalue, uart->rts_padconf);
-	uart->rts_override = 0;
 }
 
 static inline void omap_uart_restore(struct omap_uart_state *uart)
@@ -382,7 +383,7 @@ void omap_uart_prepare_idle(int num)
 
 	list_for_each_entry(uart, &uart_list, node) {
 		if (num == uart->num && uart->can_sleep) {
-			omap_uart_disable_rtspullup(uart);
+			omap_uart_enable_rtspullup(uart);
 			omap_uart_disable_clocks(uart);
 			return;
 		}
@@ -396,7 +397,7 @@ void omap_uart_resume_idle(int num)
 	list_for_each_entry(uart, &uart_list, node) {
 		if (num == uart->num) {
 			omap_uart_restore(uart);
-			omap_uart_enable_rtspullup(uart);
+			omap_uart_disable_rtspullup(uart);
 
 			/* Check for IO pad wakeup */
 			if (cpu_is_omap34xx() && uart->padconf) {
@@ -489,7 +490,8 @@ static void omap_uart_idle_init(struct omap_uart_state *uart)
 		switch (uart->num) {
 		case 0:
 			wk_mask = OMAP3430_ST_UART1_MASK;
-			padconf = 0x180;
+			padconf = 0;
+/*			padconf = 0x180; */
 			uart->rts_padconf = 0x17e;
 			break;
 		case 1:
