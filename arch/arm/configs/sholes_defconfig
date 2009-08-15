@@ -1,7 +1,7 @@
 #
 # Automatically generated make config: don't edit
 # Linux kernel version: 2.6.29-omap1
-# Fri Aug  7 17:16:06 2009
+# Thu Aug 13 11:04:08 2009
 #
 CONFIG_ARM=y
 CONFIG_SYS_SUPPORTS_APM_EMULATION=y
@@ -770,7 +770,7 @@ CONFIG_INPUT_POLLDEV=y
 # CONFIG_INPUT_JOYDEV is not set
 CONFIG_INPUT_EVDEV=y
 # CONFIG_INPUT_EVBUG is not set
-# CONFIG_INPUT_KEYRESET is not set
+CONFIG_INPUT_KEYRESET=y
 
 #
 # Input Device Drivers

@@ -126,7 +126,151 @@ static int omapvout_dss_calc_offset(struct omapvout_device *vout)
 	return rc;
 }
 
-static int omapvout_dss_config_colorkey(struct omapvout_device *vout, bool init)
+static int omapvout_dss_get_overlays(struct omap_overlay **gfx,
+			struct omap_overlay **vid1, struct omap_overlay **vid2)
+{
+	struct omap_overlay *t;
+	int num_ovlys;
+	int i;
+
+	*gfx = NULL;
+	*vid1 = NULL;
+	*vid2 = NULL;
+	num_ovlys = omap_dss_get_num_overlays();
+	for (i = 0; i < num_ovlys; i++) {
+		t = omap_dss_get_overlay(i);
+
+		switch (t->id) {
+		case OMAP_DSS_GFX:
+			*gfx = t;
+			break;
+		case OMAP_DSS_VIDEO1:
+			*vid1 = t;
+			break;
+		case OMAP_DSS_VIDEO2:
+			*vid2 = t;
+			break;
+		}
+	}
+
+	if (*gfx && *vid1 && *vid2)
+		return 0;
+
+	return -EINVAL;
+}
+
+/* The algorithm below was cooked up to provide a reasonable global alpha
+ * configuration based on the typical use case, which is a single video plane
+ * blended with the graphics plane.  This algorithm will handle multiple
+ * video planes as well, but the thought is that typically the user is not
+ * going to want to be forced to set the global alpha value via the graphics
+ * plane (the frame buffer), but instead via the video plane.
+ *
+ * Algorithm:
+ * 1) For video1, if video2 is enabled, place the global alpha value set to
+ *    video2, else set to the graphics plane.
+ * 2) For video2, always place the global alpha value set to the graphics
+ *   plane, but need to be careful to move the video1 alpha value if its
+ *   already enabled.
+ */
+static void omapvout_dss_set_global_alpha(struct omapvout_device *vout)
+{
+	struct omap_overlay *gfx, *vid1, *vid2;
+	struct omap_overlay_info info;
+	u8 alpha;
+	u8 t;
+
+	/* Invert the requested alpha value since this alpha value is how
+	 * transparent the video plane is supposed to be, but it is being
+	 * applied to the plane above.
+	 */
+	alpha = 255 - vout->win.global_alpha;
+
+	if (omapvout_dss_get_overlays(&gfx, &vid1, &vid2)) {
+		DBG("Not all planes available\n");
+		return;
+	}
+
+	if (vout->dss->overlay->id == OMAP_DSS_VIDEO1) {
+		vid2->get_overlay_info(vid2, &info);
+		if (info.enabled) {
+			info.global_alpha = alpha;
+			vid2->set_overlay_info(vid2, &info);
+		} else {
+			gfx->get_overlay_info(gfx, &info);
+			info.global_alpha = alpha;
+			gfx->set_overlay_info(gfx, &info);
+		}
+	} else if (vout->dss->overlay->id == OMAP_DSS_VIDEO2) {
+		vid1->get_overlay_info(vid1, &info);
+		if (info.enabled) {
+			gfx->get_overlay_info(gfx, &info);
+			t = info.global_alpha;
+			info.global_alpha = alpha;
+			gfx->set_overlay_info(gfx, &info);
+			vid2->get_overlay_info(vid2, &info);
+			info.global_alpha = t;
+			vid2->set_overlay_info(vid2, &info);
+		} else {
+			gfx->get_overlay_info(gfx, &info);
+			info.global_alpha = alpha;
+			gfx->set_overlay_info(gfx, &info);
+			vid2->get_overlay_info(vid2, &info);
+			info.global_alpha = 255;
+			vid2->set_overlay_info(vid2, &info);
+		}
+	}
+
+#ifdef DEBUG
+	gfx->get_overlay_info(gfx, &info);
+	DBG("GFX Alpha = %d\n", info.global_alpha);
+	vid2->get_overlay_info(vid2, &info);
+	DBG("VID2 Alpha = %d\n", info.global_alpha);
+	vid1->get_overlay_info(vid1, &info);
+	DBG("VID1 Alpha = %d\n", info.global_alpha);
+#endif
+}
+
+/* This algorithm reverses the changes made in the "_set_" function and
+ * returns a flag denoting if alpha should still be enabled.
+ *
+ * The non-trivial part is to handle the case where both video planes are
+ * enabled.
+ */
+static bool omapvout_dss_clr_global_alpha(struct omapvout_device *vout)
+{
+	struct omap_overlay *gfx, *vid1, *vid2;
+	struct omap_overlay_info info;
+	bool alpha_en = false;
+	u8 t;
+
+	if (omapvout_dss_get_overlays(&gfx, &vid1, &vid2)) {
+		DBG("Not all planes available\n");
+		return false;
+	}
+
+	if (vout->dss->overlay->id == OMAP_DSS_VIDEO1) {
+		vid2->get_overlay_info(vid2, &info);
+		if (info.enabled)
+			alpha_en = true;
+	} else if (vout->dss->overlay->id == OMAP_DSS_VIDEO2) {
+		vid1->get_overlay_info(vid1, &info);
+		if (info.enabled) {
+			alpha_en = true;
+
+			/* Set gfx alpha to vid1's alpha */
+			vid2->get_overlay_info(vid2, &info);
+			t = info.global_alpha;
+			gfx->get_overlay_info(gfx, &info);
+			info.global_alpha = t;
+			gfx->set_overlay_info(gfx, &info);
+		}
+	}
+
+	return alpha_en;
+}
+
+static int omapvout_dss_enable_transparency(struct omapvout_device *vout)
 {
 	struct omap_overlay_manager *mgr;
 	struct omap_overlay_manager_info m_info;
@@ -139,22 +283,57 @@ static int omapvout_dss_config_colorkey(struct omapvout_device *vout, bool init)
 		return -EINVAL;
 
 	mgr->get_manager_info(mgr, &m_info);
-	if (vout->colorkey_en) {
-		m_info.alpha_enabled = false;
-		if (init) {
-			m_info.trans_key_type = OMAP_DSS_COLOR_KEY_GFX_DST;
-			m_info.trans_key = vout->colorkey;
-			m_info.trans_enabled = true;
-		} else {
-			m_info.trans_enabled = false;
-		}
 
-		mgr->set_manager_info(mgr, &m_info);
+	m_info.default_color = vout->bg_color;
+
+	if (vout->fbuf.flags & V4L2_FBUF_FLAG_CHROMAKEY) {
+		m_info.trans_key_type = OMAP_DSS_COLOR_KEY_GFX_DST;
+		m_info.trans_key = vout->win.chromakey;
+		m_info.trans_enabled = true;
+	} else if (vout->fbuf.flags & V4L2_FBUF_FLAG_SRC_CHROMAKEY) {
+		m_info.trans_key_type = OMAP_DSS_COLOR_KEY_VID_SRC;
+		m_info.trans_key = vout->win.chromakey;
+		m_info.trans_enabled = true;
 	} else {
 		m_info.trans_enabled = false;
-		m_info.alpha_enabled = false;
-		mgr->set_manager_info(mgr, &m_info);
 	}
+
+	if (vout->fbuf.flags & V4L2_FBUF_FLAG_LOCAL_ALPHA) {
+		m_info.alpha_enabled = true;
+	} else if (vout->fbuf.flags & V4L2_FBUF_FLAG_GLOBAL_ALPHA) {
+		omapvout_dss_set_global_alpha(vout);
+		m_info.alpha_enabled = true;
+	} else {
+		m_info.alpha_enabled = false;
+	}
+
+	DBG("Trans Enable = %d\n", m_info.trans_enabled);
+	DBG("Trans Mode = %d\n", m_info.trans_key_type);
+	DBG("Alpha Enable = %d\n", m_info.alpha_enabled);
+
+	mgr->set_manager_info(mgr, &m_info);
+
+	return 0;
+}
+
+static int omapvout_dss_disable_transparency(struct omapvout_device *vout)
+{
+	struct omap_overlay_manager *mgr;
+	struct omap_overlay_manager_info m_info;
+
+	mgr = vout->dss->overlay->manager;
+	if (mgr == NULL)
+		return -EINVAL;
+
+	if (mgr->set_manager_info == NULL || mgr->get_manager_info == NULL)
+		return -EINVAL;
+
+	mgr->get_manager_info(mgr, &m_info);
+
+	m_info.alpha_enabled = omapvout_dss_clr_global_alpha(vout);
+	m_info.trans_enabled = false;
+
+	mgr->set_manager_info(mgr, &m_info);
 
 	return 0;
 }
@@ -282,9 +461,6 @@ static int omapvout_dss_perform_vrfb_dma(struct omapvout_device *vout,
 
 	/* It is assumed that the caller has locked the vout mutex */
 
-	if (vout->rotation == 0)
-		return 0;
-
 	if (vout->dss->vrfb.req_status != DMA_CHAN_ALLOTED)
 		return -EINVAL;
 
@@ -351,30 +527,22 @@ static int omapvout_dss_update_overlay(struct omapvout_device *vout,
 {
 	struct omap_overlay_info o_info;
 	struct omap_overlay *ovly;
+	struct omapvout_dss_vrfb *vrfb;
 	int rc = 0;
 	int rot = vout->rotation;
 
 	/* It is assumed that the caller has locked the vout mutex */
 
 	/* Populate the overlay info struct and set it */
-	memset(&o_info, 0, sizeof(o_info));
+	ovly = vout->dss->overlay;
+	ovly->get_overlay_info(ovly, &o_info);
 	o_info.enabled = true;
-	if (rot == 0) {
-		o_info.paddr = vout->queue.bufs[buf_idx]->baddr;
-		o_info.paddr += vout->dss->foffset;
-		o_info.vaddr = NULL;
-		o_info.screen_width = vout->pix.width;
-	} else {
-		struct omapvout_dss_vrfb *vrfb;
-
-		vrfb = &vout->dss->vrfb;
-		o_info.paddr = vrfb->ctx[vrfb->next].paddr[rot];
-		o_info.paddr += vout->dss->foffset;
-		o_info.vaddr = NULL;
-		o_info.screen_width = OMAP_VRFB_LINE_LEN;
-
-		vrfb->next = (vrfb->next) ? 0 : 1;
-	}
+        vrfb = &vout->dss->vrfb;
+        o_info.paddr = vrfb->ctx[vrfb->next].paddr[rot];
+        o_info.paddr += vout->dss->foffset;
+        o_info.vaddr = NULL;
+        o_info.screen_width = OMAP_VRFB_LINE_LEN;
+        vrfb->next = (vrfb->next) ? 0 : 1;
 
 	if (rot == 1 || rot == 3) { /* 90 or 270 degree rotation */
 		o_info.width = vout->crop.height;
@@ -389,15 +557,10 @@ static int omapvout_dss_update_overlay(struct omapvout_device *vout,
 	o_info.out_width = vout->win.w.width;
 	o_info.out_height = vout->win.w.height;
 	o_info.color_mode = omapvout_dss_color_mode(vout->pix.pixelformat);
-	if (rot == 0)
-		o_info.rotation_type = OMAP_DSS_ROT_DMA;
-	else
-		o_info.rotation_type = OMAP_DSS_ROT_VRFB;
-
+	o_info.rotation_type = OMAP_DSS_ROT_VRFB;
 	o_info.rotation = rot;
 	o_info.mirror = false;
 
-	ovly = vout->dss->overlay;
 	rc = ovly->set_overlay_info(ovly, &o_info);
 	if (rc) {
 		DBG("Failed setting the overlay info %d\n", rc);
@@ -461,26 +624,28 @@ static void omapvout_dss_perform_update(struct work_struct *work)
 			rc = omapvout_dss_calc_offset(vout);
 			if (rc != 0) {
 				DBG("Offset calculation failed %d\n", rc);
-				goto failed_w_idx;
+				goto failed_need_done;
 			}
 
-			rc = omapvout_dss_config_colorkey(vout, true);
+			rc = omapvout_dss_enable_transparency(vout);
 			if (rc != 0) {
 				DBG("Alpha config failed %d\n", rc);
-				goto failed_w_idx;
+				goto failed_need_done;
 			}
 		}
 
 		rc = omapvout_dss_perform_vrfb_dma(vout, idx, dss->need_cfg);
 		if (rc != 0) {
 			DBG("VRFB rotation failed %d\n", rc);
-			goto failed_w_idx;
+			goto failed_need_done;
 		}
+
+                omapvout_dss_mark_buf_done(vout, idx);
 
 		rc = omapvout_dss_update_overlay(vout, idx);
 		if (rc != 0) {
 			DBG("DSS update failed %d\n", rc);
-			goto failed_w_idx;
+			goto failed;
 		}
 
 		dss->need_cfg = false;
@@ -503,25 +668,12 @@ static void omapvout_dss_perform_update(struct work_struct *work)
 			/* Since the DSS is disabled, this isn't a problem */
 			dss->working = false;
 
-			/* Clean up the states of the final buffers */
+			/* Clean up the states of the final buffer */
 			omapvout_dss_mark_buf_done(vout, idx);
-			if (dss->cur_q_idx != -1)
-				omapvout_dss_mark_buf_done(vout,
-							dss->cur_q_idx);
 			return;
 		}
 
 		mutex_lock(&vout->mtx);
-
-		if (vout->rotation == 0) {
-			if (dss->cur_q_idx != -1)
-				omapvout_dss_mark_buf_done(vout,
-							dss->cur_q_idx);
-
-			dss->cur_q_idx = idx;
-		} else {
-			omapvout_dss_mark_buf_done(vout, idx);
-		}
 	}
 
 	dss->working = false;
@@ -529,9 +681,10 @@ static void omapvout_dss_perform_update(struct work_struct *work)
 
 	return;
 
-failed_w_idx:
+failed_need_done:
 	/* Set the done flag on failures to be sure the buffer can be DQ'd */
 	omapvout_dss_mark_buf_done(vout, idx);
+failed:
 	dss->working = false;
 	mutex_unlock(&vout->mtx);
 }
@@ -688,9 +841,9 @@ void omapvout_dss_disable(struct omapvout_device *vout)
 		mutex_lock(&vout->mtx);
 	}
 
-	rc = omapvout_dss_config_colorkey(vout, false);
+	rc = omapvout_dss_disable_transparency(vout);
 	if (rc)
-		DBG("Disabling alpha failed %d\n", rc);
+		DBG("Disabling transparency failed %d\n", rc);
 
 	ovly = vout->dss->overlay;
 	rc = ovly->set_overlay_info(ovly, &o_info);

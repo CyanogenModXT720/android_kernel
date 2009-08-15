@@ -26,6 +26,7 @@
 #include <linux/clk.h>
 #include <linux/mm.h>
 #include <linux/bootmem.h>
+#include <linux/reboot.h>
 #include <linux/qtouch_obp_ts.h>
 #include <linux/led-cpcap-lm3554.h>
 #include <linux/led-lm3530.h>
@@ -50,6 +51,7 @@
 #include <mach/control.h>
 #include <mach/hdq.h>
 #include <linux/usb/android.h>
+#include <linux/wakelock.h>
 
 #include "cm-regbits-34xx.h"
 #include "pm.h"
@@ -603,6 +605,7 @@ static u64 ohci_dmamask = ~(u32)0;
 
 static struct omap_usb_config dummy_usb_config = {
 	.usbhost_standby_status	= omap_ohci_bus_check_ctrl_standby,
+	.usb_remote_wake_gpio = SHOLES_BP_READY2_AP_GPIO,
 };
 
 static struct platform_device ohci_device = {
@@ -752,7 +755,7 @@ int sholes_voltagescale_vcbypass(u32 target_opp, u32 current_opp,
 /* Sholes specific PM */
 
 static int bpwake_irqstate;
-
+static struct wake_lock baseband_wakeup_wakelock;
 static int sholes_bpwake_irqhandler(int irq, void *unused)
 {
 	printk("%s: Baseband wakeup\n", __func__);
@@ -761,6 +764,7 @@ static int sholes_bpwake_irqhandler(int irq, void *unused)
 	 */
 	disable_irq(irq);
 	bpwake_irqstate = 0;
+	wake_lock_timeout(&baseband_wakeup_wakelock, (HZ / 2));
 	return IRQ_HANDLED;
 }
 
@@ -781,6 +785,7 @@ static int sholes_bpwake_probe(struct platform_device *pdev)
 		return rc;
 	}
 
+	wake_lock_init(&baseband_wakeup_wakelock, WAKE_LOCK_SUSPEND, "bpwake");
 	enable_irq_wake(gpio_to_irq(SHOLES_APWAKE_TRIGGER_GPIO));
 	disable_irq(gpio_to_irq(SHOLES_APWAKE_TRIGGER_GPIO));
 	bpwake_irqstate = 0;
@@ -804,6 +809,8 @@ static int sholes_bpwake_suspend(struct platform_device *pdev, pm_message_t stat
 
 static int sholes_bpwake_resume(struct platform_device *pdev)
 {
+	disable_irq(gpio_to_irq(SHOLES_APWAKE_TRIGGER_GPIO));
+	bpwake_irqstate = 0;
 	return 0;
 }
 
@@ -822,6 +829,42 @@ static struct platform_device sholes_bpwake_device = {
 	.name		= "sholes_bpwake",
 	.id		= -1,
 	.num_resources	= 0,
+};
+
+/* Choose cold or warm reset
+ *    RST_TIME1>4ms will trigger CPCAP to trigger a system cold reset */
+static void sholes_pm_set_reset(char cold)
+{
+	if (cold) {
+		/* Configure RST_TIME1 to 6ms  */
+		prm_rmw_mod_reg_bits(OMAP_RSTTIME1_MASK,
+		0xc8<<OMAP_RSTTIME1_SHIFT,
+		OMAP3430_GR_MOD,
+		OMAP3_PRM_RSTTIME_OFFSET);
+	} else {
+		/* Configure RST_TIME1 to 30us  */
+		prm_rmw_mod_reg_bits(OMAP_RSTTIME1_MASK,
+		0x01<<OMAP_RSTTIME1_SHIFT,
+		OMAP3430_GR_MOD,
+		OMAP3_PRM_RSTTIME_OFFSET);
+	}
+}
+
+static int sholes_pm_reboot_call(struct notifier_block *this,
+			unsigned long code, void *cmd)
+{
+	int result = NOTIFY_DONE;
+
+	if (code == SYS_RESTART) {
+		/* set cold reset */
+		sholes_pm_set_reset(1);
+	}
+
+	return result;
+}
+
+static struct notifier_block sholes_pm_reboot_notifier = {
+	.notifier_call = sholes_pm_reboot_call,
 };
 
 static void sholes_pm_init(void)
@@ -852,6 +895,8 @@ static void sholes_pm_init(void)
 
 	platform_device_register(&sholes_bpwake_device);
 	platform_driver_register(&sholes_bpwake_driver);
+
+	register_reboot_notifier(&sholes_pm_reboot_notifier);
 }
 
 static void __init config_wlan_gpio(void)
