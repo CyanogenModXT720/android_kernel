@@ -386,7 +386,7 @@ int dss_check_overlay(struct omap_overlay *ovl, struct omap_dss_device *dssdev)
 			outh = info->out_height;
 	}
 
-#ifdef CONFIG_PANEL_HDTV //BANG Hacked start
+#ifdef CONFIG_PANEL_HDTV /* BANG Hacked start */
 	if (info->out_width > dw || info->out_height > dh || info->width > dw || info->height > dh) {
 		printk(" The panel is changed from prev_dw,prev_dh=%d,%d to dw,dh\ = %d, %d \n",
 			info->out_width, info->out_height, dw, dh);
@@ -406,7 +406,7 @@ int dss_check_overlay(struct omap_overlay *ovl, struct omap_dss_device *dssdev)
                         outh = dh;				
 		}
 	}
-#endif // BANG Hacked end
+#endif /* BANG Hacked end */
 
 	if (dw < info->pos_x + outw) {
 		DSSDBG("check_overlay failed 1: %d < %d + %d\n",
