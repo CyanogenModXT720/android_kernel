@@ -939,6 +939,15 @@ enum omap34xx_index {
 	D25_34XX_CAM_STROBE,
 	K8_34XX_GPMC_WAIT2,
 
+	/* DSS */
+#ifdef CONFIG_PANEL_HDTV /* charlotte */
+	AG22_34XX_DSS_DATA0,
+	AH22_34XX_DSS_DATA1,
+	AG23_34XX_DSS_DATA2,
+	AH23_34XX_DSS_DATA3,
+	AG24_34XX_DSS_DATA4,
+	AH24_34XX_DSS_DATA5,
+#endif
 };
 
 struct omap_mux_cfg {
