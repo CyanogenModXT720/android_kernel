@@ -397,7 +397,7 @@ static struct lm3530_platform_data omap3430_als_light_data = {
 	.als_config = 0x7D,
 	.brightness_ramp = 0x36,
 	.als_zone_info = 0x00,
-	.als_resistor_sel = 0x66,
+	.als_resistor_sel = 0x11, /* 13.531kOhm */
 	.brightness_control = 0x00,
 	.zone_boundary_0 = 0x33,
 	.zone_boundary_1 = 0x66,
@@ -496,6 +496,9 @@ static struct i2c_board_info __initdata mapphone_i2c_bus3_board_info[] = {
 		.platform_data = &mapphone_hplens_platform_data,
 	},
 #endif
+	{
+		I2C_BOARD_INFO("tda19989", 0x70),
+	},
 };
 
 static int __init mapphone_i2c_init(void)

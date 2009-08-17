@@ -51,4 +51,10 @@ config PANEL_SHOLES
         help
 	  LCD Panel used in sholes
 
+# charlotte adding to support HDMI 
+config PANEL_HDTV
+        tristate "HDTV Panel"
+        help
+	  HDTV Panel
+
 endmenu

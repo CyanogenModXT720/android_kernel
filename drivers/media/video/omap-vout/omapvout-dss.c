@@ -407,11 +407,17 @@ static int omapvout_dss_update_overlay(struct omapvout_device *vout,
 		return rc;
 	}
 
+#ifdef CONFIG_PANEL_HDTV /* Jun */
+	if (ovly->manager->device->update) {
+#endif
 	rc = ovly->manager->device->update(ovly->manager->device,
 					o_info.pos_x, o_info.pos_y,
 					o_info.out_width, o_info.out_height);
 	if (rc)
 		DBG("Overlay update failed %d\n", rc);
+#ifdef CONFIG_PANEL_HDTV
+	}
+#endif
 
 	return rc;
 }
@@ -670,10 +676,16 @@ void omapvout_dss_disable(struct omapvout_device *vout)
 	if (rc)
 		DBG("Overlay manager apply failed %d\n", rc);
 
+#ifdef CONFIG_PANEL_HDTV  /* Jun */
+	if (ovly->manager->device->update) {
+#endif
 	rc = ovly->manager->device->update(ovly->manager->device,
 				0, 0, vout->disp_width, vout->disp_height);
 	if (rc)
 		DBG("Display update failed %d\n", rc);
+#ifdef CONFIG_PANEL_HDTV
+	}
+#endif
 
 	vout->dss->enabled = false;
 }

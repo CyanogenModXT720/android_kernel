@@ -1014,3 +1014,14 @@ config USB_S2255
 endif # V4L_USB_DRIVERS
 
 endif # VIDEO_CAPTURE_DRIVERS
+
+#
+# NXP HDMI TDA19989 configuration
+#
+config HDMI_TDA19989
+	tristate "NXP HDMI 1.3 Transmitter driver"
+	depends on I2C
+	default m
+	help
+	  Choose m here to support HDMI1.3 transmitter
+	  with 3*8bit video inputs and CEC.

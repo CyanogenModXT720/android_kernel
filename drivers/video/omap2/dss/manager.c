@@ -284,8 +284,13 @@ struct manager_attribute {
 	__ATTR(_name, _mode, _show, _store)
 
 static MANAGER_ATTR(name, S_IRUGO, manager_name_show, NULL);
+#ifdef CONFIG_PANEL_HDTV /* charlotte change permission S_IRUGO->S_IRWXUGO */
+static MANAGER_ATTR(display, S_IRWXUGO|S_IWUSR,
+		manager_display_show, manager_display_store);
+#else
 static MANAGER_ATTR(display, S_IRUGO|S_IWUSR,
 		manager_display_show, manager_display_store);
+#endif
 static MANAGER_ATTR(default_color, S_IRUGO|S_IWUSR,
 		manager_default_color_show, manager_default_color_store);
 static MANAGER_ATTR(trans_key_type, S_IRUGO|S_IWUSR,
