@@ -1211,7 +1211,7 @@ static void __init mapphone_init(void)
 	mapphone_omap_mdm_ctrl_init();
 	mapphone_spi_init();
 	mapphone_flash_init();
-	mapphone_panic_init();
+	/* mapphone_panic_init(); */
 	mapphone_serial_init();
 	mapphone_als_init();
 	mapphone_panel_init();
