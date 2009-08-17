@@ -359,6 +359,15 @@ static struct spi_board_info mapphone_spi_board_info[] __initdata = {
 		.controller_data = &mapphone_cpcap_data,
 		.mode = SPI_CS_HIGH,
 	},
+#ifdef CONFIG_MOT_FEAT_SPI_SMS1130
+	{
+		.modalias = "smsmdtv", /* should match device driver name */
+		.bus_num  = 3,
+		.chip_select = 0,
+		.max_speed_hz = 6000000,
+		/*.mode = SPI_CS_LOW*/
+	},
+#endif
 };
 
 void __init mapphone_spi_init(void)

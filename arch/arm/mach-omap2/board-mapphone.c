@@ -438,6 +438,9 @@ static struct i2c_board_info __initdata mapphone_i2c_bus1_board_info[] = {
 
 extern struct akm8973_platform_data mapphone_akm8973_data;
 extern struct lis331dlh_platform_data mapphone_lis331dlh_data;
+#ifdef CONFIG_MOT_FEAT_LP3907
+extern struct lp3907_platform_data mapphone_lp3907_data;
+#endif
 static struct i2c_board_info __initdata mapphone_i2c_bus2_board_info[] = {
 	{
 		I2C_BOARD_INFO("akm8973", 0x1C),
@@ -448,6 +451,12 @@ static struct i2c_board_info __initdata mapphone_i2c_bus2_board_info[] = {
 		I2C_BOARD_INFO("lis331dlh", 0x19),
 		.platform_data = &mapphone_lis331dlh_data,
 	},
+#ifdef CONFIG_MOT_FEAT_LP3907
+	{
+		I2C_BOARD_INFO("lp3907", 0x61),
+		.platform_data = &mapphone_lp3907_data,
+	},
+#endif
 };
 
 static struct i2c_board_info __initdata mapphone_i2c_bus3_board_info[] = {
@@ -505,7 +514,9 @@ arch_initcall(mapphone_i2c_init);
 extern void __init mapphone_spi_init(void);
 extern void __init mapphone_flash_init(void);
 extern void __init mapphone_gpio_iomux_init(void);
-
+#ifdef CONFIG_MOT_FEAT_MDTV
+extern void __init mapphone_mdtv_init(void);
+#endif
 
 #if defined(CONFIG_USB_EHCI_HCD) || defined(CONFIG_USB_EHCI_HCD_MODULE)
 
@@ -1010,6 +1021,9 @@ static void __init mapphone_init(void)
 	mapphone_vout_init();
 	mapphone_power_off_init();
 	mapphone_gadget_init();
+#ifdef CONFIG_MOT_FEAT_MDTV
+	mapphone_mdtv_init();
+#endif
 }
 
 static void __init mapphone_map_io(void)

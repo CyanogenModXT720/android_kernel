@@ -27,6 +27,7 @@
 #include <linux/delay.h>
 #include <linux/poll.h>
 #include "cpcap_audio_driver.h"
+#include "omap34xx_audio_driver.h"
 #include <linux/spi/cpcap.h>
 #include <mach/resource.h>
 #include <linux/regulator/consumer.h>
@@ -107,6 +108,16 @@ static inline int is_stdac_changed(struct cpcap_audio_state *state,
 	if (state->stdac_mode != prev_state->stdac_mode ||
 		state->rat_type != prev_state->rat_type ||
 		state->stdac_rate != prev_state->stdac_rate)
+		return 1;
+	return 0;
+}
+
+static inline int is_mute_changed(struct cpcap_audio_state *state,
+				struct cpcap_audio_state *prev_state)
+{
+	if (state->codec_mute != prev_state->codec_mute ||
+		state->stdac_mute != prev_state->stdac_mute ||
+		state->analog_source != prev_state->analog_source)
 		return 1;
 	return 0;
 }
@@ -337,7 +348,8 @@ static unsigned short int cpcap_audio_get_ext_output_amp_switches(
 
 	switch (speaker) {
 	case CPCAP_AUDIO_OUT_HANDSET:
-		value |= CPCAP_BIT_A1_EAR_EXT_SW;
+		value |= CPCAP_BIT_A1_EAR_EXT_SW | CPCAP_BIT_PGA_EXT_R_EN
+			|CPCAP_BIT_MONO_EXT1;;
 		break;
 
 	case CPCAP_AUDIO_OUT_STEREO_HEADSET:
@@ -512,12 +524,14 @@ static void cpcap_audio_configure_aud_mute(struct cpcap_audio_state *state,
 		struct cpcap_regacc ext_changes = { 0 };
 
 		if (state->analog_source == CPCAP_AUDIO_ANALOG_SOURCE_STEREO)
-			ext_changes.value |=
+			ext_changes.value |= CPCAP_BIT_MONO_EXT0 |
 			    CPCAP_BIT_PGA_IN_R_SW | CPCAP_BIT_PGA_IN_L_SW;
 		else if (state->analog_source == CPCAP_AUDIO_ANALOG_SOURCE_L)
-			ext_changes.value |= CPCAP_BIT_PGA_IN_L_SW;
+			ext_changes.value |=
+				CPCAP_BIT_MONO_EXT1 | CPCAP_BIT_PGA_IN_L_SW;
 		else if (state->analog_source == CPCAP_AUDIO_ANALOG_SOURCE_R)
-			ext_changes.value |= CPCAP_BIT_PGA_IN_R_SW;
+			ext_changes.value |=
+				CPCAP_BIT_MONO_EXT1 | CPCAP_BIT_PGA_IN_R_SW;
 		ext_changes.mask = ext_changes.value | prev_ext_mute_data;
 
 		prev_ext_mute_data = ext_changes.value;
@@ -787,11 +801,22 @@ static void cpcap_audio_configure_output_gains(
 	}
 }
 
+#define CPCAP_AUDIO_A2_CLOCK_MASK \
+	(CPCAP_BIT_A2_CLK2|CPCAP_BIT_A2_CLK1|CPCAP_BIT_A2_CLK0)
+#define CPCAP_AUDIO_A2_CLOCK_15_36 (CPCAP_BIT_A2_CLK0)
+#define CPCAP_AUDIO_A2_CLOCK_16_80 (CPCAP_BIT_A2_CLK1)
+#define CPCAP_AUDIO_A2_CLOCK_19_20 (CPCAP_BIT_A2_CLK1|CPCAP_BIT_A2_CLK0)
+#define CPCAP_AUDIO_A2_CLOCK_26_00 (CPCAP_BIT_A2_CLK2)
+#define CPCAP_AUDIO_A2_CLOCK_33_60 (CPCAP_BIT_A2_CLK2|CPCAP_BIT_A2_CLK0)
+#define CPCAP_AUDIO_A2_CLOCK_38_40 (CPCAP_BIT_A2_CLK2|CPCAP_BIT_A2_CLK1)
+
 static void cpcap_audio_configure_output(
 	struct cpcap_audio_state *state,
 	struct cpcap_audio_state *previous_state)
 {
 	static unsigned int prev_aud_out_data;
+
+	/*cpcap_audio_configure_loudspeaker_headset(previous_state, state);*/
 
 	if (is_output_changed(previous_state, state) ||
 	    is_codec_changed(previous_state, state) ||

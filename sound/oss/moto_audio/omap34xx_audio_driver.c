@@ -27,6 +27,7 @@
 #include <linux/sound.h>
 #include <linux/poll.h>
 #include <mach/mux.h>
+#include <linux/soundcard.h>
 #include "omap34xx_audio_driver.h"
 #include "cpcap_audio_driver.h"
 
@@ -1774,6 +1775,38 @@ static int audio_ioctl(struct inode *inode, struct file *file,
 		break;
 	}
 
+	case SOUND_MIXER_FMPATH:
+		{
+			int spkr;
+			TRY(copy_from_user(&spkr, (int *)arg, sizeof(int)))
+			AUDIO_LEVEL2_LOG("SOUND_MIXER_FMPATH with spkr = %#x\n",
+				 spkr);
+			cpcap_audio_state.ext_primary_speaker = spkr;
+			cpcap_audio_state.output_gain = 15;
+			cpcap_audio_set_audio_state(&cpcap_audio_state);
+			break;
+		}
+
+	case SOUND_MIXER_FMON:
+		{
+			AUDIO_LEVEL2_LOG("SOUND_MIXER_FMON\n");
+			/*cpcap_regacc_write(cpcap_audio_state.cpcap,
+				CPCAP_REG_GPIO1, 0x0204, 0x0204);*/
+			cpcap_audio_state.analog_source =
+				CPCAP_AUDIO_ANALOG_SOURCE_STEREO;
+			cpcap_audio_set_audio_state(&cpcap_audio_state);
+			break;
+		}
+
+	case SOUND_MIXER_FMOFF:
+		{
+			AUDIO_LEVEL2_LOG("SOUND_MIXER_FMOFF\n");
+			/*cpcap_regacc_write(cpcap_audio_state.cpcap,
+				CPCAP_REG_GPIO1, 0x0004, 0x0004);*/
+			cpcap_audio_set_audio_state(&cpcap_audio_state);
+			break;
+		}
+
 	case SOUND_MIXER_RECSRC:
 	{
 		int mic;
@@ -2131,8 +2164,8 @@ static int audio_mixer_open(struct inode *inode, struct file *file)
 	int ret = 0;
 	mutex_lock(&audio_lock);
 	if (state.dev_mixer_open_count == 1) {
-		ret = -EBUSY;
-		goto err;
+		/*ret = -EBUSY;
+		goto err;*/
 	}
 
 	state.dev_mixer_open_count = 1;

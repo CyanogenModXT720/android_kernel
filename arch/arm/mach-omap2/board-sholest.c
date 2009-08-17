@@ -430,6 +430,9 @@ static struct i2c_board_info __initdata sholest_i2c_bus1_board_info[] = {
 
 extern struct akm8973_platform_data sholest_akm8973_data;
 extern struct lis331dlh_platform_data sholest_lis331dlh_data;
+#ifdef CONFIG_MOT_FEAT_LP3907
+extern struct lp3907_platform_data sholest_lp3907_data;
+#endif
 static struct i2c_board_info __initdata sholest_i2c_bus2_board_info[] = {
 	{
 		I2C_BOARD_INFO("akm8973", 0x1C),
@@ -440,6 +443,12 @@ static struct i2c_board_info __initdata sholest_i2c_bus2_board_info[] = {
 		I2C_BOARD_INFO("lis331dlh", 0x19),
 		.platform_data = &sholest_lis331dlh_data,
 	},
+#ifdef CONFIG_MOT_FEAT_LP3907
+	{
+		I2C_BOARD_INFO("lp3907", 0x61),
+		.platform_data = &sholest_lp3907_data,
+	},
+#endif
 };
 
 static struct i2c_board_info __initdata sholest_i2c_bus3_board_info[] = {
@@ -497,7 +506,9 @@ arch_initcall(sholest_i2c_init);
 extern void __init sholest_spi_init(void);
 extern void __init sholest_flash_init(void);
 extern void __init sholest_gpio_iomux_init(void);
-
+#ifdef CONFIG_MOT_FEAT_MDTV
+extern void __init sholest_mdtv_init(void);
+#endif
 
 #if defined(CONFIG_USB_EHCI_HCD) || defined(CONFIG_USB_EHCI_HCD_MODULE)
 
@@ -997,6 +1008,9 @@ static void __init sholest_init(void)
 	sholest_vout_init();
 	sholest_power_off_init();
 	sholest_gadget_init();
+#ifdef CONFIG_MOT_FEAT_MDTV
+	sholest_mdtv_init();
+#endif
 }
 
 static void __init sholest_map_io(void)

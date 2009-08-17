@@ -2174,6 +2174,24 @@ CONFIG_HAS_DMA=y
 # Motorola Features
 #
 CONFIG_UMTS_SYSPANIC=y
+
+# support MDTV system
+CONFIG_MOT_FEAT_MDTV=y
+
+# support LP3907 regulator for TDMB block
+CONFIG_MOT_FEAT_LP3907=y
+
+# SMS1130 SPI interface
+CONFIG_MOT_FEAT_SPI_SMS1130=y
+
+#
+# Supported SMS1130(TDMB tuner)
+#
+CONFIG_DVB_CORE=y
+CONFIG_SMS_SIANO_MDTV_TDMB=m
+
+CONFIG_SMS_HOSTLIB_SUBSYS=m
+
 #
 # End of Motorola Features
 #
