@@ -487,6 +487,9 @@ static struct i2c_board_info __initdata mapphone_i2c_bus3_board_info[] = {
 		.platform_data = &mapphone_hplens_platform_data,
 	},
 #endif
+	{
+		I2C_BOARD_INFO("tda19989", 0x70),
+	},
 };
 
 static int __init mapphone_i2c_init(void)
