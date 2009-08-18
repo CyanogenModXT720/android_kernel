@@ -1,7 +1,7 @@
 /******************************************************************************
  * NetMUX direct.c                                                            *
  *                                                                            *
- * Copyright (C) 2006-2008 Motorola, Inc.                                     *
+ * Copyright (C) 2006-2010 Motorola, Inc.                                     *
  *                                                                            *
  * Redistribution and use in source and binary forms, with or without         *
  * modification, are permitted provided that the following conditions are     *
@@ -42,6 +42,7 @@
  *   2007/12/05  Motorola    port to kernel 2.6.22 for OMAP3430               * 
  *   2008/07/09  Motorola    port to kernel 2.6.24 for TI 23.5                *
  *   2008/10/25  Motorola    update  kernel to TI 25.1                        *
+ *   2009/08/13  Motorola    Remove wait in DirectClose()                     *
  ******************************************************************************/
 
 /* direct.c defines an interface between a NetMUX and the Linux raw character */
@@ -558,11 +559,7 @@ int DirectClose (struct inode* inode, struct file* filp)
 
     result = DisableChannel(host_end(COMMAND), minor, direct->host_interface, client_interface, direct->mux);
 
-    if(chdat->refcount)
-    {
-        wait_event_interruptible(chdat->close_wait, !chdat->refcount);
-    }
-    else
+    if (chdat->refcount <= 0)
     {
         if(result != ERROR_NONE)
             return -ENOTCONN;
