@@ -375,7 +375,7 @@ mtdoops_console_write(struct console *co, const char *s, unsigned int count)
 
 	spin_unlock_irqrestore(&cxt->writecount_lock, flags);
 
-	if (cxt->writecount == OOPS_PAGE_SIZE)
+	if ((cxt->writecount == OOPS_PAGE_SIZE) && !in_interrupt())
 		mtdoops_console_sync();
 }
 
