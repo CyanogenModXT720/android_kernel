@@ -3,6 +3,7 @@
 #include <linux/clk.h>
 #include <linux/delay.h>
 #include <linux/err.h>
+#include <linux/workqueue.h>
 
 #include <mach/display.h>
 #include <mach/dma.h>
@@ -45,18 +46,44 @@ static struct omap_video_timings sholes_panel_timings = {
 	.vbp            = 1,
 };
 
+struct sholes_data {
+	struct work_struct work;
+	struct omap_dss_device *dssdev;
+};
+
+static void sholes_panel_display_on(struct work_struct *work)
+{
+	struct sholes_data *sholes_data = container_of(work, struct sholes_data,
+						       work);
+	u8 data;
+
+	sholes_data->dssdev->sync(sholes_data->dssdev);
+	data = EDISCO_CMD_SET_DISPLAY_ON;
+	dsi_vc_dcs_write(EDISCO_CMD_VC, &data, 1);
+}
+
+
 static int sholes_panel_probe(struct omap_dss_device *dssdev)
 {
+	struct sholes_data *data;
+
 	DBG("probe\n");
 	dssdev->ctrl.pixel_size = 24;
 	dssdev->panel.config = OMAP_DSS_LCD_TFT;
 	dssdev->panel.config = OMAP_DSS_LCD_TFT;
 	dssdev->panel.timings = sholes_panel_timings;
+	data = kmalloc(sizeof(struct sholes_data), GFP_KERNEL);
+	if (!data)
+		return -ENOMEM;
+	INIT_WORK(&data->work, sholes_panel_display_on);
+	data->dssdev = dssdev;
+	dssdev->data = data;
 	return 0;
 }
 
 static void sholes_panel_remove(struct omap_dss_device *dssdev)
 {
+	kfree(dssdev->data);
 	return;
 }
 
@@ -129,11 +156,7 @@ static int sholes_panel_enable(struct omap_dss_device *dssdev)
 
 	mdelay(200);
 
-	data[0] = EDISCO_CMD_SET_DISPLAY_ON;
-	//ret = dsi_vc_write(EDISCO_CMD_VC, EDISCO_SHORT_WRITE_0, data, 1);
-	ret = dsi_vc_dcs_write(EDISCO_CMD_VC, data, 1);
-	if (ret)
-		goto error;
+	schedule_work(&((struct sholes_data *)dssdev->data)->work);
 
 	printk("done EDISCO CTRL ENABLE\n");
 	return 0;
@@ -156,7 +179,6 @@ static void sholes_panel_disable(struct omap_dss_device *dssdev)
 
 	if (dssdev->platform_disable)
 		dssdev->platform_disable(dssdev);
-
 }
 
 static void sholes_panel_setup_update(struct omap_dss_device *dssdev,
@@ -242,25 +264,6 @@ static bool sholes_panel_te_support(struct omap_dss_device *dssdev)
 	return true;
 }
 
-#if 0
-static struct omap_ctrl sholes_panel_ctrl = {
-	.owner = THIS_MODULE,
-	.name = "sholes-panel",
-	.init = sholes_panel_ctrl_init,
-
-	.enable = sholes_panel_enable,
-	.disable = sholes_panel_disable,
-	.suspend = sholes_panel_suspend,
-	.resume = sholes_panel_resume,
-	.setup_update = sholes_panel_ctrl_setup_update,
-	.enable_te = sholes_panel_ctrl_enable_te,
-	.set_rotate = sholes_panel_ctrl_rotate,
-	.set_mirror = sholes_panel_ctrl_mirror,
-	.run_test = sholes_panel_run_test,
-	.pixel_size = 24,
-};
-#endif
-
 static struct omap_dss_driver sholes_panel_driver = {
 	.probe = sholes_panel_probe,
 	.remove = sholes_panel_remove,
@@ -271,7 +274,7 @@ static struct omap_dss_driver sholes_panel_driver = {
 	.resume = sholes_panel_resume,
 	.setup_update = sholes_panel_setup_update,
 	.enable_te = sholes_panel_enable_te,
-    .te_support = sholes_panel_te_support,
+	.te_support = sholes_panel_te_support,
 	.set_rotate = sholes_panel_rotate,
 	.set_mirror = sholes_panel_mirror,
 	.run_test = sholes_panel_run_test,
