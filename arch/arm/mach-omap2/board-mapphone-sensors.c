@@ -16,7 +16,7 @@
 #include <linux/sfh7743.h>
 #include <linux/bu52014hfv.h>
 #include <linux/lis331dlh.h>
-#include <linux/akm8973.h>
+#include <linux/akm8973_akmd.h>
 #include <linux/delay.h>
 #include <linux/regulator/consumer.h>
 #include <linux/vib-gpio.h>
@@ -50,7 +50,7 @@ static void mapphone_vibrator_exit(void)
 
 static int mapphone_vibrator_power_on(void)
 {
-	regulator_set_voltage(mapphone_vibrator_regulator, 2000000, 2000000);
+	regulator_set_voltage(mapphone_vibrator_regulator, 3000000, 3000000);
 	return regulator_enable(mapphone_vibrator_regulator);
 }
 
