@@ -215,7 +215,6 @@ static struct mt9p012_reg set_exposure_time[] = {
 	{.length = MT9P012_16BIT, .reg = REG_COARSE_INT_TIME, .val = 500},
 	{.length = MT9P012_8BIT, .reg = REG_GROUPED_PAR_HOLD, .val = 0x00},
 	{.length = MT9P012_TOK_TERM, .reg = 0, .val = 0},
-
 };
 
 /*
@@ -666,6 +665,7 @@ struct mt9p012_sensor {
 	u32 min_exposure_time;
 	u32 fps_max_exposure_time;
 	u32 abs_max_exposure_time;
+
 	int min_linear_gain;
 	int max_linear_gain;
 
@@ -1303,10 +1303,10 @@ static int mt9p012_set_framerate(struct v4l2_int_device *s,
 	}
 
 	v4l_info(client, "MT9P012 Set Framerate: fper=%d/%d, "
-		 "frame_len_lines=%d, fps_max_expT=%dus, "
-		 "abs_max_expT=%dus\n",
+		"frame_len_lines=%d, fps_max_expT=%dus, "
+		"abs_max_expT=%dus\n",
 		fper->numerator, fper->denominator, frame_length_lines,
-		 sensor->fps_max_exposure_time, sensor->abs_max_exposure_time);
+		sensor->fps_max_exposure_time, sensor->abs_max_exposure_time);
 
 	return err;
 }

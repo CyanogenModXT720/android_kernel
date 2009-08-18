@@ -35,5 +35,6 @@ obj-$(CONFIG_UMTS_SYSPANIC)     += syspanic.o
 obj-$(CONFIG_OMAP_MODEM_CONTROL)       += omap_mdm_ctrl.o
 obj-$(CONFIG_VIB_GPIO)		+= vib-gpio.o
 obj-$(CONFIG_WL127X_RFKILL)	+= wl127x-rfkill.o
+obj-$(CONFIG_WL127X_TEST)	+= wl127x-test.o
 obj-$(CONFIG_MODEM_PM_DRIVER)   += modem_pm_driver/
 obj-$(CONFIG_SEC_DRIVER)        += sec/
