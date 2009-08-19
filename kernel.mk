@@ -27,9 +27,7 @@ KERNEL_CONF_OUT_DIR= \
 $(PWD)/out/target/product/generic/obj/PARTITIONS/kernel_intermediates
 KERNEL_BUILD_DIR=$(KERNEL_CONF_OUT_DIR)/build
 KERNEL_SRC_DIR=$(PWD)/kernel
-#KERNEL_CROSS_COMPILE=$(PWD)/$TARGET_TOOLS_PREFIX
-KERNEL_CROSS_COMPILE= \
-$(PWD)/codesourcery/toolchain/bin/arm-none-linux-gnueabi-
+KERNEL_CROSS_COMPILE=$(PWD)/prebuilt/linux-x86/toolchain/arm-eabi-4.4.0/bin/arm-eabi-
 MOTO_PREBUILT_DIR=$(PWD)/motorola/bsp/prebuilt/target/images
 MOTO_MOD_INSTALL=$(MOTO_PREBUILT_DIR)/system/lib/modules
 DEPMOD=$(PWD)/motorola/bsp/prebuilt/host/bin/depmod
