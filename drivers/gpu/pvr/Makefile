@@ -4,6 +4,8 @@ ccflags-y = -DLINUX -D__linux__ -Idrivers/gpu/pvr -Idrivers/gpu/pvr/omap3430 \
 	-DPVR_BUILD_DIR="\"omap3430_android\"" \
 	-DOGLES1_BASENAME=\"GLES_sgx\" \
 	-DSGX_DYNAMIC_TIMING_INFO \
+	-DSYS_CUSTOM_POWERLOCK_WRAP \
+	-DANDROID_SYNC_OBJECTS \
 	-DSERVICES4 \
 	-D_XOPEN_SOURCE=600 \
 	-DPVR2D_VALIDATE_INPUT_PARAMS \
@@ -14,7 +16,6 @@ ccflags-y = -DLINUX -D__linux__ -Idrivers/gpu/pvr -Idrivers/gpu/pvr/omap3430 \
 	-DTRANSFER_QUEUE \
 	-DSYS_USING_INTERRUPTS \
 	-DSUPPORT_HW_RECOVERY \
-	-DSUPPORT_ACTIVE_POWER_MANAGEMENT \
 	-DPVR_SECURE_HANDLES \
 	-DPVR_SECURE_FD_EXPORT \
 	-DUSE_PTHREADS \
@@ -27,6 +28,9 @@ ccflags-y = -DLINUX -D__linux__ -Idrivers/gpu/pvr -Idrivers/gpu/pvr/omap3430 \
 	-DSGX530 \
 	-DSUPPORT_SGX530 \
 	-DSGX_CORE_REV=121 
+
+#	-DSUPPORT_ACTIVE_POWER_MANAGEMENT \
+
 
 ccflags-$(CONFIG_SGX_BUILD_RELEASE) += \
 	-DPVR_BUILD_TYPE="\"release\""  -DRELEASE
@@ -73,6 +77,7 @@ pvr_common-y := \
 	bridged_support.o \
 	bridged_pvr_bridge.o \
 	perproc.o \
+	lists.o \
 	omap3430/sysconfig.o \
 	omap3430/sysutils.o
 
