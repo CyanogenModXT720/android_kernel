@@ -34,13 +34,13 @@
 #include <linux/usb/composite.h>
 #include "f_usbnet.h"
 
+#include "f_mot_android.h"
 
 /*
  * Macro Defines
  */
 
 #define EP0_BUFSIZE		256
-
 
 /* Vendor Request to config IP */
 #define USBNET_SET_IP_ADDRESS   0x05
@@ -53,30 +53,11 @@
 #define MAX_BULK_RX_REQ_NUM	8
 #define MAX_INTR_RX_REQ_NUM	8
 
-#define STRING_INTERFACE        0
-
-
-/* static strings, in UTF-8 */
-static struct usb_string usbnet_string_defs[] = {
-	[STRING_INTERFACE].s = "Motorola Test Command",
-	{  /* ZEROES END LIST */ },
-};
-
-static struct usb_gadget_strings usbnet_string_table = {
-	.language =             0x0409, /* en-us */
-	.strings =              usbnet_string_defs,
-};
-
-static struct usb_gadget_strings *usbnet_strings[] = {
-	&usbnet_string_table,
-	NULL,
-};
-
-
 struct usbnet_if_configuration {
 	u32 ip_addr;
 	u32 subnet_mask;
 	u32 router_ip;
+	u32 iff_flag;
 	struct work_struct usbnet_config_wq;
 	struct net_device *usbnet_config_dev;
 };
@@ -98,25 +79,46 @@ struct usbnet_context {
 	struct net_device_stats stats;
 };
 
-
 struct usbnet_device {
 	struct usb_function function;
 	struct usb_composite_dev *cdev;
 	struct usbnet_context *net_ctxt;
 };
 
-
-
+static struct usbnet_device             g_usbnet_device;
 static struct usbnet_context 		*g_usbnet_context;
 static struct net_device     		*g_net_dev;
 static struct usbnet_if_configuration 	g_usbnet_ifc;
 
+#ifdef CONFIG_USB_MOT_ANDROID
+/* used when eth function is disabled */
+static struct usb_descriptor_header *null_function[] = {
+	NULL,
+};
+#endif
 
+/*
+ * USB descriptors
+ */
+#define STRING_INTERFACE        0
 
+/* static strings, in UTF-8 */
+static struct usb_string usbnet_string_defs[] = {
+	[STRING_INTERFACE].s = "Motorola Networking Interface",
+	{  /* ZEROES END LIST */ },
+};
 
+static struct usb_gadget_strings usbnet_string_table = {
+	.language =             0x0409, /* en-us */
+	.strings =              usbnet_string_defs,
+};
+
+static struct usb_gadget_strings *usbnet_strings[] = {
+	&usbnet_string_table,
+	NULL,
+};
 
 /* There is only one interface. */
-
 static struct usb_interface_descriptor intf_desc = {
 	.bLength = sizeof intf_desc,
 	.bDescriptorType = USB_DT_INTERFACE,
@@ -198,8 +200,6 @@ static inline struct usbnet_device *func_to_dev(struct usb_function *f)
 	return container_of(f, struct usbnet_device, function);
 }
 
-
-
 static int ether_queue_out(struct usb_request *req)
 {
 	unsigned long flags;
@@ -222,6 +222,7 @@ static int ether_queue_out(struct usb_request *req)
 	ret = usb_ep_queue(g_usbnet_context->bulk_out, req, GFP_KERNEL);
 	if (ret == 0)
 		return 0;
+	dev_kfree_skb_any(skb);
 fail:
 	spin_lock_irqsave(&g_usbnet_context->lock, flags);
 	list_add_tail(&req->list, &g_usbnet_context->rx_reqs);
@@ -270,7 +271,6 @@ static int usb_ether_xmit(struct sk_buff *skb, struct net_device *dev)
 	if (rc != 0) {
 		spin_lock_irqsave(&g_usbnet_context->lock, flags);
 		list_add_tail(&req->list, &g_usbnet_context->tx_reqs);
-		netif_start_queue(dev);
 		spin_unlock_irqrestore(&g_usbnet_context->lock, flags);
 
 		dev_kfree_skb_any(skb);
@@ -335,13 +335,21 @@ static void usbnet_if_config(struct work_struct *work)
 
 	memset(&ifr, 0, sizeof(ifr));
 	strncpy(ifr.ifr_ifrn.ifrn_name, "usb0", strlen("usb0") + 1);
-	ifr.ifr_flags = ((g_usbnet_ifc.usbnet_config_dev->flags) | IFF_UP);
+	ifr.ifr_flags = ((g_usbnet_ifc.usbnet_config_dev->flags) |
+			g_usbnet_ifc.iff_flag);
 	err = devinet_ioctl(dev_net(g_usbnet_ifc.usbnet_config_dev),
 			  SIOCSIFFLAGS, &ifr);
 	if (err)
 		printk(KERN_INFO "%s: Error in SIOCSIFFLAGS\n", __func__);
 
 	set_fs(saved_fs);
+
+	if (g_usbnet_ifc.iff_flag == IFF_UP)
+		usb_interface_enum_cb(ETH_TYPE_FLAG);
+	else {
+		g_usbnet_ifc.subnet_mask = 0;
+		g_usbnet_ifc.router_ip   = 0;
+	}
 }
 
 static void __init usb_ether_setup(struct net_device *dev)
@@ -375,17 +383,6 @@ static void usbnet_cleanup(void)
 	}
 }
 
-static void usbnet_setup_complete(struct usb_ep *ep,
-				  struct usb_request *req)
-{
-	if (req->status || req->actual != req->length)
-		printk(KERN_INFO "%s --> %d, %u/%u\n", __func__,
-		      req->status, req->actual, req->length);
-
-	if (req->status == -ECONNRESET)	/* Request was cancelled */
-		usb_ep_fifo_flush(ep);
-}
-
 static void usbnet_unbind(struct usb_configuration *c, struct usb_function *f)
 {
 	struct usbnet_device *dev = func_to_dev(f);
@@ -395,6 +392,7 @@ static void usbnet_unbind(struct usb_configuration *c, struct usb_function *f)
 
 	dev->cdev = cdev;
 
+	/* Free EP0 Request */
 	usb_ep_disable(g_usbnet_context->bulk_in);
 	usb_ep_disable(g_usbnet_context->bulk_out);
 
@@ -449,7 +447,7 @@ static void ether_out_complete(struct usb_ep *ep, struct usb_request *req)
 	}
 
 	/* don't bother requeuing if we just went offline */
-	if (req->status == -ENODEV) {
+	if (req->status == -ESHUTDOWN) {
 		unsigned long flags;
 		spin_lock_irqsave(&g_usbnet_context->lock, flags);
 		list_add_tail(&req->list, &g_usbnet_context->rx_reqs);
@@ -500,7 +498,7 @@ static int __init usbnet_bind(struct usb_configuration *c,
 	intf_desc.bInterfaceNumber = id;
 	g_usbnet_context->gadget = cdev->gadget;
 
-	/* Find all the endpoints we will use */
+	/* config EPs */
 	ep = usb_ep_autoconfig(cdev->gadget, &fs_bulk_in_desc);
 	if (!ep) {
 		printk(KERN_INFO "%s auto-configure hs_bulk_in_desc error\n",
@@ -543,6 +541,7 @@ static int __init usbnet_bind(struct usb_configuration *c,
 
 	rc = -ENOMEM;
 
+	/* Allocate the request and buffer for endpoint 0 */
 	for (n = 0; n < MAX_BULK_RX_REQ_NUM; n++) {
 		req = usb_ep_alloc_request(g_usbnet_context->bulk_out,
 					 GFP_KERNEL);
@@ -575,13 +574,10 @@ static int __init usbnet_bind(struct usb_configuration *c,
 
 autoconf_fail:
 	rc = -ENOTSUPP;
-out:
+
 	usbnet_unbind(c, f);
 	return rc;
 }
-
-
-
 
 static void do_set_config(u16 new_config)
 {
@@ -616,7 +612,7 @@ static void do_set_config(u16 new_config)
 			result = usb_ep_enable(g_usbnet_context->bulk_out,
 					  &hs_bulk_out_desc);
 		else
-		result = usb_ep_enable(g_usbnet_context->bulk_out,
+			result = usb_ep_enable(g_usbnet_context->bulk_out,
 				  &fs_bulk_out_desc);
 
 		if (result != 0) {
@@ -641,7 +637,7 @@ static void do_set_config(u16 new_config)
 			if (ether_queue_out(req)) {
 				printk(KERN_INFO "%s: ether_queue_out failed\n",
 					__func__);
-			break;
+				break;
 			}
 		}
 
@@ -666,21 +662,26 @@ static int usbnet_setup(struct usb_function *f,
 			const struct usb_ctrlrequest *ctrl)
 {
 
-	int rc = 0;
-	int w_length = le16_to_cpu(ctrl->wLength);
+	int rc = -EOPNOTSUPP;
 	int wIndex = le16_to_cpu(ctrl->wIndex);
 	int wValue = le16_to_cpu(ctrl->wValue);
+	u16 wLength = le16_to_cpu(ctrl->wLength);
+	struct usb_composite_dev *cdev = f->config->cdev;
+	struct usb_request	*req = cdev->req;
 
 	if ((ctrl->bRequestType & USB_TYPE_MASK) == USB_TYPE_VENDOR) {
 		switch (ctrl->bRequest) {
 		case USBNET_SET_IP_ADDRESS:
 			g_usbnet_ifc.ip_addr = (wValue << 16) | wIndex;
+			rc = 0;
 			break;
 		case USBNET_SET_SUBNET_MASK:
 			g_usbnet_ifc.subnet_mask = (wValue << 16) | wIndex;
+			rc = 0;
 			break;
 		case USBNET_SET_HOST_IP:
 			g_usbnet_ifc.router_ip = (wValue << 16) | wIndex;
+			rc = 0;
 			break;
 		default:
 			break;
@@ -691,9 +692,20 @@ static int usbnet_setup(struct usb_function *f,
 			/* schedule a work queue to do this because we
 				 need to be able to sleep */
 			g_usbnet_ifc.usbnet_config_dev = g_usbnet_context->dev;
+			g_usbnet_ifc.iff_flag = IFF_UP;
 			schedule_work(&g_usbnet_ifc.usbnet_config_wq);
 		}
 	}
+
+	/* respond with data transfer or status phase? */
+	if (rc >= 0) {
+		req->zero = rc < wLength;
+		req->length = rc;
+		rc = usb_ep_queue(cdev->gadget->ep0, req, GFP_ATOMIC);
+		if (rc < 0)
+			printk(KERN_INFO "usbnet setup response error\n");
+	}
+
 	return rc;
 }
 
@@ -718,14 +730,15 @@ int __init usbnet_function_add(struct usb_composite_dev *cdev,
 		struct usb_configuration *c)
 {
 	struct usbnet_device *dev;
-	int ret;
-	int status;
+	int ret, status;
 
 	printk(KERN_INFO "usbnet_function_add\n");
 
-	dev = kzalloc(sizeof(*dev), GFP_KERNEL);
-	if (!dev)
-		return -ENOMEM;
+	status = usb_string_id(c->cdev);
+	if (status >= 0) {
+		usbnet_string_defs[STRING_INTERFACE].id = status;
+		intf_desc.iInterface = status;
+	}
 
 	g_net_dev = alloc_netdev(sizeof(struct usbnet_context),
 			   "usb%d", usb_ether_setup);
@@ -744,18 +757,21 @@ int __init usbnet_function_add(struct usb_composite_dev *cdev,
 		g_usbnet_context = netdev_priv(g_net_dev);
 	}
 
-	status = usb_string_id(c->cdev);
-	if (status >= 0) {
-		usbnet_string_defs[STRING_INTERFACE].id = status;
-		intf_desc.iInterface = status;
-	}
-
 	g_usbnet_context->config = 0;
+
+	dev = &g_usbnet_device;
 	dev->net_ctxt = g_usbnet_context;
 	dev->cdev = cdev;
 	dev->function.name = "usbnet";
+
+#ifdef CONFIG_USB_MOT_ANDROID
+	dev->function.descriptors = null_function;
+	dev->function.hs_descriptors = null_function;
+#else
 	dev->function.descriptors = fs_function;
 	dev->function.hs_descriptors = hs_function;
+#endif
+	dev->function.strings = usbnet_strings;
 	dev->function.bind = usbnet_bind;
 	dev->function.unbind = usbnet_unbind;
 	dev->function.set_alt = usbnet_set_alt;
@@ -763,10 +779,6 @@ int __init usbnet_function_add(struct usb_composite_dev *cdev,
 	dev->function.setup = usbnet_setup;
 	dev->function.suspend = usbnet_suspend;
 	dev->function.resume = usbnet_resume;
-	dev->function.strings = usbnet_strings;
-
-
-
 
 	ret = usb_add_function(c, &dev->function);
 	if (ret)
@@ -775,11 +787,32 @@ int __init usbnet_function_add(struct usb_composite_dev *cdev,
 	return 0;
 
 err1:
-	kfree(dev);
 	printk(KERN_ERR "usbnet gadget driver failed to initialize\n");
 	usbnet_cleanup();
 	return ret;
 }
 
-
+#ifdef CONFIG_USB_MOT_ANDROID
+struct usb_function *usbnet_function_enable(int enable, int id)
+{
+	if (g_usbnet_context) {
+		if (enable) {
+			g_usbnet_device.function.descriptors = fs_function;
+			g_usbnet_device.function.hs_descriptors = hs_function;
+			intf_desc.bInterfaceNumber = id;
+			netif_start_queue(g_net_dev);
+		} else {
+			g_usbnet_device.function.descriptors = null_function;
+			g_usbnet_device.function.hs_descriptors = null_function;
+			netif_stop_queue(g_net_dev);
+			g_usbnet_ifc.ip_addr = 0;
+			g_usbnet_ifc.iff_flag = 0;
+			g_usbnet_ifc.usbnet_config_dev = g_usbnet_context->dev;
+			schedule_work(&g_usbnet_ifc.usbnet_config_wq);
+		}
+		return &g_usbnet_device.function;
+	}
+	return NULL;
+}
+#endif
 

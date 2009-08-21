@@ -53,9 +53,8 @@ static void disp_button_set(struct led_classdev *led_cdev,
 		else
 			brightness = LD_DISP_BUTTON_HIGH;
 
-//#ifdef CONFIG_LEDS_SHOLEST
-#if 1
-		brightness |= LD_BLED_CPCAP_CURRENT;
+#ifdef CONFIG_LEDS_SHOLEST
+        brightness |= LD_BLED_CPCAP_CURRENT;
 #else
 		brightness |= LD_DISP_BUTTON_CURRENT;
 #endif
@@ -66,8 +65,7 @@ static void disp_button_set(struct led_classdev *led_cdev,
 			disp_button_led_data->regulator_state = 1;
 		}
 
-//#ifdef CONFIG_LEDS_SHOLEST
-#if 1
+#ifdef CONFIG_LEDS_SHOLEST
 		cpcap_status = cpcap_regacc_write(disp_button_led_data->cpcap,
 						  CPCAP_REG_BLEDC, (brightness | LD_DISP_BUTTON_ON),
 						  LD_BLED_CPCAP_MASK);
@@ -89,8 +87,7 @@ static void disp_button_set(struct led_classdev *led_cdev,
 			disp_button_led_data->regulator_state = 0;
 		}
 
-//#ifdef CONFIG_LEDS_SHOLEST
-#if 1
+#ifdef CONFIG_LEDS_SHOLEST
 		cpcap_status = cpcap_regacc_write(disp_button_led_data->cpcap,
 						  CPCAP_REG_BLEDC, brightness, LD_BLED_CPCAP_MASK);
 #else

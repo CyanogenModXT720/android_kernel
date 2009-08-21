@@ -27,6 +27,9 @@
 
 #include <linux/usb/composite.h>
 
+#ifdef CONFIG_USB_MOT_ANDROID
+#include "f_mot_android.h"
+#endif
 
 /*
  * The code in this file is utility code, used to build a gadget driver
@@ -676,6 +679,7 @@ static void composite_setup_complete(struct usb_ep *ep, struct usb_request *req)
  * housekeeping for the gadget function we're implementing.  Most of
  * the work is in config and function specific setup.
  */
+
 static int
 composite_setup(struct usb_gadget *gadget, const struct usb_ctrlrequest *ctrl)
 {
@@ -701,6 +705,9 @@ composite_setup(struct usb_gadget *gadget, const struct usb_ctrlrequest *ctrl)
 
 	/* we handle all standard USB descriptors */
 	case USB_REQ_GET_DESCRIPTOR:
+#ifdef CONFIG_USB_MOT_ANDROID
+		usb_data_transfer_callback();
+#endif
 		if (ctrl->bRequestType != USB_DIR_IN)
 			goto unknown;
 		switch (w_value >> 8) {
@@ -807,9 +814,11 @@ unknown:
 		 * take such requests too, if that's ever needed:  to work
 		 * in config 0, etc.
 		 */
+#ifndef CONFIG_USB_MOT_ANDROID
 		if ((ctrl->bRequestType & USB_RECIP_MASK)
 				== USB_RECIP_INTERFACE) {
 			f = cdev->config->interface[intf];
+
 			if (f && f->setup)
 				value = f->setup(f, ctrl);
 			else
@@ -822,18 +831,17 @@ unknown:
 			if (c && c->setup)
 				value = c->setup(c, ctrl);
 		}
-
-		if (cdev->config == NULL) {
+#else
+		{
 			struct usb_configuration        *cfg;
 
 			list_for_each_entry(cfg, &cdev->configs, list) {
-			if (cfg && cfg->setup)
-				value = cfg->setup(cfg, ctrl);
+				if (cfg && cfg->setup)
+					value = cfg->setup(cfg, ctrl);
 			}
 		}
-		/*
+#endif
 		goto done;
-		*/
 	}
 
 	/* respond with data transfer before status phase? */

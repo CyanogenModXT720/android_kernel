@@ -227,9 +227,9 @@ struct akm8973_platform_data sholes_akm8973_data = {
 
 	.hxda = 132,
 	.hyda = 134,
-	.hzda = 114,
+	.hzda = 118,
 
-	.orientation = 270,
+	.orientation = 180,
 	.xy_swap = 1,
 	.z_flip = 1,
 };

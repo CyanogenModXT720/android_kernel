@@ -27,11 +27,12 @@
 #include <linux/sound.h>
 #include <linux/poll.h>
 #include <mach/mux.h>
-#include <linux/soundcard.h>
+#include <mach/control.h>
 #include "omap34xx_audio_driver.h"
 #include "cpcap_audio_driver.h"
 
 #define AUDIO_DRIVER_NAME "cpcap_audio"
+#define CONFIG_USE_MCBSP_FIFO
 
 #define STDAC_SSI OMAP_MCBSP2
 #define CODEC_SSI OMAP_MCBSP3
@@ -39,6 +40,8 @@
 #define CODEC_FIFO_SIZE 256
 #define STDAC_FIFO_SIZE 8192
 #define AUDIO_CAPTURE_SIZE 800
+
+#define OMAP2_CONTROL_DEVCONF0_BIT6 6
 
 /* This is the number of total kernel buffers */
 #define AUDIO_NBFRAGS_DEFAULT 2
@@ -696,7 +699,7 @@ int omap2_mcbsp_dma_recv_params(unsigned int id,
 	rx_params.write_prio = DMA_CH_PRIO_HIGH;
 /* If McBSP FIFO is used, do a packet sync DMA */
 #ifdef CONFIG_USE_MCBSP_FIFO
-	mcbsp->rx_config_done = 0;
+	mcbsp_wrapper[id].rx_config_done = 0;
 	rx_params.sync_mode = OMAP_DMA_SYNC_PACKET;
 	rx_params.src_fi = mcbsp_fifo_size;
 #else
@@ -857,6 +860,7 @@ int omap2_mcbsp_dma_trans_params(unsigned int id,
 	}
 #ifdef CONFIG_USE_MCBSP_FIFO
 	omap_mcbsp_write(io_base, OMAP_MCBSP_REG_THRSH2, (mcbsp_fifo_size - 1));
+	omap_mcbsp_write(io_base, OMAP_MCBSP_REG_WKUPEN, MCBSP_WKUP_XRDYEN);
 #endif
 
 	return 0;
@@ -900,8 +904,8 @@ int omap2_mcbsp_receive_data(unsigned int id, void *cbdata,
 
 	/* IF McBSP FIFO is used, change receive side configuration */
 #ifdef CONFIG_USE_MCBSP_FIFO
-	if (mcbsp->rx_config_done == 0) {
-		mcbsp->rx_config_done = 1;
+	if (mcbsp_wrapper[id].rx_config_done == 0) {
+		mcbsp_wrapper[id].rx_config_done = 1;
 		if (id == OMAP_MCBSP2)
 			mcbsp_fifo_size = MCBSP2_FIFO_SIZE;
 		else
@@ -927,16 +931,16 @@ int omap2_mcbsp_receive_data(unsigned int id, void *cbdata,
 		omap_mcbsp_write(io_base, OMAP_MCBSP_REG_THRSH1, (thrsh1 - 1));
 
 		if (thrsh1 != mcbsp_fifo_size) {
-			mcbsp->rx_params.src_fi = thrsh1;
+			mcbsp_wrapper[id].rx_params.src_fi = thrsh1;
 			/* if threshold =1, use element sync DMA */
 			if (thrsh1 == 1) {
-				mcbsp->rx_params.sync_mode =
+				mcbsp_wrapper[id].rx_params.sync_mode =
 				    OMAP_DMA_SYNC_ELEMENT;
-				mcbsp->rx_params.src_fi = 0;
+				mcbsp_wrapper[id].rx_params.src_fi = 0;
 			}
 			err =
 			    omap_modify_dma_chain_params(mcbsp->dma_rx_lch,
-							 mcbsp->rx_params);
+						mcbsp_wrapper[id].rx_params);
 			if (err < 0) {
 				printk(KERN_ERR "DMA reconfiguration failed\n");
 				return -EINVAL;
@@ -1479,6 +1483,9 @@ static int audio_configure_ssi(struct inode *inode, struct file *file)
 		//tx_cfg_params.fs_polarity  = OMAP_MCBSP_FS_ACTIVE_LOW;
 		//tx_cfg_params.phase = OMAP_MCBSP_FRAME_DUALPHASE;
 #endif
+		omap_ctrl_writel(omap_ctrl_readl(OMAP2_CONTROL_DEVCONF0) |
+					(1 << OMAP2_CONTROL_DEVCONF0_BIT6),
+						OMAP2_CONTROL_DEVCONF0);
 	} else {		/* CODEC setting */
 		tx_cfg_params.word_length1 = OMAP_MCBSP_WORD_16;
 		tx_params.word_length1 = OMAP_MCBSP_WORD_16;
@@ -1528,6 +1535,10 @@ int audio_stop_ssi(struct inode *inode, struct file *file)
 	if (file->f_mode & FMODE_WRITE) {
 		TRY(omap2_mcbsp_set_xrst(ssi, OMAP_MCBSP_XRST_DISABLE))
 		TRY(omap2_mcbsp_stop_datatx(ssi))
+
+		omap_ctrl_writel(omap_ctrl_readl(OMAP2_CONTROL_DEVCONF0) &
+					~(1 << OMAP2_CONTROL_DEVCONF0_BIT6),
+						OMAP2_CONTROL_DEVCONF0);
 	}
 
 	if (file->f_mode & FMODE_READ) {

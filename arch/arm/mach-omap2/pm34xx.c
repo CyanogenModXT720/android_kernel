@@ -61,15 +61,14 @@
 
 static int regset_save_on_suspend;
 
+#ifdef CONFIG_SUSPEND
+static suspend_state_t suspend_state_on;
+#endif
+
 /* Scratchpad offsets */
 #define OMAP343X_TABLE_ADDRESS_OFFSET	   0x31
 #define OMAP343X_TABLE_VALUE_OFFSET	   0x30
 #define OMAP343X_CONTROL_REG_VALUE_OFFSET  0x32
-
-#define DEBUG_WAKEUP 0
-
-#define PM_WKST_WKUP_ST_GPIO1 (1 << 3)
-#define PM_WKST1_CORE_ST_UART1 (1 << 13)
 
 struct power_state {
 	struct powerdomain *pwrdm;
@@ -115,43 +114,6 @@ static struct prm_setup_vc prm_setup = {
 	.vdd_i2c_cfg = OMAP3430_MCODE_SHIFT | OMAP3430_HSEN | OMAP3430_SREN,
 };
 
-static int do_uart_pm;
-
-#if DEBUG_WAKEUP
-static void dump_regs(char *title, unsigned int r, char **decoder_ring)
-{
-	int i;
-	printk("%s: ", title);
-	for (i = 0; i < 32; i++) {
-		if (!decoder_ring[i])
-			break;
-		if ((r & (1 << i)) && decoder_ring[i][0] != '\0')
-			printk("%s ", decoder_ring[i]);
-	}
-	printk("\n");
-}
-
-static char *pm_wkup_wkst_decoder[] = {
-	"GPT1", "", "", "GPIO1", "", "", "SR1", "SR2",
-	"IO", "", "", "", "", "", "", "", "IO_CHAIN", NULL,
-};
-
-static char *pm_core_wkst1_decoder[] = {
-	"", "", "", "", "HSOTGUSB", "", "", "", "", "MCBSP1", "MCBSP5",
-	"GPT10", "GPT11", "UART1", "UART2", "I2C1", "I2C2", "I2C3",
-	"MCSPI1", "MCSPI2", "MCSPI3", "MCSPI4", "", "", "MMC1", "MMC2",
-	"", "", "", "", "MMC3", "", NULL
-};
-
-static char *pm_core_wkst3_decoder[] = { "", "", "USBTLL", NULL };
-
-static char *pm_per_wkst_decoder[] = {
-	"MCBSP2", "MCBSP3", "MCBSP4", "GPT2", "GPT3", "GPT4", "GPT5", "GPT6",
-	 "GPT7", "GPT8", "GPT9", "UART3", "", "GPIO2", "GPIO3", "GPIO4",
-	"GPIO5", "GPIO6", NULL
-};
-#endif
-
 static inline void omap3_per_save_context(void)
 {
 	omap3_gpio_save_context();
@@ -179,9 +141,9 @@ static void omap3_enable_io_chain(void)
 				       "activation failed.\n");
 				return;
 			}
-			prm_set_mod_reg_bits(OMAP3430_ST_IO_CHAIN,
-					     WKUP_MOD, PM_WKST);
 		}
+		prm_set_mod_reg_bits(OMAP3430_ST_IO_CHAIN,
+				     WKUP_MOD, PM_WKST);
 	}
 }
 
@@ -253,6 +215,117 @@ static void omap3_save_secure_ram_context(u32 target_mpu_state)
 	}
 }
 
+#ifdef CONFIG_PM_DEBUG
+
+#define LAST_IDLE_ST_ARR_SIZE 10
+#define POWER_DOM_ARR_SIZE    16
+
+static int flag_sleep_while_idle;
+static int flag_enable_off_mode;
+static int flag_uart_can_sleep;
+static int flag_omap_dma_running;
+static int pwrst_idlest[2] = {0, 0};
+static int fclkst_array[8] = { 0 };
+static int iclkst_array[8][2] = { {0, 0} };
+static int pwrst_counter[POWER_DOM_ARR_SIZE][4] = { {0, 0, 0, 0} };
+static int mpu_core_last_state[LAST_IDLE_ST_ARR_SIZE][2] = { {0, 0} };
+static int modem_sad2d_idle_counter[2][2] = { {0, 0} };
+static char *state_to_str[] = {"OFF", "RET", "INA", " ON"};
+
+static void pwrdm_pre_transition_log(void)
+{
+	/* Read state of global setting before idle */
+	flag_sleep_while_idle = enable_dyn_sleep;
+	flag_enable_off_mode  = enable_off_mode;
+	flag_uart_can_sleep   = omap_uart_can_sleep();
+	flag_omap_dma_running = omap_dma_running();
+
+	/* Read state of modem and sad2d before idle */
+	pwrst_idlest[0] = cm_read_mod_reg(CORE_MOD, CM_IDLEST1);
+
+	/* omap function fclk status */
+	fclkst_array[0] = cm_read_mod_reg(CORE_MOD, CM_FCLKEN1);
+	fclkst_array[1] = cm_read_mod_reg(CORE_MOD, OMAP3430ES2_CM_FCLKEN3);
+	fclkst_array[2] = cm_read_mod_reg(OMAP3430ES2_SGX_MOD, CM_FCLKEN);
+	fclkst_array[3] = cm_read_mod_reg(OMAP3430_CAM_MOD, CM_FCLKEN);
+	fclkst_array[4] = cm_read_mod_reg(OMAP3430_PER_MOD, CM_FCLKEN);
+	fclkst_array[5] = cm_read_mod_reg(OMAP3430ES2_USBHOST_MOD, CM_FCLKEN);
+	fclkst_array[6] = cm_read_mod_reg(OMAP3430_DSS_MOD, CM_FCLKEN);
+
+	/* omap iclk status */
+	iclkst_array[0][0] = cm_read_mod_reg(CORE_MOD, CM_ICLKEN1);
+	iclkst_array[0][1] = cm_read_mod_reg(CORE_MOD, CM_AUTOIDLE1);
+	iclkst_array[1][0] = cm_read_mod_reg(CORE_MOD, CM_ICLKEN2);
+	iclkst_array[1][1] = cm_read_mod_reg(CORE_MOD, CM_AUTOIDLE2);
+	iclkst_array[2][0] = cm_read_mod_reg(CORE_MOD, CM_ICLKEN3);
+	iclkst_array[2][1] = cm_read_mod_reg(CORE_MOD, CM_AUTOIDLE3);
+	iclkst_array[3][0] = cm_read_mod_reg(OMAP3430ES2_SGX_MOD, CM_ICLKEN);
+	iclkst_array[3][1] = 0;
+	iclkst_array[4][0] = cm_read_mod_reg(OMAP3430_CAM_MOD, CM_ICLKEN);
+	iclkst_array[4][1] = cm_read_mod_reg(OMAP3430_CAM_MOD, CM_AUTOIDLE);
+	iclkst_array[5][0] = cm_read_mod_reg(OMAP3430_PER_MOD, CM_ICLKEN);
+	iclkst_array[5][1] = cm_read_mod_reg(OMAP3430_PER_MOD, CM_AUTOIDLE);
+	iclkst_array[6][0] = cm_read_mod_reg(OMAP3430ES2_USBHOST_MOD,
+			CM_ICLKEN);
+	iclkst_array[6][1] = cm_read_mod_reg(OMAP3430ES2_USBHOST_MOD,
+			CM_AUTOIDLE);
+	iclkst_array[7][0] = cm_read_mod_reg(OMAP3430_DSS_MOD, CM_ICLKEN);
+	iclkst_array[7][1] = cm_read_mod_reg(OMAP3430_DSS_MOD, CM_AUTOIDLE);
+}
+
+static void pwrdm_post_transition_log(void)
+{
+	int i = 0;
+	int idx = 0;
+	int state;
+	struct power_state *pwrst;
+
+	/* Read the last 10 times MPU+CORE state by sequence */
+	for (i = 0; i < LAST_IDLE_ST_ARR_SIZE-1; i++) {
+		mpu_core_last_state[i][0] = mpu_core_last_state[i+1][0];
+		mpu_core_last_state[i][1] = mpu_core_last_state[i+1][1];
+	}
+	mpu_core_last_state[i][0] = pwrdm_read_prev_pwrst(mpu_pwrdm);
+	mpu_core_last_state[i][1] = pwrdm_read_prev_pwrst(core_pwrdm);
+
+	/* counter of each power domain*/
+	list_for_each_entry(pwrst, &pwrst_list, node) {
+		state = pwrdm_read_prev_pwrst(pwrst->pwrdm);
+		pwrst_counter[idx][state]++;
+		idx++;
+	}
+
+	pwrst_idlest[1] = cm_read_mod_reg(CORE_MOD, CM_IDLEST1);
+
+	/* modem and sad2d states counter */
+	i = !!(pwrst_idlest[0] & 0x80000000);
+	modem_sad2d_idle_counter[0][i]++;
+
+	i = !!(pwrst_idlest[0] & 0x8);
+	modem_sad2d_idle_counter[1][i]++;
+}
+
+#endif /* CONFIG_PM_DEBUG */
+
+#ifdef CONFIG_SUSPEND
+static void dump_wkst_regs(s16 module, u16 wkst_off, u32 wkst)
+{
+	/* only dump info that wake up from suspend */
+	if (suspend_state_on != PM_SUSPEND_MEM &&
+		suspend_state_on != PM_SUSPEND_STANDBY)
+		return;
+
+	if ((WKUP_MOD == module) && (PM_WKST == wkst_off))
+		printk(KERN_INFO "Waked up by WKUP. WKST 0x%x\n", wkst);
+	else if ((CORE_MOD == module) && (PM_WKST1 == wkst_off))
+		printk(KERN_INFO "Waked up by CORE. WKST1 0x%x\n", wkst);
+	else if ((CORE_MOD == module) && (OMAP3430ES2_PM_WKST3 == wkst_off))
+		printk(KERN_INFO "Waked up by CORE. WKST3 0x%x)\n", wkst);
+	else if ((OMAP3430_PER_MOD == module) && (PM_WKST == wkst_off))
+		printk(KERN_INFO "Waked up by PER. WKST 0x%x)\n", wkst);
+}
+#endif /* CONFIG_SUSPEND */
+
 /*
  * PRCM Interrupt Handler Helper Function
  *
@@ -263,45 +336,33 @@ static void omap3_save_secure_ram_context(u32 target_mpu_state)
  * that any peripheral wake-up events occurring while attempting to
  * clear the PM_WKST_x are detected and cleared.
  */
-static void prcm_clear_mod_irqs(s16 module, u16 wkst_off,
-				u16 iclk_off, u16 fclk_off) {
-	u32 wkst, fclk, iclk;
+static void prcm_clear_mod_irqs(s16 module, u8 regs)
+{
+	u32 wkst, fclk, iclk, clken;
+	u16 wkst_off = (regs == 3) ? OMAP3430ES2_PM_WKST3 : PM_WKST1;
+	u16 fclk_off = (regs == 3) ? OMAP3430ES2_CM_FCLKEN3 : CM_FCLKEN1;
+	u16 iclk_off = (regs == 3) ? CM_ICLKEN3 : CM_ICLKEN1;
+	u16 grpsel_off = (regs == 3) ?
+		OMAP3430ES2_PM_MPUGRPSEL3 : OMAP3430_PM_MPUGRPSEL;
 
 	wkst = prm_read_mod_reg(module, wkst_off);
+	wkst &= prm_read_mod_reg(module, grpsel_off);
 	if (wkst) {
-		if ((WKUP_MOD == module) && (PM_WKST == wkst_off)) {
-#if DEBUG_WAKEUP
-			dump_regs("wkup_dom wkup status", wkst,
-					pm_wkup_wkst_decoder);
+#ifdef CONFIG_SUSPEND
+		dump_wkst_regs(module, wkst_off, wkst);
 #endif
-			if (wkst & PM_WKST_WKUP_ST_GPIO1)
-				do_uart_pm = 1;
-		} else if ((CORE_MOD == module) && (PM_WKST1 == wkst_off)) {
-#if DEBUG_WAKEUP
-			dump_regs("core_dom wkup status", wkst,
-					pm_core_wkst1_decoder);
-#endif
-			if (wkst & PM_WKST1_CORE_ST_UART1)
-				do_uart_pm = 1;
-		} else if ((CORE_MOD == module) &&
-				(OMAP3430ES2_PM_WKST3 == wkst_off)) {
-#if DEBUG_WAKEUP
-			dump_regs("core_dom wkup status3", wkst,
-					pm_core_wkst3_decoder);
-#endif
-		} else if ((OMAP3430_PER_MOD == module) &&
-				(PM_WKST == wkst_off)) {
-#if DEBUG_WAKEUP
-			dump_regs("per_dom wkup status", wkst,
-					pm_per_wkst_decoder);
-#endif
-		}
-
 		iclk = cm_read_mod_reg(module, iclk_off);
 		fclk = cm_read_mod_reg(module, fclk_off);
 		while (wkst) {
-			cm_set_mod_reg_bits(wkst, module, iclk_off);
-			cm_set_mod_reg_bits(wkst, module, fclk_off);
+			clken = wkst;
+			cm_set_mod_reg_bits(clken, module, iclk_off);
+			/*
+			 * For USBHOST, we don't know whether HOST1 or
+			 * HOST2 woke us up, so enable both f-clocks
+			 */
+			if (module == OMAP3430ES2_USBHOST_MOD)
+				clken |= 1 << OMAP3430ES2_EN_USBHOST2_SHIFT;
+			cm_set_mod_reg_bits(clken, module, fclk_off);
 			prm_write_mod_reg(wkst, module, wkst_off);
 			wkst = prm_read_mod_reg(module, wkst_off);
 		}
@@ -332,27 +393,18 @@ static irqreturn_t prcm_interrupt_handler (int irq, void *dev_id)
 	u32 irqstatus_mpu;
 
 	do {
-		do_uart_pm = 0;
-
-		prcm_clear_mod_irqs(WKUP_MOD, PM_WKST, CM_ICLKEN, CM_FCLKEN);
-		prcm_clear_mod_irqs(CORE_MOD, PM_WKST1, CM_ICLKEN1, CM_ICLKEN1);
-		prcm_clear_mod_irqs(CORE_MOD, OMAP3430ES2_PM_WKST3,
-				CM_ICLKEN3, OMAP3430ES2_CM_FCLKEN3);
-		prcm_clear_mod_irqs(OMAP3430_PER_MOD, PM_WKST,
-				CM_ICLKEN, CM_FCLKEN);
-		if (omap_rev() > OMAP3430_REV_ES1_0)
-			prcm_clear_mod_irqs(OMAP3430ES2_USBHOST_MOD, PM_WKST,
-					CM_ICLKEN, CM_FCLKEN);
-
-		/*
-		if (do_uart_pm)
-			omap_uart_pm_wake();
-		*/
+		prcm_clear_mod_irqs(WKUP_MOD, 1);
+		prcm_clear_mod_irqs(CORE_MOD, 1);
+		prcm_clear_mod_irqs(OMAP3430_PER_MOD, 1);
+		if (omap_rev() > OMAP3430_REV_ES1_0) {
+			prcm_clear_mod_irqs(CORE_MOD, 3);
+			prcm_clear_mod_irqs(OMAP3430ES2_USBHOST_MOD, 1);
+		}
 
 		irqstatus_mpu = prm_read_mod_reg(OCP_MOD,
-						OMAP2_PRM_IRQSTATUS_MPU_OFFSET);
+					OMAP2_PRM_IRQSTATUS_MPU_OFFSET);
 		prm_write_mod_reg(irqstatus_mpu, OCP_MOD,
-				OMAP2_PRM_IRQSTATUS_MPU_OFFSET);
+					OMAP2_PRM_IRQSTATUS_MPU_OFFSET);
 
 	} while (prm_read_mod_reg(OCP_MOD, OMAP2_PRM_IRQSTATUS_MPU_OFFSET));
 
@@ -426,6 +478,9 @@ void omap_sram_idle(void)
 		return;
 	}
 
+#ifdef CONFIG_PM_DEBUG
+	pwrdm_pre_transition_log();
+#endif
 	pwrdm_pre_transition();
 
 	/* NEON control */
@@ -553,6 +608,9 @@ void omap_sram_idle(void)
 
 
 	pwrdm_post_transition();
+#ifdef CONFIG_PM_DEBUG
+	pwrdm_post_transition_log();
+#endif
 
 	omap2_clkdm_allow_idle(mpu_pwrdm->pwrdm_clkdms[0]);
 }
@@ -677,9 +735,6 @@ static int omap3_pm_suspend(void)
 			goto restore;
 	}
 
-#if DEBUG_WAKEUP
-	printk("%s(): zzzzzz....\n", __func__);
-#endif
 	omap_uart_prepare_suspend();
 
 	regset_save_on_suspend = 1;
@@ -733,6 +788,7 @@ static int omap3_pm_begin(suspend_state_t state)
 {
 	suspend_state = state;
 	omap_uart_enable_irqs(0);
+	suspend_state_on = suspend_state;
 	return 0;
 }
 
@@ -740,6 +796,7 @@ static void omap3_pm_end(void)
 {
 	suspend_state = PM_SUSPEND_ON;
 	omap_uart_enable_irqs(1);
+	suspend_state_on = suspend_state;
 	return;
 }
 
@@ -814,6 +871,7 @@ static void __init prcm_setup_regs(void)
 	if (omap_rev() > OMAP3430_REV_ES1_0) {
 		prm_write_mod_reg(0, OMAP3430ES2_SGX_MOD, PM_WKDEP);
 		prm_write_mod_reg(0, OMAP3430ES2_USBHOST_MOD, PM_WKDEP);
+		prm_write_mod_reg(0, OMAP3430ES2_USBHOST_MOD, OMAP3430_PM_IVAGRPSEL);
 	} else
 		prm_write_mod_reg(0, GFX_MOD, PM_WKDEP);
 
@@ -951,6 +1009,7 @@ static void __init prcm_setup_regs(void)
 
 	/* setup wakup source */
 	prm_write_mod_reg(OMAP3430_EN_IO | OMAP3430_EN_GPIO1 |
+			  OMAP3430_EN_GPIO2 |
 			  OMAP3430_EN_GPT1 | OMAP3430_EN_GPT12,
 			  WKUP_MOD, PM_WKEN);
 	/* No need to write EN_IO, that is always enabled */
@@ -1103,6 +1162,106 @@ void omap_push_sram_idle(void)
 				save_secure_ram_context_sz);
 }
 
+#ifdef CONFIG_PM_DEBUG
+static ssize_t pm_info_show(struct kobject *kobj, struct kobj_attribute *attr,
+		char *buf)
+{
+	int i = 0;
+	int len = 0;
+	int idx = 0;
+	struct power_state *pwrst;
+
+	len += sprintf(buf + len, "*************** PM info ****************\n");
+	len += sprintf(buf + len, "sleep_while_idle:    %s\n",
+			flag_sleep_while_idle ? "Enabled" : "Disabled");
+	len += sprintf(buf + len, "enable_off_mode:     %s\n",
+			flag_enable_off_mode ? "Enabled" : "Disabled");
+	len += sprintf(buf + len, "omap_uart_can_sleep: %s\n",
+			flag_uart_can_sleep ? "YES" : "NO");
+	len += sprintf(buf + len, "dma status check:    %s\n",
+			flag_omap_dma_running ? "Running" : "Not Running");
+
+	/* last 10 timers power domain status */
+	len += sprintf(buf + len, "\nLast 10 times state (MPU+CORE):\n");
+	for (i = 0; i < LAST_IDLE_ST_ARR_SIZE; i++) {
+		len += sprintf(buf + len, "#%d. MPU: %s CORE: %s\n",
+			i, state_to_str[mpu_core_last_state[i][0]],
+			state_to_str[mpu_core_last_state[i][1]]);
+	}
+
+	/* counter of each power domain*/
+	len += sprintf(buf + len, "\nPowerdomains state statistic:\n");
+	list_for_each_entry(pwrst, &pwrst_list, node) {
+		len += sprintf(buf + len, "%s: OFF: %d RET: %d "
+				"INA: %d ON: %d\n",
+				pwrst->pwrdm->name,
+				pwrst_counter[idx][PWRDM_POWER_OFF],
+				pwrst_counter[idx][PWRDM_POWER_RET],
+				pwrst_counter[idx][PWRDM_POWER_INACTIVE],
+				pwrst_counter[idx][PWRDM_POWER_ON]);
+		idx++;
+	}
+
+	/* modem and sad2d latest idle states */
+	len += sprintf(buf + len, "\nModem & sad2d Last idle state:\n");
+	len += sprintf(buf + len, "Before LPM: modem %s, sad2d %s\n",
+			(pwrst_idlest[0] & 0x80000000) ? "idle" : "active",
+			(pwrst_idlest[0] & 0x00000008) ? "idle" : "active");
+
+	len += sprintf(buf + len, "After  LPM: modem %s, sad2d %s\n",
+			(pwrst_idlest[1] & 0x80000000) ? "idle" : "active",
+			(pwrst_idlest[1] & 0x00000008) ? "idle" : "active");
+
+	/* modem and sad2d idle statistic */
+	len += sprintf(buf + len, "\nModem & sad2d states statistic:\n");
+	len += sprintf(buf + len, "modem: idle: %d, active: %d\n",
+			modem_sad2d_idle_counter[0][1],
+			modem_sad2d_idle_counter[0][0]);
+	len += sprintf(buf + len, "sad2d: idle: %d, active: %d\n",
+			modem_sad2d_idle_counter[1][1],
+			modem_sad2d_idle_counter[1][0]);
+
+	/* omap function fclk status */
+	len += sprintf(buf + len, "\nOmap fclk checking: Before LPM\n");
+	len += sprintf(buf + len, "CM_FCLKEN1_CORE   0x%x\n", fclkst_array[0]);
+	len += sprintf(buf + len, "CM_FCLKEN3_CORE   0x%x\n", fclkst_array[1]);
+	len += sprintf(buf + len, "CM_FCLKEN_SGX     0x%x\n", fclkst_array[2]);
+	len += sprintf(buf + len, "CM_FCLKEN_CAM     0x%x\n", fclkst_array[3]);
+	len += sprintf(buf + len, "CM_FCLKEN_PER     0x%x\n", fclkst_array[4]);
+	len += sprintf(buf + len, "CM_FCLKEN_USBHOST 0x%x\n", fclkst_array[5]);
+	len += sprintf(buf + len, "CM_FCLKEN_DSS     0x%x\n", fclkst_array[6]);
+
+	len += sprintf(buf + len, "\nOmap iclk checking:  Before LPM\n");
+
+	/* omap function iclk status */
+	len += sprintf(buf + len, "CM_ICLKEN1_CORE   0x%x, CM_AUTOIDLE1 0x%x\n",
+			iclkst_array[0][0], iclkst_array[0][1]);
+	len += sprintf(buf + len, "CM_ICLKEN2_CORE   0x%x, CM_AUTOIDLE2 0x%x\n",
+			iclkst_array[1][0], iclkst_array[1][1]);
+	len += sprintf(buf + len, "CM_ICLKEN3_CORE   0x%x, CM_AUTOIDLE3 0x%x\n",
+			iclkst_array[2][0], iclkst_array[2][1]);
+	len += sprintf(buf + len, "CM_ICLKEN_SGX     0x%x\n",
+			iclkst_array[3][0]);
+	len += sprintf(buf + len, "CM_ICLKEN_CAM     0x%x, CM_AUTOIDLE 0x%x\n",
+			iclkst_array[4][0], iclkst_array[4][1]);
+	len += sprintf(buf + len, "CM_ICLKEN_PER     0x%x, CM_AUTOIDLE 0x%x\n",
+			iclkst_array[5][0], iclkst_array[5][1]);
+	len += sprintf(buf + len, "CM_ICLKEN_USBHOST 0x%x, CM_AUTOIDLE 0x%x\n",
+			iclkst_array[6][0], iclkst_array[6][1]);
+	len += sprintf(buf + len, "CM_ICLKEN_DSS     0x%x, CM_AUTOIDLE 0x%x\n",
+			iclkst_array[7][0], iclkst_array[7][1]);
+
+	len += sprintf(buf + len, "\n************ PM info End ************\n");
+
+	WARN_ON(len > PAGE_SIZE);
+	return len;
+}
+
+static struct kobj_attribute pm_info_attr =
+__ATTR(pm_info, 0444, pm_info_show, NULL);
+
+#endif /* CONFIG_PM_DEBUG */
+
 int __init omap3_pm_init(void)
 {
 	struct power_state *pwrst, *tmp;
@@ -1150,7 +1309,6 @@ int __init omap3_pm_init(void)
 
 	pm_idle = omap3_pm_idle;
 
-	omap3_save_scratchpad_contents();
 	omap3_idle_init();
 
 	pwrdm_add_wkdep(neon_pwrdm, mpu_pwrdm);
@@ -1160,7 +1318,7 @@ int __init omap3_pm_init(void)
 	 * waking up PER with every CORE wakeup - see
 	 * http://marc.info/?l=linux-omap&m=121852150710062&w=2
 	*/
-	pwrdm_add_wkdep(per_pwrdm, core_pwrdm);
+	/*pwrdm_add_wkdep(per_pwrdm, core_pwrdm);*/
 
 	if (omap_type() != OMAP2_DEVICE_TYPE_GP) {
 		omap3_secure_ram_storage =
@@ -1180,6 +1338,12 @@ int __init omap3_pm_init(void)
 		local_fiq_enable();
 	}
 
+#ifdef CONFIG_PM_DEBUG
+	if (sysfs_create_file(power_kobj, &pm_info_attr.attr))
+		printk(KERN_ERR "sysfs_create_file failed: pm_info\n");
+#endif
+
+	omap3_save_scratchpad_contents();
 err1:
 	return ret;
 err2:

@@ -114,6 +114,11 @@ static void irq_work(struct work_struct *work)
 {
 	struct gpioinfo *gpio = container_of(work, struct gpioinfo, work);
 
+	if (gpio == &omap_mdm_ctrl_data.gpios[BP_RESOUT] &&
+	    gpio_get_value(gpio->gpio) == 0) {
+		pr_err("%s: BP panicked!\n", __func__);
+	}
+
 	if (gpio->irq_enabled && !gpio->irq_fired) {
 		/* Verify that level is what we were waiting for */
 		if (compare_irq_to_gpio
@@ -454,7 +459,7 @@ static int __devinit omap_mdm_ctrl_probe(struct platform_device *pdev)
 	    gpio_to_irq(omap_mdm_ctrl_data.gpios[BP_READY2_AP].gpio);
 	omap_mdm_ctrl_data.gpios[BP_RESOUT].irq =
 	    gpio_to_irq(omap_mdm_ctrl_data.gpios[BP_RESOUT].gpio);
-
+#if 0
 	ret =
 	    request_irq(omap_mdm_ctrl_data.gpios[BP_READY_AP].irq, irq_handler,
 			IRQF_DISABLED | OMAP_MDM_CTRL_IRQ_RISING |
@@ -467,20 +472,7 @@ static int __devinit omap_mdm_ctrl_probe(struct platform_device *pdev)
 	} else {
 		omap_mdm_ctrl_data.gpios[BP_READY_AP].irq_enabled = 1;
 	}
-
-	ret =
-	    request_irq(omap_mdm_ctrl_data.gpios[BP_READY2_AP].irq, irq_handler,
-			IRQF_DISABLED | OMAP_MDM_CTRL_IRQ_RISING |
-			OMAP_MDM_CTRL_IRQ_FALLING, OMAP_MDM_CTRL_MODULE_NAME,
-			&omap_mdm_ctrl_data.gpios[BP_READY2_AP]);
-	if (ret < 0) {
-		pr_err("%s: Can not reqeust IRQ (%d) from kernel!\n", __func__,
-		       omap_mdm_ctrl_data.gpios[BP_READY2_AP].irq);
-		goto err_clear_gpio;
-	} else {
-		omap_mdm_ctrl_data.gpios[BP_READY2_AP].irq_enabled = 1;
-		enable_irq_wake(omap_mdm_ctrl_data.gpios[BP_READY2_AP].irq);
-	}
+#endif
 
 	ret =
 	    request_irq(omap_mdm_ctrl_data.gpios[BP_RESOUT].irq, irq_handler,
@@ -528,13 +520,36 @@ static int __devexit omap_mdm_ctrl_remove(struct platform_device *pdev)
 	return 0;
 }
 
-/* This function is temporary to force the BP to shutdown when using recovery
- * mode */
+/* Initiate modem power down */
 static void __devexit omap_mdm_ctrl_shutdown(struct platform_device *pdev)
 {
-	gpio_set_value(omap_mdm_ctrl_data.gpios[AP_TO_BP_PSHOLD].gpio, 1);
-	/* Wait for 1 second to allow time for the BP to fully power off */
-	ssleep(1);
+	int i;
+	int pd_failure = 1;
+
+	pr_info("%s: Initiate modem power down...\n", __func__);
+	/* Press modem Power Button */
+	gpio_set_value(omap_mdm_ctrl_data.gpios[BP_PWRON].gpio, 1);
+	msleep(100);
+	gpio_set_value(omap_mdm_ctrl_data.gpios[BP_PWRON].gpio, 0);
+	/* Wait up to 5 seconds for the modem to properly power down */
+	for (i = 0; i < 10; i++) {
+		if (!gpio_get_value(omap_mdm_ctrl_data.gpios[BP_RESOUT].gpio)) {
+			pr_info("%s: Modem power down success.\n", __func__);
+			pd_failure = 0;
+			break;
+		} else
+			msleep(500);
+	}
+
+	if (pd_failure) {
+		/* Pull power from the modem */
+		pr_info("%s: Modem pd failure.  Pull power.\n", __func__);
+		gpio_set_value(
+			omap_mdm_ctrl_data.gpios[AP_TO_BP_PSHOLD].gpio, 1);
+		msleep(5);
+		gpio_set_value(
+			omap_mdm_ctrl_data.gpios[AP_TO_BP_PSHOLD].gpio, 0);
+	}
 }
 
 static struct platform_driver omap_mdm_ctrl_driver = {
@@ -562,5 +577,5 @@ module_exit(omap_mdm_ctrl_os_exit);
 
 MODULE_AUTHOR("Motorola");
 MODULE_DESCRIPTION("OMAP Modem Control Driver");
-MODULE_VERSION("1.1.1");
+MODULE_VERSION("1.1.2");
 MODULE_LICENSE("GPL");

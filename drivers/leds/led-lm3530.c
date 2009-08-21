@@ -19,6 +19,7 @@
 #include <linux/i2c.h>
 #include <linux/leds.h>
 #include <linux/delay.h>
+#include <linux/earlysuspend.h>
 #include <linux/platform_device.h>
 #include <linux/workqueue.h>
 #include <linux/irq.h>
@@ -34,12 +35,21 @@ struct lm3530_data {
 	struct work_struct wq;
 	struct workqueue_struct *working_queue;
 	struct lm3530_platform_data *als_pdata;
+	struct early_suspend		early_suspend;
 	uint8_t mode;
 	uint8_t last_requested_brightness;
 	uint8_t zone;
 	uint8_t current_divisor;
 	uint8_t current_array[8];
 };
+
+#ifdef CONFIG_HAS_EARLYSUSPEND
+static void lm3530_early_suspend(struct early_suspend *handler);
+static void lm3530_late_resume(struct early_suspend *handler);
+#endif
+
+static uint32_t lm3530_debug;
+module_param_named(als_debug, lm3530_debug, uint, 0664);
 
 static int lm3530_read_reg(struct lm3530_data *als_data, uint8_t reg,
 		   uint8_t *value)
@@ -245,6 +255,44 @@ static ssize_t ld_lm3530_als_store(struct device *dev, struct device_attribute
 
 static DEVICE_ATTR(als, 0644, NULL, ld_lm3530_als_store);
 
+static ssize_t ld_lm3530_pwm_store(struct device *dev, struct device_attribute
+				   *attr, const char *buf, size_t size)
+{
+	int error = 0;
+	unsigned long pwm_value;
+	uint8_t gen_config_val;
+	uint8_t pwm_val;
+	struct i2c_client *client = container_of(dev->parent, struct i2c_client,
+						 dev);
+	struct lm3530_data *als_data = i2c_get_clientdata(client);
+
+	error = strict_strtoul(buf, 10, &pwm_value);
+	if (error < 0)
+		return -1;
+
+	error = lm3530_read_reg(als_data,
+		LM3530_GEN_CONFIG,
+		&gen_config_val);
+	if (error != 0) {
+		pr_err("%s:Unable to read ALS Zone: %d\n",
+		       __func__, error);
+		return -1;
+	}
+
+	if (pwm_value >= 1)
+		pwm_val = gen_config_val | 0x20;
+	else
+		pwm_val = gen_config_val & 0xdf;
+
+	if (lm3530_write_reg(als_data, LM3530_GEN_CONFIG, pwm_val)) {
+		pr_err("%s:writing failed while setting pwm mode:%d\n",
+		       __func__, error);
+		return -1;
+	}
+	return pwm_value;
+}
+static DEVICE_ATTR(pwm_mode, 0644, NULL, ld_lm3530_pwm_store);
+
 irqreturn_t ld_lm3530_irq_handler(int irq, void *dev)
 {
 	struct lm3530_data *als_data = dev;
@@ -274,12 +322,20 @@ void ld_lm3530_work_queue(struct work_struct *work)
 	}
 
 	als_data->zone = als_data->zone & LM3530_ALS_READ_MASK;
+	if (lm3530_debug)
+		pr_info("%s:ALS Zone read back: %d\n",
+		       __func__, als_data->zone);
 
 	light_value = als_data->zone *  (als_data->current_divisor - 1);
+
 	/* Need to indicate a zone 0 but this would indicate it is off
 	so send up a low value and not a 0 */
 	if (light_value == 0)
 		light_value = 10;
+
+	if (lm3530_debug)
+		pr_err("%s:Modified ALS Zone being sent: %d\n",
+		       __func__, light_value);
 
 	input_event(als_data->idev, EV_MSC, MSC_RAW, light_value);
 	input_sync(als_data->idev);
@@ -409,15 +465,30 @@ static int ld_lm3530_probe(struct i2c_client *client,
 	if (error < 0) {
 		pr_err("%s:File device creation failed: %d\n", __func__, error);
 		error = -ENODEV;
-		goto err_create_file_failed;
+		goto err_create_file_als_failed;
 	}
 
+	error = device_create_file(als_data->led_dev.dev, &dev_attr_pwm_mode);
+	if (error < 0) {
+		pr_err("%s:File device creation failed: %d\n", __func__, error);
+		error = -ENODEV;
+		goto err_create_pwm_file_failed;
+	}
+
+#ifdef CONFIG_HAS_EARLYSUSPEND
+	als_data->early_suspend.level = EARLY_SUSPEND_LEVEL_BLANK_SCREEN + 1;
+	als_data->early_suspend.suspend = lm3530_early_suspend;
+	als_data->early_suspend.resume = lm3530_late_resume;
+	register_early_suspend(&als_data->early_suspend);
+#endif
 	disable_irq(als_data->client->irq);
 	queue_work(als_data->working_queue, &als_data->wq);
 
 	return 0;
 
-err_create_file_failed:
+err_create_pwm_file_failed:
+	device_remove_file(als_data->led_dev.dev, &dev_attr_als);
+err_create_file_als_failed:
 	led_classdev_unregister(&als_data->led_dev);
 err_class_reg_failed:
 err_reg_init_failed:
@@ -439,6 +510,8 @@ static int ld_lm3530_remove(struct i2c_client *client)
 {
 	struct lm3530_data *als_data = i2c_get_clientdata(client);
 	device_remove_file(als_data->led_dev.dev, &dev_attr_als);
+	device_remove_file(als_data->led_dev.dev,
+		&dev_attr_pwm_mode);
 	led_classdev_unregister(&als_data->led_dev);
 	free_irq(als_data->client->irq, als_data);
 	if (als_data->working_queue)
@@ -446,6 +519,55 @@ static int ld_lm3530_remove(struct i2c_client *client)
 	kfree(als_data);
 	return 0;
 }
+
+static int lm3530_suspend(struct i2c_client *client, pm_message_t mesg)
+{
+	struct lm3530_data *als_data = i2c_get_clientdata(client);
+	int ret;
+
+	if (lm3530_debug)
+		pr_info("%s: Suspending\n", __func__);
+
+	disable_irq_nosync(als_data->client->irq);
+	ret = cancel_work_sync(&als_data->wq);
+	if (ret) {
+		pr_info("%s: Not Suspending\n", __func__);
+		enable_irq(als_data->client->irq);
+		return -EBUSY;
+	}
+
+	return 0;
+}
+
+static int lm3530_resume(struct i2c_client *client)
+{
+	struct lm3530_data *als_data = i2c_get_clientdata(client);
+
+	if (lm3530_debug)
+		pr_info("%s: Resuming\n", __func__);
+
+	enable_irq(als_data->client->irq);
+
+	return 0;
+}
+
+#ifdef CONFIG_HAS_EARLYSUSPEND
+static void lm3530_early_suspend(struct early_suspend *handler)
+{
+	struct lm3530_data *als_data;
+
+	als_data = container_of(handler, struct lm3530_data, early_suspend);
+	lm3530_suspend(als_data->client, PMSG_SUSPEND);
+}
+
+static void lm3530_late_resume(struct early_suspend *handler)
+{
+	struct lm3530_data *als_data;
+
+	als_data = container_of(handler, struct lm3530_data, early_suspend);
+	lm3530_resume(als_data->client);
+}
+#endif
 
 static const struct i2c_device_id lm3530_id[] = {
 	{LD_LM3530_NAME, 0},
@@ -455,6 +577,10 @@ static const struct i2c_device_id lm3530_id[] = {
 static struct i2c_driver ld_lm3530_i2c_driver = {
 	.probe = ld_lm3530_probe,
 	.remove = ld_lm3530_remove,
+#ifndef CONFIG_HAS_EARLYSUSPEND
+	.suspend	= lm3530_suspend,
+	.resume		= lm3530_resume,
+#endif
 	.id_table = lm3530_id,
 	.driver = {
 		   .name = LD_LM3530_NAME,

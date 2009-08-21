@@ -60,8 +60,7 @@ static struct gpio_event_matrix_info sholest_keypad_matrix_info = {
 };
 
 static struct gpio_event_direct_entry sholest_keypad_switch_map[] = {
-	{ GPIO_SILENCE_KEY,	SW_HEADPHONE_INSERT },
-	{ GPIO_SLIDER,		SW_LID}
+	{ GPIO_SILENCE_KEY,	SW_HEADPHONE_INSERT }
 };
 
 static struct gpio_event_input_info sholest_keypad_switch_info = {

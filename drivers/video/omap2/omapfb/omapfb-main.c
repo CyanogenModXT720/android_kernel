@@ -852,7 +852,6 @@ static int omapfb_pan_display(struct fb_var_screeninfo *var,
 		struct fb_info *fbi)
 {
 	struct omapfb_info *ofbi = FB2OFB(fbi);
-	struct omapfb2_device *fbdev = ofbi->fbdev;
 	struct omap_dss_device *display = fb2display(fbi);
 	int r = 0;
 
@@ -875,8 +874,10 @@ static int omapfb_pan_display(struct fb_var_screeninfo *var,
 		}
 	}
 
-	if (display && display->update)
+	if (display && display->update && display->sync) {
+		display->sync(display);
 		display->update(display, 0, 0, var->xres, var->yres);
+	}
 
 	return r;
 }
@@ -1314,7 +1315,12 @@ static int omapfb_alloc_fbmem_display(struct fb_info *fbi, unsigned long size,
 					oldw, oldh, w, h);
 		}
 
+#ifdef CONFIG_PVR_OMAP_DSS2
+		/* pvr drivers require double buffered fb */
+		size = w * h * bytespp * 2 + 8192;
+#else
 		size = w * h * bytespp;
+#endif
 	}
 
 	if (!size)
@@ -2076,9 +2082,9 @@ static int omapfb_probe(struct platform_device *pdev)
 
 	/* set the update mode */
 	if (def_display->caps & OMAP_DSS_DISPLAY_CAP_MANUAL_UPDATE) {
-#ifdef CONFIG_FB_OMAP2_FORCE_AUTO_UPDATE
 		if (def_display->enable_te)
 			def_display->enable_te(def_display, 1);
+#ifdef CONFIG_FB_OMAP2_FORCE_AUTO_UPDATE
 		if (def_display->set_update_mode)
 			def_display->set_update_mode(def_display,
 					OMAP_DSS_UPDATE_AUTO);

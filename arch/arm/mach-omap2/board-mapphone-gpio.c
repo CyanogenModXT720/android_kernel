@@ -209,12 +209,12 @@ device_initcall(mapphone_init_gpiodev);
 #define GPIO_MAP_SIZE 50
 
 static struct gpio_mapping gpio_map_table[GPIO_MAP_SIZE] = {
-	{1, 27, "lcd_panel_reset"},
-	{1, 41, "lcd_panel_sd"},
+	{1, 92, "lcd_panel_reset"},
+	{1, 93, "lcd_panel_sd"},
 	{1, 149, "usb_ipc_phy_reset"},
 	{1, 164, "touch_panel_reset"},
 	{1, 163, "mmc_detect"},
-	{1, 110, "slider_data"},
+	{1, 177, "slider_data"},
 	{1, 65, "wlan_host_wake"},
 };
 

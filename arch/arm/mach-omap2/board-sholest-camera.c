@@ -24,6 +24,7 @@
 #include <linux/regulator/consumer.h>
 #include <mach/mux.h>
 #include <mach/board-sholest.h>
+#include <mach/omap-pm.h>
 
 #ifdef CONFIG_VIDEO_OLDOMAP3
 #include <media/v4l2-int-device.h>
@@ -32,12 +33,6 @@
 #include <../drivers/media/video/oldisp/isp.h>
 #if defined(CONFIG_VIDEO_MT9P012) || defined(CONFIG_VIDEO_MT9P012_MODULE)
 #include <media/mt9p012.h>
-#endif
-#if defined(CONFIG_VIDEO_MT9P012_HP)
-#include <../drivers/media/video/mt9p012_hp.h>
-#endif
-#if defined(CONFIG_VIDEO_MT9P013_HP)
-#include <../drivers/media/video/mt9p013_hp.h>
 #endif
 #endif
 
@@ -70,8 +65,7 @@ struct hplens_platform_data sholest_hplens_platform_data = {
 };
 #endif
 
-#if defined(CONFIG_VIDEO_MT9P012) || defined(CONFIG_VIDEO_MT9P012_MODULE) \
-	|| defined(CONFIG_VIDEO_MT9P012_HP)
+#if defined(CONFIG_VIDEO_MT9P012) || defined(CONFIG_VIDEO_MT9P012_MODULE)
 static struct omap34xxcam_sensor_config mt9p012_cam_hwc = {
 	.sensor_isp = 0,
 	.xclk = OMAP34XXCAM_XCLK_A,
@@ -112,7 +106,7 @@ static struct isp_interface_config mt9p012_if_config = {
 	.u.par.par_clk_pol = 0x0,
 };
 
-static int mt9p012_sensor_power_set(enum v4l2_power power)
+static int mt9p012_sensor_power_set(struct device* dev, enum v4l2_power power)
 {
 	static enum v4l2_power previous_power = V4L2_POWER_OFF;
 	static struct regulator *regulator;
@@ -120,7 +114,7 @@ static int mt9p012_sensor_power_set(enum v4l2_power power)
 	switch (power) {
 	case V4L2_POWER_OFF:
 		/* Power Down Sequence */
-		gpio_free(GPIO_MT9P012_RESET);
+		gpio_free(GPIO_CAMERA_RESET);
 
 		/* Turn off power */
 		if (regulator != NULL) {
@@ -132,25 +126,32 @@ static int mt9p012_sensor_power_set(enum v4l2_power power)
 					"initialized\n", __func__);
 			return -EIO;
 		}
+
+		/* Release pm constraints */
+		omap_pm_set_min_bus_tput(dev, OCP_INITIATOR_AGENT, 0);
 	break;
 	case V4L2_POWER_ON:
 		if (previous_power == V4L2_POWER_OFF) {
 			/* Power Up Sequence */
+
+			/* Set min throughput to:
+			 *  2592 x 1944 x 2bpp x 30fps x 3 L3 accesses */
+			omap_pm_set_min_bus_tput(dev, OCP_INITIATOR_AGENT, 885735);
 
 			/* Configure pixel clock divider (here?) */
 			omap_writel(0x4, 0x48004f40);
 			isp_configure_interface(&mt9p012_if_config);
 
 			/* Request and configure gpio pins */
-			if (gpio_request(GPIO_MT9P012_RESET,
+			if (gpio_request(GPIO_CAMERA_RESET,
 						"mt9p012 camera reset") != 0)
 				return -EIO;
 
 			/* set to output mode */
-			gpio_direction_output(GPIO_MT9P012_RESET, 0);
+			gpio_direction_output(GPIO_CAMERA_RESET, 0);
 
 			/* nRESET is active LOW. set HIGH to release reset */
-			gpio_set_value(GPIO_MT9P012_RESET, 1);
+			gpio_set_value(GPIO_CAMERA_RESET, 1);
 
 			/* turn on digital power */
 			if (regulator != NULL) {
@@ -177,12 +178,12 @@ static int mt9p012_sensor_power_set(enum v4l2_power power)
 
 		if (previous_power == V4L2_POWER_OFF) {
 			/* trigger reset */
-			gpio_direction_output(GPIO_MT9P012_RESET, 0);
+			gpio_direction_output(GPIO_CAMERA_RESET, 0);
 
 			udelay(1500);
 
 			/* nRESET is active LOW. set HIGH to release reset */
-			gpio_set_value(GPIO_MT9P012_RESET, 1);
+			gpio_set_value(GPIO_CAMERA_RESET, 1);
 
 			/* give sensor sometime to get out of the reset.
 			 * Datasheet says 2400 xclks. At 6 MHz, 400 usec is
@@ -192,7 +193,7 @@ static int mt9p012_sensor_power_set(enum v4l2_power power)
 		}
 		break;
 	case V4L2_POWER_STANDBY:
-		/* stand by */
+		/* Stand By Sequence */
 		break;
 	}
 	/* Save powerstate to know what was before calling POWER_ON. */
@@ -205,158 +206,14 @@ u32 mt9p012_set_xclk(u32 xclkfreq)
 	return isp_set_xclk(xclkfreq, OMAP34XXCAM_XCLK_A);
 }
 
-#if defined(CONFIG_VIDEO_MT9P012)
+
 struct mt9p012_platform_data sholest_mt9p012_platform_data = {
 	.power_set      = mt9p012_sensor_power_set,
 	.set_xclk	= mt9p012_set_xclk,
 	.priv_data_set  = mt9p012_sensor_set_prv_data,
 };
-#else
-struct mt9p012_platform_data sholest_mt9p012_platform_data = {
-	.power_set      = mt9p012_sensor_power_set,
-	.priv_data_set  = mt9p012_sensor_set_prv_data,
-	.default_regs   = NULL,
-};
-#endif
 
 #endif /* #ifdef CONFIG_VIDEO_MT9P012 || CONFIG_VIDEO_MT9P012_MODULE */
-
-#if defined(CONFIG_VIDEO_MT9P013_HP)
-static struct omap34xxcam_sensor_config mt9p013_cam_hwc = {
-	.sensor_isp = 0,
-	.xclk = OMAP34XXCAM_XCLK_A,
-	.capture_mem = PAGE_ALIGN(2592 * 1944 * 2) * 4,
-};
-
-static int mt9p013_sensor_set_prv_data(void *priv)
-{
-	struct omap34xxcam_hw_config *hwc = priv;
-
-	hwc->u.sensor.xclk = mt9p013_cam_hwc.xclk;
-	hwc->u.sensor.sensor_isp = mt9p013_cam_hwc.sensor_isp;
-	hwc->u.sensor.capture_mem = mt9p013_cam_hwc.capture_mem;
-	hwc->dev_index = 0;
-	hwc->dev_minor = 0;
-	hwc->dev_type = OMAP34XXCAM_SLAVE_SENSOR;
-	hwc->interface_type = ISP_PARLL;
-	return 0;
-}
-
-static struct isp_interface_config mt9p013_if_config = {
-	.ccdc_par_ser = ISP_PARLL,
-	.dataline_shift = 0x1,
-	.hsvs_syncdetect = ISPCTRL_SYNC_DETECT_VSRISE,
-	.vdint0_timing = 0x0,
-	.vdint1_timing = 0x0,
-	.strobe = 0x0,
-	.prestrobe = 0x0,
-	.shutter = 0x0,
-	.wenlog = ISPCCDC_CFG_WENLOG_OR,
-	.dcsub = 42,
-	.raw_fmt_in = ISPCCDC_INPUT_FMT_GR_BG,
-	.wbal.coef0 = 0x23,
-	.wbal.coef1 = 0x20,
-	.wbal.coef2 = 0x20,
-	.wbal.coef3 = 0x30,
-	.u.par.par_bridge = 0x0,
-	.u.par.par_clk_pol = 0x0,
-};
-
-static int mt9p013_sensor_power_set(enum v4l2_power power)
-{
-	static enum v4l2_power previous_power = V4L2_POWER_OFF;
-	static struct regulator *regulator;
-
-	switch (power) {
-	case V4L2_POWER_OFF:
-		/* Power Down Sequence */
-		gpio_free(GPIO_MT9P012_RESET);
-
-		/* Turn off power */
-		if (regulator != NULL) {
-			regulator_disable(regulator);
-			regulator_put(regulator);
-			regulator = NULL;
-		} else {
-			pr_err("%s: Regulator for vcam is not "\
-					"initialized\n", __func__);
-			return -EIO;
-		}
-	break;
-	case V4L2_POWER_ON:
-		if (previous_power == V4L2_POWER_OFF) {
-			/* Power Up Sequence */
-
-			/* Configure pixel clock divider (here?) */
-			omap_writel(0x4, 0x48004f40);
-			isp_configure_interface(&mt9p012_if_config);
-
-			/* Request and configure gpio pins */
-			if (gpio_request(GPIO_MT9P012_RESET,
-						"mt9p012 camera reset") != 0)
-				return -EIO;
-
-			/* set to output mode */
-			gpio_direction_output(GPIO_MT9P012_RESET, 0);
-
-			/* nRESET is active LOW. set HIGH to release reset */
-			gpio_set_value(GPIO_MT9P012_RESET, 1);
-
-			/* turn on digital power */
-			if (regulator != NULL) {
-				pr_warning("%s: Already have "\
-						"regulator\n", __func__);
-			} else {
-				regulator = regulator_get(NULL, "vcam");
-				if (IS_ERR(regulator)) {
-					pr_err("%s: Cannot get vcam "\
-						"regulator, err=%ld\n",
-						__func__, PTR_ERR(regulator));
-					return PTR_ERR(regulator);
-				}
-			}
-
-			if (regulator_enable(regulator) != 0) {
-				pr_err("%s: Cannot enable vcam regulator\n",
-						__func__);
-				return -EIO;
-			}
-		}
-
-		udelay(1000);
-
-		if (previous_power == V4L2_POWER_OFF) {
-			/* trigger reset */
-			gpio_direction_output(GPIO_MT9P012_RESET, 0);
-
-			udelay(1500);
-
-			/* nRESET is active LOW. set HIGH to release reset */
-			gpio_set_value(GPIO_MT9P012_RESET, 1);
-
-			/* give sensor sometime to get out of the reset.
-			 * Datasheet says 2400 xclks. At 6 MHz, 400 usec is
-			 * enough
-			 */
-			udelay(300);
-		}
-		break;
-	case V4L2_POWER_STANDBY:
-		/* stand by */
-		break;
-	}
-	/* Save powerstate to know what was before calling POWER_ON. */
-	previous_power = power;
-	return 0;
-}
-
-struct mt9p013_platform_data sholest_mt9p013_platform_data = {
-	.power_set      = mt9p013_sensor_power_set,
-	.priv_data_set  = mt9p013_sensor_set_prv_data,
-	.default_regs   = NULL,
-};
-
-#endif  /* #ifdef CONFIG_VIDEO_MT9P013 || CONFIG_VIDEO_MT9P013_MODULE */
 
 void __init sholest_camera_init(void)
 {

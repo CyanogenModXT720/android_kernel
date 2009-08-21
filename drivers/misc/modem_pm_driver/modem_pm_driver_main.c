@@ -15,6 +15,7 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
  * 02111-1307, USA
  *
+ * Motorola 2009-Jul-13 - Update for K29 to use Resource Framework
  * Motorola 2009-Jan-28 - Initial Creation
  */
 
@@ -26,13 +27,13 @@
 #include <linux/module.h>
 #include <linux/poll.h>
 #include <linux/semaphore.h>
+#include <mach/omap34xx.h>
 #include <mach/resource.h>
 #include "modem_pm_driver.h"
 
 static char modem_pm_driver_opened;
 
-/* static struct constraint_handle *co_latency; */
-/* static struct constraint_handle *co_vdd2_opp; */
+static struct device my_device;
 
 static struct class *modem_pm_driver_class;
 static struct device *modem_pm_driver_dev;
@@ -56,7 +57,7 @@ static int modem_pm_driver_ioctl(struct inode *inode,
 				 unsigned long arg);
 
 /* This structure defines the file operations for the Modem PM Driver */
-static struct file_operations modem_pm_driver_fops = {
+static const struct file_operations modem_pm_driver_fops = {
 	.owner =    THIS_MODULE,
 	.ioctl =    modem_pm_driver_ioctl,
 	.open =     modem_pm_driver_open,
@@ -126,15 +127,6 @@ static int modem_pm_driver_open(struct inode *inode, struct file *file)
 			/* Set the opened state */
 			modem_pm_driver_opened = 1;
 			retval = 0;
-
-			/* Get the VDD2 OPP constraint handle */
-			/* co_vdd2_opp = constraint_get(
-			   MODEM_PM_DRIVER_DEV_NAME,
-			   &cnstr_id_vdd2_opp); */
-
-			/* Get the latency constraint handle */
-			/* co_latency = constraint_get(MODEM_PM_DRIVER_DEV_NAME,
-			   &cnstr_id_latency); */
 		} else
 			retval = -EBUSY;
 
@@ -151,21 +143,14 @@ static int modem_pm_driver_free(struct inode *inode, struct file *file)
 
 	/* Acquire the mutex */
 	if (down_interruptible(&modem_pm_driver_lock) == 0) {
-
-		/* Remove the setting of the VDD2 OPP constraint */
-		/* constraint_remove(co_vdd2_opp); */
-
-		/* Release the VDD2 OPP constraint handle */
-		/* constraint_put(co_vdd2_opp); */
-
-		/* Remove the setting of the VDD2 OPP constraint */
-		/* constraint_remove(co_latency); */
-
-		/* Release the latency constraint handle */
-		/* constraint_put(co_latency); */
-
 		modem_pm_driver_opened = 0;
 		retval = 0;
+
+		/* Remove the setting of the VDD2 OPP constraint */
+		resource_release("vdd2_opp", &my_device);
+
+		/* Remove the setting of the latency constraint */
+		resource_release("core_latency", &my_device);
 
 		/* Release the mutex */
 		up(&modem_pm_driver_lock);
@@ -186,13 +171,13 @@ static int modem_pm_driver_ioctl(struct inode *inode,
 		switch (arg) {
 		case MODEM_PM_SHARED_DDR_FREQUENCY_OPP_HIGH: {
 			/* Set the target value of the VDD2 OPP constraint */
-			/* constraint_set(co_vdd2_opp, CO_VDD2_OPP3); */
+			resource_request("vdd2_opp", &my_device, VDD2_OPP3);
 			status = 0;
 			break;
 		}
 		case MODEM_PM_SHARED_DDR_FREQUENCY_OPP_NO_VOTE: {
 			/* Remove the setting of the VDD2 OPP constraint */
-			/* constraint_remove(co_vdd2_opp); */
+			resource_release("vdd2_opp", &my_device);
 			status = 0;
 			break;
 		}
@@ -205,21 +190,19 @@ static int modem_pm_driver_ioctl(struct inode *inode,
 		switch (arg) {
 		case MODEM_PM_SHARED_DDR_LOW_POWER_POLICY_ON_INACTIVE: {
 			/* Set the target value of the latency constraint */
-			/* constraint_set(co_latency,
-			   CO_LATENCY_MPUOFF_COREON); */
+			resource_request("core_latency", &my_device, 9999);
 			status = 0;
 			break;
 		}
 		case MODEM_PM_SHARED_DDR_LOW_POWER_POLICY_RET: {
 			/* Set the target value of the latency constraint */
-			/* constraint_set(co_latency,
-			   CO_LATENCY_MPUOFF_CORERET); */
+			resource_request("core_latency", &my_device, 39999);
 			status = 0;
 			break;
 		}
 		case MODEM_PM_SHARED_DDR_LOW_POWER_POLICY_NO_VOTE: {
 			/* Remove the setting of the latency constraint */
-			/* constraint_remove(co_latency); */
+			resource_release("core_latency", &my_device);
 			status = 0;
 			break;
 		}

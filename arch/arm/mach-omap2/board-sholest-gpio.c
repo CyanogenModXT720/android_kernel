@@ -65,7 +65,7 @@ static struct gpio_device gpio_devs[GPIO_DEVICE_SIZE] = {
 		GPIODEV_FLAG_CONFIGURABLE | GPIODEV_FLAG_LOWLEVELACCESS,
 	},
 	{
-		136,
+		23,
 		"gps_standby",
 		GPIODEV_CONFIG_OUTPUT_LOW,
 		GPIODEV_CONFIG_INVALID,

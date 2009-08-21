@@ -72,6 +72,8 @@ struct omap_usb_config {
 	 *  6 == 6 wire unidirectional (or TLL)
 	 */
 	u8		pins[3];
+	int (*usbhost_standby_status)(void);
+	u8		usb_remote_wake_gpio;
 };
 
 struct omap_lcd_config {
@@ -122,7 +124,7 @@ struct omap_tea5761_config {
 /* This cannot be passed from the bootloader */
 struct omap_tmp105_config {
 	u16 tmp105_irq_pin;
-	int (* set_power)(int enable);
+	int (*set_power)(int enable);
 };
 
 struct omap_partition_config {
@@ -157,12 +159,21 @@ struct omap_board_config_kernel {
 	const void *data;
 };
 
+struct omap_vout_config {
+	u16 max_width;
+	u16 max_height;
+	u32 max_buffer_size;
+	u8  num_buffers;
+	u8  num_devices;
+	int device_ids[2]; /* -1 for any videoX */
+};
+
 extern const void *__omap_get_config(u16 tag, size_t len, int nr);
 
 #define omap_get_config(tag, type) \
-	((const type *) __omap_get_config((tag), sizeof(type), 0))
+	((const type*) __omap_get_config((tag), sizeof(type), 0))
 #define omap_get_nr_config(tag, type, nr) \
-	((const type *) __omap_get_config((tag), sizeof(type), (nr)))
+	((const type*) __omap_get_config((tag), sizeof(type), (nr)))
 
 extern const void *omap_get_var_config(u16 tag, size_t *len);
 

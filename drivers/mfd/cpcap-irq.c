@@ -44,6 +44,7 @@ struct cpcap_irqdata {
 	struct cpcap_event_handler event_handler[CPCAP_IRQ__NUM];
 	uint64_t registered;
 	uint64_t enabled;
+	struct wake_lock wake_lock;
 };
 
 #define EVENT_MASK(event) (1 << ((event) % NUM_INTS_PER_REG))
@@ -58,6 +59,7 @@ static irqreturn_t event_isr(int irq, void *data)
 {
 	struct cpcap_irqdata *irq_data = data;
 	disable_irq_nosync(irq);
+	wake_lock(&irq_data->wake_lock);
 	queue_work(irq_data->workqueue, &irq_data->work);
 
 	return IRQ_HANDLED;
@@ -171,7 +173,7 @@ static int int_read_and_clear(struct cpcap_device *cpcap,
 	ret = cpcap_regacc_read(cpcap, mask_reg, &mreg_val);
 	if (ret)
 		return ret;
-	*en = ireg_val & ~mreg_val;
+	*en |= ireg_val & ~mreg_val;
 	*en &= valid_mask;
 	ret = cpcap_regacc_write(cpcap, mask_reg, *en, *en);
 	if (ret)
@@ -204,20 +206,25 @@ static void irq_work_func(struct work_struct *work)
 		{CPCAP_REG_MI1,  CPCAP_REG_MIM1,  0xFFFF}
 	};
 
+	for (i = 0; i < NUM_INT_REGS; ++i)
+		en_ints[i] = 0;
+
 	data = container_of(work, struct cpcap_irqdata, work);
 	cpcap = data->cpcap;
 	spi = cpcap->spi;
 
-	for (i = 0; i < NUM_INT_REGS; ++i) {
-		retval = int_read_and_clear(cpcap,
-					    int_reg[i].status_reg,
-					    int_reg[i].mask_reg,
-					    int_reg[i].valid,
-					    &en_ints[i]);
-		if (retval < 0) {
-			dev_err(&cpcap->spi->dev,
-				"Error reading interrupts\n");
-			break;
+	while (gpio_get_value(irq_to_gpio(spi->irq))) {
+		for (i = 0; i < NUM_INT_REGS; ++i) {
+			retval = int_read_and_clear(cpcap,
+						int_reg[i].status_reg,
+						int_reg[i].mask_reg,
+						int_reg[i].valid,
+						&en_ints[i]);
+			if (retval < 0) {
+				dev_err(&cpcap->spi->dev,
+					"Error reading interrupts\n");
+				break;
+			}
 		}
 	}
 	enable_irq(spi->irq);
@@ -246,6 +253,7 @@ static void irq_work_func(struct work_struct *work)
 	}
 error:
 	mutex_unlock(&data->lock);
+	wake_unlock(&data->wake_lock);
 }
 
 int cpcap_irq_init(struct cpcap_device *cpcap)
@@ -259,9 +267,10 @@ int cpcap_irq_init(struct cpcap_device *cpcap)
 	if (!data)
 		return -ENOMEM;
 
-        data->workqueue = create_workqueue("cpcap_irq");
+	data->workqueue = create_workqueue("cpcap_irq");
 	INIT_WORK(&data->work, irq_work_func);
 	mutex_init(&data->lock);
+	wake_lock_init(&data->wake_lock, WAKE_LOCK_SUSPEND, "cpcap-irq");
 	data->cpcap = cpcap;
 
 	retval = request_irq(spi->irq, event_isr, IRQF_DISABLED, "cpcap-irq",
@@ -289,8 +298,8 @@ int cpcap_irq_init(struct cpcap_device *cpcap)
 	return 0;
 
 error:
+	free_irq(spi->irq, data);
 	kfree(data);
-	free_irq(spi->irq, &data->work);
 	printk(KERN_ERR "cpcap_irq: Error registering cpcap irq.\n");
 	return retval;
 }
@@ -302,7 +311,9 @@ void cpcap_irq_shutdown(struct cpcap_device *cpcap)
 
 	cpcap_irq_free_data(cpcap, CPCAP_IRQ_ON);
 	cancel_work_sync(&data->work);
-	free_irq(spi->irq, &data->work);
+	destroy_workqueue(data->workqueue);
+	free_irq(spi->irq, data);
+	kfree(data);
 }
 
 int cpcap_irq_register(struct cpcap_device *cpcap,

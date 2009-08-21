@@ -34,7 +34,7 @@
 #include <asm/prom.h>
 #endif
 #ifdef CONFIG_EMU_UART_DEBUG
-#include <mach/board-sholest-emu_uart.h>
+#include <mach/board-mapphone-emu_uart.h>
 #endif
 
 
@@ -1696,7 +1696,10 @@ static __initdata struct {
 		    OMAP343X_PADCONF_INPUT_ENABLED | OMAP343X_PADCONF_MUXMODE0},
 	    /* SYS_NRESWARM */
 	{
-	0x0A08, OMAP343X_PADCONF_MUXMODE7},
+        0x0A08,
+		    OMAP343X_PADCONF_INPUT_ENABLED |
+		    OMAP343X_PADCONF_PULL_UP |
+		    OMAP343X_PADCONF_PUD_ENABLED | OMAP343X_PADCONF_MUXMODE0},
 	    /* SYS_BOOT0 */
 	{
 	0x0A0A,

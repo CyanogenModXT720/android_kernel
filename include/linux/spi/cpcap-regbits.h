@@ -406,7 +406,7 @@
 #define CPCAP_BIT_UNUSED_266_14		0x00004000
 #define CPCAP_BIT_UNUSED_266_13		0x00002000
 #define CPCAP_BIT_UNUSED_266_12		0x00001000
-#define CPCAP_BIT_UNUSED_266_11		0x00000800
+#define CPCAP_BIT_BOOT_MODE		0x00000800
 #define CPCAP_BIT_UNUSED_266_10		0x00000400
 #define CPCAP_BIT_OUT_CHARGE_ONLY	0x00000200
 #define CPCAP_BIT_USB_BATT_RECOVERY	0x00000100
@@ -652,6 +652,18 @@
 #define CPCAP_BIT_A2_LDSP_L_EXT_SW        0x00000004
 #define CPCAP_BIT_A2_LDSP_R_EXT_SW        0x00000002
 #define CPCAP_BIT_A1_EAR_EXT_SW           0x00000001
+
+/*
+ * Register 525 Loudspeaker Amplifier and Clock Configuration for Headset
+ */
+#define CPCAP_BIT_NCP_CLK_SYNC            0x00000080
+#define CPCAP_BIT_A2_CLK_SYNC             0x00000040
+#define CPCAP_BIT_A2_FREE_RUN             0x00000020
+#define CPCAP_BIT_A2_CLK2                 0x00000010
+#define CPCAP_BIT_A2_CLK1                 0x00000008
+#define CPCAP_BIT_A2_CLK0                 0x00000004
+#define CPCAP_BIT_A2_CLK_IN               0x00000002
+#define CPCAP_BIT_A2_CONFIG               0x00000001
 
 /*
  * Register 641 - CPCAP_REG_CHRGR_1 bits

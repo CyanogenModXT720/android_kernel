@@ -40,10 +40,13 @@ void msg_ind_set_rgb_brightness(struct msg_ind_led_data *msg_ind_data,
 	int cpcap_status = 0;
 	int cpcap_register = 0;
 
+    pr_info ("ld-cpcap-rgb: LED_%s %s \n",
+            ((color == LD_LED_RED) ? "RED" : ((color == LD_LED_GREEN) ? "GREEN" : "BLUE")),
+            ((value > LED_OFF) ? "ON" : "OFF"));
+
 	if (color & LD_LED_RED)
-//#ifdef CONFIG_LEDS_SHOLEST
-#if 1
-		cpcap_register = CPCAP_REG_ADLC;
+#ifdef CONFIG_LEDS_SHOLEST
+        cpcap_register = CPCAP_REG_ADLC;
 #else
 		cpcap_register = CPCAP_REG_REDC;
 #endif
