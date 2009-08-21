@@ -227,6 +227,7 @@ static void akm8973_device_power_off(struct akm8973_data *akm)
 {
 	if (akm->pdata->power_off) {
 		disable_irq_nosync(akm->client->irq);
+		mutex_unlock(&akm->lock);
 		akm->pdata->power_off();
 		clear_bit(BUSY, &akm->flags);
 		akm->hw_initialized = 0;
