@@ -1056,9 +1056,9 @@ static int dsi_pll_calc_ddrfreq(struct omap_dss_device *dssdev,
 	/* To reduce PLL lock time, keep Fint high (around 2 MHz) */
 	for (cur.regn = 1; cur.regn < REGN_MAX; ++cur.regn) {
 		if (cur.highfreq == 0)
-			cur.fint = cur.clkin / cur.regn;
+			cur.fint = cur.clkin / (cur.regn + 1);
 		else
-			cur.fint = cur.clkin / (2 * cur.regn);
+			cur.fint = cur.clkin / (2 * (cur.regn + 1));
 
 		if (cur.fint > FINT_MAX || cur.fint < FINT_MIN)
 			continue;
@@ -1068,7 +1068,7 @@ static int dsi_pll_calc_ddrfreq(struct omap_dss_device *dssdev,
 			unsigned long a, b;
 
 			a = 2 * cur.regm * (cur.clkin/1000);
-			b = cur.regn * (cur.highfreq + 1);
+			b = (cur.regn + 1) * (cur.highfreq + 1);
 			cur.dsiphy = a / b * 1000;
 
 			if (cur.dsiphy > 1800 * 1000 * 1000)
@@ -2699,11 +2699,10 @@ static void dsi_update_screen_dispc(struct omap_dss_device *dssdev,
 
 	len = w * h * bytespp;
 
-    /* The line buffer is 1024 x 24bits, and we want to send
-	 * much data in one package as we can but the package size
-	 * must be smaller the line buffer and it must be multiple of
-	 * the panel width */
-	packet_payload = ((u16)1023 / w) * w * bytespp;
+	/* XXX: one packet could be longer, I think? Line buffer is
+	 * 1024 x 24bits, but we have to put DCS cmd there also.
+	 * 1023 * 3 should work, but causes strange color effects. */
+	packet_payload = ((u16)1020 / w) * w * bytespp;
 
 	packet_len = packet_payload + 1;	/* 1 byte for DCS cmd */
 	total_len = (len / packet_payload) * packet_len;
