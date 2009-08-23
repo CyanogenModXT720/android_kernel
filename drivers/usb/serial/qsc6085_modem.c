@@ -450,7 +450,7 @@ static int modem_open(struct tty_struct *tty,
 {
 	struct modem_port *modem_port_ptr =
 	    usb_get_serial_data(port->serial);
-	int retval;
+	int retval = -1;
 	int i;
 	unsigned long flags;
 
