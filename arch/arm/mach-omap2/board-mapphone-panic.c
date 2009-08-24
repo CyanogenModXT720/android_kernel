@@ -30,11 +30,11 @@
 #include <linux/uaccess.h>
 #include <linux/mtd/mtd.h>
 #include <linux/notifier.h>
-#include <linux/mtd/mtd.h>
 #include <linux/debugfs.h>
 #include <linux/fs.h>
 #include <linux/proc_fs.h>
 #include <linux/spinlock.h>
+#include <linux/rtc.h>
 
 #define PANIC_PARTITION "kpanic"
 
@@ -59,10 +59,22 @@ static DEFINE_SPINLOCK(kmsg_lock);
 static void *kmsg_data = NULL;
 static unsigned kmsg_data_len = 0;
 
-static void mapphone_panic_erase_callback(struct erase_info *done)
+static int kpanic_erase(struct mtd_info *mtd)
 {
-	wait_queue_head_t *wait_q = (wait_queue_head_t *) done->priv;
-	wake_up(wait_q);
+	struct erase_info erase;
+
+	/* set up the erase structure */
+	erase.mtd = mtd;
+	erase.addr = 0;
+	erase.len = mtd->size;
+	erase.callback = NULL;
+
+	/* erase the kpanic flash block partition */
+	if (mtd->erase(mtd, &erase)) {
+		printk(KERN_EMERG "mapphone-panic: fail to erase the kpanic partition.\n");
+		return 1;
+	}
+	return 0;
 }
 
 static ssize_t mapphone_panic_proc_read(struct file *file, char __user *buf,
@@ -113,15 +125,13 @@ static void mtd_panic_notify_add(struct mtd_info *mtd)
 	struct proc_dir_entry *entry;
 	struct panic_header *hdr = mtd_bounce_page;
 	size_t len;
-	struct erase_info erase;
-	DECLARE_WAITQUEUE(wait, current);
-	wait_queue_head_t wait_q;
 	int rc, i;
 
 	if (strcmp(mtd->name, PANIC_PARTITION))
 		return;
 
 	panic_mtd_dev = mtd;
+	printk(KERN_EMERG "mapphone_panic: writesize=%d\n", mtd->writesize);
 
 	/* If theres a dump currently in flash, suck it out */
 	if (!mtd->read) {
@@ -135,12 +145,12 @@ static void mtd_panic_notify_add(struct mtd_info *mtd)
 		return;
 	}
 
-	rc = mtd->read(mtd, 0, PAGE_SIZE, &len, mtd_bounce_page);
+	rc = mtd->read(mtd, 0, mtd->writesize, &len, mtd_bounce_page);
 	if (rc) {
 		printk(KERN_ERR "mapphone_panic: Err reading flash (%d)\n", rc);
 		return;
 	}
-	if (len != PAGE_SIZE) {
+	if (len != mtd->writesize) {
 		printk(KERN_ERR "mapphone_panic: Bad read size (%d)\n", rc);
 		return;
 	}
@@ -149,7 +159,8 @@ static void mtd_panic_notify_add(struct mtd_info *mtd)
 
 	if (hdr->magic != PANIC_MAGIC) {
 		printk(KERN_INFO "mapphone_panic: No panic data available\n");
-		goto erase;
+		kpanic_erase(mtd);
+		return;
 	}
 
 	printk(KERN_INFO "mapphone_panic: c(%u, %u) t(%u, %u)\n",
@@ -174,73 +185,31 @@ static void mtd_panic_notify_add(struct mtd_info *mtd)
 	printk("mapphone_panic: Allocated %llu bytes for kmsg buffer\n",
 	       (ALIGN(entry->size, PAGE_SIZE)));
 
-	for (i = 0; i < hdr->console_length; i += PAGE_SIZE) {
-		rc = mtd->read(mtd,
-			       i + hdr->console_offset,
-			       PAGE_SIZE, &len, kmsg_data + i);
+	for (i = 0; i < hdr->console_length; i += mtd->writesize) {
+		rc = mtd->read(mtd, 
+				i + hdr->console_offset, 
+				   mtd->writesize, &len, kmsg_data + i);
 		if (rc) {
-			printk(KERN_ERR "mapphone_panic: Err reading console\n");
+			printk(KERN_ERR "mapphone_panic: Err reading console, rc = %d\n", rc);
 			remove_proc_entry("last_kmsg", NULL);
 			return;
 		}
 	}
 	kmsg_data_len = hdr->console_length;
 
-	for (i = 0; i < hdr->threads_length; i += PAGE_SIZE) {
-		rc = mtd->read(mtd,
-			       i + hdr->threads_offset,
-			       PAGE_SIZE, &len, kmsg_data + kmsg_data_len + i);
+	for (i = 0; i < hdr->threads_length; i += mtd->writesize) {
+		rc = mtd->read(mtd, 
+				i + hdr->threads_offset,
+				   mtd->writesize, &len, 
+				   kmsg_data + kmsg_data_len + i);
 		if (rc) {
-			printk(KERN_ERR "mapphone_panic: Err reading threads\n");
+			printk(KERN_ERR "mapphone_panic: Err reading threads, rc = %d\n", rc);			
 			remove_proc_entry("last_kmsg", NULL);
 			return;
 		}
 	}
 	kmsg_data_len += hdr->threads_length;
 
-erase:
-
-	init_waitqueue_head(&wait_q);
-	erase.mtd = mtd;
-	erase.callback = mapphone_panic_erase_callback;
-	erase.len = mtd->erasesize;
-	erase.priv = (u_long)&wait_q;
-	for (i = 0; i < mtd->size; i += mtd->erasesize) {
-		erase.addr = i;
-		set_current_state(TASK_INTERRUPTIBLE);
-		add_wait_queue(&wait_q, &wait);
-
-		rc = mtd->block_isbad(mtd, erase.addr);
-		if (rc < 0) {
-			printk(KERN_ERR
-			       "mapphone_panic: Bad block check "
-			       "failed (%d)\n", rc);
-			goto out;
-		}
-		if (rc) {
-			printk(KERN_WARNING
-			       "mapphone_panic: Skipping erase of bad "
-			       "block @%llx\n", erase.addr);
-			set_current_state(TASK_RUNNING);
-			remove_wait_queue(&wait_q, &wait);
-			continue;
-		}
-
-		rc = mtd->erase(mtd, &erase);
-		if (rc) {
-			set_current_state(TASK_RUNNING);
-			remove_wait_queue(&wait_q, &wait);
-			printk(KERN_ERR
-			       "mapphone_panic: Erase of region 0x%llx, 0x%llx failed\n",
-			       (unsigned long long) erase.addr,
-			       (unsigned long long) erase.len);
-			goto out;
-		}
-		schedule();
-		remove_wait_queue(&wait_q, &wait);
-	}
-	printk(KERN_DEBUG "mapphone_panic: Panic partition cleared\n");
-out:
 	return;
 }
 
@@ -277,7 +246,7 @@ static int mapphone_writeflash(struct mtd_info *mtd, loff_t to, size_t num_pages
 	if (panic)
 		rc = mtd->panic_write(mtd, to, PAGE_SIZE, &wlen, buf);
 	else
-		rc = mtd->write(mtd, to, PAGE_SIZE, &wlen, buf);
+		rc = mtd->write(mtd, to, mtd->writesize, &wlen, buf);
 
 	if (rc) {
 		printk(KERN_EMERG
@@ -305,12 +274,12 @@ static int mapphone_panic_write_console(struct mtd_info *mtd, unsigned int off,
 	for (;;) {
 		saved_oip = oops_in_progress;
 		oops_in_progress = 1;
-		rc = log_buf_copy(mtd_bounce_page, idx, PAGE_SIZE);
+		rc = log_buf_copy(mtd_bounce_page, idx, mtd->writesize);
 		oops_in_progress = saved_oip;
 		if (rc <= 0)
 			break;
-		if (rc != PAGE_SIZE)
-			memset(mtd_bounce_page + rc, 0, PAGE_SIZE - rc);
+		if (rc != mtd->writesize)
+			memset(mtd_bounce_page + rc, 0, mtd->writesize - rc);
 #if EXPERIMENTAL_BB_SKIP
 check_badblock:
 		rc = mtd->block_isbad(mtd, off);
@@ -364,6 +333,10 @@ static int mapphone_panic(struct notifier_block *this, unsigned long event,
 	if (!panic_mtd_dev)
 		goto out;
 
+	if (0 != kpanic_erase(panic_mtd_dev)) {
+		printk(KERN_EMERG "mapphone_panic: erase error\n");
+		goto out;
+	}
 
 	/*
 	 * Write out the console
@@ -439,6 +412,6 @@ void __init mapphone_panic_init(void)
 	register_mtd_user(&mtd_panic_notifier);
 	atomic_notifier_chain_register(&panic_notifier_list, &panic_blk);
 	debugfs_create_file("panic", 0644, NULL, NULL, &panic_dbg_fops);
-	mtd_bounce_page = __get_free_page(GFP_KERNEL);
+	mtd_bounce_page = (void *)__get_free_page(GFP_KERNEL);
 }
 
