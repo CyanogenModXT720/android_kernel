@@ -927,6 +927,9 @@ static void mapphone_pm_init(void)
 	platform_device_register(&mapphone_bpwake_device);
 	platform_driver_register(&mapphone_bpwake_driver);
 
+	/* set cold reset, will move to warm reset once ready */
+	mapphone_pm_set_reset(1);
+
 	register_reboot_notifier(&mapphone_pm_reboot_notifier);
 }
 
