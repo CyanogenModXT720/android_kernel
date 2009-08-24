@@ -91,6 +91,11 @@ struct lis331dlh_data {
 
 	int hw_initialized;
 	atomic_t enabled;
+	int on_before_suspend;
+
+	atomic_t x;
+	atomic_t y;
+	atomic_t z;
 
 	u8 shift_adj;
 	u8 resume_state[5];
@@ -212,7 +217,7 @@ static int lis331dlh_device_power_on(struct lis331dlh_data *lis)
 	}
 
 	if (!lis->hw_initialized) {
-		mdelay(100);
+		udelay(600);
 		err = lis331dlh_hw_init(lis);
 		if (err < 0) {
 			lis331dlh_device_power_off(lis);
@@ -334,8 +339,11 @@ static int lis331dlh_get_acceleration_data(struct lis331dlh_data *lis, int *xyz)
 static void lis331dlh_report_values(struct lis331dlh_data *lis, int *xyz)
 {
 	input_report_abs(lis->input_dev, ABS_X, xyz[0]);
+	atomic_set(&lis->x, xyz[0]);
 	input_report_abs(lis->input_dev, ABS_Y, xyz[1]);
+	atomic_set(&lis->y, xyz[1]);
 	input_report_abs(lis->input_dev, ABS_Z, xyz[2]);
+	atomic_set(&lis->z, xyz[2]);
 	input_sync(lis->input_dev);
 }
 
@@ -378,6 +386,25 @@ static int lis331dlh_misc_open(struct inode *inode, struct file *file)
 	file->private_data = lis331dlh_misc_data;
 
 	return 0;
+}
+
+static ssize_t lis331dlh_misc_read(struct file *file, char __user *buf,
+				   size_t count, loff_t *offset)
+{
+	int xyz[3] = { 0 };
+	int nread = sizeof(xyz[0]) * 3;
+
+	if (count < nread)
+		return -ENOMEM;
+
+	xyz[0] = atomic_read(&lis331dlh_misc_data->x);
+	xyz[1] = atomic_read(&lis331dlh_misc_data->y);
+	xyz[2] = atomic_read(&lis331dlh_misc_data->z);
+
+	if (copy_to_user(buf, xyz, nread))
+		return -EFAULT;
+
+	return nread;
 }
 
 static int lis331dlh_misc_ioctl(struct inode *inode, struct file *file,
@@ -450,6 +477,7 @@ static int lis331dlh_misc_ioctl(struct inode *inode, struct file *file,
 static const struct file_operations lis331dlh_misc_fops = {
 	.owner = THIS_MODULE,
 	.open = lis331dlh_misc_open,
+	.read = lis331dlh_misc_read,
 	.ioctl = lis331dlh_misc_ioctl,
 };
 
@@ -510,8 +538,8 @@ static int lis331dlh_validate_pdata(struct lis331dlh_data *lis)
 	}
 
 	/* Only allow 0 and 1 for negation boolean flag */
-	if (lis->pdata->negate_x > 1 || lis->pdata->negate_x > 1 ||
-	    lis->pdata->negate_x > 1) {
+	if (lis->pdata->negate_x > 1 || lis->pdata->negate_y > 1 ||
+	    lis->pdata->negate_z > 1) {
 		dev_err(&lis->client->dev,
 			"invalid negate value x:%u y:%u z:%u\n",
 			lis->pdata->negate_x, lis->pdata->negate_y,
@@ -670,6 +698,9 @@ static int lis331dlh_probe(struct i2c_client *client,
 
 	/* As default, do not report information */
 	atomic_set(&lis->enabled, 0);
+	atomic_set(&lis->x, 0);
+	atomic_set(&lis->y, 0);
+	atomic_set(&lis->z, 0);
 
 	mutex_unlock(&lis->lock);
 
@@ -713,13 +744,16 @@ static int lis331dlh_resume(struct i2c_client *client)
 {
 	struct lis331dlh_data *lis = i2c_get_clientdata(client);
 
-	return lis331dlh_enable(lis);
+	if (lis->on_before_suspend)
+		return lis331dlh_enable(lis);
+	return 0;
 }
 
 static int lis331dlh_suspend(struct i2c_client *client, pm_message_t mesg)
 {
 	struct lis331dlh_data *lis = i2c_get_clientdata(client);
 
+	lis->on_before_suspend = atomic_read(&lis->enabled);
 	return lis331dlh_disable(lis);
 }
 

@@ -32,6 +32,7 @@
 #include <linux/led-lm3530.h>
 #include <linux/usb/omap.h>
 #include <linux/wl127x-rfkill.h>
+#include <linux/wl127x-test.h>
 #include <linux/omap_mdm_ctrl.h>
 
 #include <asm/mach-types.h>
@@ -402,11 +403,11 @@ static struct qtouch_ts_platform_data sholes_ts_platform_data = {
 };
 
 static struct lm3530_platform_data omap3430_als_light_data = {
-	.gen_config = 0x3b,
+	.gen_config = 0x1b,
 	.als_config = 0x7b,
 	.brightness_ramp = 0x2d,
 	.als_zone_info = 0x00,
-	.als_resistor_sel = 0x41,
+	.als_resistor_sel = 0x83,
 	.brightness_control = 0x00,
 	.zone_boundary_0 = 0x4,
 	.zone_boundary_1 = 0x44,
@@ -1000,6 +1001,17 @@ static struct platform_device sholes_wl1271_device = {
 	.dev.platform_data = &sholes_wl1271_pdata,
 };
 
+static struct wl127x_test_platform_data sholes_wl1271_test_pdata = {
+	.btwake_gpio = SHOLES_WL1271_WAKE_GPIO,
+	.hostwake_gpio = SHOLES_WL1271_HOSTWAKE_GPIO,
+};
+
+static struct platform_device sholes_wl1271_test_device = {
+	.name = "wl127x-test",
+	.id = 0,
+	.dev.platform_data = &sholes_wl1271_test_pdata,
+};
+
 static void __init sholes_bt_init(void)
 {
 	/* Mux setup for Bluetooth chip-enable */
@@ -1010,6 +1022,7 @@ static void __init sholes_bt_init(void)
 	omap_cfg_reg(W7_34XX_GPIO178_DOWN);
 
 	platform_device_register(&sholes_wl1271_device);
+	platform_device_register(&sholes_wl1271_test_device);
 }
 
 static struct omap_mdm_ctrl_platform_data omap_mdm_ctrl_platform_data = {

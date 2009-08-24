@@ -70,6 +70,13 @@ static suspend_state_t suspend_state_on;
 #define OMAP343X_TABLE_VALUE_OFFSET	   0x30
 #define OMAP343X_CONTROL_REG_VALUE_OFFSET  0x32
 
+/* Interrupt Controller */
+#define IC_BASE                 0x48200000
+#define IC_REG32_34XX(offset)   io_p2v(IC_BASE + (offset))
+#define INTCPS_PENDING_IRQ0     IC_REG32_34XX(0x098)
+#define INTCPS_PENDING_IRQ1     IC_REG32_34XX(0x0B8)
+#define INTCPS_PENDING_IRQ2     IC_REG32_34XX(0x0D8)
+
 struct power_state {
 	struct powerdomain *pwrdm;
 	u32 next_state;
@@ -623,6 +630,11 @@ int omap3_can_sleep(void)
 		return 0;
 	if (atomic_read(&sleep_block) > 0)
 		return 0;
+
+	/* Check for pending interrupts. If there is an interrupt, return */
+	if (INTCPS_PENDING_IRQ0 | INTCPS_PENDING_IRQ1 | INTCPS_PENDING_IRQ2)
+		return 0;
+
 	return 1;
 }
 

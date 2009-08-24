@@ -32,6 +32,7 @@
 #include <linux/led-lm3530.h>
 #include <linux/usb/omap.h>
 #include <linux/wl127x-rfkill.h>
+#include <linux/wl127x-test.h>
 #include <linux/omap_mdm_ctrl.h>
 
 #include <asm/mach-types.h>
@@ -184,7 +185,7 @@ static struct android_usb_platform_data andusb_plat = {
 	.vendor_id      = 0x22b8,
 	.product_id     = 0x41DA,
 	.adb_product_id = 0x41DA,
-	.product_name   = "Sholes-UMTS",
+	.product_name   = "A853",
 	.manufacturer_name	= "Motorola",
 	.serial_number		= device_serial,
 };
@@ -434,7 +435,7 @@ static struct lm3530_platform_data omap3430_als_light_data = {
 	.als_config = 0x7b,
 	.brightness_ramp = 0x2d,
 	.als_zone_info = 0x00,
-	.als_resistor_sel = 0x41,
+	.als_resistor_sel = 0x83,
 	.brightness_control = 0x00,
 	.zone_boundary_0 = 0x4,
 	.zone_boundary_1 = 0x44,
@@ -1034,6 +1035,17 @@ static struct platform_device mapphone_wl1271_device = {
 	.dev.platform_data = &mapphone_wl1271_pdata,
 };
 
+static struct wl127x_test_platform_data mapphone_wl1271_test_pdata = {
+	.btwake_gpio = MAPPHONE_WL1271_WAKE_GPIO,
+	.hostwake_gpio = MAPPHONE_WL1271_HOSTWAKE_GPIO,
+};
+
+static struct platform_device mapphone_wl1271_test_device = {
+	.name = "wl127x-test",
+	.id = 0,
+	.dev.platform_data = &mapphone_wl1271_test_pdata,
+};
+
 static void __init mapphone_bt_init(void)
 {
 	/* Mux setup for Bluetooth chip-enable */
@@ -1044,6 +1056,7 @@ static void __init mapphone_bt_init(void)
 	omap_cfg_reg(W7_34XX_GPIO178_DOWN);
 
 	platform_device_register(&mapphone_wl1271_device);
+	platform_device_register(&mapphone_wl1271_test_device);
 }
 
 static struct omap_mdm_ctrl_platform_data omap_mdm_ctrl_platform_data = {
