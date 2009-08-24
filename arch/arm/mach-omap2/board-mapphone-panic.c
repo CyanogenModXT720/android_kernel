@@ -131,8 +131,7 @@ static void mtd_panic_notify_add(struct mtd_info *mtd)
 		return;
 
 	panic_mtd_dev = mtd;
-	printk(KERN_EMERG "mapphone_panic: mtd->writesize=%d\n",
-			mtd->writesize);
+	printk(KERN_EMERG "mapphone_panic: writesize=%d\n", mtd->writesize);
 
 	/* If theres a dump currently in flash, suck it out */
 	if (!mtd->read) {
@@ -187,12 +186,11 @@ static void mtd_panic_notify_add(struct mtd_info *mtd)
 	       (ALIGN(entry->size, PAGE_SIZE)));
 
 	for (i = 0; i < hdr->console_length; i += mtd->writesize) {
-		rc = mtd->read(mtd,
-			       i + hdr->console_offset,
+		rc = mtd->read(mtd, 
+				i + hdr->console_offset, 
 				   mtd->writesize, &len, kmsg_data + i);
 		if (rc) {
-			printk(KERN_ERR "mapphone_panic: Err reading console, "
-				"rc = %d\n", rc);
+			printk(KERN_ERR "mapphone_panic: Err reading console, rc = %d\n", rc);
 			remove_proc_entry("last_kmsg", NULL);
 			return;
 		}
@@ -200,13 +198,12 @@ static void mtd_panic_notify_add(struct mtd_info *mtd)
 	kmsg_data_len = hdr->console_length;
 
 	for (i = 0; i < hdr->threads_length; i += mtd->writesize) {
-		rc = mtd->read(mtd,
+		rc = mtd->read(mtd, 
 				i + hdr->threads_offset,
-				mtd->writesize,
-				&len, kmsg_data + kmsg_data_len + i);
+				   mtd->writesize, &len, 
+				   kmsg_data + kmsg_data_len + i);
 		if (rc) {
-			printk(KERN_ERR "mapphone_panic: Err reading threads, "
-				"rc = %d\n", rc);
+			printk(KERN_ERR "mapphone_panic: Err reading threads, rc = %d\n", rc);			
 			remove_proc_entry("last_kmsg", NULL);
 			return;
 		}
@@ -437,6 +434,6 @@ void __init mapphone_panic_init(void)
 	register_mtd_user(&mtd_panic_notifier);
 	atomic_notifier_chain_register(&panic_notifier_list, &panic_blk);
 	debugfs_create_file("panic", 0644, NULL, NULL, &panic_dbg_fops);
-	mtd_bounce_page = __get_free_page(GFP_KERNEL);
+	mtd_bounce_page = (void *)__get_free_page(GFP_KERNEL);
 }
 

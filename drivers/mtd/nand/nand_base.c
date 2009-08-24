@@ -2023,6 +2023,15 @@ int nand_erase_nand(struct mtd_info *mtd, struct erase_info *instr,
 	DEBUG(MTD_DEBUG_LEVEL3, "nand_erase: start = 0x%012llx, len = %llu\n",
 	      (unsigned long long)instr->addr, (unsigned long long)instr->len);
 
+	/* if attempt to erase nand flash physical block# 0,
+	 * dump stack and panic the phone ...
+	*/
+	if (!(instr->addr)) {
+		dump_stack();
+		panic("%s: nand flash physical block: 0x%12llx\n", __func__,
+		  (unsigned long long)instr->addr);
+	}
+
 	/* Start address must align on block boundary */
 	if (instr->addr & ((1 << chip->phys_erase_shift) - 1)) {
 		DEBUG(MTD_DEBUG_LEVEL0, "nand_erase: Unaligned address\n");
