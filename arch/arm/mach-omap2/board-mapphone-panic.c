@@ -190,8 +190,7 @@ static void mtd_panic_notify_add(struct mtd_info *mtd)
 				i + hdr->console_offset, 
 				   mtd->writesize, &len, kmsg_data + i);
 		if (rc) {
-			printk(KERN_ERR "mapphone_panic: Err 
-					reading console, rc = %d\n", rc);
+			printk(KERN_ERR "mapphone_panic: Err reading console, rc = %d\n", rc);
 			remove_proc_entry("last_kmsg", NULL);
 			return;
 		}
@@ -204,8 +203,7 @@ static void mtd_panic_notify_add(struct mtd_info *mtd)
 				   mtd->writesize, &len, 
 				   kmsg_data + kmsg_data_len + i);
 		if (rc) {
-			printk(KERN_ERR "mapphone_panic: Err 
-					reading threads, rc = %d\n", rc);			
+			printk(KERN_ERR "mapphone_panic: Err reading threads, rc = %d\n", rc);			
 			remove_proc_entry("last_kmsg", NULL);
 			return;
 		}
