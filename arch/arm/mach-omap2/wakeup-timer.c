@@ -26,6 +26,7 @@
  * -----		-----		 --------
  * Jul 01, 2009		Motorola	 Initial version for omap Android
  * Jul 27, 2009         Motorola         Timer granularity to be in msecs
+ * Aug 21, 2009		Motorola	 suspend optimization
  */
 
 #include <linux/module.h>
@@ -119,6 +120,10 @@ struct timer_cascade_root {
 #endif
 
 };
+
+#ifdef CONFIG_HAS_WAKELOCK
+static struct wake_lock driver_wake_lock;
+#endif
 
 static LIST_HEAD(parent_node);
 static DEFINE_SPINLOCK(wakeup_timer_lock);
@@ -517,6 +522,11 @@ static int __init wakeup_timer_probe(struct platform_device *pdev)
 		dev_err(pdev->dev.parent,
 			"failed to create timer list attribute, %d\n", err);
 	}
+#ifdef CONFIG_HAS_WAKELOCK
+	wake_lock_init(&driver_wake_lock,
+			WAKE_LOCK_SUSPEND,
+			"wakeup_driver");
+#endif
 
 	return misc_register(&wakeup_timer_miscdev);
 }
@@ -562,6 +572,9 @@ static int wakeup_timer_suspend(struct platform_device *pdev,
 {
 	struct timer_cascade_root *pwkup_cascade;
 	ktime_t delta;
+#ifdef CONFIG_HAS_WAKELOCK
+	long timeout;
+#endif
 
 	ktime_t expire = get_nearest_wakeup_timer_ktime();
 	if (expire.tv64 == KTIME_MAX) {
@@ -570,8 +583,14 @@ static int wakeup_timer_suspend(struct platform_device *pdev,
 	}
 	/* If expire time less that 1s, dont get into suspend */
 	delta = ktime_sub(expire, ktime_get_real());
-	if (delta.tv.sec <= 1)
+	if (delta.tv.sec <= 1) {
+#ifdef CONFIG_HAS_WAKELOCK
+		timeout = HZ*delta.tv.sec +
+			(HZ*(delta.tv.nsec/NSEC_PER_MSEC))/MSEC_PER_SEC + 1;
+		wake_lock_timeout(&driver_wake_lock , timeout);
+#endif
 		return -EBUSY;
+	}
 
 	DPRINTK("Set wakeup_timer_seconds: %d\n", delta.tv.sec);
 	wakeup_timer_seconds = (unsigned int)delta.tv.sec;
