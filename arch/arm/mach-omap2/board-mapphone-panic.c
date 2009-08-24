@@ -412,6 +412,6 @@ void __init mapphone_panic_init(void)
 	register_mtd_user(&mtd_panic_notifier);
 	atomic_notifier_chain_register(&panic_notifier_list, &panic_blk);
 	debugfs_create_file("panic", 0644, NULL, NULL, &panic_dbg_fops);
-	mtd_bounce_page = __get_free_page(GFP_KERNEL);
+	mtd_bounce_page = (void *)__get_free_page(GFP_KERNEL);
 }
 
