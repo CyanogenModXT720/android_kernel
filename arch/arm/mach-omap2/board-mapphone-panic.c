@@ -65,7 +65,13 @@ static struct mapphone_panic_data drv_ctx;
 static struct work_struct proc_removal_work;
 static DEFINE_MUTEX(drv_mutex);
 
-static int kpanic_erase(struct mtd_info *mtd)
+static void mapphone_panic_erase_callback(struct erase_info *done)
+{
+	wait_queue_head_t *wait_q = (wait_queue_head_t *) done->priv;
+	wake_up(wait_q);
+}
+
+static int kpanic_emergency_erase(struct mtd_info *mtd)
 {
 	struct erase_info erase;
 
@@ -77,7 +83,7 @@ static int kpanic_erase(struct mtd_info *mtd)
 
 	/* erase the kpanic flash block partition */
 	if (mtd->erase(mtd, &erase)) {
-		printk(KERN_EMERG "mapphone-panic: fail to erase the kpanic partition.\n");
+		printk(KERN_EMERG "mapphone-panic: erase fail\n");
 		return 1;
 	}
 	return 0;
@@ -277,6 +283,7 @@ static void mtd_panic_notify_add(struct mtd_info *mtd)
 
 	if (hdr->magic != PANIC_MAGIC) {
 		printk(KERN_INFO "mapphone_panic: No panic data available\n");
+		kpanic_emergency_erase(mtd);
 		return;
 	}
 
@@ -454,8 +461,8 @@ static int mapphone_panic(struct notifier_block *this, unsigned long event,
 	if (!ctx->mtd)
 		goto out;
 
-	if (0 != kpanic_erase(panic_mtd_dev)) {
-		printk(KERN_EMERG "mapphone_panic: erase error\n");
+	if (0 != kpanic_emergency_erase(ctx->mtd)) {
+		printk(KERN_EMERG "mapphone_panic: erase error on panic\n");
 		goto out;
 	}
 
