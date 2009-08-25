@@ -10,6 +10,7 @@
  */
 
 #include <linux/kernel.h>
+#include <linux/clk.h>
 #include <linux/platform_device.h>
 #include <linux/init.h>
 #include <linux/input.h>
@@ -20,10 +21,12 @@
 #include <linux/delay.h>
 #include <linux/regulator/consumer.h>
 #include <linux/vib-gpio.h>
+#include <linux/vib-pwm.h>
 
 #include <mach/mux.h>
 #include <mach/gpio.h>
 #include <mach/keypad.h>
+#include <mach/dmtimer.h>
 
 #define SHOLEST_PROX_INT_GPIO		180
 #define SHOLEST_HF_NORTH_GPIO		10
@@ -31,6 +34,8 @@
 #define SHOLEST_AKM8973_INT_GPIO	175
 #define SHOLEST_AKM8973_RESET_GPIO	28
 #define SHOLEST_VIBRATOR_GPIO		181
+#define SHOLEST_LVIBRATOR_PERIOD	5714
+#define SHOLEST_LVIBRATOR_DUTY		2857
 
 static struct regulator *sholest_vibrator_regulator;
 static int sholest_vibrator_initialization(void)
@@ -74,11 +79,65 @@ static struct vib_gpio_platform_data sholest_vib_gpio_data = {
 };
 
 static struct platform_device sholest_vib_gpio = {
-	.name           = "vib-gpio",
-	.id             = -1,
-	.dev            = {
-		.platform_data  = &sholest_vib_gpio_data,
-	},
+	.name = VIB_GPIO_NAME,
+	.id = -1,
+	.dev = {
+		.platform_data = &sholest_vib_gpio_data,
+		},
+};
+
+static struct omap_dm_timer *vib_pwm_timer;
+static int sholest_lvibrator_initialization(void)
+{
+	unsigned long load_reg, cmp_reg;
+	uint32_t timer_rate = 0;
+	int ret = 0;
+	vib_pwm_timer = omap_dm_timer_request_specific(11);
+	if (vib_pwm_timer == NULL)
+		ret = -ENODEV;
+	timer_rate = clk_get_rate(omap_dm_timer_get_fclk(vib_pwm_timer));
+	load_reg = timer_rate * SHOLEST_LVIBRATOR_PERIOD / 1000000;
+	cmp_reg = timer_rate * (SHOLEST_LVIBRATOR_PERIOD -
+				SHOLEST_LVIBRATOR_DUTY) / 1000000;
+	omap_dm_timer_enable(vib_pwm_timer);
+	omap_dm_timer_set_source(vib_pwm_timer, OMAP_TIMER_SRC_32_KHZ);
+	omap_dm_timer_set_load(vib_pwm_timer, 1, -load_reg);
+	omap_dm_timer_set_match(vib_pwm_timer, 1, -cmp_reg);
+	omap_dm_timer_set_pwm(vib_pwm_timer, 0, 1,
+			      OMAP_TIMER_TRIGGER_OVERFLOW_AND_COMPARE);
+	omap_dm_timer_write_counter(vib_pwm_timer, -2);
+	return 0;
+}
+
+static void sholest_lvibrator_exit(void)
+{
+	omap_dm_timer_stop(vib_pwm_timer);
+}
+
+static void sholest_lvibrator_power_on(void)
+{
+	omap_dm_timer_start(vib_pwm_timer);
+}
+
+static void sholest_lvibrator_power_off(void)
+{
+	omap_dm_timer_stop(vib_pwm_timer);
+}
+
+static struct vib_pwm_platform_data sholest_vib_pwm_data = {
+	.initial_vibrate = 500,
+	.init = sholest_lvibrator_initialization,
+	.exit = sholest_lvibrator_exit,
+	.power_on = sholest_lvibrator_power_on,
+	.power_off = sholest_lvibrator_power_off,
+};
+
+static struct platform_device sholest_vib_pwm = {
+	.name = VIB_PWM_NAME,
+	.id = -1,
+	.dev = {
+		.platform_data = &sholest_vib_pwm_data,
+		},
 };
 
 static struct regulator *sholest_sfh7743_regulator;
@@ -125,7 +184,6 @@ static void __init sholest_sfh7743_init(void)
 	omap_cfg_reg(Y3_34XX_GPIO180);
 }
 
-
 static struct bu52014hfv_platform_data bu52014hfv_platform_data = {
 	.docked_north_gpio = SHOLEST_HF_NORTH_GPIO,
 	.docked_south_gpio = SHOLEST_HF_SOUTH_GPIO,
@@ -136,10 +194,12 @@ static struct regulator *sholest_lis331dlh_regulator;
 static int sholest_lis331dlh_initialization(void)
 {
 	struct regulator *reg;
-	reg = regulator_get(NULL, "vhvio");
-	if (IS_ERR(reg))
-		return PTR_ERR(reg);
-	sholest_lis331dlh_regulator = reg;
+	if (sholest_lis331dlh_regulator == NULL) {
+		reg = regulator_get(NULL, "vhvio");
+		if (IS_ERR(reg))
+			return PTR_ERR(reg);
+		sholest_lis331dlh_regulator = reg;
+	}
 	return 0;
 }
 
@@ -166,18 +226,18 @@ struct lis331dlh_platform_data sholest_lis331dlh_data = {
 	.power_on = sholest_lis331dlh_power_on,
 	.power_off = sholest_lis331dlh_power_off,
 
-	.min_interval	= 1,
-	.poll_interval	= 200,
+	.min_interval = 1,
+	.poll_interval = 200,
 
-	.g_range	= LIS331DLH_G_8G,
+	.g_range = LIS331DLH_G_8G,
 
-	.axis_map_x	= 0,
-	.axis_map_y	= 1,
-	.axis_map_z	= 2,
+	.axis_map_x = 0,
+	.axis_map_y = 1,
+	.axis_map_z = 2,
 
-	.negate_x	= 0,
-	.negate_y	= 0,
-	.negate_z	= 0,
+	.negate_x = 0,
+	.negate_y = 0,
+	.negate_z = 0,
 };
 
 static struct regulator *sholest_akm8973_regulator;
@@ -251,15 +311,15 @@ struct platform_device sfh7743_platform_device = {
 	.id = -1,
 	.dev = {
 		.platform_data = &sholest_sfh7743_data,
-	},
+		},
 };
 
 static struct platform_device omap3430_hall_effect_dock = {
-	.name	= BU52014HFV_MODULE_NAME,
-	.id	= -1,
-	.dev	= {
-		.platform_data  = &bu52014hfv_platform_data,
-	},
+	.name = BU52014HFV_MODULE_NAME,
+	.id = -1,
+	.dev = {
+		.platform_data = &bu52014hfv_platform_data,
+		},
 };
 
 static void sholest_vibrator_init(void)
@@ -273,6 +333,7 @@ static struct platform_device *sholest_sensors[] __initdata = {
 	&sfh7743_platform_device,
 	&omap3430_hall_effect_dock,
 	&sholest_vib_gpio,
+	&sholest_vib_pwm,
 };
 
 static void sholest_hall_effect_init(void)

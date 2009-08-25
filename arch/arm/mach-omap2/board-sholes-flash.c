@@ -121,13 +121,13 @@ static struct platform_device sdp_nand_device = {
 	.num_resources	= 1,
 	.resource	= &sdp_nand_resource,
 };
-
+/*
 static int omap_nand_dev_ready(struct omap_nand_platform_data *data)
 {
 	printk(KERN_INFO "RDY/BSY line is connected!\n");
 	return 0;
 }
-
+*/
 /**
  * sholes_flash_init - Identify devices connected to GPMC and register.
  *
@@ -174,7 +174,7 @@ void __init sholes_flash_init(void)
 #endif
 
 	/* RDY/BSY line is connected, use GPMC_IRQSTATUS pull instead of 50 udelay */
-	sdp_nand_data.dev_ready = omap_nand_dev_ready;
+	//sdp_nand_data.dev_ready = omap_nand_dev_ready;
 
         if (platform_device_register(&sdp_nand_device) < 0) {
             printk(KERN_ERR "Unable to register NAND device\n");

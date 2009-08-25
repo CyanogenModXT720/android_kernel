@@ -361,17 +361,17 @@ static struct vkey sholest_touch_vkeys[] = {
 	{
 		.min		= 0,
 		.max		= 139,
-		.code		= KEY_BACK,
+		.code		= KEY_MENU,
 	},
 	{
 		.min		= 422,
 		.max		= 602,
-		.code		= KEY_MENU,
+		.code		= KEY_HOME,
 	},
 	{
 		.min		= 884,
 		.max		= 1023,
-		.code		= KEY_HOME,
+		.code		= KEY_BACK,
 	},
 //##SSA
 #if 0 //for p0, p1, p2
@@ -711,9 +711,6 @@ static void __init sholest_ehci_init(void)
 #if defined(CONFIG_USB_EHCI_HCD) || defined(CONFIG_USB_EHCI_HCD_MODULE)
 	platform_device_register(&ehci_device);
 #endif
-#if defined(CONFIG_USB_OHCI_HCD) || defined(CONFIG_USB_OHCI_HCD_MODULE)
-    platform_device_register(&ohci_device);
-#endif
 }
 
 static void __init sholest_sdrc_init(void)
@@ -899,13 +896,13 @@ static struct platform_driver sholest_bpwake_driver = {
 	.suspend	= sholest_bpwake_suspend,
 	.resume		= sholest_bpwake_resume,
 	.driver		= {
-		.name		= "sholest_bpwake",
+		.name		= "mapphone_bpwake",
 		.owner		= THIS_MODULE,
 	},
 };
 
 static struct platform_device sholest_bpwake_device = {
-	.name		= "sholest_bpwake",
+	.name		= "mapphone_bpwake",
 	.id		= -1,
 	.num_resources	= 0,
 };
