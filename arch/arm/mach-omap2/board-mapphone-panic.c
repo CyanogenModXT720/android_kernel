@@ -283,7 +283,6 @@ static void mtd_panic_notify_add(struct mtd_info *mtd)
 
 	if (hdr->magic != PANIC_MAGIC) {
 		printk(KERN_INFO "mapphone_panic: No panic data available\n");
-		kpanic_emergency_erase(mtd);
 		return;
 	}
 
