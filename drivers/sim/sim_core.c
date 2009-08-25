@@ -88,6 +88,14 @@ static struct clk *omap_120m_fck;
 #define CM_AUTOIDLE_WK IO_ADDRESS(CM_BASE + 0x0C30)
 #define CM_CLKSEL_WK IO_ADDRESS(CM_BASE + 0x0C40)
 #define PBIAS_CONTROL_LITE IO_ADDRESS(0x48002520)
+#define DMA_SYSCONFIG IO_ADDRESS(0x4805602C)
+
+/*
+  OFFSET TO DMA REGISTER
+  This is required to keep DMA from going to sleep on us as the lat APIs don't seem to work
+*/
+
+#define DMA_MIDLE 0x3000
 
 /*
   OFFSETS TO PBIAS LITE REGISTERS
@@ -1012,6 +1020,10 @@ static int sim_ioctl(struct inode *inode, struct file *file,
 				 args_kernel[1]);
 			/*  if we are active ...  */
 			if ((BOOL) args_kernel[1] == FALSE) {
+                                /* Stop DMA from AKC'ing idle requests */
+			        write_reg_bits((volatile UINT32 *)DMA_SYSCONFIG,DMA_MIDLE, 
+                                    DMA_SYSCONFIG_MIDLEMODE(1));
+
 				/* Request the latency constraint */
 				omap_pm_set_max_mpu_wakeup_lat(&sim_device.
 							       dev, 10);
@@ -1025,6 +1037,10 @@ static int sim_ioctl(struct inode *inode, struct file *file,
 
 			/* else, we are inactive ... */
 			else {
+                                /* Allow DMA to ACK idle requests */
+			        write_reg_bits((volatile UINT32 *)DMA_SYSCONFIG,DMA_MIDLE, 
+                                    DMA_SYSCONFIG_MIDLEMODE(2));
+
 				/* Disable DMA mode for low power mode */
 				write_reg_bits(&
 					       (sim_registers
