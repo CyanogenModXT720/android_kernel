@@ -188,6 +188,14 @@ config OMAP_MCBSP
 	  Say Y here if you want support for the OMAP Multichannel
 	  Buffered Serial Port.
 
+config OMAP_WARMRESET
+	bool " WARMRESET support"
+	depends on ARCH_OMAP
+	default y
+	help
+	  Say Y here if you want support for warmreset system when panic
+	  happens.
+
 config OMAP_MBOX_FWK
 	tristate "Mailbox framework support"
 	depends on ARCH_OMAP
