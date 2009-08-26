@@ -177,6 +177,7 @@ static int cpcap_reboot(struct notifier_block *this, unsigned long code,
 
 	if (code == SYS_RESTART) {
 		/* Set the soft reset bit in the cpcap */
+		/*
 		ret = cpcap_regacc_write(misc_cpcap, CPCAP_REG_VAL1,
 				CPCAP_BIT_SOFT_RESET, CPCAP_BIT_SOFT_RESET);
 		if (ret) {
@@ -184,6 +185,7 @@ static int cpcap_reboot(struct notifier_block *this, unsigned long code,
 				"SW Reset cpcap set failure.\n");
 			result = NOTIFY_BAD;
 		}
+		*/
 
 		if (mode != NULL && !strncmp("outofcharge", mode, 12)) {
 			/* Set the outofcharge bit in the cpcap */
@@ -313,6 +315,10 @@ static int __devinit cpcap_probe(struct spi_device *spi)
 	/* Set Kpanic bit, which will be cleared at normal reboot */
 	cpcap_regacc_write(cpcap, CPCAP_REG_VAL1,
 			CPCAP_BIT_AP_KERNEL_PANIC, CPCAP_BIT_AP_KERNEL_PANIC);
+
+	/* Set the soft reset bit in the cpcap */
+	cpcap_regacc_write(misc_cpcap, CPCAP_REG_VAL1,
+			CPCAP_BIT_SOFT_RESET, CPCAP_BIT_SOFT_RESET);
 
 	cpcap_vendor_read(cpcap);
 
