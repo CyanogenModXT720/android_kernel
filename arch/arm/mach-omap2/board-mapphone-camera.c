@@ -40,6 +40,11 @@
 #include <../drivers/media/video/hplens.h>
 #endif
 
+#define CAM_IOMUX_SAFE_MODE (OMAP343X_PADCONF_PULL_UP | \
+				OMAP343X_PADCONF_PUD_ENABLED | \
+				OMAP343X_PADCONF_MUXMODE7)
+#define CAM_IOMUX_FUNC_MODE (OMAP343X_PADCONF_INPUT_ENABLED)
+
 static void mapphone_camera_lines_safe_mode(void);
 static void mapphone_camera_lines_func_mode(void);
 
@@ -228,40 +233,18 @@ struct mt9p012_platform_data mapphone_mt9p012_platform_data = {
 
 void mapphone_camera_lines_safe_mode(void)
 {
-	omap_writew(0x0007, 0x4800210c);
-	omap_writew(0x0007, 0x4800210e);
-	omap_writew(0x0007, 0x48002110);
-	omap_writew(0x0007, 0x48002112);
-	omap_writew(0x0007, 0x48002114);
-	omap_writew(0x0007, 0x4800211a);
-	omap_writew(0x0007, 0x4800211c);
-	omap_writew(0x0007, 0x4800211e);
-	omap_writew(0x0007, 0x48002120);
-	omap_writew(0x001F, 0x48002122);
-	omap_writew(0x001F, 0x48002124);
-	omap_writew(0x001F, 0x48002126);
-	omap_writew(0x001F, 0x48002128);
-	omap_writew(0x0007, 0x4800212a);
-	omap_writew(0x0007, 0x4800212c);
+	omap_writew(CAM_IOMUX_SAFE_MODE, OMAP343X_CTRL_BASE + 0x0122);
+	omap_writew(CAM_IOMUX_SAFE_MODE, OMAP343X_CTRL_BASE + 0x0124);
+	omap_writew(CAM_IOMUX_SAFE_MODE, OMAP343X_CTRL_BASE + 0x0126);
+	omap_writew(CAM_IOMUX_SAFE_MODE, OMAP343X_CTRL_BASE + 0x0128);
 }
 
 void mapphone_camera_lines_func_mode(void)
 {
-	omap_writew(0x0118, 0x4800210c);
-	omap_writew(0x0118, 0x4800210e);
-	omap_writew(0x0000, 0x48002110);
-	omap_writew(0x0118, 0x48002112);
-	omap_writew(0x0004, 0x48002114);
-	omap_writew(0x0100, 0x4800211a);
-	omap_writew(0x0100, 0x4800211c);
-	omap_writew(0x0100, 0x4800211e);
-	omap_writew(0x0100, 0x48002120);
-	omap_writew(0x0100, 0x48002122);
-	omap_writew(0x0100, 0x48002124);
-	omap_writew(0x0100, 0x48002126);
-	omap_writew(0x0100, 0x48002128);
-	omap_writew(0x0100, 0x4800212a);
-	omap_writew(0x0100, 0x4800212c);
+	omap_writew(CAM_IOMUX_FUNC_MODE, OMAP343X_CTRL_BASE + 0x0122);
+	omap_writew(CAM_IOMUX_FUNC_MODE, OMAP343X_CTRL_BASE + 0x0124);
+	omap_writew(CAM_IOMUX_FUNC_MODE, OMAP343X_CTRL_BASE + 0x0126);
+	omap_writew(CAM_IOMUX_FUNC_MODE, OMAP343X_CTRL_BASE + 0x0128);
 }
 
 void __init mapphone_camera_init(void)
