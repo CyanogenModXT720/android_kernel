@@ -194,6 +194,12 @@ config LEDS_SHOLES
 	depends on LEDS_CLASS
 	help
 	  This option enables support for LEDs on Sholes.
+          
+config LEDS_SHOLEST
+	tristate "LED Support for Sholes Tablet device"
+	depends on LEDS_CLASS
+	help
+	  This option enables support for LEDs on Sholes Tablet.
 
 config LEDS_LM3530
 	tristate "LM3530 ALS driver"

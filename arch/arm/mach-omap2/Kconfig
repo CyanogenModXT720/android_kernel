@@ -119,7 +119,7 @@ config MACH_OMAP_ZOOM2
 
 config WIFI_CONTROL_FUNC
         bool "Enable WiFi control function abstraction"
-	depends on MACH_OMAP_ZOOM2 || MACH_SHOLES || MACH_MAPPHONE
+	depends on MACH_OMAP_ZOOM2 || MACH_SHOLES || MACH_MAPPHONE || MACH_SHOLEST
         help
           Enables Power/Reset/Carddetect function abstraction
 
@@ -164,6 +164,10 @@ config MACH_SHOLES_UMTS
         bool "Motorola sholes umts"
         depends on MACH_SHOLES
 
+config MACH_SHOLEST
+        bool "Motorola sholes tablet"
+        depends on ARCH_OMAP3 && ARCH_OMAP34XX
+
 config MACH_MAPPHONE
         bool "Motorola Android Platform phone"
         depends on ARCH_OMAP3 && ARCH_OMAP34XX
@@ -175,6 +179,10 @@ config MACH_OVERO
 config MACH_OMAP3_PANDORA
 	bool "OMAP3 Pandora"
 	depends on ARCH_OMAP3 && ARCH_OMAP34XX
+
+config MOT_FEAT_MDTV
+	bool "support MDTV system for motorola"
+	default n
 
 config EMU_UART_DEBUG
 	bool "Provide the option of setting MiniUSB port as UART3 to debug kernel"
