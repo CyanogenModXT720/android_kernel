@@ -25,6 +25,7 @@
 #include <mach/mux.h>
 #include <mach/board-mapphone.h>
 #include <mach/omap-pm.h>
+#include <mach/control.h>
 
 #ifdef CONFIG_VIDEO_OLDOMAP3
 #include <media/v4l2-int-device.h>
@@ -233,18 +234,18 @@ struct mt9p012_platform_data mapphone_mt9p012_platform_data = {
 
 void mapphone_camera_lines_safe_mode(void)
 {
-	omap_writew(CAM_IOMUX_SAFE_MODE, OMAP343X_CTRL_BASE + 0x0122);
-	omap_writew(CAM_IOMUX_SAFE_MODE, OMAP343X_CTRL_BASE + 0x0124);
-	omap_writew(CAM_IOMUX_SAFE_MODE, OMAP343X_CTRL_BASE + 0x0126);
-	omap_writew(CAM_IOMUX_SAFE_MODE, OMAP343X_CTRL_BASE + 0x0128);
+	omap_ctrl_writew(CAM_IOMUX_SAFE_MODE, 0x0122);
+	omap_ctrl_writew(CAM_IOMUX_SAFE_MODE, 0x0124);
+	omap_ctrl_writew(CAM_IOMUX_SAFE_MODE, 0x0126);
+	omap_ctrl_writew(CAM_IOMUX_SAFE_MODE, 0x0128);
 }
 
 void mapphone_camera_lines_func_mode(void)
 {
-	omap_writew(CAM_IOMUX_FUNC_MODE, OMAP343X_CTRL_BASE + 0x0122);
-	omap_writew(CAM_IOMUX_FUNC_MODE, OMAP343X_CTRL_BASE + 0x0124);
-	omap_writew(CAM_IOMUX_FUNC_MODE, OMAP343X_CTRL_BASE + 0x0126);
-	omap_writew(CAM_IOMUX_FUNC_MODE, OMAP343X_CTRL_BASE + 0x0128);
+	omap_ctrl_writew(CAM_IOMUX_FUNC_MODE, 0x0122);
+	omap_ctrl_writew(CAM_IOMUX_FUNC_MODE, 0x0124);
+	omap_ctrl_writew(CAM_IOMUX_FUNC_MODE, 0x0126);
+	omap_ctrl_writew(CAM_IOMUX_FUNC_MODE, 0x0128);
 }
 
 void __init mapphone_camera_init(void)
