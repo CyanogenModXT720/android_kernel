@@ -46,9 +46,9 @@
 #define OMAP343X_PADCONF_CORE_ETK_BASE  (OMAP343X_CTRL_BASE + 0x5D8)
 #define OMAP343X_PADCONF_CORE_ETK_TOP   (OMAP343X_CTRL_BASE + 0x5FA)
 
-/* d2d padconf registers are at 0x480021E4 - 0x48002260 */
+/* d2d padconf registers are at 0x480021E4 - 0x48002264 */
 #define OMAP343X_PADCONF_CORE_D2D_BASE  (OMAP343X_CTRL_BASE + 0x1E4)
-#define OMAP343X_PADCONF_CORE_D2D_TOP   (OMAP343X_CTRL_BASE + 0x260)
+#define OMAP343X_PADCONF_CORE_D2D_TOP   (OMAP343X_CTRL_BASE + 0x264)
 
 /* wakeup module padconf registers are at 0x48002A00 - 0x48002A26 */
 #define OMAP343X_PADCONF_WKUP_BASE  (OMAP343X_CTRL_BASE + 0xA00)
@@ -1928,6 +1928,9 @@ void __init mapphone_padconf_init(void)
 			val |= padconf_settings[i].setting;
 
 			omap_writew(val, addr);
+		} else {
+			printk(KERN_ERR "padconf check failed, offset = 0x%04x\n",
+						padconf_settings[i].offset);
 		}
 	}
 
