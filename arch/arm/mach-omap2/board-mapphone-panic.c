@@ -74,18 +74,35 @@ static void mapphone_panic_erase_callback(struct erase_info *done)
 static int kpanic_emergency_erase(struct mtd_info *mtd)
 {
 	struct erase_info erase;
+	int rc, i;
 
 	/* set up the erase structure */
 	erase.mtd = mtd;
-	erase.addr = 0;
-	erase.len = mtd->size;
+	erase.len = mtd->erasesize;
 	erase.callback = NULL;
+	for (i = 0; i < mtd->size; i += mtd->erasesize) {
+		erase.addr = i;
+		rc = mtd->block_isbad(mtd, erase.addr);
+		if (rc < 0) {
+			printk(KERN_ERR
+					"mapphone_panic: Bad block check "
+					"rc = %d\n", rc);
+			return 1;
+		}
+		if (rc) {
+			printk(KERN_WARNING
+					"mapphone_panic: Skipping bad "
+					"block @%llx\n", erase.addr);
+			continue;
+		}
 
-	/* erase the kpanic flash block partition */
-	if (mtd->erase(mtd, &erase)) {
-		printk(KERN_EMERG "mapphone-panic: erase fail\n");
-		return 1;
+		/* erase the kpanic flash block partition */
+		if (mtd->erase(mtd, &erase)) {
+			printk(KERN_EMERG "mapphone-panic: erase fail\n");
+			return 1;
+		}
 	}
+
 	return 0;
 }
 
@@ -452,6 +469,9 @@ static int mapphone_panic(struct notifier_block *this, unsigned long event,
 	int threads_offset = 0;
 	int threads_len = 0;
 	int rc;
+	struct timespec now;
+	struct timespec uptime;
+	struct rtc_time rtc_timestamp;
 
 	if (in_panic)
 		return NOTIFY_DONE;
@@ -464,6 +484,25 @@ static int mapphone_panic(struct notifier_block *this, unsigned long event,
 		printk(KERN_EMERG "mapphone_panic: erase error on panic\n");
 		goto out;
 	}
+
+	/*
+	 * Add timestamp to displays current time and uptime (in seconds).
+	 */
+	now = current_kernel_time();
+	rtc_time_to_tm((unsigned long)now.tv_sec, &rtc_timestamp);
+	do_posix_clock_monotonic_gettime(&uptime);
+	bust_spinlocks(1);
+	printk(KERN_EMERG "Timestamp = %ld\n", now.tv_sec);
+	printk(KERN_EMERG "Current Time = "
+			"%02d-%02d %02d:%02d:%lu.%03lu UTC, "
+			"Uptime = %lu.%03lu seconds\n",
+			rtc_timestamp.tm_mon + 1, rtc_timestamp.tm_mday,
+			rtc_timestamp.tm_hour, rtc_timestamp.tm_min,
+			(unsigned long)rtc_timestamp.tm_sec,
+			(unsigned long)(now.tv_nsec / 1000000),
+			(unsigned long)uptime.tv_sec,
+			(unsigned long)(uptime.tv_nsec/USEC_PER_SEC));
+	bust_spinlocks(0);
 
 	console_offset = ctx->mtd->writesize;
 
