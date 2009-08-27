@@ -898,8 +898,12 @@ static struct notifier_block mapphone_pm_reboot_notifier = {
 	.notifier_call = mapphone_pm_reboot_call,
 };
 
-#ifdef CONFIG_OMAP_WARMRESET
-static unsigned int warmreset_tag = 1 ;
+#ifdef CONFIG_MEM_DUMP
+
+#define WARMRESET 1
+#define COLDRESET 0
+
+static unsigned long reset_status = COLDRESET ;
 #endif
 static void mapphone_pm_init(void)
 {
@@ -930,8 +934,11 @@ static void mapphone_pm_init(void)
 	platform_device_register(&mapphone_bpwake_device);
 	platform_driver_register(&mapphone_bpwake_driver);
 
-#ifdef CONFIG_OMAP_WARMRESET
-    mapphone_pm_set_reset(warmreset_tag);
+#ifdef CONFIG_MEM_DUMP
+	if (reset_status == COLDRESET)
+		mapphone_pm_set_reset(1);
+	else
+		mapphone_pm_set_reset(0);
 #else
 	/* set cold reset, will move to warm reset once ready */
 	mapphone_pm_set_reset(1);
@@ -939,9 +946,8 @@ static void mapphone_pm_init(void)
 	register_reboot_notifier(&mapphone_pm_reboot_notifier);
 }
 
-#ifdef CONFIG_OMAP_WARMRESET
+#ifdef CONFIG_MEM_DUMP
 static struct proc_dir_entry *proc_entry ;
-static unsigned long val = 0x0 ;
 
 ssize_t reset_proc_read(char *page, char **start, off_t off, \
    int count, int *eof, void *data)
@@ -952,7 +958,7 @@ ssize_t reset_proc_read(char *page, char **start, off_t off, \
 		*eof = 1 ;
 		return 0 ;
 	}
-	len = sprintf(page, "%x\n", (unsigned int)val) ;
+	len = snprintf(page, "%x\n", (unsigned int)reset_status) ;
 	return len ;
 }
 
@@ -970,11 +976,11 @@ ssize_t reset_proc_write(struct file *filp, const char __user *buff, \
 		goto err ;
 	} else{
 		if (k_buf[0] == '0') {
-			val = 0;
+			reset_status = COLDRESET;
 			mapphone_pm_set_reset(1);
 			printk(KERN_ERR"switch to cold reset\n");
 		} else if (k_buf[0] == '1') {
-			val = 1;
+			reset_status = WARMRESET;
 			mapphone_pm_set_reset(0);
 			printk(KERN_ERR"switch to warm reset\n");
 		} else{
@@ -1001,7 +1007,9 @@ static void  reset_proc_init(void)
 
 int __init warmreset_init(char *s)
 {
-	warmreset_tag = 0;
+	/* configure to warmreset */
+	reset_status = WARMRESET;
+	mapphone_pm_set_reset(0);
 	return 1;
 }
 __setup("warmreset_debug=", warmreset_init);
@@ -1323,7 +1331,7 @@ static void __init mapphone_init(void)
 	mapphone_sgx_init();
 	mapphone_power_off_init();
 	mapphone_gadget_init();
-#ifdef CONFIG_OMAP_WARMRESET
+#ifdef CONFIG_MEM_DUMP
     reset_proc_init();
 #endif
 }
