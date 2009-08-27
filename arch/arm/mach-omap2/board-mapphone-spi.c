@@ -151,6 +151,12 @@ struct regulator_consumer_supply cpcap_vaudio_consumers[] = {
 	REGULATOR_CONSUMER("vaudio", NULL /* mic opamp */),
 };
 
+struct regulator_consumer_supply cpcap_vfuse_consumers[] = {
+    REGULATOR_CONSUMER("vfuse", NULL),
+};
+
+
+
 static struct regulator_init_data cpcap_regulator[CPCAP_NUM_REGULATORS] = {
 	[CPCAP_SW5] = {
 		.constraints = {
@@ -206,6 +212,8 @@ static struct regulator_init_data cpcap_regulator[CPCAP_NUM_REGULATORS] = {
 			.valid_ops_mask		= (REGULATOR_CHANGE_VOLTAGE |
 						   REGULATOR_CHANGE_STATUS),
 		},
+		.num_consumer_supplies  = ARRAY_SIZE(cpcap_vfuse_consumers),
+		.consumer_supplies      = cpcap_vfuse_consumers,
 	},
 	[CPCAP_VHVIO] = {
 		.constraints = {
