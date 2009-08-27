@@ -898,6 +898,9 @@ static struct notifier_block mapphone_pm_reboot_notifier = {
 	.notifier_call = mapphone_pm_reboot_call,
 };
 
+#ifdef CONFIG_OMAP_WARMRESET
+static unsigned int warmreset_tag = 1 ;
+#endif
 static void mapphone_pm_init(void)
 {
 	omap3_set_prm_setup_vc(&mapphone_prm_setup);
@@ -927,9 +930,12 @@ static void mapphone_pm_init(void)
 	platform_device_register(&mapphone_bpwake_device);
 	platform_driver_register(&mapphone_bpwake_driver);
 
+#ifdef CONFIG_OMAP_WARMRESET
+    mapphone_pm_set_reset(warmreset_tag);
+#else
 	/* set cold reset, will move to warm reset once ready */
 	mapphone_pm_set_reset(1);
-
+#endif
 	register_reboot_notifier(&mapphone_pm_reboot_notifier);
 }
 
@@ -992,6 +998,13 @@ static void  reset_proc_init(void)
 		proc_entry->owner = THIS_MODULE ;
 	}
 }
+
+int __init warmreset_init(char *s)
+{
+	warmreset_tag = 0;
+	return 1;
+}
+__setup("warmreset_debug=", warmreset_init);
 #endif
 
 static void __init config_wlan_gpio(void)
