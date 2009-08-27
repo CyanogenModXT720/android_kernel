@@ -35,9 +35,7 @@
 
 #define CLOCK_TREE_RESET_TIME 1
 
-#define SLEEP_CODEC_STDAC_PGA_SWITCH 10
-
-#define SLEEP_OUTPUT_AMPS_ENABLE 10
+#define SLEEP_OUTPUT_AMPS_ENABLE 1
 
 #ifdef CPCAP_AUDIO_DEBUG
 #define CPCAP_AUDIO_DEBUG_LOG(args...)  \
@@ -1036,8 +1034,6 @@ void cpcap_audio_set_audio_state(struct cpcap_audio_state *state)
 
 	cpcap_audio_configure_output_gains(state, previous_state);
 
-	msleep(SLEEP_CODEC_STDAC_PGA_SWITCH);
-
 	cpcap_audio_configure_aud_mute(state, previous_state);
 
 	msleep(SLEEP_OUTPUT_AMPS_ENABLE);
@@ -1069,7 +1065,7 @@ void cpcap_audio_init(struct cpcap_audio_state *state)
 	logged_cpcap_write(state->cpcap, CPCAP_REG_SDACDI, 0, 0x3FFF);
 	logged_cpcap_write(state->cpcap, CPCAP_REG_TXI, 0, 0xFDF);
 	logged_cpcap_write(state->cpcap, CPCAP_REG_TXMP, 0, 0xFFF);
-	logged_cpcap_write(state->cpcap, CPCAP_REG_RXOA, 0, 0x3FF);
+	logged_cpcap_write(state->cpcap, CPCAP_REG_RXOA, 0, 0x1FF);
 	/* logged_cpcap_write(state->cpcap, CPCAP_REG_RXVC, 0, 0xFFF); */
 	logged_cpcap_write(state->cpcap, CPCAP_REG_RXCOA, 0, 0x7FF);
 	logged_cpcap_write(state->cpcap, CPCAP_REG_RXSDOA, 0, 0x1FFF);

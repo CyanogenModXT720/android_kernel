@@ -44,7 +44,8 @@
 #define OMAP2_CONTROL_DEVCONF0_BIT6 6
 
 /* This is the number of total kernel buffers */
-#define AUDIO_NBFRAGS_DEFAULT 2
+#define AUDIO_NBFRAGS_WRITE 2
+#define AUDIO_NBFRAGS_READ 10
 
 #define AUDIO_TIMEOUT HZ
 
@@ -1888,7 +1889,7 @@ static ssize_t audio_write(struct file *file, const char *buffer, size_t count,
 		if (!str->active) {
 			int temp_size = count % STDAC_FIFO_SIZE;
 			str->fragsize = (count - temp_size) + STDAC_FIFO_SIZE;
-			str->nbfrags = AUDIO_NBFRAGS_DEFAULT;
+			str->nbfrags = AUDIO_NBFRAGS_WRITE;
 			if (audio_setup_buf(str, file->private_data)) {
 				AUDIO_ERROR_LOG("Unable to allocate memory\n");
 				ret = -ENOMEM;
@@ -1900,7 +1901,7 @@ static ssize_t audio_write(struct file *file, const char *buffer, size_t count,
 		if (!str->active) {
 			int temp_size = count % CODEC_FIFO_SIZE;
 			str->fragsize = (count - temp_size) + CODEC_FIFO_SIZE;
-			str->nbfrags = AUDIO_NBFRAGS_DEFAULT;
+			str->nbfrags = AUDIO_NBFRAGS_WRITE;
 			if (audio_setup_buf(str, file->private_data)) {
 				AUDIO_ERROR_LOG("Unable to allocate memory\n");
 				ret = -ENOMEM;
@@ -2085,7 +2086,7 @@ static ssize_t audio_codec_read(struct file *file, char *buffer, size_t size,
 
 	if (str->fragsize != size) {
 		str->fragsize = size;
-		str->nbfrags = AUDIO_NBFRAGS_DEFAULT;
+		str->nbfrags = AUDIO_NBFRAGS_READ;
 		str->input_output = FMODE_READ;
 		init_waitqueue_head(&str->wq);
 		if (audio_setup_buf(str, file->private_data)) {
