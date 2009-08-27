@@ -958,7 +958,7 @@ ssize_t reset_proc_read(char *page, char **start, off_t off, \
 		*eof = 1 ;
 		return 0 ;
 	}
-	len = snprintf(page, "%x\n", (unsigned int)reset_status) ;
+	len = snprintf(page, sizeof(page), "%x\n", (unsigned int)reset_status) ;
 	return len ;
 }
 
