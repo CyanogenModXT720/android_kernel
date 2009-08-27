@@ -963,12 +963,11 @@ ssize_t reset_proc_write(struct file *filp, const char __user *buff, \
 		ret = -EFAULT ;
 		goto err ;
 	} else{
-		result = strict_strtoul(k_buf, NULL, 16);
-		if (result == 0) {
+		if (k_buf[0] == '0') {
 			val = 0;
 			mapphone_pm_set_reset(1);
 			printk(KERN_ERR"switch to cold reset\n");
-		} else if (result == 1) {
+		} else if (k_buf[0] == '1') {
 			val = 1;
 			mapphone_pm_set_reset(0);
 			printk(KERN_ERR"switch to warm reset\n");
