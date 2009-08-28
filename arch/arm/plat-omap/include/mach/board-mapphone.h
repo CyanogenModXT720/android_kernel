@@ -33,6 +33,7 @@
 #define __ASM_ARCH_OMAP_MAPPHONE_H
 
 #include <linux/init.h>
+#include "board-mapphone-padconf.h"
 
 extern void __init mapphone_usb_init(void);
 extern void __init mapphone_flash_init(void);
