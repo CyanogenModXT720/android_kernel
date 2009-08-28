@@ -1064,8 +1064,7 @@ static __initdata struct {
 	{
 	0x01D0,
 		    OMAP343X_PADCONF_INPUT_ENABLED |
-		    OMAP343X_PADCONF_PULL_UP |
-		    OMAP343X_PADCONF_PUD_ENABLED | OMAP343X_PADCONF_MUXMODE4},
+		    OMAP343X_PADCONF_PUD_DISABLED | OMAP343X_PADCONF_MUXMODE4},
 	    /* MCSPI1_CS2 */
 	{
 	0x01D2,
@@ -1553,11 +1552,14 @@ static __initdata struct {
 	    /* SDRC_CKE0 */
 	{
 	0x0262,
-		    OMAP343X_PADCONF_MUXMODE0},
+		    OMAP343X_PADCONF_PUD_DISABLED | OMAP343X_PADCONF_MUXMODE0},
 	    /* SDRC_CKE1 */
 	{
 	0x0264,
-		    OMAP343X_PADCONF_MUXMODE0},
+			OMAP343X_PADCONF_INPUT_ENABLED |
+			OMAP343X_PADCONF_PULL_UP |
+			OMAP343X_PADCONF_PUD_ENABLED |
+			OMAP343X_PADCONF_MUXMODE7},
 	    /* I2C4_SCL */
 	{
 	0x0A00,
@@ -1594,8 +1596,8 @@ static __initdata struct {
 		    OMAP343X_PADCONF_OFF_OUTPUT_ENABLED |
 		    OMAP343X_PADCONF_OFFMODE_ENABLED |
 		    OMAP343X_PADCONF_INPUT_ENABLED |
-		    OMAP343X_PADCONF_PULL_DOWN |
-		    OMAP343X_PADCONF_PUD_ENABLED | OMAP343X_PADCONF_MUXMODE0},
+		    OMAP343X_PADCONF_PUD_DISABLED |
+			OMAP343X_PADCONF_MUXMODE0},
 	    /* SYS_BOOT1 */
 	{
 	0x0A0C,
@@ -1813,6 +1815,9 @@ void __init mapphone_padconf_init(void)
 			val |= padconf_settings[i].setting;
 
 			omap_writew(val, addr);
+		} else {
+			printk(KERN_ERR "padconf check failed, offset = 0x%04x\n",
+						padconf_settings[i].offset);
 		}
 	}
 
