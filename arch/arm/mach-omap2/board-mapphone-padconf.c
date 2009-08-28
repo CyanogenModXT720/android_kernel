@@ -102,7 +102,7 @@ inline bool is_omap343x_padconf_register(uint16_t offset)
 #define OMAP343X_PADCONF_OFF_OUTPUT_DISABLED	(0 << 10)
 
 #define OMAP343X_PADCONF_OFFMODE_ENABLED    (1 << 9)
-#define OMAP343X_PADCONF_OFFMODE_DISABLED   (1 << 9)
+#define OMAP343X_PADCONF_OFFMODE_DISABLED   (0 << 9)
 
 #define OMAP343X_PADCONF_INPUT_ENABLED	    (1 << 8)
 
