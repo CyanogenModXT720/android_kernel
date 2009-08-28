@@ -35,9 +35,8 @@ static void SecLowerVfuse(void);
 
 static int SecProvisionModelID(unsigned int model_id);
 
-static unsigned int
-SEC_ENTRY_pub2sec_dispatcher(unsigned int appl_id, unsigned int proc_ID,
-			     unsigned int flag, ...);
+static u32
+SEC_ENTRY_pub2sec_dispatcher(u32 appl_id, u32 proc_ID, u32 flag, ...);
 
 static int SecBSDis(void);
 
@@ -118,8 +117,8 @@ ssize_t sec_write(struct file *filp, char *buf,
 	return 0;
 }
 
-int sec_ioctl(struct inode *inode, struct file *file, unsigned int ioctl_num,
-	      unsigned long ioctl_param)
+int sec_ioctl(struct inode *inode, struct file *file,
+	      unsigned int ioctl_num, unsigned long ioctl_param)
 {
 	unsigned long count = 0xDEADBEEF;
 	void *sec_buffer = NULL;
@@ -127,7 +126,6 @@ int sec_ioctl(struct inode *inode, struct file *file, unsigned int ioctl_num,
 
 	switch (ioctl_num) {
 	case SEC_IOCTL_MODEL:
-
 		sec_buffer = kmalloc(SIZE_OF_MODEL_ID, GFP_KERNEL);
 		if (sec_buffer != NULL) {
 			SecGetModelId(sec_buffer);
@@ -142,7 +140,6 @@ int sec_ioctl(struct inode *inode, struct file *file, unsigned int ioctl_num,
 		break;
 
 	case SEC_IOCTL_MODELID_PROV:
-
 		ret_val = SecProvisionModelID(ioctl_param);
 
 		break;
@@ -151,6 +148,7 @@ int sec_ioctl(struct inode *inode, struct file *file, unsigned int ioctl_num,
 	case SEC_IOCTL_SWRV:
 
 		sec_buffer = kmalloc(SIZE_OF_SWRV, GFP_KERNEL);
+
 		if (sec_buffer != NULL) {
 			SecGetSWRV(sec_buffer);
 			count =
@@ -164,7 +162,6 @@ int sec_ioctl(struct inode *inode, struct file *file, unsigned int ioctl_num,
 
 	case SEC_IOCTL_PROC_ID:
 		sec_buffer = kmalloc(SIZE_OF_PROC_ID, GFP_KERNEL);
-
 		if (sec_buffer != NULL) {
 			SecGetProcID(sec_buffer);
 			count =
@@ -191,13 +188,12 @@ int sec_ioctl(struct inode *inode, struct file *file, unsigned int ioctl_num,
 		break;
 
 	default:
-		printk(KERN_ERR "sec ioctl called with bad cmd : %d ",
-		       ioctl_num);
+		printk("sec ioctl called with bad cmd : %d ", ioctl_num);
 		break;
 	}
 
 	if (count != 0) {
-		printk(KERN_ERR "sec ioctl operation : %d failed, \
+		printk("sec ioctl operation : %d failed, \
 			copy_to_user returned: 0x%lX", ioctl_num, count);
 	}
 
@@ -221,17 +217,16 @@ static void SecGetSWRV(void *data)
 	int ret_val = 99;
 
 	memset(data, 0xFF, SIZE_OF_SWRV);
-	printk("\nInside get swrv");
-	ret_val = SEC_ENTRY_pub2sec_dispatcher(API_HAL_MOT_EFUSE_READ, 0,
-					       FLAG_IRQFIQ_MASK |
+	ret_val = SEC_ENTRY_pub2sec_dispatcher(API_HAL_MOT_EFUSE_READ,
+					       0,
+					       FLAG_IRQ_ENABLE |
+					       FLAG_FIQ_ENABLE |
 					       FLAG_START_HAL_CRITICAL, 1,
-					       (void *) __pa(data));
-	printk("\nAfter pub2sec - GetSWRV");
+					       __pa(data));
+
 	if (ret_val != 0) {
-		printk("\nFail - After pub2sec - GetSWRV");
 		memset(data, 0xFF, SIZE_OF_SWRV);
 	}
-	printk("\nBefore return - GetSWRV");
 	return;
 }
 
@@ -257,7 +252,8 @@ static void SecRaiseVfuse(void)
 	if (sec_efuse_regulator == NULL) {
 		ret_value = SecFuseInit();
 		if (ret_value != 0) {
-			printk("Registration regulator framework failed:%d",
+			printk
+			    ("Registration regulator framework failed:%d",
 			     ret_value);
 		}
 	}
@@ -311,7 +307,6 @@ static int SecBSDis()
 	ns_efuse_params.component = SEC_BS_DIS;
 	ns_efuse_params.efuse_value = 0x01;
 	ns_efuse_params.bch_value = 99;
-
 	result = SEC_ENTRY_pub2sec_dispatcher(API_HAL_MOT_EFUSE,
 					      0,
 					      FLAG_IRQFIQ_MASK |
@@ -325,36 +320,39 @@ static int SecBSDis()
 
 }
 
-/* This function has variable number of parameters as this can be used to make
- * secure ROM service calls as well in future and then the number of arguments
- * passed in will be different, even though the function would remain the same
- */
-
-static unsigned int
-SEC_ENTRY_pub2sec_dispatcher(unsigned int appl_id, unsigned int proc_ID,
-			     unsigned int flag, ...)
+/*----------------------------------------------------------------------------
+ * Function responsible for formatting the parameters to pass
+ * from NS-World to S-World.
+ *----------------------------------------------------------------------------*/
+u32 SEC_ENTRY_pub2sec_dispatcher(u32 appl_id, u32 proc_ID, u32 flag, ...)
 {
-	unsigned int return_value = 0;
-	unsigned int *pArgs = NULL;
+	u32 return_value = 0;
+	u32 *pArgs = NULL;
 
 	va_list args;
+	int temp_counter;
 
-	/* We need a physically contiguous buffer
-	 * to pass parameters to the SE */
-	pArgs = (unsigned int *)kmalloc(sizeof(unsigned int) * 5, GFP_KERNEL);
+	/*
+	 * We need a physically contiguous buffer to pass parameters to the SE
+	 */
+	pArgs = (u32 *) kmalloc(sizeof(u32) * 5, GFP_KERNEL);
 	if (pArgs == NULL)
 		return -ENOMEM;
 
 	va_start(args, flag);
-	memcpy(pArgs, args, sizeof(unsigned int) * 5);
+
+	for (temp_counter = 0; temp_counter < 5; temp_counter++)
+		pArgs[temp_counter] = va_arg(args, int);
+
 	va_end(args);
+
 
 	/*
 	 * OMAP3430 Secure ROM Code Functional Specification:
 	 *    L2 Cache is not used by SW which runs in Secure Mode.
 	 *    Thus, the non-Secure World's software must ensure that any data
-	 *    in L2 Cache are coherent with memory before feeding such data
-	 *    to the Secure World for processing.
+	 *    in L2 Cache are coherent with memory before feeding such data to the
+	 *    Secure World for processing.
 	 */
 	v7_flush_kern_cache_all();
 
@@ -367,16 +365,15 @@ SEC_ENTRY_pub2sec_dispatcher(unsigned int appl_id, unsigned int proc_ID,
 	return return_value;
 }
 
+
 static int SecFuseInit(void)
 {
 	int ret_value = 99;
 	struct regulator *reg;
 
 	reg = regulator_get(NULL, "vfuse");
-
 	if (reg)
 		sec_efuse_regulator = reg;
-
 
 	return ret_value;
 
@@ -391,13 +388,9 @@ static int SecVfuseOn(void)
 		return 99;
 	regulator_set_voltage(sec_efuse_regulator, 1900000, 1900000);
 	ret_value = regulator_enable(sec_efuse_regulator);
-
 	return ret_value;
 
 }
-
-
-
 
 static int SecVfuseOff(void)
 {
@@ -406,7 +399,6 @@ static int SecVfuseOff(void)
 	if (sec_efuse_regulator == NULL)
 		return 99;
 	ret_value = regulator_disable(sec_efuse_regulator);
-
 	return ret_value;
 
 }
@@ -432,6 +424,7 @@ SEC_STAT_T SecProcessorID(unsigned char *buffer, int length)
 	}
 	return SEC_SUCCESS;
 }
+
 EXPORT_SYMBOL(SecProcessorID);
 
 SEC_STAT_T SecModelID(unsigned char *buffer, int length)
@@ -445,22 +438,20 @@ SEC_STAT_T SecModelID(unsigned char *buffer, int length)
 	fuse_ptr = (unsigned int *) IO_ADDRESS(REGISTER_ADDRESS_MSV);
 	fuse_value = *fuse_ptr;
 	memcpy(buffer, (void *) &fuse_value, sizeof(unsigned int));
-
 	return SEC_SUCCESS;
 
 }
+
 EXPORT_SYMBOL(SecModelID);
 
 SEC_MODE_T SecProcessorType(void)
 {
 	SEC_MODE_T ret_val = SEC_PRODUCTION;
 	/* UINT16 : unsigned short int */
-	unsigned short int *iterator = NULL;
-	unsigned short int *data =
-	    (unsigned short int *) kmalloc(SIZE_OF_SWRV, GFP_KERNEL);
+	u32 *iterator = NULL;
+	u32 *data = (u32 *) kmalloc(SIZE_OF_SWRV, GFP_KERNEL);
 
 	memset(data, 0xFF, SIZE_OF_SWRV);
-
 	SEC_ENTRY_pub2sec_dispatcher(API_HAL_MOT_EFUSE_READ, 0,
 				     FLAG_IRQFIQ_MASK |
 				     FLAG_START_HAL_CRITICAL, 1,
@@ -470,16 +461,15 @@ SEC_MODE_T SecProcessorType(void)
 
 	iterator = data + 4;
 
-	if ((((*iterator) && (0x3 << 13)) || (0x1 << 13)) == (0x1 << 13))
-		/*HAB_ENG : 13, HAB_PROD : 14 */
-		/*Engineering only if engineering blown and production not */
-	{
+	/*HAB_ENG : 13, HAB_PROD : 14 */
+	/*Engineering only if engineering blown and production not */
+	if (((*iterator) & (0x3 << 13)) == (0x1 << 13))
 		ret_val = SEC_ENGINEERING;
-	}
 
 	return ret_val;
 
 }
+
 EXPORT_SYMBOL(SecProcessorType);
 
 
