@@ -286,6 +286,9 @@ static void modem_read_bulk_callback(struct urb *urb)
 	if (modem_port_ptr == NULL)
 		return;
 
+	if (modem_port_ptr->port == NULL)
+		return;
+
 	usb_mark_last_busy(modem_port_ptr->port->serial->dev);
 
 	buf = rcv->buffer;
@@ -362,6 +365,9 @@ static void modem_interrupt_callback(struct urb *urb)
 	struct usb_serial_port *port = (struct usb_serial_port *)urb->context;
 	struct modem_port *modem_port_ptr =
 	    usb_get_serial_data(port->serial);
+
+	if (modem_port_ptr->port == NULL)
+		return;
 
 	if (port->number != MODEM_INTERFACE_NUM) {
 		if (cdma_modem_debug)
@@ -450,7 +456,7 @@ static int modem_open(struct tty_struct *tty,
 {
 	struct modem_port *modem_port_ptr =
 	    usb_get_serial_data(port->serial);
-	int retval = -1;
+	int retval = 0;
 	int i;
 	unsigned long flags;
 
@@ -654,7 +660,7 @@ urbs:
 			modem_port_ptr->processing = 0;
 			dev_err(&port->dev, "%s: submit bulk in  urb failed.\n",
 				 __func__);
-			spin_unlock_irqrestore(modem_port_ptr->read_lock,
+			spin_unlock_irqrestore(&modem_port_ptr->read_lock,
 					       flags);
 			return;
 		} else {
@@ -713,9 +719,12 @@ static void modem_write_done(struct modem_port *modem_port_ptr,
 static int modem_start_wb(struct modem_port *modem_port_ptr,
 				struct ap_wb *wb)
 {
-	int result;
+	int result = 0;
 	struct usb_serial_port *port =  modem_port_ptr->port;
 	unsigned long flags;
+
+	if (port == NULL)
+		return -ENODEV;
 
 	spin_lock_irqsave(&modem_port_ptr->write_lock, flags);
 	modem_port_ptr->sending++;
@@ -741,9 +750,14 @@ static void modem_wake_and_write(struct work_struct *work)
 {
 	struct modem_port *modem_port_ptr =
 		container_of(work, struct modem_port, wake_and_write);
-	struct usb_serial *serial = modem_port_ptr->port->serial;
+	struct usb_serial *serial;
 	struct usb_serial_port *port =  modem_port_ptr->port;
 	int result;
+
+	if (modem_port_ptr->port == NULL)
+		return;
+
+	serial = modem_port_ptr->port->serial;
 
 	result = usb_autopm_get_interface(serial->interface);
 	if (result < 0) {
@@ -766,6 +780,9 @@ static void modem_write_bulk_callback(struct urb *urb)
 	struct modem_port *modem_port_ptr = wb->instance;
 	struct usb_serial_port *port = modem_port_ptr->port;
 	unsigned long flags;
+
+	if (port == NULL)
+		return;
 
 	spin_lock_irqsave(&modem_port_ptr->write_lock, flags);
 	modem_write_done(modem_port_ptr, wb);
@@ -1030,6 +1047,34 @@ static int modem_resume(struct usb_interface *intf)
 	}
 	return 0;
 }
+
+static int modem_reset_resume(struct usb_interface *intf)
+{
+	int ret = 0;
+
+	if (cdma_modem_debug)
+		dev_info(&intf->dev,
+		"%s: Enter \n", __func__);
+
+	ret = modem_resume(intf);
+
+	if (cdma_modem_debug)
+		dev_info(&intf->dev,
+		"%s: Exit ret is %d \n", __func__, ret);
+
+	return ret;
+}
+
+static int modem_pre_reset(struct usb_interface *intf)
+{
+	return 0;
+}
+
+static int modem_post_reset(struct usb_interface *intf)
+{
+	return 0;
+}
+
 #endif /* CONFIG_PM */
 
 static int modem_startup(struct usb_serial *serial)
@@ -1229,6 +1274,9 @@ static struct usb_driver modem_driver = {
 	.supports_autosuspend = 1,
 	.suspend = modem_suspend,
 	.resume = modem_resume,
+	.reset_resume = modem_reset_resume,
+	.pre_reset = modem_pre_reset,
+	.post_reset = modem_post_reset,
 #endif
 };
 

@@ -290,6 +290,39 @@ static int sholes_touch_reset(void)
 	return 0;
 }
 
+static ssize_t sholes_virtual_keys_show(struct kobject *kobj,
+					struct kobj_attribute *attr, char *buf)
+{
+	/* center: x: home: 55, menu: 185, back: 305, search 425, y: 835 */
+	/* keys are specified by setting the x,y of the center, the width,
+	 * and the height, as such keycode:center_x:center_y:width:height */
+	return sprintf(buf, __stringify(EV_KEY) ":"
+		       __stringify(KEY_BACK) ":35:906:55:55"
+		       ":" __stringify(EV_KEY) ":"
+		       __stringify(KEY_MENU) ":168:906:75:55"
+		       ":" __stringify(EV_KEY) ":"
+		       __stringify(KEY_HOME) ":308:906:75:55"
+		       ":" __stringify(EV_KEY) ":"
+		       __stringify(KEY_SEARCH) ":440:906:55:55"
+		       "\n");
+}
+static struct kobj_attribute sholes_virtual_keys_attr = {
+	.attr = {
+		.name = "virtualkeys.qtouch-touchscreen",
+		.mode = S_IRUGO,
+	},
+	.show = &sholes_virtual_keys_show,
+};
+
+static struct attribute *sholes_properties_attrs[] = {
+	&sholes_virtual_keys_attr.attr,
+	NULL,
+};
+
+static struct attribute_group sholes_properties_attr_group = {
+	.attrs = sholes_properties_attrs,
+};
+
 static void sholes_touch_init(void)
 {
 	gpio_request(SHOLES_TOUCH_RESET_N_GPIO, "sholes touch reset");
@@ -309,36 +342,13 @@ static void sholes_als_init(void)
 	omap_cfg_reg(AC27_34XX_GPIO92);
 }
 
-static struct vkey sholes_touch_vkeys[] = {
-	{
-		.min		= 20,
-		.max		= 193,
-		.code		= KEY_BACK,
-	},
-	{
-		.min		= 275,
-		.max		= 467,
-		.code		= KEY_MENU,
-	},
-	{
-		.min		= 556,
-		.max		= 748,
-		.code		= KEY_HOME,
-	},
-	{
-		.min		= 834,
-		.max		= 1004,
-		.code		= KEY_SEARCH,
-	},
-};
-
 static struct qtouch_ts_platform_data sholes_ts_platform_data = {
 	.irqflags	= (IRQF_TRIGGER_FALLING |IRQF_TRIGGER_LOW),
 	.flags		= (QTOUCH_SWAP_XY |
 			   QTOUCH_USE_MULTITOUCH |
 			   QTOUCH_CFG_BACKUPNV),
-	.abs_min_x	= 0,
-	.abs_max_x	= 1024,
+	.abs_min_x	= 20,
+	.abs_max_x	= 1004,
 	.abs_min_y	= 0,
 	.abs_max_y	= 960,
 	.abs_min_p	= 0,
@@ -357,7 +367,7 @@ static struct qtouch_ts_platform_data sholes_ts_platform_data = {
 		.active_idle_to	= 0x01,
 	},
 	.acquire_cfg	= {
-		.charge_time	= 10,
+		.charge_time	= 12,
 		.atouch_drift	= 5,
 		.touch_drift	= 20,
 		.drift_susp	= 20,
@@ -405,17 +415,17 @@ static struct qtouch_ts_platform_data sholes_ts_platform_data = {
 		  .ctrl = 0x01,
 		  .x_offset = 0x0000,
 		  .x_segment = {
-			  0x4D, 0x40, 0x3E, 0x3E,
-			  0x44, 0x3c, 0x3c, 0x3d,
-			  0x3f, 0x42, 0x3f, 0x3c,
-			  0x3f, 0x3f, 0x3e, 0x44
+			  0x4B, 0x3f, 0x3c , 0x3E,
+			  0x3f, 0x3b, 0x3a, 0x3c,
+			  0x3f, 0x42, 0x41, 0x3f,
+			  0x41, 0x40, 0x40, 0x46
 		  },
 		  .y_offset = 0x0000,
 		  .y_segment = {
-			  0x42, 0x38, 0x34, 0x3c,
-			  0x3c, 0x44, 0x3e, 0x3b,
-			  0x42, 0x41, 0x43, 0x45,
-			  0x43, 0x45, 0x43, 0x46
+			  0x44, 0x38, 0x37, 0x3e,
+			  0x3c, 0x44, 0x3e, 0x3d,
+			  0x42, 0x41, 0x42, 0x42,
+			  0x43, 0x43, 0x41, 0x45
 		  },
 	  },
 	.grip_suppression_cfg = {
@@ -430,11 +440,6 @@ static struct qtouch_ts_platform_data sholes_ts_platform_data = {
 		.szthr2	= 0x00,
 		.shpthr1	= 0x00,
 		.shpthr2	= 0x00,
-	},
-	.vkeys			= {
-		.keys		= sholes_touch_vkeys,
-		.count		= ARRAY_SIZE(sholes_touch_vkeys),
-		.start		= 961,
 	},
 };
 
@@ -1175,8 +1180,19 @@ static void __init sholes_power_off_init(void)
 
 static void __init sholes_init(void)
 {
+	int ret = 0;
+	struct kobject *properties_kobj = NULL;
+
 	omap_board_config = sholes_config;
 	omap_board_config_size = ARRAY_SIZE(sholes_config);
+
+	properties_kobj = kobject_create_and_add("board_properties", NULL);
+	if (properties_kobj)
+		ret = sysfs_create_group(properties_kobj,
+				 &sholes_properties_attr_group);
+	if (!properties_kobj || ret)
+		pr_err("failed to create board_properties\n");
+
 	sholes_ramconsole_init();
 	sholes_omap_mdm_ctrl_init();
 	sholes_spi_init();

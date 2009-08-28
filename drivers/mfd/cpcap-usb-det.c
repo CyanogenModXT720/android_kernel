@@ -492,6 +492,7 @@ free_irqs:
 	cpcap_irq_free(data->cpcap, CPCAP_IRQ_CHRG_DET);
 	regulator_put(data->regulator);
 free_mem:
+	wake_lock_destroy(&data->wake_lock);
 	kfree(data);
 
 	return retval;
@@ -515,6 +516,8 @@ static int __exit cpcap_usb_det_remove(struct platform_device *pdev)
 
 	vusb_disable(data);
 	regulator_put(data->regulator);
+
+	wake_lock_destroy(&data->wake_lock);
 
 	kfree(data);
 	return 0;
