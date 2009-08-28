@@ -164,7 +164,7 @@ static struct keyreset_platform_data mapphone_reset_keys_pdata = {
 	.keys_up = mapphone_reset_keys_up,
 	.keys_down = {
 		KEY_LEFTSHIFT,
-		KEY_LEFTALT,
+		KEY_RIGHTALT,
 		KEY_BACKSPACE,
 		0
 	},
