@@ -575,9 +575,11 @@ static struct omap_usb_port_data usb_port_data[] = {
 	},
 };
 
+static int omap_ohci_bus_check_ctrl_standby(void);
 static struct omap_usb_platform_data usb_platform_data = {
 	.port_data = usb_port_data,
 	.num_ports = ARRAY_SIZE(usb_port_data),
+	.usbhost_standby_status	= omap_ohci_bus_check_ctrl_standby,
 };
 
 static struct resource ehci_resources[] = {
@@ -606,7 +608,7 @@ static struct platform_device ehci_device = {
 };
 #endif
 
-#if defined(CONFIG_USB_OHCI_HCD) || defined(CONFIG_USB_OHCI_HCD_MODULE)
+#if defined(CONFIG_USB_OHCI_HCD) || defined(CONFIG_USB_OHCI_HCD_MODULE) || defined(CONFIG_USB_EHCI_HCD)
 static int omap_ohci_bus_check_ctrl_standby(void)
 {
 	u32 val;
@@ -617,6 +619,10 @@ static int omap_ohci_bus_check_ctrl_standby(void)
 	else
 		return 0;
 }
+#endif
+
+#if defined(CONFIG_USB_OHCI_HCD) || defined(CONFIG_USB_OHCI_HCD_MODULE)
+
 
 static struct resource ohci_resources[] = {
 	[0] = {
