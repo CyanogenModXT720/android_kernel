@@ -175,15 +175,16 @@ static int cpcap_reboot(struct notifier_block *this, unsigned long code,
 	int result = NOTIFY_DONE;
 	char *mode = cmd;
 
+	/* Clear kernel panic bit in cpcap */
+	ret = cpcap_regacc_write(misc_cpcap, CPCAP_REG_VAL1,
+			0, CPCAP_BIT_AP_KERNEL_PANIC);
+	if (ret) {
+		dev_err(&(misc_cpcap->spi->dev),
+				"Clear kernel panic bit failure.\n");
+		return  NOTIFY_BAD;
+	}
+
 	if (code == SYS_RESTART) {
-		/* Set the soft reset bit in the cpcap */
-		ret = cpcap_regacc_write(misc_cpcap, CPCAP_REG_VAL1,
-				CPCAP_BIT_SOFT_RESET, CPCAP_BIT_SOFT_RESET);
-		if (ret) {
-			dev_err(&(misc_cpcap->spi->dev),
-				"SW Reset cpcap set failure.\n");
-			result = NOTIFY_BAD;
-		}
 
 		if (mode != NULL && !strncmp("outofcharge", mode, 12)) {
 			/* Set the outofcharge bit in the cpcap */
@@ -195,16 +196,6 @@ static int cpcap_reboot(struct notifier_block *this, unsigned long code,
 					"outofcharge cpcap set failure.\n");
 				result = NOTIFY_BAD;
 			}
-		}
-
-		/* Clear kernel panic bit in cpcap */
-		ret = cpcap_regacc_write(misc_cpcap, CPCAP_REG_VAL1,
-				0, CPCAP_BIT_AP_KERNEL_PANIC);
-
-		if (ret) {
-			dev_err(&(misc_cpcap->spi->dev),
-			"Clear kernel panic bit failure.\n");
-			result = NOTIFY_BAD;
 		}
 
 		/* Check if we are starting recovery mode */
@@ -313,6 +304,10 @@ static int __devinit cpcap_probe(struct spi_device *spi)
 	/* Set Kpanic bit, which will be cleared at normal reboot */
 	cpcap_regacc_write(cpcap, CPCAP_REG_VAL1,
 			CPCAP_BIT_AP_KERNEL_PANIC, CPCAP_BIT_AP_KERNEL_PANIC);
+
+	/* Set the soft reset bit in the cpcap */
+	cpcap_regacc_write(misc_cpcap, CPCAP_REG_VAL1,
+			CPCAP_BIT_SOFT_RESET, CPCAP_BIT_SOFT_RESET);
 
 	cpcap_vendor_read(cpcap);
 

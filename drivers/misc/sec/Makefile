@@ -18,5 +18,7 @@
 # Motorola 2009-Mar-13 - Initial Creation
 #
 MODULE_NAME = sec
-    obj - $(CONFIG_SEC_DRIVER) += $(MODULE_NAME).o
-$(MODULE_NAME) - objs: = sec_core.o bridge_pub2sec.o
+
+obj-$(CONFIG_SEC_DRIVER) += $(MODULE_NAME).o
+
+$(MODULE_NAME)-objs := sec_core.o bridge_pub2sec.o

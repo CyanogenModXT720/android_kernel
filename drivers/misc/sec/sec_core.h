@@ -33,15 +33,19 @@
 #include <linux/io.h>
 
 #define SIZE_OF_MODEL_ID 4
-#define SIZE_OF_SWRV     (2*5)
+#define SIZE_OF_SWRV     (20)
 #define SIZE_OF_PROC_ID   16
 
 #define LARGER_OF_TWO (n, m) (n > m ? n : m)
 #define LARGER_OF_THREE (x, y, z) \
 	(x > (LARGER_OF_TWO(y, z)) ? x : LARGER_OF_TWO(y, z))
+
 #define API_HAL_KM_SOFTWAREREVISION_READ          33
+
 #define FLAG_IRQFIQ_MASK            0x3
 #define FLAG_START_HAL_CRITICAL     0x4
+#define FLAG_IRQ_ENABLE             0x2
+#define FLAG_FIQ_ENABLE             0x1
 
 #define SMICODEPUB_IRQ_END   0xFE
 #define SMICODEPUB_FIQ_END   0xFD
@@ -99,21 +103,18 @@ typedef enum {
 int sec_open(struct inode *inode, struct file *filp);
 int sec_release(struct inode *inode, struct file *filp);
 ssize_t sec_read(struct file *filp, char *buf, size_t count,
-		 loff_t *f_pos);
+		loff_t *f_pos);
 ssize_t sec_write(struct file *filp, char *buf, size_t count,
-		  loff_t *f_pos);
+		loff_t *f_pos);
 int sec_ioctl(struct inode *inode, struct file *file,
 	      unsigned int ioctl_num, unsigned long ioctl_param);
 
-extern unsigned int pub2sec_bridge_entry(unsigned int appl_id,
-					 unsigned int proc_ID,
-					 unsigned int flag, va_list);
 
-extern unsigned int v7_flush_kern_cache_all(void);
 
-static unsigned int SEC_ENTRY_pub2sec_dispatcher(unsigned int appl_id,
-						 unsigned int proc_ID,
-						 unsigned int flag, ...);
+extern u32 pub2sec_bridge_entry(u32 appl_id, u32 proc_ID, u32 flag,
+				char *ptr);
+extern u32 rpc_handler(u32 p1, u32 p2, u32 p3, u32 p4);
+extern u32 v7_flush_kern_cache_all(void);
 
 void sec_exit(void);
 

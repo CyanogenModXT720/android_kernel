@@ -22,13 +22,14 @@
 
                               Motorola Confidential Proprietary
                                     Template version 1.1
-                       Copyright 2007 Motorola, Inc.  All Rights Reserved.
+                       Copyright 2009 Motorola, Inc.  All Rights Reserved.
 
 Internal Revision History:
                             Modification     Tracking
 Author                          Date          Number     Description of Changes
 -------------------------   ------------    ----------   -------------------------------------------
 Falempe Jocelyn              18/02/2009     LIBss12162    initial creation
+LIU Peng - a22543            24/08/2009     LIBtt10246   Syspanic need to prevent suspend when BP panic happen
 
 \endif
 
@@ -40,6 +41,8 @@ External Revision History:
 Modification Date | Release ID | Description of Changes \n
 ----------------- | ---------- | -------------------------------- \n
 -- 2009-02-18 --- | Version_01 | Initial Creation
+-- 2009-08-24 --- | Version_02 | To prevent suspend when BP panic happen
+
 
 </tt>
 */
@@ -61,6 +64,9 @@ Modification Date | Release ID | Description of Changes \n
 #include <linux/device.h>
 #include <linux/timer.h>
 #include <asm/delay.h>
+#ifdef CONFIG_HAS_WAKELOCK
+#include <linux/wakelock.h>
+#endif
 /*=============================================================================
                                 LOCAL CONSTANTS
 =============================================================================*/
@@ -103,6 +109,9 @@ typedef struct {
                                              user-space */
 	wait_queue_head_t waitQueue;	/**< Wait queue used for sleeping */
 	struct timer_list timerList;
+#ifdef CONFIG_HAS_WAKELOCK
+    struct wake_lock syspanic_wake_lock;
+#endif
 	atomic_t state;
 
 } SysPanicDriverType;
@@ -258,6 +267,12 @@ static int __init syspanicInit(void)
 	atomic_set(&sysp.state, SYSP_IDLE);
 	printk(KERN_INFO "Loaded SysPanic device driver\n");
 
+#ifdef CONFIG_HAS_WAKELOCK
+	wake_lock_init(&sysp.syspanic_wake_lock,
+		       WAKE_LOCK_SUSPEND,
+		       "syspanic");
+#endif
+
 	/* Request for an interrupt from kernel */
 	if ((ret = syspanicRequestIRQ()) < 0) {
 		printk(KERN_ERR "Cannot request IRQ from kernel\n");
@@ -276,6 +291,10 @@ static void __exit syspanicExit(void)
 	}
 	/* Free the requested IRQ */
 	syspanicFreeIRQ();
+
+#ifdef CONFIG_HAS_WAKELOCK
+	wake_lock_destroy(&sysp.syspanic_wake_lock);
+#endif
 
 	printk(KERN_INFO "Unloaded SysPanic device driver\n");
 }
@@ -304,6 +323,10 @@ static int syspanicOpen(struct inode *inode, struct file *filp)
 
 static int syspanicRelease(struct inode *inode, struct file *filp)
 {
+#ifdef CONFIG_HAS_WAKELOCK
+    wake_unlock(&sysp.syspanic_wake_lock);
+#endif
+
 	/* Hold the semaphore */
 	if (down_interruptible(&sysp.sem)) {
 		return -ERESTARTSYS;
@@ -331,6 +354,10 @@ static void syspTimeout(unsigned long ptr)
 
 static irqreturn_t irqHandler(int irq, void *data)
 {
+#ifdef CONFIG_HAS_WAKELOCK
+    wake_lock(&sysp.syspanic_wake_lock);
+#endif
+
 	switch (atomic_read(&sysp.state)) {
 	case SYSP_IDLE:
 		atomic_set(&sysp.state, SYSP_WAIT);
