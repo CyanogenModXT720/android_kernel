@@ -43,6 +43,9 @@
 
 #include "ehci-omap.h"
 #include <mach/hardware.h>
+#ifdef CONFIG_HAS_WAKELOCK
+#include <linux/wakelock.h>
+#endif
 
 #ifdef CONFIG_MOT_FEAT_GPIO_API
 #include <mach/mot-gpio-omap.h>
@@ -97,6 +100,10 @@ static DEFINE_SPINLOCK(usbtll_clock_lock);
 #define USBHOST_TLL_ICKL	"usbtll_ick"
 #define USBHOST_TLL_FCLK	"usbtll_fck"
 /*-------------------------------------------------------------------------*/
+
+#ifdef CONFIG_HAS_WAKELOCK
+struct wake_lock wake_lock_ehci;
+#endif
 
 #ifdef CONFIG_MOT_FEAT_IPC_CORERETENTION
 unsigned short disable_irq_value;
@@ -707,6 +714,9 @@ static irqreturn_t usbtll_irq(int irq, void *tll)
 	usbtll_irqstatus = omap_readl(OMAP_USBTLL_IRQSTATUS);
 
 	if (usbtll_irqstatus & 1) {
+		#ifdef CONFIG_HAS_WAKELOCK
+		wake_lock_timeout(&wake_lock_ehci , HZ/2);
+		#endif
 		clk_enable(ehci_clocks->usbhost_ick_clk);
 		clk_enable(ehci_clocks->usbtll_fck_clk);
 		usbtll_fclk_enabled = 1;
@@ -746,6 +756,10 @@ static int ehci_hcd_omap_drv_probe(struct platform_device *dev)
 
 	if (usb_disabled())
 		return -ENODEV;
+
+	#ifdef CONFIG_HAS_WAKELOCK
+	wake_lock_init(&wake_lock_ehci, WAKE_LOCK_SUSPEND, "ehci_omap");
+	#endif
 
 	retval = request_irq(78, usbtll_irq, IRQF_DISABLED | IRQF_SHARED,
 			"usbtll", &dev->dev);
@@ -839,6 +853,10 @@ static int ehci_hcd_omap_drv_remove(struct platform_device *dev)
 			(((char *)hcd_to_ehci(hcd)) + sizeof(struct ehci_hcd));
 
 	dev_dbg(&dev->dev, "ehci_hcd_omap_drv_remove()\n");
+
+	#ifdef CONFIG_HAS_WAKELOCK
+	wake_lock_destroy(&wake_lock_ehci);
+	#endif
 
 	spin_lock_irqsave(&usbtll_clock_lock, flags);
        if (ehci_clocks->suspended) {
