@@ -369,6 +369,34 @@ static void mapphone_als_init(void)
 	gpio_direction_input(MAPPHONE_LM_3530_INT_GPIO);
 	omap_cfg_reg(AC27_34XX_GPIO92);
 }
+static struct qtm_touch_keyarray_cfg mapphone_key_array_data[] = {
+	{
+		.ctrl = 0,
+		.x_origin = 0,
+		.y_origin = 0,
+		.x_size = 0,
+		.y_size = 0,
+		.aks_cfg = 0,
+		.burst_len = 0,
+		.tch_det_thr = 0,
+		.tch_det_int = 0,
+		.rsvd1 = 0,
+		.rsvd2 = 0,
+	},
+	{
+		.ctrl = 0,
+		.x_origin = 0,
+		.y_origin = 0,
+		.x_size = 0,
+		.y_size = 0,
+		.aks_cfg = 0,
+		.burst_len = 0,
+		.tch_det_thr = 0,
+		.tch_det_int = 0,
+		.rsvd1 = 0,
+		.rsvd2 = 0,
+	},
+};
 
 static struct qtouch_ts_platform_data mapphone_ts_platform_data = {
 	.irqflags	= (IRQF_TRIGGER_FALLING | IRQF_TRIGGER_LOW),
@@ -425,19 +453,6 @@ static struct qtouch_ts_platform_data mapphone_ts_platform_data = {
 		.y_low_clip = 0x00,
 		.y_high_clip = 0x00,
 	},
-	.key_array_cfg = {
-		.ctrl = 0,
-		.x_origin = 0,
-		.y_origin = 0,
-		.x_size = 0,
-		.y_size = 0,
-		.aks_cfg = 0,
-		.burst_len = 0,
-		.tch_det_thr = 0,
-		.tch_det_int = 0,
-		.rsvd1 = 0,
-		.rsvd2 = 0,
-	},
 	.linear_tbl_cfg = {
 		.ctrl = 0x01,
 		.x_offset = 0x0000,
@@ -467,6 +482,16 @@ static struct qtouch_ts_platform_data mapphone_ts_platform_data = {
 		.szthr2		= 0x00,
 		.shpthr1	= 0x00,
 		.shpthr2	= 0x00,
+	},
+	.noise1_suppression_cfg = {
+		.ctrl = 0x01,
+		.reserved = 0x01,
+		.atchthr = 0x6f,
+		.duty_cycle = 0x08,
+	},
+	.key_array      = {
+		.cfg		= mapphone_key_array_data,
+		.num_keys   = ARRAY_SIZE(mapphone_key_array_data),
 	},
 };
 
@@ -843,6 +868,7 @@ static int mapphone_bpwake_probe(struct platform_device *pdev)
 			 IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING,
 			 "Remote Wakeup", NULL);
 	if (rc) {
+		wake_lock_destroy(&baseband_wakeup_wakelock);
 		printk(KERN_ERR
 		       "Failed requesting APWAKE_TRIGGER irq (%d)\n", rc);
 		return rc;
@@ -854,6 +880,7 @@ static int mapphone_bpwake_probe(struct platform_device *pdev)
 
 static int mapphone_bpwake_remove(struct platform_device *pdev)
 {
+	wake_lock_destroy(&baseband_wakeup_wakelock);
 	free_irq(gpio_to_irq(MAPPHONE_APWAKE_TRIGGER_GPIO), NULL);
 	return 0;
 }
