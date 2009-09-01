@@ -198,6 +198,20 @@ static struct platform_device androidusb_device = {
 	},
 };
 
+static struct usb_mass_storage_platform_data usbms_plat = {
+	.vendor			= "Motorola",
+	.product		= "A853",
+	.release		= 1,
+};
+
+static struct platform_device usb_mass_storage_device = {
+	.name	= "usb_mass_storage",
+	.id	= -1,
+	.dev	= {
+		.platform_data = &usbms_plat,
+	},
+};
+
 static int cpcap_usb_connected_probe(struct platform_device *pdev)
 {
 	android_usb_set_connected(1);
@@ -246,6 +260,7 @@ static void mapphone_gadget_init(void)
 		andusb_plat.adb_product_id = MAPPHONE_ADB_PRODUCT_ID;
 	}
 	platform_device_register(&androidusb_device);
+	platform_device_register(&usb_mass_storage_device);
 	platform_driver_register(&cpcap_usb_connected_driver);
 }
 
@@ -324,7 +339,7 @@ static void mapphone_als_init(void)
 
 static struct vkey mapphone_touch_vkeys[] = {
 	{
-		.min		= 0,
+		.min		= 20,
 		.max		= 193,
 		.code		= KEY_BACK,
 	},
@@ -340,13 +355,13 @@ static struct vkey mapphone_touch_vkeys[] = {
 	},
 	{
 		.min		= 834,
-		.max		= 1024,
+		.max		= 1004,
 		.code		= KEY_SEARCH,
 	},
 };
 
 static struct qtouch_ts_platform_data mapphone_ts_platform_data = {
-	.irqflags	= IRQF_TRIGGER_LOW,
+	.irqflags	= (IRQF_TRIGGER_FALLING | IRQF_TRIGGER_LOW),
 	.flags		= (QTOUCH_SWAP_XY |
 			   QTOUCH_USE_MULTITOUCH |
 			   QTOUCH_CFG_BACKUPNV),
@@ -358,16 +373,16 @@ static struct qtouch_ts_platform_data mapphone_ts_platform_data = {
 	.abs_max_p	= 255,
 	.abs_min_w	= 0,
 	.abs_max_w	= 15,
-	.nv_checksum	= 0xf429,
+	.nv_checksum	= 0xb834,
 	.fuzz_x		= 0,
 	.fuzz_y		= 0,
 	.fuzz_p		= 2,
 	.fuzz_w		= 2,
 	.hw_reset	= mapphone_touch_reset,
 	.power_cfg	= {
-		.idle_acq_int	= 1,
+		.idle_acq_int	= 0xff,
 		.active_acq_int	= 0xff,
-		.active_idle_to	= 0xff,
+		.active_idle_to	= 0x01,
 	},
 	.acquire_cfg	= {
 		.charge_time	= 10,
@@ -393,6 +408,25 @@ static struct qtouch_ts_platform_data mapphone_ts_platform_data = {
 		.num_touch	= 4,
 		.merge_hyst	= 0,
 		.merge_thresh	= 3,
+		.x_res = 0x0000,
+		.y_res = 0x0000,
+		.x_low_clip = 0x00,
+		.x_high_clip = 0x00,
+		.y_low_clip = 0x00,
+		.y_high_clip = 0x00,
+	},
+	.key_array_cfg = {
+		.ctrl = 0,
+		.x_origin = 0,
+		.y_origin = 0,
+		.x_size = 0,
+		.y_size = 0,
+		.aks_cfg = 0,
+		.burst_len = 0,
+		.tch_det_thr = 0,
+		.tch_det_int = 0,
+		.rsvd1 = 0,
+		.rsvd2 = 0,
 	},
 	.linear_tbl_cfg = {
 		.ctrl = 0x01,
@@ -418,8 +452,9 @@ static struct qtouch_ts_platform_data mapphone_ts_platform_data = {
 		.ylogrip	= 0x00,
 		.yhigrip	= 0x00,
 		.maxtchs	= 0x00,
-		.szthr1	= 0x00,
-		.szthr2	= 0x00,
+		.reserve0	= 0x00,
+		.szthr1		= 0x00,
+		.szthr2		= 0x00,
 		.shpthr1	= 0x00,
 		.shpthr2	= 0x00,
 	},
@@ -474,12 +509,10 @@ static struct i2c_board_info __initdata mapphone_i2c_bus1_board_info[] = {
 	},
 };
 
-extern struct akm8973_platform_data mapphone_akm8973_data;
 extern struct lis331dlh_platform_data mapphone_lis331dlh_data;
 static struct i2c_board_info __initdata mapphone_i2c_bus2_board_info[] = {
 	{
 		I2C_BOARD_INFO("akm8973", 0x1C),
-		.platform_data = &mapphone_akm8973_data,
 		.irq = OMAP_GPIO_IRQ(MAPPHONE_AKM8973_INT_GPIO),
 	},
 	{
@@ -703,9 +736,9 @@ static void __init mapphone_serial_init(void)
 #define MAPPHONE_R_SMPS_VOL_CNTL_CMDRA1		0x01
 
 static struct prm_setup_vc mapphone_prm_setup = {
-	.clksetup = 0x52,
-	.voltsetup_time1 = 0x229,
-	.voltsetup_time2 = 0x229,
+	.clksetup = 0x4c,
+	.voltsetup_time1 = 0x94,
+	.voltsetup_time2 = 0x94,
 	.voltoffset = 0x0,
 	.voltsetup2 = 0x0,
 	.vdd0_on = 0x65,
@@ -784,16 +817,9 @@ int mapphone_voltagescale_vcbypass(u32 target_opp, u32 current_opp,
 
 /* Mapphone specific PM */
 
-static int bpwake_irqstate;
 static struct wake_lock baseband_wakeup_wakelock;
 static int mapphone_bpwake_irqhandler(int irq, void *unused)
 {
-	printk("%s: Baseband wakeup\n", __func__);
-	/*
-	 * Ignore the BP pokes while we're awake
-	 */
-	disable_irq(irq);
-	bpwake_irqstate = 0;
 	wake_lock_timeout(&baseband_wakeup_wakelock, (HZ / 2));
 	return IRQ_HANDLED;
 }
@@ -802,8 +828,10 @@ static int mapphone_bpwake_probe(struct platform_device *pdev)
 {
 	int rc;
 
-	gpio_request(MAPPHONE_APWAKE_TRIGGER_GPIO, "BP -> AP wakeup trigger");
+	gpio_request(MAPPHONE_APWAKE_TRIGGER_GPIO, "BP -> AP IPC trigger");
 	gpio_direction_input(MAPPHONE_APWAKE_TRIGGER_GPIO);
+
+	wake_lock_init(&baseband_wakeup_wakelock, WAKE_LOCK_IDLE, "bpwake");
 
 	rc = request_irq(gpio_to_irq(MAPPHONE_APWAKE_TRIGGER_GPIO),
 			 mapphone_bpwake_irqhandler,
@@ -815,10 +843,7 @@ static int mapphone_bpwake_probe(struct platform_device *pdev)
 		return rc;
 	}
 
-	wake_lock_init(&baseband_wakeup_wakelock, WAKE_LOCK_SUSPEND, "bpwake");
 	enable_irq_wake(gpio_to_irq(MAPPHONE_APWAKE_TRIGGER_GPIO));
-	disable_irq(gpio_to_irq(MAPPHONE_APWAKE_TRIGGER_GPIO));
-	bpwake_irqstate = 0;
 	return 0;
 }
 
@@ -831,17 +856,11 @@ static int mapphone_bpwake_remove(struct platform_device *pdev)
 static int mapphone_bpwake_suspend(struct platform_device *pdev,
 					pm_message_t state)
 {
-	if (!bpwake_irqstate) {
-		enable_irq(gpio_to_irq(MAPPHONE_APWAKE_TRIGGER_GPIO));
-		bpwake_irqstate = 1;
-	}
 	return 0;
 }
 
 static int mapphone_bpwake_resume(struct platform_device *pdev)
 {
-	disable_irq(gpio_to_irq(MAPPHONE_APWAKE_TRIGGER_GPIO));
-	bpwake_irqstate = 0;
 	return 0;
 }
 
