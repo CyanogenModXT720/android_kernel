@@ -42,7 +42,8 @@
 #define GPIO_AUDIO_SELECT_CPCAP  143
 
 /* This is the number of total kernel buffers */
-#define AUDIO_NBFRAGS_DEFAULT 2
+#define AUDIO_NBFRAGS_WRITE 2
+#define AUDIO_NBFRAGS_READ 10
 
 #define AUDIO_TIMEOUT HZ
 
@@ -1127,7 +1128,6 @@ static void map_audioic_speakers(void)
 		} else{
 			AUDIO_LEVEL1_LOG("Setting codec in Normal mode\n");
 			cpcap_audio_state.codec_mode = CPCAP_AUDIO_CODEC_ON;
-			cpcap_audio_state.codec_mute = CPCAP_AUDIO_CODEC_UNMUTE;
 			gpio_direction_output(GPIO_AUDIO_SELECT_CPCAP, 1);
 		}
 	}
@@ -1578,7 +1578,7 @@ static int audio_stdac_open(struct inode *inode, struct file *file)
 		TRY(error = audio_configure_ssi(inode, file))
 
 		cpcap_audio_state.stdac_mode = CPCAP_AUDIO_STDAC_ON;
-		cpcap_audio_state.stdac_mute = CPCAP_AUDIO_STDAC_UNMUTE;
+
 
 		map_audioic_speakers();
 		cpcap_audio_set_audio_state(&cpcap_audio_state);
@@ -1799,7 +1799,20 @@ static int audio_ioctl(struct inode *inode, struct file *file,
 		unsigned int gain;
 		TRY(copy_from_user(&gain, (unsigned int *)arg,
 					sizeof(unsigned int)))
-		cpcap_audio_state.output_gain = gain;
+		if (gain == 0) {
+			cpcap_audio_state.stdac_mute = CPCAP_AUDIO_STDAC_MUTE;
+			cpcap_audio_state.codec_mute = CPCAP_AUDIO_CODEC_MUTE;
+		} else {
+			/* unmute codec or stereo DAC */
+			if (cpcap_audio_state.stdac_mode == CPCAP_AUDIO_STDAC_ON)
+				cpcap_audio_state.stdac_mute = CPCAP_AUDIO_STDAC_UNMUTE;
+
+			if (cpcap_audio_state.codec_mode == CPCAP_AUDIO_CODEC_ON)
+				cpcap_audio_state.codec_mute = CPCAP_AUDIO_CODEC_UNMUTE;
+
+			cpcap_audio_state.output_gain = gain;
+		}
+
 		cpcap_audio_set_audio_state(&cpcap_audio_state);
 		AUDIO_LEVEL2_LOG("SOUND_MIXER_VOLUME, output_gain = %d\n",
 				cpcap_audio_state.output_gain);
@@ -1849,7 +1862,7 @@ static ssize_t audio_write(struct file *file, const char *buffer, size_t count,
 		if (!str->active) {
 			int temp_size = count % STDAC_FIFO_SIZE;
 			str->fragsize = (count - temp_size) + STDAC_FIFO_SIZE;
-			str->nbfrags = AUDIO_NBFRAGS_DEFAULT;
+			str->nbfrags = AUDIO_NBFRAGS_WRITE;
 			if (audio_setup_buf(str, file->private_data)) {
 				AUDIO_ERROR_LOG("Unable to allocate memory\n");
 				ret = -ENOMEM;
@@ -1861,7 +1874,7 @@ static ssize_t audio_write(struct file *file, const char *buffer, size_t count,
 		if (!str->active) {
 			int temp_size = count % CODEC_FIFO_SIZE;
 			str->fragsize = (count - temp_size) + CODEC_FIFO_SIZE;
-			str->nbfrags = AUDIO_NBFRAGS_DEFAULT;
+			str->nbfrags = AUDIO_NBFRAGS_WRITE;
 			if (audio_setup_buf(str, file->private_data)) {
 				AUDIO_ERROR_LOG("Unable to allocate memory\n");
 				ret = -ENOMEM;
@@ -2035,7 +2048,7 @@ static ssize_t audio_codec_read(struct file *file, char *buffer, size_t size,
 
 	if (str->fragsize != size) {
 		str->fragsize = size;
-		str->nbfrags = AUDIO_NBFRAGS_DEFAULT;
+		str->nbfrags = AUDIO_NBFRAGS_READ;
 		str->input_output = FMODE_READ;
 		init_waitqueue_head(&str->wq);
 		if (audio_setup_buf(str, file->private_data)) {

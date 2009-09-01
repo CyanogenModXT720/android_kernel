@@ -304,7 +304,8 @@ static void mtd_panic_notify_add(struct mtd_info *mtd)
 
 	if (hdr->console_length || hdr->threads_length) {
 		ctx->last_kmsg = create_proc_entry("last_kmsg",
-						   S_IFREG | S_IRUGO, NULL);
+						   S_IFREG | S_IRUGO |
+						   S_IWUSR | S_IWGRP, NULL);
 		if (!ctx->last_kmsg)
 			printk(KERN_ERR "%s: failed creating procfile\n",
 			       __func__);
@@ -442,6 +443,10 @@ static int sholes_panic(struct notifier_block *this, unsigned long event,
 	if (!ctx->mtd)
 		goto out;
 
+	if (ctx->curr.magic) {
+		printk(KERN_EMERG "Crash partition in use!\n");
+		goto out;
+	}
 	console_offset = ctx->mtd->writesize;
 
 	/*
@@ -459,6 +464,9 @@ static int sholes_panic(struct notifier_block *this, unsigned long event,
 	 */
 	threads_offset = ALIGN(console_offset + console_len,
 			       ctx->mtd->writesize);
+	if (!threads_offset)
+		threads_offset = ctx->mtd->writesize;
+
 	log_buf_clear();
 	show_state_filter(0);
 	threads_len = sholes_panic_write_console(ctx->mtd, threads_offset);

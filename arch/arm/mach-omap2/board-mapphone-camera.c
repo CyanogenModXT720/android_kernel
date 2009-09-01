@@ -44,7 +44,8 @@
 #define CAM_IOMUX_SAFE_MODE (OMAP343X_PADCONF_PULL_UP | \
 				OMAP343X_PADCONF_PUD_ENABLED | \
 				OMAP343X_PADCONF_MUXMODE7)
-#define CAM_IOMUX_FUNC_MODE (OMAP343X_PADCONF_INPUT_ENABLED)
+#define CAM_IOMUX_FUNC_MODE (OMAP343X_PADCONF_INPUT_ENABLED | \
+				OMAP343X_PADCONF_MUXMODE0)
 
 static void mapphone_camera_lines_safe_mode(void);
 static void mapphone_camera_lines_func_mode(void);
@@ -151,7 +152,7 @@ static int mt9p012_sensor_power_set(struct device* dev, enum v4l2_power power)
 			omap_pm_set_min_bus_tput(dev, OCP_INITIATOR_AGENT, 885735);
 
 			/* Configure pixel clock divider (here?) */
-			omap_writel(0x4, 0x48004f40);
+			omap_writel(0x2, 0x48004f40);
 			isp_configure_interface(&mt9p012_if_config);
 
 			/* Request and configure gpio pins */
