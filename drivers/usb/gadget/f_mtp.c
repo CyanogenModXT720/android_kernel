@@ -109,6 +109,7 @@ static struct usb_endpoint_descriptor fs_intr_in_desc = {
 	.bDescriptorType = USB_DT_ENDPOINT,
 	.bEndpointAddress = USB_DIR_IN,
 	.bmAttributes = USB_ENDPOINT_XFER_INT,
+	.wMaxPacketSize = __constant_cpu_to_le16(64),
 	.bInterval = 10,
 };
 
