@@ -290,6 +290,22 @@ static int sholes_touch_reset(void)
 	return 0;
 }
 
+/* These are for test event-injection purposes only */
+static struct vkey sholes_touch_vkeys[] = {
+	{
+		.code		= KEY_BACK,
+	},
+	{
+		.code		= KEY_MENU,
+	},
+	{
+		.code		= KEY_HOME,
+	},
+	{
+		.code		= KEY_SEARCH,
+	},
+};
+
 static ssize_t sholes_virtual_keys_show(struct kobject *kobj,
 					struct kobj_attribute *attr, char *buf)
 {
@@ -297,13 +313,13 @@ static ssize_t sholes_virtual_keys_show(struct kobject *kobj,
 	/* keys are specified by setting the x,y of the center, the width,
 	 * and the height, as such keycode:center_x:center_y:width:height */
 	return sprintf(buf, __stringify(EV_KEY) ":"
-		       __stringify(KEY_BACK) ":35:906:55:55"
+		       __stringify(KEY_BACK) ":32:906:63:57"
 		       ":" __stringify(EV_KEY) ":"
-		       __stringify(KEY_MENU) ":168:906:75:55"
+		       __stringify(KEY_MENU) ":162:906:89:57"
 		       ":" __stringify(EV_KEY) ":"
-		       __stringify(KEY_HOME) ":308:906:75:55"
+		       __stringify(KEY_HOME) ":292:906:89:57"
 		       ":" __stringify(EV_KEY) ":"
-		       __stringify(KEY_SEARCH) ":440:906:55:55"
+		       __stringify(KEY_SEARCH) ":439:906:63:57"
 		       "\n");
 }
 static struct kobj_attribute sholes_virtual_keys_attr = {
@@ -458,12 +474,17 @@ static struct qtouch_ts_platform_data sholes_ts_platform_data = {
 	.noise1_suppression_cfg = {
 		.ctrl = 0x01,
 		.reserved = 0x01,
-		.atchthr = 0x6f,
+		.atchthr = 0x64,
 		.duty_cycle = 0x08,
 	},
 	.key_array      = {
 		.cfg		= sholes_key_array_data,
 		.num_keys   = ARRAY_SIZE(sholes_key_array_data),
+	},
+	.vkeys			= {
+		.keys		= sholes_touch_vkeys,
+		.count		= ARRAY_SIZE(sholes_touch_vkeys),
+		.start		= 961,
 	},
 };
 

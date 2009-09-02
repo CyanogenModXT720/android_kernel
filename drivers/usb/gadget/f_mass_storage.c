@@ -2246,8 +2246,12 @@ static int get_next_command(struct fsg_dev *fsg)
 	/* Wait for the CBW to arrive */
 	while (bh->state != BUF_STATE_FULL) {
 		rc = sleep_thread(fsg);
-		if (rc)
+		if (rc) {
+			usb_ep_dequeue(fsg->bulk_out, bh->outreq);
+			bh->outreq_busy = 0;
+			bh->state = BUF_STATE_EMPTY;
 			return rc;
+		}
 	}
 	smp_rmb();
 	rc = received_cbw(fsg, bh);
@@ -2296,9 +2300,7 @@ static int do_set_interface(struct fsg_dev *fsg, int altsetting)
 
 	if (fsg->running)
 		DBG(fsg, "reset interface\n");
-
 reset:
-
 	/* Disable the endpoints */
 	if (fsg->bulk_in_enabled) {
 		DBG(fsg, "usb_ep_disable %s\n", fsg->bulk_in->name);
@@ -2314,7 +2316,6 @@ reset:
 	/* Deallocate the requests */
 	for (i = 0; i < NUM_BUFFERS; ++i) {
 		struct fsg_buffhd *bh = &fsg->buffhds[i];
-
 		if (bh->inreq) {
 			usb_ep_free_request(fsg->bulk_in, bh->inreq);
 			bh->inreq = NULL;
@@ -2510,7 +2511,10 @@ static void handle_exception(struct fsg_dev *fsg)
 
 	case FSG_STATE_EXIT:
 	case FSG_STATE_TERMINATED:
-		do_set_interface(fsg, -1);
+		if (new_config)  {
+			fsg->new_config = 0;
+			do_set_interface(fsg, -1);
+		}
 		do_set_config(fsg, 0);			/* Free resources */
 		spin_lock_irq(&fsg->lock);
 		fsg->state = FSG_STATE_TERMINATED;	/* Stop the thread */
