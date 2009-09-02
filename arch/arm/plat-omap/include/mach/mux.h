@@ -961,6 +961,7 @@ enum omap34xx_index {
 	AG24_34XX_DSS_DATA4,
 	AH24_34XX_DSS_DATA5,
 #endif
+	D25_34XX_GPIO109,
 };
 
 struct omap_mux_cfg {

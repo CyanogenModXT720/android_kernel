@@ -89,6 +89,11 @@ static struct workqueue_struct *qtouch_ts_wq;
 static uint32_t qtouch_tsdebug;
 module_param_named(tsdebug, qtouch_tsdebug, uint, 0664);
 
+#ifdef QTOUCH_TS_ATMEGA64A1_SUPPORT
+/*! @brief set atmega64a1_enable_flag */
+static unsigned char qtm_obp_touch_atmega64a1_enable;
+#endif
+
 static irqreturn_t qtouch_ts_irq_handler(int irq, void *dev_id)
 {
 	struct qtouch_ts_data *ts = dev_id;
@@ -337,6 +342,27 @@ static int qtouch_hw_init(struct qtouch_ts_data *ts)
 	 * layout, but are just different enough where we basically have to
 	 * repeat the same code */
 
+#ifdef QTOUCH_TS_ATMEGA64A1_SUPPORT
+if (qtm_obp_touch_atmega64a1_enable) {
+	/* configure the multi-touch object. */
+	obj = find_obj(ts, QTM_OBJ_TOUCH_MULTI);
+	if (obj && obj->entry.num_inst > 0) {
+		struct qtm_touch_multi_cfg cfg;
+		struct qtm_touch_multi_cfg_atmega64a1 cfg_atmega64a1;
+		memcpy(&cfg, &ts->pdata->multi_touch_cfg, sizeof(cfg));
+		if (ts->pdata->flags & QTOUCH_USE_MULTITOUCH)
+			cfg.ctrl |= (1 << 1) | (1 << 0); /* reporten | enable */
+		else
+			cfg.ctrl = 0;
+		ret = qtouch_write_addr(ts, obj->entry.addr, &cfg,
+			min(sizeof(cfg_atmega64a1), obj->entry.size));
+		if (ret != 0) {
+			pr_err("%s: Can't write multi-touch config\n",
+			       __func__);
+			return ret;
+		}
+	}
+} else {
 	/* configure the multi-touch object. */
 	obj = find_obj(ts, QTM_OBJ_TOUCH_MULTI);
 	if (obj && obj->entry.num_inst > 0) {
@@ -354,7 +380,29 @@ static int qtouch_hw_init(struct qtouch_ts_data *ts)
 			return ret;
 		}
 	}
+}
+#else
+	/* configure the multi-touch object. */
+	obj = find_obj(ts, QTM_OBJ_TOUCH_MULTI);
+	if (obj && obj->entry.num_inst > 0) {
+		struct qtm_touch_multi_cfg cfg;
+		memcpy(&cfg, &ts->pdata->multi_touch_cfg, sizeof(cfg));
+		if (ts->pdata->flags & QTOUCH_USE_MULTITOUCH)
+			cfg.ctrl |= (1 << 1) | (1 << 0); /* reporten | enable */
+		else
+			cfg.ctrl = 0;
+		ret = qtouch_write_addr(ts, obj->entry.addr, &cfg,
+					min(sizeof(cfg), obj->entry.size));
+		if (ret != 0) {
+			pr_err("%s: Can't write multi-touch config\n",
+			       __func__);
+			return ret;
+		}
+	}
+#endif
 
+#ifdef QTOUCH_TS_ATMEGA64A1_SUPPORT
+if (qtm_obp_touch_atmega64a1_enable) {
 	/* configure the key-array object. */
 	obj = find_obj(ts, QTM_OBJ_TOUCH_KEYARRAY);
 	if (obj && obj->entry.num_inst > 0) {
@@ -372,6 +420,8 @@ static int qtouch_hw_init(struct qtouch_ts_data *ts)
 			return ret;
 		}
 	}
+}
+#endif
 
 	/* configure the signal filter */
 	obj = find_obj(ts, QTM_OBJ_PROCG_SIG_FILTER);
@@ -400,6 +450,92 @@ static int qtouch_hw_init(struct qtouch_ts_data *ts)
 			return ret;
 		}
 	}
+
+#ifdef QTOUCH_TS_ATMEGA64A1_SUPPORT
+if (!qtm_obp_touch_atmega64a1_enable) {
+#endif
+	/* configure qtm_touch_keyarray_cfg */
+	obj = find_obj(ts, QTM_OBJ_TOUCH_KEYARRAY);
+	if (obj && obj->entry.num_inst > 0) {
+		ret = qtouch_write_addr(ts, obj->entry.addr,
+			&ts->pdata->touch_keyarray_cfg,
+			min(sizeof(ts->pdata->touch_keyarray_cfg),
+			obj->entry.size));
+		if (ret != 0) {
+			pr_err("%s: Can't write qtm_touch_keyarray_cfg\n",
+			       __func__);
+			return ret;
+		}
+	}
+	/* configure qtm_spt_gpiopwm_cfg */
+	obj = find_obj(ts, QTM_OBJ_SPT_GPIOPWM);
+	if (obj && obj->entry.num_inst > 0) {
+		ret = qtouch_write_addr(ts, obj->entry.addr,
+			&ts->pdata->spt_gpiopwm_cfg,
+			min(sizeof(ts->pdata->spt_gpiopwm_cfg),
+			obj->entry.size));
+		if (ret != 0) {
+			pr_err("%s: Can't write qtm_spt_gpiopwm_cfg\n",
+			       __func__);
+			return ret;
+		}
+	}
+	/* configure qtm_spt_noisesuppression_cfg */
+	obj = find_obj(ts, QTM_OBJ_SPT_NOISESUPPRESSION);
+	if (obj && obj->entry.num_inst > 0) {
+		ret = qtouch_write_addr(ts, obj->entry.addr,
+			&ts->pdata->spt_noisesuppression_cfg,
+			min(sizeof(ts->pdata->spt_noisesuppression_cfg),
+			obj->entry.size));
+		if (ret != 0) {
+			pr_err("%s: Can't write qtm_spt_noisesuppression_cfg\n",
+			       __func__);
+			return ret;
+		}
+	}
+	/* configure qtm_spt_noisesuppression_cfg */
+	obj = find_obj(ts, QTM_OBJ_PROCI_ONETOUCHGESTURE_PROC);
+	if (obj && obj->entry.num_inst > 0) {
+		ret = qtouch_write_addr(ts, obj->entry.addr,
+		 &ts->pdata->proci_onetouchgestureprocessor_cfg,
+		 min(sizeof(ts->pdata->proci_onetouchgestureprocessor_cfg),
+		 obj->entry.size));
+		if (ret != 0) {
+			pr_err("%s: Can't write qtm_proci_one\n",
+			       __func__);
+			return ret;
+		}
+	}
+	/* configure qtm_proci_twotouchgestureprocessor_cfg */
+	obj = find_obj(ts, QTM_OBJ_PROCI_TWOTOUCHGESTURE_PROC);
+	if (obj && obj->entry.num_inst > 0) {
+		ret = qtouch_write_addr(ts, obj->entry.addr,
+		 &ts->pdata->proci_twotouchgestureprocessor_cfg,
+		 min(sizeof(ts->pdata->proci_twotouchgestureprocessor_cfg),
+		 obj->entry.size));
+		if (ret != 0) {
+			pr_err("%s: Can't write qtm_proci_two\n",
+			       __func__);
+			return ret;
+		}
+	}
+	/* configure qtm_spt_cteconfig_cfg */
+	obj = find_obj(ts, QTM_OBJ_SPT_CTECONFIG);
+	if (obj && obj->entry.num_inst > 0) {
+		ret = qtouch_write_addr(ts, obj->entry.addr,
+			&ts->pdata->spt_cteconfig_cfg,
+			min(sizeof(ts->pdata->spt_cteconfig_cfg),
+			obj->entry.size));
+		if (ret != 0) {
+			pr_err("%s: Can't write qtm_spt_cteconfig_cfg\n",
+			       __func__);
+			return ret;
+		}
+	}
+#ifdef QTOUCH_TS_ATMEGA64A1_SUPPORT
+}
+#endif
+
 	/* configure the grip suppression table */
 	obj = find_obj(ts, QTM_OBJ_PROCI_GRIPFACESUPPRESSION);
 	if (obj && obj->entry.num_inst > 0) {
@@ -879,8 +1015,24 @@ static int qtouch_ts_probe(struct i2c_client *client,
 	qtouch_force_reset(ts, 0);
 
 	err = qtouch_process_info_block(ts);
+#ifdef QTOUCH_TS_ATMEGA64A1_SUPPORT
+	if (err != 0) {
+		client->dev.platform_data = (struct qtouch_ts_platform_data *)\
+			&sholest_ts_platform_data_atmega64a1;
+		pdata = client->dev.platform_data;
+		ts->pdata = pdata;
+		client->addr = 0x11;
+		qtouch_force_reset(ts, 0);
+		err = qtouch_process_info_block(ts);
 	if (err != 0)
 		goto err_process_info_block;
+		else
+			qtm_obp_touch_atmega64a1_enable = 1;
+	}
+#else
+	if (err != 0)
+		goto err_process_info_block;
+#endif
 
 	ts->msg_buf = kmalloc(ts->msg_size, GFP_KERNEL);
 	if (ts->msg_buf == NULL) {
@@ -900,6 +1052,7 @@ static int qtouch_ts_probe(struct i2c_client *client,
 
 	set_bit(EV_SYN, ts->input_dev->evbit);
 
+#ifdef QTOUCH_TS_ATMEGA64A1_SUPPORT
 	/* register the harwdare assisted virtual keys, if any */
 	obj = find_obj(ts, QTM_OBJ_TOUCH_KEYARRAY);
 	if (obj && (obj->entry.num_inst > 0) &&
@@ -908,6 +1061,7 @@ static int qtouch_ts_probe(struct i2c_client *client,
 			input_set_capability(ts->input_dev, EV_KEY,
 					     pdata->key_array.keys[i].code);
 	}
+#endif
 
 	/* register the software virtual keys, if any are provided */
 	for (i = 0; i < pdata->vkeys.count; ++i)
