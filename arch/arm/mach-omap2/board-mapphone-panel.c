@@ -20,6 +20,7 @@
 #include <mach/display.h>
 #include <mach/gpio.h>
 #include <mach/mux.h>
+#include <mach/resource.h>
 
 #define MAPPHONE_DISPLAY_RESET_GPIO	136
 
@@ -27,14 +28,23 @@ struct regulator *display_regulator;
 
 static int mapphone_panel_enable(struct omap_dss_device *dssdev)
 {
+	int ret;
+
+	/* pin the memory bus bw to the highest value */
+	ret = resource_request("vdd2_opp", &dssdev->dev, 400000);
+	if (ret)
+		printk("%s: resource request failed\n", __func__);
+
 	if (!display_regulator) {
 		display_regulator = regulator_get(NULL, "vhvio");
 		if (IS_ERR(display_regulator)) {
 			printk(KERN_ERR "failed to get regulator for display");
 			return PTR_ERR(display_regulator);
 		}
+		regulator_enable(display_regulator);
 		return 0;
 	}
+
 	regulator_enable(display_regulator);
 	msleep(1);
 	gpio_request(MAPPHONE_DISPLAY_RESET_GPIO, "display reset");
@@ -44,11 +54,19 @@ static int mapphone_panel_enable(struct omap_dss_device *dssdev)
 	msleep(5);
 	gpio_set_value(MAPPHONE_DISPLAY_RESET_GPIO, 1);
 	msleep(10);
+
 	return 0;
 }
 
 static void mapphone_panel_disable(struct omap_dss_device *dssdev)
 {
+	int ret;
+
+	/* unpin the memory bus */
+	ret = resource_release("vdd2_opp", &dssdev->dev);
+	if (ret)
+		printk("%s: resource request failed\n", __func__);
+
 	gpio_direction_output(MAPPHONE_DISPLAY_RESET_GPIO, 1);
 	gpio_set_value(MAPPHONE_DISPLAY_RESET_GPIO, 0);
 	msleep(1);

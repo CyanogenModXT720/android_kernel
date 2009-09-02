@@ -26,12 +26,6 @@
 #include <linux/irq.h>
 #include <linux/kernel.h>
 #include <linux/platform_device.h>
-#if defined(CONFIG_VIB_OMAP_PWM)
-#include <linux/vib-omap-pwm.h>
-#elif defined(CONFIG_VIB_GPIO)
-#include <linux/vib-gpio.h>
-#endif
-
 #include <linux/qtouch_obp_ts.h>
 
 #define IGNORE_CHECKSUM_MISMATCH
@@ -316,7 +310,9 @@ static int qtouch_power_config(struct qtouch_ts_data *ts, int on)
 static int qtouch_hw_init(struct qtouch_ts_data *ts)
 {
 	struct qtm_object *obj;
+	int i;
 	int ret;
+	uint16_t adj_addr;
 
 	pr_info("%s: Doing hw init\n", __func__);
 
@@ -359,17 +355,26 @@ static int qtouch_hw_init(struct qtouch_ts_data *ts)
 	obj = find_obj(ts, QTM_OBJ_TOUCH_KEYARRAY);
 	if (obj && obj->entry.num_inst > 0) {
 		struct qtm_touch_keyarray_cfg cfg;
-		if (ts->pdata->flags & QTOUCH_USE_KEYARRAY) {
-			memcpy(&cfg, &ts->pdata->key_array.cfg, sizeof(cfg));
-			cfg.ctrl |= (1 << 1) | (1 << 0); /* reporten | enable */
-		} else
-			memset(&cfg, 0, sizeof(cfg));
-		ret = qtouch_write_addr(ts, obj->entry.addr, &cfg,
-					min(sizeof(cfg), obj->entry.size));
-		if (ret != 0) {
-			pr_err("%s: Can't write touch keyarray config\n",
-			       __func__);
-			return ret;
+		for (i = 0; i < obj->entry.num_inst; i++) {
+			if (i > (ts->pdata->key_array.num_keys - 1)) {
+				pr_info("%s: No entry key instance.\n",
+					__func__);
+				memset(&cfg, 0, sizeof(cfg));
+			} else if (ts->pdata->flags & QTOUCH_USE_KEYARRAY) {
+				memcpy(&cfg, &ts->pdata->key_array.cfg[i], sizeof(cfg));
+				cfg.ctrl |= (1 << 1) | (1 << 0); /* reporten | enable */
+			} else
+				memset(&cfg, 0, sizeof(cfg));
+
+			adj_addr = obj->entry.addr +
+				((obj->entry.size + 1) * i);
+			ret = qtouch_write_addr(ts, adj_addr, &cfg,
+				min(sizeof(cfg), obj->entry.size));
+			if (ret != 0) {
+				pr_err("%s: Can't write keyarray config\n",
+					   __func__);
+				return ret;
+			}
 		}
 	}
 
@@ -442,6 +447,11 @@ static int qtouch_hw_init(struct qtouch_ts_data *ts)
 			pr_err("%s: Can't backup nvram settings\n", __func__);
 			return ret;
 		}
+		/* Since the IC does not indicate that has completed the
+		backup place a hard wait here.  If we communicate with the
+		IC during backup the EEPROM may be corrupted */
+
+		msleep(500);
 	}
 
 	ret = qtouch_force_calibration(ts);
@@ -490,70 +500,37 @@ static int do_cmd_proc_msg(struct qtouch_ts_data *ts, struct qtm_object *obj,
 	if (msg->status & QTM_CMD_PROC_STATUS_SIGERR)
 		pr_err("%s: Acquisition error\n", __func__);
 
-	if (msg->status & QTM_CMD_PROC_STATUS_CFGERR)
-		pr_err("%s: Configuration error\n", __func__);
+	if (msg->status & QTM_CMD_PROC_STATUS_CFGERR) {
+		ret = qtouch_hw_init(ts);
+		if (ret != 0)
+			pr_err("%s:Cannot initialize the touch IC\n",
+			       __func__);
 
+		pr_err("%s: Configuration error\n", __func__);
+	}
+	/* Check the EEPROM checksum.  An ESD event may cause
+	the checksum to change during operation so we need to
+	reprogram the EEPROM and reset the IC */
+	if (ts->pdata->flags & QTOUCH_EEPROM_CHECKSUM) {
+		if (msg->checksum != ts->pdata->nv_checksum) {
+			if (qtouch_tsdebug)
+				pr_info("%s:EEPROM checksum is 0x%X\n",
+					__func__, msg->checksum);
+			ret = qtouch_hw_init(ts);
+			if (ret != 0)
+				pr_err("%s:Cannot initialize the touch IC\n",
+					   __func__);
+			qtouch_force_reset(ts, 0);
+		}
+	}
 	return ret;
 }
 
-/* axis_val is the coordinate that's on the axis of the 'start' value.
- * orth_val is on the orthogonal axis to the above. */
-static struct vkey *virt_key_find(struct virt_keys *vkeys, int axis_val,
-				  int orth_val)
-{
-	int i;
-
-	if (!vkeys || axis_val < vkeys->start)
-		return NULL;
-
-	for (i = 0; i < vkeys->count; ++i) {
-		struct vkey *key = &vkeys->keys[i];
-		if (orth_val >= key->min && orth_val <= key->max)
-			return key;
-	}
-	return NULL;
-}
-static int qtouch_process_vkey(struct qtouch_ts_data *ts,
-				  struct vkey *vkey, int down, int finger)
-{
-	if (qtouch_tsdebug)
-		pr_info("%s: vkey 0x%X is %i\n", __func__,
-		vkey->code, down);
-
-	if (ts->down_mask & (1 << finger)) {
-		input_report_key(ts->input_dev,
-			axis_map[finger].key, 0);
-		input_sync(ts->input_dev);
-		ts->down_mask &= ~(1 << finger);
-	}
-	ts->vkey_down[finger] = vkey;
-
-	/* This is a temporary solution until a more global haptics soltion is
-	 * available for haptics that need to occur in any application */
-#if defined(CONFIG_VIB_OMAP_PWM) || defined(CONFIG_VIB_GPIO)
-	if ((down == 1) && (ts->haptic_mask[finger] == 0)) {
-			vibrator_haptic_fire(40);
-			ts->haptic_mask[finger] = 1;
-	}
-#endif
-
-	input_report_key(ts->input_dev,
-		ts->vkey_down[finger]->code, down);
-	input_sync(ts->input_dev);
-
-	if (down == 0) {
-		ts->vkey_down[finger] = NULL;
-		ts->haptic_mask[finger] = 0;
-	}
-
-	return 0;
-}
 /* Handles a message from a multi-touch object. */
 static int do_touch_multi_msg(struct qtouch_ts_data *ts, struct qtm_object *obj,
 			      void *_msg)
 {
 	struct qtm_touch_multi_msg *msg = _msg;
-	struct vkey *vkey = NULL;
 	int x;
 	int y;
 	int pressure;
@@ -580,40 +557,20 @@ static int do_touch_multi_msg(struct qtouch_ts_data *ts, struct qtm_object *obj,
 
 	down = !(msg->status & QTM_TOUCH_MULTI_STATUS_RELEASE);
 
-	vkey = virt_key_find(&ts->pdata->vkeys, y, x);
-	if (vkey) {
-		qtouch_process_vkey(ts, vkey, down, finger);
-		return 0;
-	} else if (ts->vkey_down[finger]) {
-		/* If the finger moved from the vkey to the touch area
-		   produce a liftoff for the key. */
-		input_report_key(ts->input_dev, ts->vkey_down[finger]->code, 0);
-		input_sync(ts->input_dev);
-		ts->vkey_down[finger] = NULL;
-		ts->haptic_mask[finger] = 0;
-		return 0;
+	input_report_abs(ts->input_dev, axis_map[finger].x, x);
+	input_report_abs(ts->input_dev, axis_map[finger].y, y);
+
+	if (finger == 0) {
+		input_report_abs(ts->input_dev, ABS_PRESSURE, pressure);
+		input_report_abs(ts->input_dev, ABS_TOOL_WIDTH, width);
 	}
-	/* Report only if the touch is in the touchable area */
-	if (y < ts->pdata->abs_max_y) {
-		input_report_abs(ts->input_dev, axis_map[finger].x, x);
-		input_report_abs(ts->input_dev, axis_map[finger].y, y);
 
-		if (finger == 0) {
-			input_report_abs(ts->input_dev, ABS_PRESSURE, pressure);
-			input_report_abs(ts->input_dev, ABS_TOOL_WIDTH, width);
-		}
+	ts->down_mask &= ~(1 << finger);
+	ts->down_mask |= (down << finger);
 
-		ts->down_mask &= ~(1 << finger);
-		ts->down_mask |= (down << finger);
+	input_report_key(ts->input_dev, axis_map[finger].key, down);
+	input_sync(ts->input_dev);
 
-		input_report_key(ts->input_dev, axis_map[finger].key, down);
-		input_sync(ts->input_dev);
-	} else if (ts->down_mask & (1 << finger)) {
-		/* If going from the touch area
-		to a non-vkey area give a lift off */
-		input_report_key(ts->input_dev, axis_map[finger].key, 0);
-		input_sync(ts->input_dev);
-	}
 	return 0;
 }
 
@@ -918,11 +875,6 @@ static int qtouch_ts_probe(struct i2c_client *client,
 			input_set_capability(ts->input_dev, EV_KEY,
 					     pdata->key_array.keys[i].code);
 	}
-
-	/* register the software virtual keys, if any are provided */
-	for (i = 0; i < pdata->vkeys.count; ++i)
-		input_set_capability(ts->input_dev, EV_KEY,
-				     pdata->vkeys.keys[i].code);
 
 	obj = find_obj(ts, QTM_OBJ_TOUCH_MULTI);
 	if (obj && obj->entry.num_inst > 0) {

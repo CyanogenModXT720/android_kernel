@@ -39,6 +39,13 @@
 
 #include "dss.h"
 
+#define PRINT_FPS 1
+#ifdef PRINT_FPS
+static int dsi_fps;
+module_param_named(dsi_fps, dsi_fps, bool, S_IRUGO | S_IWUSR | S_IWGRP);
+#endif
+
+
 /*#define VERBOSE_IRQ*/
 
 #define DSI_BASE		0x4804FC00
@@ -1056,9 +1063,9 @@ static int dsi_pll_calc_ddrfreq(struct omap_dss_device *dssdev,
 	/* To reduce PLL lock time, keep Fint high (around 2 MHz) */
 	for (cur.regn = 1; cur.regn < REGN_MAX; ++cur.regn) {
 		if (cur.highfreq == 0)
-			cur.fint = cur.clkin / cur.regn;
+			cur.fint = cur.clkin / (cur.regn + 1);
 		else
-			cur.fint = cur.clkin / (2 * cur.regn);
+			cur.fint = cur.clkin / (2 * (cur.regn + 1));
 
 		if (cur.fint > FINT_MAX || cur.fint < FINT_MIN)
 			continue;
@@ -1068,7 +1075,7 @@ static int dsi_pll_calc_ddrfreq(struct omap_dss_device *dssdev,
 			unsigned long a, b;
 
 			a = 2 * cur.regm * (cur.clkin/1000);
-			b = cur.regn * (cur.highfreq + 1);
+			b = (cur.regn + 1) * (cur.highfreq + 1);
 			cur.dsiphy = a / b * 1000;
 
 			if (cur.dsiphy > 1800 * 1000 * 1000)
@@ -2699,11 +2706,10 @@ static void dsi_update_screen_dispc(struct omap_dss_device *dssdev,
 
 	len = w * h * bytespp;
 
-    /* The line buffer is 1024 x 24bits, and we want to send
-	 * much data in one package as we can but the package size
-	 * must be smaller the line buffer and it must be multiple of
-	 * the panel width */
-	packet_payload = ((u16)1023 / w) * w * bytespp;
+	/* XXX: one packet could be longer, I think? Line buffer is
+	 * 1024 x 24bits, but we have to put DCS cmd there also.
+	 * 1023 * 3 should work, but causes strange color effects. */
+	packet_payload = ((u16)1020 / w) * w * bytespp;
 
 	packet_len = packet_payload + 1;	/* 1 byte for DCS cmd */
 	total_len = (len / packet_payload) * packet_len;
@@ -3321,6 +3327,13 @@ static int dsi_display_update(struct omap_dss_device *dssdev,
 {
 	int r = 0;
 	u16 dw, dh;
+#if PRINT_FPS
+        int64_t dt;
+        ktime_t now;
+        static int64_t frame_count;
+        static ktime_t last_sec;
+#endif
+
 
 	DSSDBG("dsi_display_update(%d,%d %dx%d)\n", x, y, w, h);
 
@@ -3353,6 +3366,20 @@ static int dsi_display_update(struct omap_dss_device *dssdev,
 end:
 	mutex_unlock(&dsi.lock);
 
+#if PRINT_FPS
+	if (dsi_fps) {
+		now = ktime_get();
+		dt = ktime_to_ns(ktime_sub(now, last_sec));
+		frame_count++;
+		if (dt > NSEC_PER_SEC) {
+			int64_t fps = frame_count * NSEC_PER_SEC * 100;
+			frame_count = 0;
+			last_sec = ktime_get();
+			do_div(fps, dt);
+			printk(KERN_INFO "fps * 100: %llu\n", fps);
+		}
+	}
+#endif
 	return r;
 }
 

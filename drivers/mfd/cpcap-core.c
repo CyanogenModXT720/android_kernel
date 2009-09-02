@@ -175,15 +175,6 @@ static int cpcap_reboot(struct notifier_block *this, unsigned long code,
 	int result = NOTIFY_DONE;
 	char *mode = cmd;
 
-	/* Clear kernel panic bit in cpcap */
-	ret = cpcap_regacc_write(misc_cpcap, CPCAP_REG_VAL1,
-			0, CPCAP_BIT_AP_KERNEL_PANIC);
-	if (ret) {
-		dev_err(&(misc_cpcap->spi->dev),
-				"Clear kernel panic bit failure.\n");
-		return  NOTIFY_BAD;
-	}
-
 	if (code == SYS_RESTART) {
 
 		if (mode != NULL && !strncmp("outofcharge", mode, 12)) {
@@ -249,6 +240,15 @@ static int cpcap_reboot(struct notifier_block *this, unsigned long code,
 		}
 	}
 
+	/* Always clear the kpanic bit */
+	ret = cpcap_regacc_write(misc_cpcap, CPCAP_REG_VAL1,
+		0, CPCAP_BIT_AP_KERNEL_PANIC);
+	if (ret) {
+		dev_err(&(misc_cpcap->spi->dev),
+			"Clear kernel panic bit failure.\n");
+		result = NOTIFY_BAD;
+	}
+
 	return result;
 }
 static struct notifier_block cpcap_reboot_notifier = {
@@ -299,7 +299,7 @@ static int __devinit cpcap_probe(struct spi_device *spi)
 		goto free_mem;
 	retval = cpcap_irq_init(cpcap);
 	if (retval < 0)
-		goto free_mem;
+		goto free_cpcap_irq;
 
 	/* Set Kpanic bit, which will be cleared at normal reboot */
 	cpcap_regacc_write(cpcap, CPCAP_REG_VAL1,
@@ -316,7 +316,7 @@ static int __devinit cpcap_probe(struct spi_device *spi)
 
 	retval = misc_register(&cpcap_dev);
 	if (retval < 0)
-		goto free_mem;
+		goto free_cpcap_irq;
 
 	/* the cpcap usb_detection device is a consumer of the
 	 * vusb regulator */
@@ -355,6 +355,8 @@ static int __devinit cpcap_probe(struct spi_device *spi)
 
 	return 0;
 
+free_cpcap_irq:
+	cpcap_irq_shutdown(cpcap);
 free_mem:
 	kfree(cpcap);
 	return retval;

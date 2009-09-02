@@ -43,15 +43,19 @@
 #define LM3554_VIN_MONITOR		0x80
 #define LM3554_GPIO_REG			0x20
 
-#define VOLTAGE_MONITOR_FAULT 0x80
-#define THERMAL_MONITOR_FAULT 0x20
 #define LED_FAULT		0x04
 #define THERMAL_SHUTDOWN 0x02
+#define TX1_INTERRUPT_FAULT 0x08
+#define THERMAL_MONITOR_FAULT 0x20
+#define VOLTAGE_MONITOR_FAULT 0x80
 
 struct lm3554_data {
 	struct i2c_client *client;
 	struct lm3554_platform_data *pdata;
 	struct led_classdev led_dev;
+	struct led_classdev spotlight_dev;
+	int camera_strobe_brightness;
+	int flash_light_brightness;
 };
 
 int lm3554_read_reg(struct lm3554_data *torch_data, uint8_t reg, uint8_t * val)
@@ -153,23 +157,37 @@ static void lm3554_brightness_set(struct led_classdev *led_cdev,
 	return;
 }
 
-static ssize_t lm3554_torch_show(struct device *dev,
+static ssize_t lm3554_strobe_err_show(struct device *dev,
 				 struct device_attribute *attr, char *buf)
 {
 	int err;
-	uint8_t val;
+	uint8_t err_flags;
 	struct i2c_client *client = container_of(dev->parent,
 						 struct i2c_client, dev);
 	struct lm3554_data *torch_data = i2c_get_clientdata(client);
 
-	err = lm3554_read_reg(torch_data, LM3554_TORCH_BRIGHTNESS, &val);
+	err = lm3554_read_reg(torch_data, LM3554_FLAG_REG, &err_flags);
 	if (err) {
-		pr_info("%s: Failure reading brightness value\n", __func__);
+		pr_err("%s: Reading the status failed for %i\n",
+			__func__, err);
 		return -EIO;
 	}
-	/* Get the value of the brightness */
-	val = ((val & 0x38) >> 3) * LM3554_TORCH_STEP;
-	sprintf(buf, "%d\n", val);
+
+	sprintf(buf, "%d\n", (err_flags & TX1_INTERRUPT_FAULT));
+
+	return sizeof(buf);
+}
+static DEVICE_ATTR(strobe_err, 0644, lm3554_strobe_err_show, NULL);
+
+static ssize_t lm3554_torch_show(struct device *dev,
+				 struct device_attribute *attr, char *buf)
+{
+	struct i2c_client *client = container_of(dev->parent,
+						 struct i2c_client, dev);
+	struct lm3554_data *torch_data = i2c_get_clientdata(client);
+
+	sprintf(buf, "%d\n", torch_data->flash_light_brightness);
+
 	return sizeof(buf);
 }
 
@@ -215,29 +233,61 @@ static ssize_t lm3554_torch_store(struct device *dev,
 		       "%i\n", __func__, err);
 		return -EIO;
 	}
+	torch_data->flash_light_brightness = torch_val;
 
 	return err;
 }
 
 static DEVICE_ATTR(flash_light, 0644, lm3554_torch_show, lm3554_torch_store);
 
-static ssize_t lm3554_strobe_show(struct device *dev,
-				  struct device_attribute *attr, char *buf)
+static void lm3554_spot_light_brightness_set(struct led_classdev *led_cdev,
+				  enum led_brightness value)
 {
 	int err;
 	uint8_t val;
+	unsigned long torch_val = value;
+
+	struct lm3554_data *torch_data =
+	    container_of(led_cdev, struct lm3554_data, spotlight_dev);
+
+	err = lm3554_read_reg(torch_data, LM3554_TORCH_BRIGHTNESS, &val);
+	if (err)
+		return;
+	/* Clear out the Enable and brightness bits */
+	val &= 0xc4;
+
+	if (torch_val) {
+		val |= ((torch_val / LM3554_TORCH_STEP) << 3);
+		val |= 0x02;
+	}
+
+	err = lm3554_write_reg(torch_data, LM3554_CONFIG_REG_2, 0x08);
+	if (err) {
+		pr_err("%s: Configuring the VIN Monitor failed for "
+		       "%i\n", __func__, err);
+		return;
+	}
+
+	err = lm3554_write_reg(torch_data,
+			       LM3554_TORCH_BRIGHTNESS, val);
+	if (err) {
+		pr_err("%s: Configuring the flash light failed for "
+		       "%i\n", __func__, err);
+		return;
+	}
+
+	return;
+}
+
+static ssize_t lm3554_strobe_show(struct device *dev,
+				  struct device_attribute *attr, char *buf)
+{
 	struct i2c_client *client = container_of(dev->parent,
 						 struct i2c_client, dev);
 	struct lm3554_data *torch_data = i2c_get_clientdata(client);
 
-	err = lm3554_read_reg(torch_data, LM3554_FLASH_BRIGHTNESS, &val);
-	if (err) {
-		pr_err("%s: Failure reading brightness value\n", __func__);
-		return -EIO;
-	}
-	/* Get the value of the brightness */
-	val = ((val & 0x78) >> 3) * LM3554_STROBE_STEP;
-	sprintf(buf, "%d\n", val);
+	sprintf(buf, "%d\n", torch_data->camera_strobe_brightness);
+
 	return sizeof(buf);
 }
 
@@ -283,30 +333,38 @@ static ssize_t lm3554_strobe_store(struct device *dev,
 	}
 
 
-	val |= 0x04;
-	if (strobe_val) {
-		err = lm3554_write_reg(torch_data,
-				       LM3554_TORCH_BRIGHTNESS,
-				       torch_data->
-				       pdata->torch_brightness_def);
-		if (err) {
-			pr_err("%s:Configuring torch brightness failed\n",
-			       __func__);
-			return -EIO;
-		}
-		err = lm3554_read_reg(torch_data, LM3554_FLASH_BRIGHTNESS,
-				      &strobe_brightness);
-		if (err) {
-			pr_err("%s: Configuring flash brightness failed\n",
-			       __func__);
-			return -EIO;
-		}
-		strobe_brightness &= 0x83;
-		strobe_brightness |= ((strobe_val / LM3554_STROBE_STEP) << 3);
-		err = lm3554_write_reg(torch_data, LM3554_FLASH_BRIGHTNESS,
-				       strobe_brightness);
-		val &= 0xfb;
+	err = lm3554_write_reg(torch_data,
+			       LM3554_TORCH_BRIGHTNESS,
+			       torch_data->
+			       pdata->torch_brightness_def);
+	if (err) {
+		pr_err("%s:Configuring torch brightness failed\n",
+		       __func__);
+		return -EIO;
 	}
+	err = lm3554_read_reg(torch_data, LM3554_FLASH_BRIGHTNESS,
+			      &strobe_brightness);
+	if (err) {
+		pr_err("%s: Configuring flash brightness failed\n",
+		       __func__);
+		return -EIO;
+	}
+	strobe_brightness &= 0x83;
+	strobe_brightness |= ((strobe_val / LM3554_STROBE_STEP) << 3);
+	err = lm3554_write_reg(torch_data, LM3554_FLASH_BRIGHTNESS,
+			       strobe_brightness);
+
+	if (err) {
+		pr_err("%s: Configuring the strobe failed for "
+		       "%i\n", __func__, err);
+		return -EIO;
+	}
+
+	torch_data->camera_strobe_brightness = strobe_val;
+	val |= 0x04;
+	if (strobe_val)
+		val &= 0xfb;
+
 	err = lm3554_write_reg(torch_data, LM3554_CONFIG_REG_1, val);
 	return 0;
 }
@@ -374,11 +432,30 @@ static int lm3554_probe(struct i2c_client *client,
 		pr_err("%s:File device creation failed: %d\n", __func__, err);
 		goto error5;
 	}
+	err = device_create_file(torch_data->led_dev.dev,
+				 &dev_attr_strobe_err);
+	if (err < 0) {
+		err = -ENODEV;
+		pr_err("%s:File device creation failed: %d\n", __func__, err);
+		goto error6;
+	}
 
+	torch_data->spotlight_dev.name = LM3554_LED_SPOTLIGHT;
+	torch_data->spotlight_dev.brightness_set =
+		lm3554_spot_light_brightness_set;
+	err = led_classdev_register((struct device *)
+				    &client->dev, &torch_data->spotlight_dev);
+	if (err < 0) {
+		err = -ENODEV;
+		pr_err("%s: Register led class failed: %d\n", __func__, err);
+		goto error6;
+	}
 	pr_info("LM3554 torch initialized\n");
 
 	return 0;
 
+error6:
+	device_remove_file(torch_data->led_dev.dev, &dev_attr_camera_strobe);
 error5:
 	device_remove_file(torch_data->led_dev.dev, &dev_attr_flash_light);
 error4:
@@ -396,8 +473,10 @@ static int lm3554_remove(struct i2c_client *client)
 
 	device_remove_file(torch_data->led_dev.dev, &dev_attr_camera_strobe);
 	device_remove_file(torch_data->led_dev.dev, &dev_attr_flash_light);
+	device_remove_file(torch_data->led_dev.dev, &dev_attr_strobe_err);
 
 	led_classdev_unregister(&torch_data->led_dev);
+	led_classdev_unregister(&torch_data->spotlight_dev);
 
 	kfree(torch_data->pdata);
 	kfree(torch_data);

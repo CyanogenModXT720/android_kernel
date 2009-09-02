@@ -666,6 +666,10 @@ static int serial_omap_startup(struct uart_port *port)
 	*/
 	if (up->port.flags & UPF_TRIGGER_HIGH)
 		irq_flags |= IRQF_TRIGGER_HIGH;
+
+	if (up->port.flags & UPF_SHARE_IRQ)
+		irq_flags |= IRQF_SHARED;
+
 	/*
 	 * Allocate the IRQ
 	 */
@@ -1551,6 +1555,7 @@ int __init serial_omap_init(void)
 
 void __exit serial_omap_exit(void)
 {
+	wake_lock_destroy(&omap_serial_wakelock);
 	platform_driver_unregister(&serial_omap_driver);
 	uart_unregister_driver(&serial_omap_reg);
 }

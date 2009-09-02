@@ -16,7 +16,6 @@
 #include <linux/sfh7743.h>
 #include <linux/bu52014hfv.h>
 #include <linux/lis331dlh.h>
-#include <linux/akm8973_akmd.h>
 #include <linux/delay.h>
 #include <linux/regulator/consumer.h>
 #include <linux/vib-gpio.h>
@@ -178,61 +177,6 @@ struct lis331dlh_platform_data mapphone_lis331dlh_data = {
 	.negate_x	= 0,
 	.negate_y	= 0,
 	.negate_z	= 0,
-};
-
-static struct regulator *mapphone_akm8973_regulator;
-static int mapphone_akm8973_initialization(void)
-{
-	struct regulator *reg;
-	reg = regulator_get(NULL, "vhvio");
-	if (IS_ERR(reg))
-		return PTR_ERR(reg);
-	mapphone_akm8973_regulator = reg;
-	return 0;
-}
-
-static void mapphone_akm8973_exit(void)
-{
-	regulator_put(mapphone_akm8973_regulator);
-}
-
-static int mapphone_akm8973_power_on(void)
-{
-	int ret;
-
-	ret = regulator_enable(mapphone_akm8973_regulator);
-	gpio_set_value(MAPPHONE_AKM8973_RESET_GPIO, 0);
-	udelay(10);
-	gpio_set_value(MAPPHONE_AKM8973_RESET_GPIO, 1);
-	return ret;
-}
-
-static int mapphone_akm8973_power_off(void)
-{
-	if (mapphone_akm8973_regulator)
-		return regulator_disable(mapphone_akm8973_regulator);
-	return 0;
-}
-
-struct akm8973_platform_data mapphone_akm8973_data = {
-	.init = mapphone_akm8973_initialization,
-	.exit = mapphone_akm8973_exit,
-	.power_on = mapphone_akm8973_power_on,
-	.power_off = mapphone_akm8973_power_off,
-
-	.min_interval = 27,
-	.poll_interval = 200,
-
-	.cal_min_threshold = 8,
-	.cal_max_threshold = 247,
-
-	.hxda = 132,
-	.hyda = 134,
-	.hzda = 118,
-
-	.orientation = 180,
-	.xy_swap = 1,
-	.z_flip = 1,
 };
 
 static void __init mapphone_akm8973_init(void)
