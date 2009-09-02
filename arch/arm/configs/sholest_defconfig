@@ -2142,6 +2142,10 @@ CONFIG_SMS_SIANO_MDTV_TDMB=m
 CONFIG_SMS_HOSTLIB_SUBSYS=m
 
 #
+# TTA charger
+#
+CONFIG_TTA_CHARGER=y
+#
 # End of Motorola Features
 #
 
