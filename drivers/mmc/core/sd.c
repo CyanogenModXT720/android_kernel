@@ -10,6 +10,13 @@
  * published by the Free Software Foundation.
  */
 
+/*
+ * Date         Author          Comment 
+ * ===========  ==============  ============================================= 
+ * 31-Aug-2009  Motorola        All of 2GB sd card set to 24Mhz(H3G dependant)
+ */
+
+
 #include <linux/err.h>
 
 #include <linux/mmc/host.h>
@@ -252,6 +259,10 @@ static int mmc_switch_hs(struct mmc_card *card)
 		return 0;
 
 	if (card->sw_caps.hs_max_dtr == 0)
+		return 0;
+
+	/* LIBtt04854 : All of 2GB sd card set to 24Mhz */
+	if (card->csd.read_blkbits == 10)
 		return 0;
 
 	err = -EIO;

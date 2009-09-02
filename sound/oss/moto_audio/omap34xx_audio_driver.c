@@ -1801,8 +1801,6 @@ static int audio_ioctl(struct inode *inode, struct file *file,
 	case SOUND_MIXER_FMON:
 		{
 			AUDIO_LEVEL2_LOG("SOUND_MIXER_FMON\n");
-			/*cpcap_regacc_write(cpcap_audio_state.cpcap,
-				CPCAP_REG_GPIO1, 0x0204, 0x0204);*/
 			cpcap_audio_state.analog_source =
 				CPCAP_AUDIO_ANALOG_SOURCE_STEREO;
 			cpcap_audio_set_audio_state(&cpcap_audio_state);
@@ -1812,8 +1810,6 @@ static int audio_ioctl(struct inode *inode, struct file *file,
 	case SOUND_MIXER_FMOFF:
 		{
 			AUDIO_LEVEL2_LOG("SOUND_MIXER_FMOFF\n");
-			/*cpcap_regacc_write(cpcap_audio_state.cpcap,
-				CPCAP_REG_GPIO1, 0x0004, 0x0004);*/
 			cpcap_audio_set_audio_state(&cpcap_audio_state);
 			break;
 		}
@@ -2175,8 +2171,8 @@ static int audio_mixer_open(struct inode *inode, struct file *file)
 	int ret = 0;
 	mutex_lock(&audio_lock);
 	if (state.dev_mixer_open_count == 1) {
-		/*ret = -EBUSY;
-		goto err;*/
+		ret = -EBUSY;
+		goto err;
 	}
 
 	state.dev_mixer_open_count = 1;
