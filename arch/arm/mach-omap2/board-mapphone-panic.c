@@ -36,6 +36,7 @@
 #include <linux/rtc.h>
 #include <linux/mutex.h>
 #include <linux/workqueue.h>
+#include <linux/console.h>
 
 #define PANIC_PARTITION "kpanic"
 
@@ -404,6 +405,7 @@ static int mapphone_writeflashpage(struct mtd_info *mtd, loff_t to, const u_char
 
 extern int log_buf_copy(char *dest, int idx, int len);
 extern void log_buf_clear(void);
+extern void console_stop(struct console *console);
 
 /*
  * Writes the contents of the console to the specified offset in flash.
@@ -473,6 +475,7 @@ static int mapphone_panic(struct notifier_block *this, unsigned long event,
 	struct timespec now;
 	struct timespec uptime;
 	struct rtc_time rtc_timestamp;
+	struct console *con;
 
 	if (in_panic)
 		return NOTIFY_DONE;
@@ -481,11 +484,12 @@ static int mapphone_panic(struct notifier_block *this, unsigned long event,
 	if (!ctx->mtd)
 		goto out;
 
+/*
 	if (ctx->curr.magic) {
 		printk(KERN_EMERG "Crash partition in use!\n");
 		goto out;
 	}
-
+*/
 	if (0 != kpanic_emergency_erase(ctx->mtd)) {
 		printk(KERN_EMERG "mapphone_panic: erase error on panic\n");
 		goto out;
@@ -493,33 +497,16 @@ static int mapphone_panic(struct notifier_block *this, unsigned long event,
 
 
 	/*
-	 * Add timestamp to displays current time and uptime (in seconds).
+	 * Add timestamp to displays current UTC time and uptime (in seconds).
 	 */
 	now = current_kernel_time();
 	rtc_time_to_tm((unsigned long)now.tv_sec, &rtc_timestamp);
 	do_posix_clock_monotonic_gettime(&uptime);
 	bust_spinlocks(1);
+	printk(KERN_EMERG "Timestamp = %lu.%03lu\n", 
+			(unsigned long)now.tv_sec, (unsigned long)(now.tv_nsec / 1000000));
 	printk(KERN_EMERG "Current Time = "
 			"%02d-%02d %02d:%02d:%lu.%03lu, "
-			"Uptime = %lu.%03lu seconds\n",
-			rtc_timestamp.tm_mon + 1, rtc_timestamp.tm_mday,
-			rtc_timestamp.tm_hour, rtc_timestamp.tm_min,
-			(unsigned long)rtc_timestamp.tm_sec,
-			(unsigned long)(now.tv_nsec / 1000000),
-			(unsigned long)uptime.tv_sec,
-			(unsigned long)(uptime.tv_nsec/USEC_PER_SEC));
-	bust_spinlocks(0);
-
-	/*
-	 * Add timestamp to displays current time and uptime (in seconds).
-	 */
-	now = current_kernel_time();
-	rtc_time_to_tm((unsigned long)now.tv_sec, &rtc_timestamp);
-	do_posix_clock_monotonic_gettime(&uptime);
-	bust_spinlocks(1);
-	printk(KERN_EMERG "Timestamp = %ld\n", now.tv_sec);
-	printk(KERN_EMERG "Current Time = "
-			"%02d-%02d %02d:%02d:%lu.%03lu UTC, "
 			"Uptime = %lu.%03lu seconds\n",
 			rtc_timestamp.tm_mon + 1, rtc_timestamp.tm_mday,
 			rtc_timestamp.tm_hour, rtc_timestamp.tm_min,
@@ -550,6 +537,12 @@ static int mapphone_panic(struct notifier_block *this, unsigned long event,
 		threads_offset = ctx->mtd->writesize;
 
 	log_buf_clear();
+
+	for (con = console_drivers; con; con = con->next) {
+		console_stop(con);
+		printk("mapphone_panic: stop console con = %p\n", con);
+	}
+
 	show_state_filter(0);
 	threads_len = mapphone_panic_write_console(ctx->mtd, threads_offset);
 	if (threads_len < 0) {
