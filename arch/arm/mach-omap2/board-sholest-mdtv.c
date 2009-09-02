@@ -40,36 +40,42 @@ static void sholest_lp3907_exit(void)
 
 static int sholest_lp3907_power_on(void)
 {
+	int ret;
+
+	printk(KERN_INFO "lp3907_power_on\n");
+	/* SPI pin control */
+	/*omap_cfg_reg(F1_34XX_MDTV_INT_ON);*/
+
+	ret = omap_cfg_reg(AC3_34XX_MDTV_SIMO_ON);
+	ret = omap_cfg_reg(AD4_34XX_MDTV_SOMI_ON);
+	ret = omap_cfg_reg(AD3_34XX_MDTV_CS_ON);
+	ret = omap_cfg_reg(AA3_34XX_MDTV_CLK_ON);
+	mdelay(10);
+
 	/* EN_T is high */
 	gpio_set_value(SHOLEST_MDTV_REG_EN_GPIO, 1);
 	mdelay(6);	/* stable time */
 
-	/* SPI pin control */
-	/*omap_cfg_reg(F1_34XX_MDTV_INT_ON);*/
-	omap_cfg_reg(AC3_34XX_MDTV_SIMO_ON);
-	omap_cfg_reg(AD4_34XX_MDTV_SOMI_ON);
-	omap_cfg_reg(AD3_34XX_MDTV_CS_ON);
-	omap_cfg_reg(AA3_34XX_MDTV_CLK_ON);
-	mdelay(5);
-
-	printk(KERN_INFO "sholest_lp3907_power_on()");
 	return 0;
 }
 
 static int sholest_lp3907_power_off(void)
 {
+	int ret;
+
+    printk(KERN_INFO "sholest_lp3907_power_off()");
+
 	/* SPI pin control */
 	/*omap_cfg_reg(F1_34XX_MDTV_INT_OFF);*/
-	omap_cfg_reg(AC3_34XX_MDTV_SIMO_OFF);
-	omap_cfg_reg(AD4_34XX_MDTV_SOMI_OFF);
-	omap_cfg_reg(AD3_34XX_MDTV_CS_OFF);
-	omap_cfg_reg(AA3_34XX_MDTV_CLK_OFF);
+	ret = omap_cfg_reg(AC3_34XX_MDTV_SIMO_OFF);
+	ret = omap_cfg_reg(AD4_34XX_MDTV_SOMI_OFF);
+	ret = omap_cfg_reg(AD3_34XX_MDTV_CS_OFF);
+	ret = omap_cfg_reg(AA3_34XX_MDTV_CLK_OFF);
 
 	/* EN_T is low */
 	gpio_set_value(SHOLEST_MDTV_REG_EN_GPIO, 0);
 	mdelay(6); /* stable time */
 
-	printk(KERN_INFO "sholest_lp3907_power_off()");
 	return 0;
 }
 

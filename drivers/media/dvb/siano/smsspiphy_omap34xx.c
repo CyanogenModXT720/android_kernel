@@ -108,9 +108,7 @@ static irqreturn_t spibus_interrupt(int irq, void *context)
 	if (spiphy_dev->interruptHandler)
 		spiphy_dev->interruptHandler(spiphy_dev->intr_context);
 
-	printk(KERN_INFO "spibus_interrupt.\n");
 	return IRQ_HANDLED;
-
 }
 
 #define SPI_MIN_BYTES (4)
@@ -198,9 +196,6 @@ int smsmdtv_power_control(int pwrup_enable)
 
   if (pwrup_enable == 1) {
 
-#ifdef CONFIG_MOT_FEAT_TDMB_SUPPORT
-	tdmb_config_gpio_on();
-#endif
 	/* PWDN High */
 	gpio_set_value(MDTV_PWDN_GPIO, 1);
 	udelay(20);  /* at least, T = 10usec */
@@ -232,9 +227,6 @@ int smsmdtv_power_control(int pwrup_enable)
 	gpio_set_value(MDTV_PWDN_GPIO, 0);
 	msleep(1);
 
-#ifdef CONFIG_MOT_FEAT_TDMB_SUPPORT
-	tdmb_config_gpio_off();
-#endif
 	}
 
   if (ret < 0)
@@ -311,7 +303,7 @@ void *smsspiphy_init(void *context,
 		IRQF_TRIGGER_RISING|IRQF_DISABLED, "smsmdtv", spiphy_dev);
 
 	if (ret < 0) {
-		sms_err("Unable to request irq %d", ret);
+		sms_info("Unable to request irq %d", ret);
 		goto err_irq;
 	}
 
