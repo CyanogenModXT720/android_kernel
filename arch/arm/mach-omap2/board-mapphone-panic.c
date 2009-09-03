@@ -484,12 +484,16 @@ static int mapphone_panic(struct notifier_block *this, unsigned long event,
 	if (!ctx->mtd)
 		goto out;
 
-/*
+	/*
 	if (ctx->curr.magic) {
 		printk(KERN_EMERG "Crash partition in use!\n");
 		goto out;
 	}
-*/
+	*/
+
+	/*
+	 * Delete the last data on new panic occurs for UMTS phone.
+	 */
 	if (0 != kpanic_emergency_erase(ctx->mtd)) {
 		printk(KERN_EMERG "mapphone_panic: erase error on panic\n");
 		goto out;
@@ -540,7 +544,6 @@ static int mapphone_panic(struct notifier_block *this, unsigned long event,
 
 	for (con = console_drivers; con; con = con->next) {
 		console_stop(con);
-		printk("mapphone_panic: stop console con = %p\n", con);
 	}
 
 	show_state_filter(0);
