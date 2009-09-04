@@ -1807,8 +1807,11 @@ void __init mapphone_padconf_init(void)
 			 */
 			unsigned short val = omap_readw(addr);
 #ifdef CONFIG_EMU_UART_DEBUG
-			if (is_emu_uart_iomux_reg(padconf_settings[i].offset))
-				break;
+			if (is_emu_uart_iomux_reg(padconf_settings[i].offset)) {
+				printk(KERN_ERR "padconf ignored, offset = 0x%04x\n",
+						padconf_settings[i].offset);
+				continue;
+			}
 #endif
 			val &= ~(OMAP343X_PADCONF_SETTING_MASK);
 			val |= padconf_settings[i].setting;
