@@ -36,6 +36,7 @@
 #include <linux/platform_device.h>
 #include <linux/spinlock.h>
 #include <linux/clk.h>
+#include <linux/usb/omap.h>
 #ifdef CONFIG_MOT_FEAT_IPC_CORERETENTION
 #include <linux/device.h>
 #endif
@@ -523,6 +524,11 @@ static int omap_ehci_bus_suspend(struct usb_hcd *hcd)
 	int ret = 0;
 	unsigned long flags;
 
+#if defined(CONFIG_ARCH_OMAP34XX)
+	int res = 0;
+	struct omap_usb_platform_data *config = hcd->self.controller->platform_data;
+#endif
+
 	ehci_clocks = (struct ehci_omap_clock_defs *)
 			(((char *)hcd_to_ehci(hcd)) + sizeof(struct ehci_hcd));
 	ret = ehci_bus_suspend(hcd);
@@ -537,6 +543,17 @@ static int omap_ehci_bus_suspend(struct usb_hcd *hcd)
 		 */
 		omap_writel(OHCI_HC_CTRL_SUSPEND, OHCI_HC_CONTROL);
 		mdelay(8); /* MSTANDBY assertion is delayed by ~8ms */
+
+#if defined(CONFIG_ARCH_OMAP34XX)
+		if (config->usbhost_standby_status)
+			res = config->usbhost_standby_status();
+
+		if (res == 0) {
+			printk(KERN_ERR "ehci: suspend failed!\n");
+			ehci_bus_resume(hcd);
+			return -EBUSY ;
+		}
+#endif
 
 		/* Ports suspended: Stop All Clks */
 #if 0
