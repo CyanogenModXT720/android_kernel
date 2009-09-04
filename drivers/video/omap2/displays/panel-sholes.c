@@ -59,7 +59,9 @@ static void sholes_panel_display_on(struct work_struct *work)
 
 	sholes_data->dssdev->sync(sholes_data->dssdev);
 	data = EDISCO_CMD_SET_DISPLAY_ON;
+	dsi_bus_lock(); 
 	dsi_vc_dcs_write(EDISCO_CMD_VC, &data, 1);
+	dsi_bus_unlock();
 }
 
 
