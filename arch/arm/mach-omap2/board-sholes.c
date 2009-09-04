@@ -102,8 +102,6 @@
 #define FACTORY_PRODUCT_ID		0x41E3
 #define FACTORY_ADB_PRODUCT_ID		0x41E2
 
-extern void sholes_panic_init(void);
-
 static char device_serial[MAX_USB_SERIAL_NUM];
 
 static struct omap_opp sholes_mpu_rate_table[] = {
@@ -489,24 +487,25 @@ static struct qtouch_ts_platform_data sholes_ts_platform_data = {
 };
 
 static struct lm3530_platform_data omap3430_als_light_data = {
-	.gen_config = 0x1b,
-	.als_config = 0x7b,
-	.brightness_ramp = 0x2d,
+	.gen_config = 0x19,
+	.als_config = 0x7c,
+	.brightness_ramp = 0x36,
 	.als_zone_info = 0x00,
-	.als_resistor_sel = 0x83,
+	.als_resistor_sel = 0xf4,
 	.brightness_control = 0x00,
-	.zone_boundary_0 = 0x4,
-	.zone_boundary_1 = 0x44,
-	.zone_boundary_2 = 0xc5,
-	.zone_boundary_3 = 0xC5,
-	.zone_target_0 = 0x23,
-	.zone_target_1 = 0x31,
-	.zone_target_2 = 0x63,
-	.zone_target_3 = 0x7b,
-	.zone_target_4 = 0x7b,
+	.zone_boundary_0 = 0x0,
+	.zone_boundary_1 = 0x06,
+	.zone_boundary_2 = 0x44,
+	.zone_boundary_3 = 0xff,
+	.zone_target_0 = 0x56,
+	.zone_target_1 = 0x6e,
+	.zone_target_2 = 0x6e,
+	.zone_target_3 = 0x79,
+	.zone_target_4 = 0x7e,
 	.manual_current = 0x33,
 	.upper_curr_sel = 6,
 	.lower_curr_sel = 3,
+	.lens_loss_coeff = 6,
 };
 
 static struct lm3554_platform_data sholes_camera_flash = {
@@ -1247,7 +1246,6 @@ static void __init sholes_init(void)
 	sholes_omap_mdm_ctrl_init();
 	sholes_spi_init();
 	sholes_flash_init();
-	sholes_panic_init();
 	sholes_serial_init();
 	sholes_als_init();
 	sholes_panel_init();
