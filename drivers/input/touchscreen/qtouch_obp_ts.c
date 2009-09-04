@@ -63,8 +63,6 @@ struct qtouch_ts_data {
 	unsigned long			obj_map[_BITMAP_LEN];
 
 	uint32_t			last_keystate;
-	uint8_t				haptic_mask[MAX_FINGERS];
-	struct vkey			*vkey_down[MAX_FINGERS];
 	uint32_t			down_mask;
 
 	/* Note: The message buffer is reused for reading different messages.
@@ -433,6 +431,12 @@ static int qtouch_hw_init(struct qtouch_ts_data *ts)
 		}
 	}
 
+	ret = qtouch_force_calibration(ts);
+	if (ret != 0) {
+		pr_err("%s: Unable to recalibrate after reset\n", __func__);
+		return ret;
+	}
+
 	/* Write the settings into nvram, if needed */
 	if (ts->pdata->flags & QTOUCH_CFG_BACKUPNV) {
 		uint8_t val;
@@ -452,12 +456,6 @@ static int qtouch_hw_init(struct qtouch_ts_data *ts)
 		IC during backup the EEPROM may be corrupted */
 
 		msleep(500);
-	}
-
-	ret = qtouch_force_calibration(ts);
-	if (ret != 0) {
-		pr_err("%s: Unable to recalibrate after reset\n", __func__);
-		return ret;
 	}
 
 	/* reset the address pointer */
@@ -875,6 +873,11 @@ static int qtouch_ts_probe(struct i2c_client *client,
 			input_set_capability(ts->input_dev, EV_KEY,
 					     pdata->key_array.keys[i].code);
 	}
+
+	/* register the software virtual keys, if any are provided */
+	for (i = 0; i < pdata->vkeys.count; ++i)
+		input_set_capability(ts->input_dev, EV_KEY,
+				     pdata->vkeys.keys[i].code);
 
 	obj = find_obj(ts, QTM_OBJ_TOUCH_MULTI);
 	if (obj && obj->entry.num_inst > 0) {
