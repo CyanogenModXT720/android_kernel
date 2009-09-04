@@ -262,7 +262,7 @@ static void mapphone_panic_remove_proc_work(struct work_struct *work)
 static int mapphone_panic_proc_write(struct file *file, const char __user *buffer,
 				unsigned long count, void *data)
 {
-	schedule_work(&proc_removal_work);
+	/* schedule_work(&proc_removal_work); */
 	return count;
 }
 
@@ -507,8 +507,9 @@ static int mapphone_panic(struct notifier_block *this, unsigned long event,
 	rtc_time_to_tm((unsigned long)now.tv_sec, &rtc_timestamp);
 	do_posix_clock_monotonic_gettime(&uptime);
 	bust_spinlocks(1);
-	printk(KERN_EMERG "Timestamp = %lu.%03lu\n", 
-			(unsigned long)now.tv_sec, (unsigned long)(now.tv_nsec / 1000000));
+	printk(KERN_EMERG "Timestamp = %lu.%03lu\n",
+			(unsigned long)now.tv_sec,
+			(unsigned long)(now.tv_nsec / 1000000));
 	printk(KERN_EMERG "Current Time = "
 			"%02d-%02d %02d:%02d:%lu.%03lu, "
 			"Uptime = %lu.%03lu seconds\n",
