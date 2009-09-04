@@ -1,6 +1,7 @@
 /* drivers/misc/apanic.c
  *
  * Copyright (C) 2009 Google, Inc.
+ * Copyright (C) 2009 Motorola, Inc.
  * Author: San Mehat <san@android.com>
  *
  * This software is licensed under the terms of the GNU General Public
@@ -34,6 +35,7 @@
 #include <linux/debugfs.h>
 #include <linux/fs.h>
 #include <linux/proc_fs.h>
+#include <linux/rtc.h>
 #include <linux/mutex.h>
 #include <linux/workqueue.h>
 
@@ -67,6 +69,41 @@ static void apanic_erase_callback(struct erase_info *done)
 {
 	wait_queue_head_t *wait_q = (wait_queue_head_t *) done->priv;
 	wake_up(wait_q);
+}
+
+static int apanic_emergency_erase(struct mtd_info *mtd)
+{
+	struct erase_info erase;
+	int rc, i;
+
+	/* set up the erase structure */
+	erase.mtd = mtd;
+	erase.len = mtd->erasesize;
+	erase.callback = NULL;
+	for (i = 0; i < mtd->size; i += mtd->erasesize) {
+		erase.addr = i;
+		rc = mtd->block_isbad(mtd, erase.addr);
+		if (rc < 0) {
+			printk(KERN_ERR
+					"apanic: Bad block check "
+					"rc = %d\n", rc);
+			return 1;
+		}
+		if (rc) {
+			printk(KERN_WARNING
+					"apanic: Skipping bad "
+					"block @%llx\n", erase.addr);
+			continue;
+		}
+
+		/* erase the kpanic flash block partition */
+		if (mtd->erase(mtd, &erase)) {
+			printk(KERN_EMERG "apanic: erase fail\n");
+			return 1;
+		}
+	}
+
+	return 0;
 }
 
 static int apanic_proc_read(char *buffer, char **start, off_t offset,
@@ -121,7 +158,7 @@ static int apanic_proc_read(char *buffer, char **start, off_t offset,
 		count -= page_offset;
 	memcpy(buffer, ctx->bounce + page_offset, count);
 
-	*start = count;
+	*start = (char *)count;
 
 	if ((offset + count) == file_length)
 		*peof = 1;
@@ -427,6 +464,9 @@ static int apanic(struct notifier_block *this, unsigned long event,
 	int threads_offset = 0;
 	int threads_len = 0;
 	int rc;
+	struct timespec now;
+	struct timespec uptime;
+	struct rtc_time rtc_timestamp;
 
 	if (in_panic)
 		return NOTIFY_DONE;
@@ -439,6 +479,50 @@ static int apanic(struct notifier_block *this, unsigned long event,
 		printk(KERN_EMERG "Crash partition in use!\n");
 		goto out;
 	}
+
+	if (0 != apanic_emergency_erase(ctx->mtd)) {
+		printk(KERN_EMERG "apanic: erase error on panic\n");
+		goto out;
+	}
+
+
+	/*
+	 * Add timestamp to displays current time and uptime (in seconds).
+	 */
+	now = current_kernel_time();
+	rtc_time_to_tm((unsigned long)now.tv_sec, &rtc_timestamp);
+	do_posix_clock_monotonic_gettime(&uptime);
+	bust_spinlocks(1);
+	printk(KERN_EMERG "Current Time = "
+			"%02d-%02d %02d:%02d:%lu.%03lu, "
+			"Uptime = %lu.%03lu seconds\n",
+			rtc_timestamp.tm_mon + 1, rtc_timestamp.tm_mday,
+			rtc_timestamp.tm_hour, rtc_timestamp.tm_min,
+			(unsigned long)rtc_timestamp.tm_sec,
+			(unsigned long)(now.tv_nsec / 1000000),
+			(unsigned long)uptime.tv_sec,
+			(unsigned long)(uptime.tv_nsec/USEC_PER_SEC));
+	bust_spinlocks(0);
+
+	/*
+	 * Add timestamp to displays current time and uptime (in seconds).
+	 */
+	now = current_kernel_time();
+	rtc_time_to_tm((unsigned long)now.tv_sec, &rtc_timestamp);
+	do_posix_clock_monotonic_gettime(&uptime);
+	bust_spinlocks(1);
+	printk(KERN_EMERG "Timestamp = %ld\n", now.tv_sec);
+	printk(KERN_EMERG "Current Time = "
+			"%02d-%02d %02d:%02d:%lu.%03lu UTC, "
+			"Uptime = %lu.%03lu seconds\n",
+			rtc_timestamp.tm_mon + 1, rtc_timestamp.tm_mday,
+			rtc_timestamp.tm_hour, rtc_timestamp.tm_min,
+			(unsigned long)rtc_timestamp.tm_sec,
+			(unsigned long)(now.tv_nsec / 1000000),
+			(unsigned long)uptime.tv_sec,
+			(unsigned long)(uptime.tv_nsec/USEC_PER_SEC));
+	bust_spinlocks(0);
+
 	console_offset = ctx->mtd->writesize;
 
 	/*
@@ -513,7 +597,7 @@ static int panic_dbg_set(void *data, u64 val)
 
 DEFINE_SIMPLE_ATTRIBUTE(panic_dbg_fops, panic_dbg_get, panic_dbg_set, "%llu\n");
 
-void __init apanic_init(void)
+static int __init apanic_init(void)
 {
 	register_mtd_user(&mtd_panic_notifier);
 	atomic_notifier_chain_register(&panic_notifier_list, &panic_blk);
@@ -523,6 +607,7 @@ void __init apanic_init(void)
 	INIT_WORK(&proc_removal_work, apanic_remove_proc_work);
 	printk(KERN_INFO "Android kernel panic handler initialized (bind=%s)\n",
 	       CONFIG_APANIC_PLABEL);
+	return 0;
 }
 
 module_init(apanic_init);
