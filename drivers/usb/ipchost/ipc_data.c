@@ -330,9 +330,41 @@ static void ipc_events(void)
       }
       else spin_unlock_bh(&usb_ipc_data_param.pm_lock);
 #endif
-      if(usb_ipc_data_param.ipc_read_cb != NULL) {
-        usb_ipc_data_param.ipc_read_cb(IPC_DATA_CH_NUM, 0, usb_ipc_data_param.read_urb.actual_length);
-      }
+	if ((usb_ipc_data_param.read_urb.status < 0) &&
+	    (usb_ipc_data_param.read_urb.actual_length != 0)) {
+		if (usb_ipc_data_param.truncated_buf == NULL)
+			usb_ipc_data_param.truncated_buf = (char *)
+				usb_ipc_data_param.read_urb.transfer_buffer;
+		usb_ipc_data_param.truncated_size +=
+			usb_ipc_data_param.read_urb.actual_length;
+		usb_ipc_data_param.read_urb.transfer_buffer =
+			usb_ipc_data_param.truncated_buf
+				+ usb_ipc_data_param.truncated_size;
+		usb_ipc_data_param.read_urb.transfer_buffer_length -=
+			usb_ipc_data_param.read_urb.actual_length;
+		spin_lock_bh(&usb_ipc_data_param.pm_lock);
+		if (usb_ipc_data_param.sleeping == 1) {
+			spin_unlock_bh(&usb_ipc_data_param.pm_lock);
+			usb_ipc_data_param.read_urb_used = 1;
+		} else {
+			spin_unlock_bh(&usb_ipc_data_param.pm_lock);
+			ret = usb_submit_urb(&usb_ipc_data_param.read_urb,
+					     GFP_ATOMIC|GFP_DMA);
+		}
+	} else {
+		if ((usb_ipc_data_param.truncated_buf != NULL) &&
+		    (usb_ipc_data_param.truncated_size != 0)) {
+			usb_ipc_data_param.read_urb.transfer_buffer =
+				usb_ipc_data_param.truncated_buf;
+			usb_ipc_data_param.read_urb.actual_length +=
+				usb_ipc_data_param.truncated_size;
+			usb_ipc_data_param.truncated_buf = NULL;
+			usb_ipc_data_param.truncated_size = 0;
+		}
+		if (usb_ipc_data_param.ipc_read_cb != NULL)
+			usb_ipc_data_param.ipc_read_cb(IPC_DATA_CH_NUM,
+				0, usb_ipc_data_param.read_urb.actual_length);
+	}
     }
     /* process ipc_log_read_callback */
     if(pending_events & IPC_LOG_RD_CB) {
