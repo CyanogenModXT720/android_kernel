@@ -2158,8 +2158,23 @@ err_on:
 		sensor->pdata->set_xclk(0);
 		break;
 	case V4L2_POWER_STANDBY:
-		if (sensor->detected)
+		if (sensor->detected) {
 			mt9p012_write_regs(c, stream_off_list);
+			/*
+			 * Work around, black image is captured on HW with 39pf
+			 * capacitor in camera pclk line (for RF desense).
+			 *
+			 * Resetting the sensor here eliminates the issue.
+			 * Remove this workaround after root cause determined.
+			 *
+			 * Workaround allows HW with cap to function properly.
+			 * The capacitor has been removed for production.
+			 * This has no other effect on operation, since the
+			 * sensor is always reset on V4L2_POWER_ON
+			 * (i.e. out of standby) in mt9p012_configure.
+			 */
+			mt9p012_write_regs(c, mt9p012_common_pre);
+		}
 		sensor->power_on = false;
 		rval = sensor->pdata->power_set(sensor->dev, V4L2_POWER_STANDBY);
 		sensor->pdata->set_xclk(0);
