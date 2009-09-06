@@ -64,7 +64,7 @@ static struct vib_gpio_platform_data mapphone_vib_gpio_data = {
 	.gpio = MAPPHONE_VIBRATOR_GPIO,
 	.max_timeout = 15000,
 	.active_low = 0,
-	.initial_vibrate = 500,
+	.initial_vibrate = 0,
 
 	.init = mapphone_vibrator_initialization,
 	.exit = mapphone_vibrator_exit,

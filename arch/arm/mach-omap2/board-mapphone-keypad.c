@@ -161,6 +161,7 @@ static int mapphone_reset_keys_up[] = {
 };
 
 static struct keyreset_platform_data mapphone_reset_keys_pdata = {
+	.crash_key = KEY_SPACE,
 	.keys_up = mapphone_reset_keys_up,
 	.keys_down = {
 		KEY_LEFTSHIFT,

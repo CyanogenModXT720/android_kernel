@@ -83,8 +83,7 @@ obj-$(CONFIG_MACH_SHOLES)		+= board-sholes.o \
 					   board-sholes-sensors.o \
 					   board-sholes-hsmmc.o \
 					   board-sholes-keypad.o \
-					   board-sholes-wifi.o \
-					   board-sholes-panic.o
+					   board-sholes-wifi.o
 obj-$(CONFIG_MACH_MAPPHONE)		+= board-mapphone.o \
 					   board-mapphone-camera.o \
 					   board-mapphone-flash.o \
@@ -95,8 +94,7 @@ obj-$(CONFIG_MACH_MAPPHONE)		+= board-mapphone.o \
 					   board-mapphone-hsmmc.o \
 					   board-mapphone-keypad.o \
 					   board-mapphone-wifi.o \
-					   board-mapphone-gpio.o \
-					   board-mapphone-panic.o
+					   board-mapphone-gpio.o
 obj-$(CONFIG_MACH_OMAP_APOLLON)		+= board-apollon.o \
 					   board-apollon-mmc.o	\
 					   board-apollon-keys.o

@@ -102,8 +102,6 @@
 #define FACTORY_PRODUCT_ID		0x41E3
 #define FACTORY_ADB_PRODUCT_ID		0x41E2
 
-extern void sholes_panic_init(void);
-
 static char device_serial[MAX_USB_SERIAL_NUM];
 
 static struct omap_opp sholes_mpu_rate_table[] = {
@@ -290,6 +288,22 @@ static int sholes_touch_reset(void)
 	return 0;
 }
 
+/* These are for test event-injection purposes only */
+static struct vkey sholes_touch_vkeys[] = {
+	{
+		.code		= KEY_BACK,
+	},
+	{
+		.code		= KEY_MENU,
+	},
+	{
+		.code		= KEY_HOME,
+	},
+	{
+		.code		= KEY_SEARCH,
+	},
+};
+
 static ssize_t sholes_virtual_keys_show(struct kobject *kobj,
 					struct kobj_attribute *attr, char *buf)
 {
@@ -297,13 +311,13 @@ static ssize_t sholes_virtual_keys_show(struct kobject *kobj,
 	/* keys are specified by setting the x,y of the center, the width,
 	 * and the height, as such keycode:center_x:center_y:width:height */
 	return sprintf(buf, __stringify(EV_KEY) ":"
-		       __stringify(KEY_BACK) ":35:906:55:55"
+		       __stringify(KEY_BACK) ":32:906:63:57"
 		       ":" __stringify(EV_KEY) ":"
-		       __stringify(KEY_MENU) ":168:906:75:55"
+		       __stringify(KEY_MENU) ":162:906:89:57"
 		       ":" __stringify(EV_KEY) ":"
-		       __stringify(KEY_HOME) ":308:906:75:55"
+		       __stringify(KEY_HOME) ":292:906:89:57"
 		       ":" __stringify(EV_KEY) ":"
-		       __stringify(KEY_SEARCH) ":440:906:55:55"
+		       __stringify(KEY_SEARCH) ":439:906:63:57"
 		       "\n");
 }
 static struct kobj_attribute sholes_virtual_keys_attr = {
@@ -458,34 +472,40 @@ static struct qtouch_ts_platform_data sholes_ts_platform_data = {
 	.noise1_suppression_cfg = {
 		.ctrl = 0x01,
 		.reserved = 0x01,
-		.atchthr = 0x6f,
+		.atchthr = 0x64,
 		.duty_cycle = 0x08,
 	},
 	.key_array      = {
 		.cfg		= sholes_key_array_data,
 		.num_keys   = ARRAY_SIZE(sholes_key_array_data),
 	},
+	.vkeys			= {
+		.keys		= sholes_touch_vkeys,
+		.count		= ARRAY_SIZE(sholes_touch_vkeys),
+		.start		= 961,
+	},
 };
 
 static struct lm3530_platform_data omap3430_als_light_data = {
-	.gen_config = 0x1b,
-	.als_config = 0x7b,
-	.brightness_ramp = 0x2d,
+	.gen_config = 0x19,
+	.als_config = 0x7c,
+	.brightness_ramp = 0x36,
 	.als_zone_info = 0x00,
-	.als_resistor_sel = 0x83,
+	.als_resistor_sel = 0xf4,
 	.brightness_control = 0x00,
-	.zone_boundary_0 = 0x4,
-	.zone_boundary_1 = 0x44,
-	.zone_boundary_2 = 0xc5,
-	.zone_boundary_3 = 0xC5,
-	.zone_target_0 = 0x23,
-	.zone_target_1 = 0x31,
-	.zone_target_2 = 0x63,
-	.zone_target_3 = 0x7b,
-	.zone_target_4 = 0x7b,
+	.zone_boundary_0 = 0x0,
+	.zone_boundary_1 = 0x06,
+	.zone_boundary_2 = 0x44,
+	.zone_boundary_3 = 0xff,
+	.zone_target_0 = 0x56,
+	.zone_target_1 = 0x6e,
+	.zone_target_2 = 0x6e,
+	.zone_target_3 = 0x79,
+	.zone_target_4 = 0x7e,
 	.manual_current = 0x33,
 	.upper_curr_sel = 6,
 	.lower_curr_sel = 3,
+	.lens_loss_coeff = 6,
 };
 
 static struct lm3554_platform_data sholes_camera_flash = {
@@ -1226,7 +1246,6 @@ static void __init sholes_init(void)
 	sholes_omap_mdm_ctrl_init();
 	sholes_spi_init();
 	sholes_flash_init();
-	sholes_panic_init();
 	sholes_serial_init();
 	sholes_als_init();
 	sholes_panel_init();
