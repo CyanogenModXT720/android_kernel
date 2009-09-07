@@ -2312,7 +2312,6 @@ static int do_set_interface(struct fsg_dev *fsg, int altsetting)
 
 	if (fsg->running)
 		DBG(fsg, "reset interface\n");
-
 reset:
 	/* Disable the endpoints */
 	if (fsg->bulk_in_enabled) {
@@ -2331,7 +2330,6 @@ reset:
 	/* Deallocate the requests */
 	for (i = 0; i < NUM_BUFFERS; ++i) {
 		struct fsg_buffhd *bh = &fsg->buffhds[i];
-
 		if (bh->inreq) {
 			usb_ep_free_request(fsg->bulk_in, bh->inreq);
 			bh->inreq = NULL;

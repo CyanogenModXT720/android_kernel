@@ -28,6 +28,13 @@
 #include <linux/led-lm3530.h>
 #include <linux/types.h>
 
+int als_resistor_val[16] = {1, 9260, 4630, 3090, 2310,
+1850, 1540, 1320, 1160, 1030, 925, 842, 772, 712, 661, 617};
+
+struct lux_data {
+	int lux_value;
+};
+
 struct lm3530_data {
 	struct input_dev *idev;
 	struct led_classdev led_dev;
@@ -36,6 +43,7 @@ struct lm3530_data {
 	struct workqueue_struct *working_queue;
 	struct lm3530_platform_data *als_pdata;
 	struct early_suspend		early_suspend;
+	struct lux_data lux_passed_value[5];
 	uint8_t mode;
 	uint8_t last_requested_brightness;
 	uint8_t zone;
@@ -146,13 +154,20 @@ static void ld_lm3530_brightness_set(struct led_classdev *led_cdev,
 				     enum led_brightness value)
 {
 	int brightness = 0;
-	int current_select = 0;
 	int error = 0;
 	uint8_t gen_config_val;
+	uint8_t ramp_rate_val;
 	struct lm3530_data *als_data =
 	    container_of(led_cdev, struct lm3530_data, led_dev);
 
 	if (value == LED_OFF) {
+
+		error = lm3530_write_reg(als_data, LM3530_BRIGHTNESS_RAMP_RATE,
+			     0x00);
+		if (error != 0)
+			pr_err("%s:Unable to set the ramp rate: %d\n",
+			       __func__, error);
+
 		error = lm3530_read_reg(als_data,
 					LM3530_GEN_CONFIG,
 					&gen_config_val);
@@ -173,13 +188,7 @@ static void ld_lm3530_brightness_set(struct led_classdev *led_cdev,
 				       __func__, error);
 				return;
 			}
-			current_select =
-			    als_data->current_array[value /
-						    als_data->current_divisor];
-
-			/* Add one here to turn on device enable bit */
-			brightness = (((gen_config_val & LM3530_GEN_CONF_MASK) |
-				       (current_select << 2)) | 1);
+			brightness = gen_config_val | 0x01;
 			break;
 		case MANUAL:
 			error = lm3530_write_reg(als_data,
@@ -198,6 +207,23 @@ static void ld_lm3530_brightness_set(struct led_classdev *led_cdev,
 		pr_err("%s:writing failed while setting brightness:%d\n",
 		       __func__, error);
 		return;
+	}
+	if (value > LED_OFF) {
+		error = lm3530_read_reg(als_data,
+					LM3530_BRIGHTNESS_RAMP_RATE,
+					&ramp_rate_val);
+		if ((error == 0) &&
+			(ramp_rate_val != als_data->als_pdata->brightness_ramp)) {
+			/* Wait until the IC has a chance to turn on
+			and set the brightness level */
+			msleep(5);
+			error = lm3530_write_reg(als_data,
+				LM3530_BRIGHTNESS_RAMP_RATE,
+				als_data->als_pdata->brightness_ramp);
+				if (error != 0)
+					pr_err("%s:Unable to set the ramp rate: %d\n",
+					__func__, error);
+		}
 	}
 
 	als_data->last_requested_brightness = value;
@@ -333,14 +359,61 @@ void ld_lm3530_work_queue(struct work_struct *work)
 	if (light_value == 0)
 		light_value = 10;
 
-	if (lm3530_debug)
+	if (lm3530_debug) {
 		pr_err("%s:Modified ALS Zone being sent: %d\n",
 		       __func__, light_value);
+		pr_err("%s:Lux value: %i\n", __func__,
+			als_data->lux_passed_value[als_data->zone].lux_value);
+	}
 
 	input_event(als_data->idev, EV_MSC, MSC_RAW, light_value);
+	input_event(als_data->idev, EV_LED, LED_MISC,
+		als_data->lux_passed_value[als_data->zone].lux_value);
 	input_sync(als_data->idev);
 
 	enable_irq(als_data->client->irq);
+}
+
+static int convert_to_lux(struct lm3530_data *als_data, int zone_value)
+{
+	int mv_conv;
+	int current_conv;
+	int divisor;
+
+	if (zone_value == 0)
+		return 0x40;
+
+	divisor = als_data->als_pdata->lens_loss_coeff;
+	if (divisor == 0)
+		divisor = 1;
+
+	mv_conv = ((zone_value * 1000) / 255);
+	current_conv = (mv_conv * 1000) /
+		als_resistor_val[(als_data->als_pdata->als_resistor_sel & 0xF0) >> 4];
+	return (current_conv * 100) / divisor;
+}
+
+static void ld_lm3530_lux_conv(struct lm3530_data *als_data)
+{
+	int zone_boundary;
+
+	als_data->lux_passed_value[0].lux_value = 10;
+
+	zone_boundary = als_data->als_pdata->zone_boundary_0;
+	als_data->lux_passed_value[1].lux_value =
+		convert_to_lux(als_data, zone_boundary);
+
+	zone_boundary = als_data->als_pdata->zone_boundary_1;
+	als_data->lux_passed_value[2].lux_value =
+		convert_to_lux(als_data, zone_boundary);
+
+	zone_boundary = als_data->als_pdata->zone_boundary_2;
+	als_data->lux_passed_value[3].lux_value =
+		convert_to_lux(als_data, zone_boundary);
+
+	zone_boundary = als_data->als_pdata->zone_boundary_3;
+	als_data->lux_passed_value[4].lux_value =
+		convert_to_lux(als_data, zone_boundary);
 }
 
 static int ld_lm3530_probe(struct i2c_client *client,
@@ -396,6 +469,8 @@ static int ld_lm3530_probe(struct i2c_client *client,
 	for (i = 0; i <= (pdata->upper_curr_sel - pdata->lower_curr_sel); i++)
 		als_data->current_array[i] = pdata->lower_curr_sel + i;
 
+	ld_lm3530_lux_conv(als_data);
+
 	als_data->idev = input_allocate_device();
 	if (!als_data->idev) {
 		error = -ENOMEM;
@@ -406,6 +481,7 @@ static int ld_lm3530_probe(struct i2c_client *client,
 
 	als_data->idev->name = LD_LM3530_NAME;
 	input_set_capability(als_data->idev, EV_MSC, MSC_RAW);
+	input_set_capability(als_data->idev, EV_LED, LED_MISC);
 
 	als_data->led_dev.name = LD_LM3530_LED_DEV;
 	als_data->led_dev.brightness_set = ld_lm3530_brightness_set;
