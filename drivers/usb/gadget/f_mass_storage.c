@@ -689,6 +689,7 @@ static int fsg_function_setup(struct usb_function *f,
 	u16			w_index = le16_to_cpu(ctrl->wIndex);
 	u16			w_value = le16_to_cpu(ctrl->wValue);
 	u16			w_length = le16_to_cpu(ctrl->wLength);
+	int rc;
 
 	DBG(fsg, "fsg_function_setup\n");
 	/* Handle Bulk-only class-specific requests */
@@ -708,7 +709,7 @@ static int fsg_function_setup(struct usb_function *f,
 			 * and reinitialize our state. */
 			DBG(fsg, "bulk reset request\n");
 			raise_exception(fsg, FSG_STATE_RESET);
-			value = DELAYED_STATUS;
+			value = 0;
 			break;
 
 		case USB_BULK_GET_MAX_LUN_REQUEST:
@@ -725,6 +726,17 @@ static int fsg_function_setup(struct usb_function *f,
 			break;
 		}
 	}
+
+	/* respond with data transfer or status phase? */
+	if (value >= 0) {
+		cdev->req->zero = value < w_length;
+		cdev->req->length = value;
+		rc = usb_ep_queue(cdev->gadget->ep0, cdev->req, GFP_ATOMIC);
+		if (rc < 0)
+			printk(KERN_INFO"%s setup response queue error\n",
+					__func__);
+	}
+
 
 	if (value == -EOPNOTSUPP)
 		VDBG(fsg,
@@ -2451,11 +2463,18 @@ static void handle_exception(struct fsg_dev *fsg)
 		}
 	}
 
-	/* Clear out the controller's fifos */
-	if (fsg->bulk_in_enabled)
-		usb_ep_fifo_flush(fsg->bulk_in);
-	if (fsg->bulk_out_enabled)
-		usb_ep_fifo_flush(fsg->bulk_out);
+	/*
+	* Do NOT flush fifo after set_interface()
+	* Otherwise, it cause some data lost
+	*/
+	if ((fsg->state != FSG_STATE_CONFIG_CHANGE) ||
+		(fsg->new_config != 1))   {
+		/* Clear out the controller's fifos */
+		if (fsg->bulk_in_enabled)
+			usb_ep_fifo_flush(fsg->bulk_in);
+		if (fsg->bulk_out_enabled)
+			usb_ep_fifo_flush(fsg->bulk_out);
+	}
 
 	/* Reset the I/O buffer states and pointers, the SCSI
 	 * state, and the exception.  Then invoke the handler. */
