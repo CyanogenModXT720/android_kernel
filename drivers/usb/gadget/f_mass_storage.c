@@ -2242,12 +2242,8 @@ static int get_next_command(struct fsg_dev *fsg)
 	bh = fsg->next_buffhd_to_fill;
 	while (bh->state != BUF_STATE_EMPTY) {
 		rc = sleep_thread(fsg);
-		if (rc) {
-			usb_ep_dequeue(fsg->bulk_out, bh->outreq);
-			bh->outreq_busy = 0;
-			bh->state = BUF_STATE_EMPTY;
+		if (rc)
 			return rc;
-		}
 	}
 
 	/* Queue a request to read a Bulk-only CBW */
@@ -2262,8 +2258,12 @@ static int get_next_command(struct fsg_dev *fsg)
 	/* Wait for the CBW to arrive */
 	while (bh->state != BUF_STATE_FULL) {
 		rc = sleep_thread(fsg);
-		if (rc)
+		if (rc) {
+			usb_ep_dequeue(fsg->bulk_out, bh->outreq);
+			bh->outreq_busy = 0;
+			bh->state = BUF_STATE_EMPTY;
 			return rc;
+		}
 	}
 	smp_rmb();
 	rc = received_cbw(fsg, bh);
