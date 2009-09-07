@@ -1024,10 +1024,8 @@ static int omap_hsmmc_get_ro(struct mmc_host *mmc)
 static struct mmc_host_ops mmc_omap_ops = {
 	.request = omap_mmc_request,
 	.set_ios = omap_mmc_set_ios,
-#if !defined(CONFIG_MACH_MAPPHONE)
 	.get_cd = omap_hsmmc_get_cd,
 	.get_ro = omap_hsmmc_get_ro,
-#endif
 	/* NYET -- enable_sdio_irq */
 };
 
@@ -1139,22 +1137,6 @@ static int __init omap_mmc_probe(struct platform_device *pdev)
 		clk_put(host->fclk);
 		goto err1;
 	}
-
-#if defined(CONFIG_MACH_MAPPHONE)
-	if (host->id == OMAP_MMC1_DEVID) {
-		/*
-		 * We used to set Speed Control for MMC I/O to 52MHz I/O max
-		 * speed, but to avoid power overshooting, we now set speed
-		 * control to 26MHz I/O max speed
-		 */
-		omap_ctrl_writel(omap_ctrl_readl(OMAP343X_CONTROL_PBIAS_LITE) &
-				(~(1 << 2)), OMAP343X_CONTROL_PBIAS_LITE);
-
-		/* set MMC/SDI/O Module Input Clock to Internal loop-back */
-		omap_ctrl_writel(omap_ctrl_readl(OMAP2_CONTROL_DEVCONF0) |
-				(1 << 24), OMAP2_CONTROL_DEVCONF0);
-	}
-#endif /* CONFIG_MACH_MAPPHONE */
 
 #ifdef CONFIG_MMC_BLOCK_BOUNCE
 	mmc->max_phys_segs = 1;
