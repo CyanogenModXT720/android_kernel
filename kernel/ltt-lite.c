@@ -1270,7 +1270,7 @@ static int ltt_lite_proc_write_init(struct file *filp,
 		return -EFAULT;
 
 	i = 0;
-	while (string[i] != 0xa && i < 5)
+	while (isdigit(string[i]) && i < 5)
 		i++;
 
 	string[i] = '\0';
