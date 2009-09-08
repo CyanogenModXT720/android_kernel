@@ -15,6 +15,7 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
  * 02111-1307, USA
  *
+ * Motorola 2009-Sep-08 - Bug fix for frequency constraint
  * Motorola 2009-Jul-13 - Update for K29 to use Resource Framework
  * Motorola 2009-Jan-28 - Initial Creation
  */
@@ -170,8 +171,10 @@ static int modem_pm_driver_ioctl(struct inode *inode,
 	case MODEM_PM_DRIVER_IOCTL_HANDLE_FREQUENCY_OPP_CONSTRAINT: {
 		switch (arg) {
 		case MODEM_PM_SHARED_DDR_FREQUENCY_OPP_HIGH: {
-			/* Set the target value of the VDD2 OPP constraint */
-			resource_request("vdd2_opp", &my_device, VDD2_OPP3);
+			/* Set the target value of the VDD2 OPP constraint  */
+			/* Make sure the interconnect is at 150Mhz or above */
+			/* Throughput in KiB/s for 150 Mhz = 150 * 1000 * 4 */
+			resource_request("vdd2_opp", &my_device, 600000);
 			status = 0;
 			break;
 		}
