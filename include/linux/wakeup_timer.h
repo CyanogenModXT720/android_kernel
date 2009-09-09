@@ -50,4 +50,7 @@
 /* Selete the wakeup timer request */
 #define IOC_WAKEUP_TIMER_DELETE			_IO('w', 0x3)
 
+/* Operations for /dev/clock_32k device */
+#define IOC_32KHZ_READ                          _IOW('w', 0x4, int)
+
 #endif /* WAKEUP_TIMER_H_ */
