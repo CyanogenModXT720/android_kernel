@@ -40,12 +40,26 @@
 #include <linux/workqueue.h>
 #include <linux/console.h>
 
+#ifdef CONFIG_APANIC_APR
+#define WDOG_AP_REBOOT	0x00020000
+#define POWER_DOWN	0x00000200
+#define CPCAP_RESET	0x00040000
+#define INFO_SIZE 64
+
+extern u32 bi_powerup_reason(void);
+#endif
+
 struct panic_header {
 	u32 magic;
 #define PANIC_MAGIC 0xdeadf00d
 
 	u32 version;
 #define PHDR_VERSION   0x01
+
+#ifdef CONFIG_APANIC_APR
+	u32 is_panic_data;
+#define PANIC_DATA 0x1
+#endif
 
 	u32 console_offset;
 	u32 console_length;
@@ -60,8 +74,17 @@ struct apanic_data {
 	void			*bounce;
 	struct proc_dir_entry	*apanic_console;
 	struct proc_dir_entry	*apanic_threads;
+
+#ifdef CONFIG_APANIC_APR
+	struct proc_dir_entry   *last_kmsg;
+#endif
 };
 
+#ifdef CONFIG_APANIC_APR
+static char rst_buf[INFO_SIZE];
+static u32 rst_len;
+static u32 powerup_reason;
+#endif
 static struct apanic_data drv_ctx;
 static struct work_struct proc_removal_work;
 static DEFINE_MUTEX(drv_mutex);
@@ -132,6 +155,13 @@ static int apanic_proc_read(char *buffer, char **start, off_t offset,
 		file_length = ctx->curr.threads_length;
 		file_offset = ctx->curr.threads_offset;
 		break;
+#ifdef CONFIG_APANIC_APR
+	case 3:	/* last_kmsg */
+		file_length = ctx->curr.threads_length
+						+ ctx->curr.console_length;
+		file_offset = ctx->curr.console_offset;
+		break;
+#endif
 	default:
 		pr_err("Bad dat (%d)\n", (int) dat);
 		mutex_unlock(&drv_mutex);
@@ -248,15 +278,49 @@ static void apanic_remove_proc_work(struct work_struct *work)
 		remove_proc_entry("apanic_threads", NULL);
 		ctx->apanic_threads = NULL;
 	}
+#ifdef CONFIG_APANIC_APR
+	if (ctx->last_kmsg) {
+		remove_proc_entry("last_kmsg", NULL);
+		ctx->last_kmsg = NULL;
+	}
+#endif
 	mutex_unlock(&drv_mutex);
 }
 
 static int apanic_proc_write(struct file *file, const char __user *buffer,
-				unsigned long count, void *data)
+		unsigned long count, void *data)
 {
 	/* schedule_work(&proc_removal_work); */
 	return count;
 }
+
+#ifdef CONFIG_APANIC_APR
+static ssize_t rst_info_proc_read(struct file *file, char __user *buf,
+		size_t len, loff_t *offset)
+{
+	ssize_t count = 0;
+	loff_t pos = *offset;
+
+
+	if (pos >= rst_len)
+		return 0;
+
+	count = min(len, rst_len);
+	if (copy_to_user(buf, rst_buf + pos, count)) {
+		printk(KERN_EMERG "apanic: copy fail\n");
+		return -EFAULT;
+	}
+
+	*offset += count;
+
+	return count;
+}
+
+static struct file_operations rst_info_file_ops = {
+	.owner = THIS_MODULE,
+	.read = rst_info_proc_read,
+};
+#endif
 
 static void mtd_panic_notify_add(struct mtd_info *mtd)
 {
@@ -264,6 +328,10 @@ static void mtd_panic_notify_add(struct mtd_info *mtd)
 	struct panic_header *hdr = ctx->bounce;
 	size_t len;
 	int rc;
+#ifdef CONFIG_APANIC_APR
+	size_t wlen;
+	struct proc_dir_entry *entry;
+#endif
 
 	if (strcmp(mtd->name, CONFIG_APANIC_PLABEL))
 		return;
@@ -306,6 +374,45 @@ static void mtd_panic_notify_add(struct mtd_info *mtd)
 
 	memcpy(&ctx->curr, hdr, sizeof(struct panic_header));
 
+#ifdef CONFIG_APANIC_APR
+	if (hdr->is_panic_data != PANIC_DATA) {
+		powerup_reason = bi_powerup_reason();
+		printk(KERN_INFO 
+				"apanic: Record powerup_reason = 0x%08x\n",
+				powerup_reason);
+
+		memset(rst_buf, 0, INFO_SIZE);
+		rst_len = 0;
+
+		if (powerup_reason == WDOG_AP_REBOOT)
+			rst_len = sprintf(rst_buf,
+				"POWERUPREASON : WDOG_AP_RESET(0x%08x)\n",
+				powerup_reason);
+		else if (powerup_reason == POWER_DOWN)
+			rst_len = sprintf(rst_buf,
+				"POWERUPREASON : POWER_CUT(0x%08x)\n",
+				powerup_reason);
+		else if (powerup_reason == CPCAP_RESET)
+			rst_len = sprintf(rst_buf,
+				"POWERUPREASON : CPCAP_RESET(0x%08x)\n",
+				powerup_reason);
+
+		if (rst_len) {
+			entry = create_proc_entry("last_kmsg",
+					S_IFREG | S_IRUGO, NULL);
+			if (!entry)
+				printk(KERN_ERR "%s: failed creating procfile\n",
+						 __func__);
+			else {
+				entry->proc_fops = &rst_info_file_ops;
+				entry->size = rst_len;
+			}
+		}
+
+		return;
+	}
+#endif
+
 	printk(KERN_INFO "apanic: c(%u, %u) t(%u, %u)\n",
 	       hdr->console_offset, hdr->console_length,
 	       hdr->threads_offset, hdr->threads_length);
@@ -337,6 +444,31 @@ static void mtd_panic_notify_add(struct mtd_info *mtd)
 			ctx->apanic_threads->data = (void *) 2;
 		}
 	}
+
+#ifdef CONFIG_APANIC_APR
+	if (hdr->console_length || hdr->threads_length) {
+		ctx->last_kmsg = create_proc_entry("last_kmsg",
+				S_IFREG | S_IRUGO |
+				S_IWUSR | S_IWGRP, NULL);
+		if (!ctx->last_kmsg)
+			printk(KERN_ERR "%s: failed creating procfile\n",
+					__func__);
+		else {
+			ctx->last_kmsg->read_proc = apanic_proc_read;
+			ctx->last_kmsg->write_proc = apanic_proc_write;
+			ctx->last_kmsg->size = hdr->console_length +
+				hdr->threads_length;
+			ctx->last_kmsg->data = (void *) 3;
+		}
+	}
+
+	hdr->is_panic_data = 0;
+	rc = mtd->write(ctx->mtd, 0, mtd->writesize, &wlen, ctx->bounce);
+	if (rc) {
+		printk(KERN_EMERG "apanic: Header write failed (%d)\n",
+				rc);
+	}
+#endif
 
 	return;
 out_err:
@@ -555,6 +687,9 @@ static int apanic(struct notifier_block *this, unsigned long event,
 	memset(ctx->bounce, 0, PAGE_SIZE);
 	hdr->magic = PANIC_MAGIC;
 	hdr->version = PHDR_VERSION;
+#ifdef CONFIG_APANIC_APR
+	hdr->is_panic_data = PANIC_DATA;
+#endif
 
 	hdr->console_offset = console_offset;
 	hdr->console_length = console_len;
