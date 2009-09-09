@@ -49,56 +49,52 @@
 #define DRV_NAME "clock_32k"
 
 struct timer_list timer_32k;
-
-static int major_clock_32k;
-static struct class *clock_32k_class;
-static DEFINE_MUTEX(clock_32k_lock);
 static struct platform_device *clock_platform_device;
-
-static int clock_32k_ioctl_core(unsigned int cmd, unsigned long arg)
+static DEFINE_SPINLOCK(clock_32k_spin_lock);
+struct timespec clock_32k_read(void)
 {
-	int ret = 0;
 	static unsigned long long roll_over;
 	struct timespec my_time_32k;
 	unsigned long long current_time;
 	static unsigned long long curr_val;
 	static unsigned long long last_val;
-	/* Acquire mutx to be sure that user read and
-	   timer read will not happen at same time */
-	mutex_lock(&clock_32k_lock);
-
-	/* Then evaluate the command and take according action */
-	switch (cmd) {
-	case IOC_32KHZ_READ:
-		curr_val = sched_clock();
-		/* Check if sched_clock returned value has rolled over */
-		if (curr_val < last_val) {
-			roll_over += (1ULL << (32-15))*1000000000ULL;
-			printk(KERN_DEBUG "roll over happened\n");
-			}
-		current_time = curr_val + roll_over ;
-		printk(KERN_DEBUG "current time= %llu ns\n", current_time);
-		my_time_32k = ns_to_timespec(current_time);
-		last_val = curr_val;
-		/* Restart the 24 hrs timer to be sure that
-		   all roll over will be detected */
-		mod_timer(&timer_32k, jiffies + 24*60*60*HZ);
-		ret = __copy_to_user((int *)arg, \
-				&my_time_32k, sizeof(my_time_32k));
-		break;
-	default:
-		printk(KERN_ERR "Invalid IOCTL command\n");
-		ret = -EINVAL;
-	}
-	mutex_unlock(&clock_32k_lock);
-	return ret;
+	curr_val = sched_clock();
+	/* Check if sched_clock returned value has rolled over */
+	if (curr_val < last_val) {
+		roll_over += (1ULL << (32-15))*1000000000ULL;
+		printk(KERN_DEBUG "roll over happened\n");
+		}
+	current_time = curr_val + roll_over ;
+	printk(KERN_DEBUG "current time= %llu ns\n", current_time);
+	my_time_32k = ns_to_timespec(current_time);
+	last_val = curr_val;
+	/* Restart the 24 hrs timer to be sure that
+	   all roll over will be detected */
+	mod_timer(&timer_32k, jiffies + 24*60*60*HZ);
+	return my_time_32k;
 }
 
 static int clock_32k_ioctl(struct inode *inode,
 		struct file *filp, unsigned int cmd, unsigned long arg)
 {
 	int ret = 0;
-	ret = clock_32k_ioctl_core(cmd, arg);
+	struct timespec my_time_32k;
+	/* Acquire mutx to be sure that user read and
+	*timer read will not happen at same time */
+
+	/* Then evaluate the command and take according action */
+	switch (cmd) {
+	case IOC_32KHZ_READ:
+		spin_lock_bh(&clock_32k_spin_lock);
+		my_time_32k = clock_32k_read();
+		spin_unlock_bh(&clock_32k_spin_lock);
+		ret = __copy_to_user((int *)arg, \
+		&my_time_32k, sizeof(my_time_32k));
+		break;
+	default:
+		printk(KERN_ERR "Invalid IOCTL command\n");
+		ret = -EINVAL;
+	}
 	return ret;
 }
 
@@ -127,34 +123,29 @@ static struct miscdevice clock_32k_miscdev = {
 	.fops	= &clock_32k_fops,
 };
 
-
 void timer_32k_callback(unsigned long param)
 {
-	unsigned long arg = 0;
-	int ret;
-	ret = clock_32k_ioctl_core(IOC_32KHZ_READ, arg);
-	BUG_ON(ret == -EFAULT);
+	spin_lock(&clock_32k_spin_lock);
+	clock_32k_read();
+	spin_unlock(&clock_32k_spin_lock);
 }
 
 static int __devinit clock_32k_probe(struct platform_device *dev)
 {
 	int ret;
-	int timer_32k_callback_parameters = 0;
+	spin_lock_init(&clock_32k_spin_lock);
 	ret = misc_register(&clock_32k_miscdev);
 	if (ret != 0)
 		goto out;
-
 	init_timer(&timer_32k);
 	timer_32k.function = timer_32k_callback;
-	timer_32k.data = (unsigned long) &timer_32k_callback_parameters;
+	timer_32k.data = 0 ;
 	timer_32k.expires = jiffies + 24*60*60*HZ;
 	add_timer(&timer_32k);
 	return 0;
-
 out:
 	return ret;
 }
-
 
 static int __devexit clock_32k_remove(struct platform_device *dev)
 {
@@ -162,24 +153,21 @@ static int __devexit clock_32k_remove(struct platform_device *dev)
 	return 0;
 }
 
-
 static struct platform_driver clock_32k_driver = {
 	.probe		= clock_32k_probe,
 	.remove		= __devexit_p(clock_32k_remove),
 	.driver		= {
 		.owner	= THIS_MODULE,
 		.name	= DRV_NAME,
-	},
+		},
 };
 
 static int __init clock_32k_init(void)
 {
 	int err;
-
 	err = platform_driver_register(&clock_32k_driver);
 	if (err)
 		return err;
-
 	clock_platform_device = platform_device_register_simple(DRV_NAME,
 								-1, NULL, 0);
 	if (IS_ERR(clock_platform_device)) {
@@ -192,14 +180,11 @@ unreg_platform_driver:
 	platform_driver_unregister(&clock_32k_driver);
 	return err;
 }
-
 static void __exit clock_32k_exit(void)
 {
 	platform_device_unregister(clock_platform_device);
 	platform_driver_unregister(&clock_32k_driver);
-
 }
-
 
 module_init(clock_32k_init);
 module_exit(clock_32k_exit);
