@@ -33,6 +33,12 @@
 #define CPCAP_IRQ_INT4_INDEX 48
 #define CPCAP_IRQ_INT5_INDEX 64
 
+enum {
+	BARREL_CAP_NONE = 0,
+	BARREL_CAP_DETECT_HEADSET,
+	BARREL_CAP_DETECT_TV_OUT,
+};
+
 enum cpcap_regulator_id {
 	CPCAP_SW5,
 	CPCAP_VCAM,
@@ -63,7 +69,7 @@ enum cpcap_regulator_id {
  * are not the actual register numbers.
  */
 enum cpcap_reg {
-	CPCAP_REG_START,        /* Start of CPCAP registers. */
+	CPCAP_REG_START,		/* Start of CPCAP registers. */
 
 	CPCAP_REG_INT1 = CPCAP_REG_START, /* Interrupt 1 */
 	CPCAP_REG_INT2,		/* Interrupt 2 */
@@ -117,15 +123,15 @@ enum cpcap_reg {
 	CPCAP_REG_SDVSPLL,	/* Switcher DVS and PLL */
 	CPCAP_REG_SI2CC1,	/* Switcher I2C Control 1 */
 	CPCAP_REG_Si2CC2,	/* Switcher I2C Control 2 */
-	CPCAP_REG_S1C1,	        /* Switcher 1 Control 1 */
-	CPCAP_REG_S1C2,	        /* Switcher 1 Control 2 */
-	CPCAP_REG_S2C1,	        /* Switcher 2 Control 1 */
-	CPCAP_REG_S2C2,	        /* Switcher 2 Control 2 */
-	CPCAP_REG_S3C,	        /* Switcher 3 Control */
-	CPCAP_REG_S4C1,	        /* Switcher 4 Control 1 */
-	CPCAP_REG_S4C2,	        /* Switcher 4 Control 2 */
-	CPCAP_REG_S5C,	        /* Switcher 5 Control */
-	CPCAP_REG_S6C,	        /* Switcher 6 Control */
+	CPCAP_REG_S1C1,			/* Switcher 1 Control 1 */
+	CPCAP_REG_S1C2,			/* Switcher 1 Control 2 */
+	CPCAP_REG_S2C1,			/* Switcher 2 Control 1 */
+	CPCAP_REG_S2C2,			/* Switcher 2 Control 2 */
+	CPCAP_REG_S3C,			/* Switcher 3 Control */
+	CPCAP_REG_S4C1,			/* Switcher 4 Control 1 */
+	CPCAP_REG_S4C2,			/* Switcher 4 Control 2 */
+	CPCAP_REG_S5C,			/* Switcher 5 Control */
+	CPCAP_REG_S6C,			/* Switcher 6 Control */
 	CPCAP_REG_VCAMC,	/* VCAM Control */
 	CPCAP_REG_VCSIC,	/* VCSI Control */
 	CPCAP_REG_VDACC,	/* VDAC Control */
@@ -485,6 +491,7 @@ struct cpcap_platform_data {
 	unsigned short *regulator_mode_values;
 	struct regulator_init_data *regulator_init;
 	struct cpcap_adc_ato *adc_ato;
+	int barrel_capability;
 };
 
 struct cpcap_batt_data {
@@ -600,8 +607,8 @@ struct cpcap_regacc {
 #ifdef __KERNEL__
 struct cpcap_device {
 	struct spi_device	*spi;
-	enum cpcap_vendor       vendor;
-	enum cpcap_revision     revision;
+	enum cpcap_vendor	   vendor;
+	enum cpcap_revision	 revision;
 	void			*keydata;
 	struct platform_device  *regulator_pdev[CPCAP_NUM_REGULATORS];
 	void			*irqdata;
@@ -621,22 +628,22 @@ static inline void *cpcap_get_keydata(struct cpcap_device *cpcap)
 }
 
 int cpcap_regacc_write(struct cpcap_device *cpcap, enum cpcap_reg reg,
-		       unsigned short value, unsigned short mask);
+			   unsigned short value, unsigned short mask);
 
 int cpcap_regacc_read(struct cpcap_device *cpcap, enum cpcap_reg reg,
-		      unsigned short *value_ptr);
+			  unsigned short *value_ptr);
 
 int cpcap_regacc_init(struct cpcap_device *cpcap);
 
 void cpcap_broadcast_key_event(struct cpcap_device *cpcap,
-			       unsigned int code, int value);
+				   unsigned int code, int value);
 
 int cpcap_irq_init(struct cpcap_device *cpcap);
 
 void cpcap_irq_shutdown(struct cpcap_device *cpcap);
 
 int cpcap_irq_register(struct cpcap_device *cpcap, enum cpcap_irqs irq,
-		       void (*cb_func) (enum cpcap_irqs, void *), void *data);
+			void (*cb_func) (enum cpcap_irqs, void *), void *data);
 
 int cpcap_irq_free(struct cpcap_device *cpcap, enum cpcap_irqs irq);
 
@@ -652,7 +659,7 @@ int cpcap_irq_unmask(struct cpcap_device *cpcap, enum cpcap_irqs int_event);
 int cpcap_irq_mask_get(struct cpcap_device *cpcap, enum cpcap_irqs int_event);
 
 int cpcap_irq_sense(struct cpcap_device *cpcap, enum cpcap_irqs int_event,
-		    unsigned char clear);
+			unsigned char clear);
 
 int cpcap_adc_sync_read(struct cpcap_device *cpcap,
 			struct cpcap_adc_request *request);
@@ -665,7 +672,7 @@ void cpcap_adc_phase(struct cpcap_device *cpcap, struct cpcap_adc_phase *phase);
 void cpcap_batt_set_ac_prop(struct cpcap_device *cpcap, int online);
 
 void cpcap_batt_set_usb_prop_online(struct cpcap_device *cpcap, int online,
-				    enum cpcap_batt_usb_model model);
+					enum cpcap_batt_usb_model model);
 
 void cpcap_batt_set_usb_prop_curr(struct cpcap_device *cpcap,
 				  unsigned int curr);
@@ -675,7 +682,7 @@ int cpcap_uc_start(struct cpcap_device *cpcap, enum cpcap_macro macro);
 int cpcap_uc_stop(struct cpcap_device *cpcap, enum cpcap_macro macro);
 
 unsigned char cpcap_uc_status(struct cpcap_device *cpcap,
-			      enum cpcap_macro macro);
+				  enum cpcap_macro macro);
 
 void enable_tta_irq(void);
 
