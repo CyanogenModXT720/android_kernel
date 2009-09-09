@@ -252,7 +252,10 @@ static void hs_handler_tv_out(enum cpcap_irqs irq, void *data)
 			/* Headset without mic and MFB is detected. (May also
 			 * be a headset with the MFB pressed.) */
 			new_state = HEADSET_WITHOUT_MIC;
-		} else
+		} else if (cpcap_irq_sense(data_3mm5->cpcap,
+					CPCAP_IRQ_MB2, 0) == 0)
+			new_state = HEADSET_WITHOUT_MIC;
+		else
 			new_state = HEADSET_WITH_MIC;
 
 		cpcap_irq_clear(data_3mm5->cpcap, CPCAP_IRQ_MB2);
