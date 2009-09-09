@@ -677,8 +677,10 @@ int cpcap_uc_stop(struct cpcap_device *cpcap, enum cpcap_macro macro);
 unsigned char cpcap_uc_status(struct cpcap_device *cpcap,
 			      enum cpcap_macro macro);
 
+#ifdef CONFIG_TTA_CHARGER
 void enable_tta_irq(void);
-
 void disable_tta_irq(void);
+#endif
+
 #endif /* __KERNEL__ */
 #endif /* _LINUX_SPI_CPCAP_H */

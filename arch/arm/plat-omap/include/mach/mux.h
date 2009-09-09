@@ -953,7 +953,7 @@ enum omap34xx_index {
 	AA3_34XX_MDTV_CLK_ON,
 
 	/* DSS */
-#ifdef CONFIG_PANEL_HDTV /* charlotte */
+#ifdef CONFIG_PANEL_HDTV
 	AG22_34XX_DSS_DATA0,
 	AH22_34XX_DSS_DATA1,
 	AG23_34XX_DSS_DATA2,

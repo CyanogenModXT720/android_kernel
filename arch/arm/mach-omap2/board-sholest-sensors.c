@@ -79,11 +79,11 @@ static struct vib_gpio_platform_data sholest_vib_gpio_data = {
 };
 
 static struct platform_device sholest_vib_gpio = {
-	.name = VIB_GPIO_NAME,
-	.id = -1,
-	.dev = {
-		.platform_data = &sholest_vib_gpio_data,
-		},
+	.name           = VIB_GPIO_NAME,
+	.id             = -1,
+	.dev            = {
+		.platform_data  = &sholest_vib_gpio_data,
+    },
 };
 
 static struct omap_dm_timer *vib_pwm_timer;
@@ -137,7 +137,7 @@ static struct platform_device sholest_vib_pwm = {
 	.id = -1,
 	.dev = {
 		.platform_data = &sholest_vib_pwm_data,
-		},
+	},
 };
 
 static struct regulator *sholest_sfh7743_regulator;
@@ -194,12 +194,10 @@ static struct regulator *sholest_lis331dlh_regulator;
 static int sholest_lis331dlh_initialization(void)
 {
 	struct regulator *reg;
-	if (sholest_lis331dlh_regulator == NULL) {
-		reg = regulator_get(NULL, "vhvio");
-		if (IS_ERR(reg))
-			return PTR_ERR(reg);
-		sholest_lis331dlh_regulator = reg;
-	}
+	reg = regulator_get(NULL, "vhvio");
+	if (IS_ERR(reg))
+		return PTR_ERR(reg);
+	sholest_lis331dlh_regulator = reg;
 	return 0;
 }
 
@@ -226,18 +224,18 @@ struct lis331dlh_platform_data sholest_lis331dlh_data = {
 	.power_on = sholest_lis331dlh_power_on,
 	.power_off = sholest_lis331dlh_power_off,
 
-	.min_interval = 1,
-	.poll_interval = 200,
+	.min_interval	= 1,
+	.poll_interval	= 200,
 
-	.g_range = LIS331DLH_G_8G,
+	.g_range	= LIS331DLH_G_8G,
 
-	.axis_map_x = 0,
-	.axis_map_y = 1,
-	.axis_map_z = 2,
+	.axis_map_x	= 0,
+	.axis_map_y	= 1,
+	.axis_map_z	= 2,
 
-	.negate_x = 0,
-	.negate_y = 0,
-	.negate_z = 0,
+	.negate_x	= 0,
+	.negate_y	= 0,
+	.negate_z	= 0,
 };
 
 static struct regulator *sholest_akm8973_regulator;
@@ -311,15 +309,15 @@ struct platform_device sfh7743_platform_device = {
 	.id = -1,
 	.dev = {
 		.platform_data = &sholest_sfh7743_data,
-		},
+	},
 };
 
 static struct platform_device omap3430_hall_effect_dock = {
-	.name = BU52014HFV_MODULE_NAME,
-	.id = -1,
-	.dev = {
-		.platform_data = &bu52014hfv_platform_data,
-		},
+	.name	= BU52014HFV_MODULE_NAME,
+	.id	= -1,
+	.dev	= {
+		.platform_data  = &bu52014hfv_platform_data,
+	},
 };
 
 static void sholest_vibrator_init(void)
