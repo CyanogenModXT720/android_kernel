@@ -975,6 +975,13 @@ static struct notifier_block mapphone_pm_reboot_notifier = {
 	.notifier_call = mapphone_pm_reboot_call,
 };
 
+#ifdef CONFIG_MEM_DUMP
+
+#define WARMRESET 1
+#define COLDRESET 0
+
+static unsigned long reset_status = COLDRESET ;
+#endif
 static void mapphone_pm_init(void)
 {
 	omap3_set_prm_setup_vc(&mapphone_prm_setup);
@@ -1004,11 +1011,86 @@ static void mapphone_pm_init(void)
 	platform_device_register(&mapphone_bpwake_device);
 	platform_driver_register(&mapphone_bpwake_driver);
 
+#ifdef CONFIG_MEM_DUMP
+	if (reset_status == COLDRESET)
+		mapphone_pm_set_reset(1);
+	else
+		mapphone_pm_set_reset(0);
+#else
 	/* set cold reset, will move to warm reset once ready */
 	mapphone_pm_set_reset(1);
-
+#endif
 	register_reboot_notifier(&mapphone_pm_reboot_notifier);
 }
+
+#ifdef CONFIG_MEM_DUMP
+static struct proc_dir_entry *proc_entry ;
+
+ssize_t reset_proc_read(char *page, char **start, off_t off, \
+   int count, int *eof, void *data)
+{
+	int len ;
+    /* don't visit offset */
+	if (off > 0) {
+		*eof = 1 ;
+		return 0 ;
+	}
+	len = snprintf(page, sizeof(page), "%x\n", (unsigned int)reset_status) ;
+	return len ;
+}
+
+ssize_t reset_proc_write(struct file *filp, const char __user *buff, \
+  unsigned long len, void *data)
+{
+#define MAX_UL_LEN 8
+	char k_buf[MAX_UL_LEN] ;
+	unsigned long result ;
+	int count = min((unsigned long)MAX_UL_LEN, len) ;
+	int ret ;
+
+	if (copy_from_user(k_buf, buff, count)) {
+		ret = -EFAULT ;
+		goto err ;
+	} else{
+		if (k_buf[0] == '0') {
+			reset_status = COLDRESET;
+			mapphone_pm_set_reset(1);
+			printk(KERN_ERR"switch to cold reset\n");
+		} else if (k_buf[0] == '1') {
+			reset_status = WARMRESET;
+			mapphone_pm_set_reset(0);
+			printk(KERN_ERR"switch to warm reset\n");
+		} else{
+			ret = -EFAULT;
+			goto err;
+		}
+	return count ;
+	}
+err:
+	return ret ;
+}
+
+static void  reset_proc_init(void)
+{
+	proc_entry = create_proc_entry("reset_proc", 0666, NULL);
+	if (proc_entry == NULL) {
+		printk(KERN_INFO"Couldn't create proc entry\n") ;
+	} else{
+		proc_entry->read_proc = reset_proc_read ;
+		proc_entry->write_proc = reset_proc_write ;
+		proc_entry->owner = THIS_MODULE ;
+	}
+}
+
+int __init warmreset_init(char *s)
+{
+	/* configure to warmreset */
+	reset_status = WARMRESET;
+	mapphone_pm_set_reset(0);
+	return 1;
+}
+__setup("warmreset_debug=", warmreset_init);
+#endif
 
 static void __init config_wlan_gpio(void)
 {
@@ -1135,6 +1217,7 @@ static void __init mapphone_bt_init(void)
 	platform_device_register(&mapphone_wl1271_device);
 	platform_device_register(&mapphone_wl1271_test_device);
 }
+
 
 static struct omap_mdm_ctrl_platform_data omap_mdm_ctrl_platform_data = {
 	.bp_ready_ap_gpio = MAPPHONE_BP_READY_AP_GPIO,
@@ -1335,6 +1418,9 @@ static void __init mapphone_init(void)
 	mapphone_sgx_init();
 	mapphone_power_off_init();
 	mapphone_gadget_init();
+#ifdef CONFIG_MEM_DUMP
+    reset_proc_init();
+#endif
 }
 
 static void __init mapphone_map_io(void)
