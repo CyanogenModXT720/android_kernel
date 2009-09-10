@@ -1524,11 +1524,11 @@ static void __init sholest_init(void)
 	sholest_spi_init();
 	sholest_flash_init();
 	sholest_panic_init();
-	sholest_serial_init();
+ 	sholest_serial_init();
     sholest_misc_init();
-	sholest_als_init();
-    sholest_panel_init();
-    sholest_sensors_init();
+ 	sholest_als_init();
+ 	sholest_panel_init();
+	sholest_sensors_init();
 	sholest_camera_init();
 	sholest_touch_init();
 	sholest_audio_init();

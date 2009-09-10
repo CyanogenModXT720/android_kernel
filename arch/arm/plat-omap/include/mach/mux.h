@@ -941,6 +941,7 @@ enum omap34xx_index {
 	K8_34XX_GPMC_WAIT2,
 
 	/* MDTV, INT&SPI */
+#ifdef CONFIG_MOT_FEAT_MDTV
 	F1_34XX_MDTV_INT_OFF,
 	AC3_34XX_MDTV_SIMO_OFF,
 	AD4_34XX_MDTV_SOMI_OFF,
@@ -951,6 +952,7 @@ enum omap34xx_index {
 	AD4_34XX_MDTV_SOMI_ON,
 	AD3_34XX_MDTV_CS_ON,
 	AA3_34XX_MDTV_CLK_ON,
+#endif
 
 	/* DSS */
 #ifdef CONFIG_PANEL_HDTV
@@ -962,6 +964,9 @@ enum omap34xx_index {
 	AH24_34XX_DSS_DATA5,
 #endif
 	D25_34XX_GPIO109,
+#ifdef CONFIG_VIB_PWM
+	AF22_34XX_GPIO9_OUT,
+#endif
 };
 
 struct omap_mux_cfg {

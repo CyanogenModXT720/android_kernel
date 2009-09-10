@@ -26,6 +26,9 @@
 #
 ###############################################################################
 
+# enable/disable driver log
+#DEBUG = y
+
 #Local variables initailization
 MODULE_NAME = smsmdtv
 
@@ -36,6 +39,10 @@ SMSOBJ += smschar.o
 
 EXTRA_CFLAGS += -DSMS_SPI_DRV
 SMSOBJ += smsspilog.o smsspicommon.o smsspiphy_omap34xx.o
+
+ifeq ($(DEBUG), y)
+EXTRA_CFLAGS += -DENABLE_CONSOLE_DBG
+endif
 
 smsmdtv-objs := $(SMSOBJ)
 

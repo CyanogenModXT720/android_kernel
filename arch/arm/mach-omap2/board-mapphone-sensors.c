@@ -74,11 +74,11 @@ static struct vib_gpio_platform_data mapphone_vib_gpio_data = {
 };
 
 static struct platform_device mapphone_vib_gpio = {
-	.name           = "vib-gpio",
-	.id             = -1,
-	.dev            = {
-		.platform_data  = &mapphone_vib_gpio_data,
-	},
+	.name = "vib-gpio",
+	.id = -1,
+	.dev = {
+		.platform_data = &mapphone_vib_gpio_data,
+		},
 };
 
 static struct regulator *mapphone_sfh7743_regulator;
