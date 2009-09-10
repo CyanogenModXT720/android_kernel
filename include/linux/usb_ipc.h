@@ -135,6 +135,8 @@ typedef struct {
         struct workqueue_struct *ksuspend_usb_wq;
 #endif
         int ipc_events;
+	char *truncated_buf;
+	int truncated_size;
 } USB_IPC_IFS_STRUCT;
 
 /* macros for LinkDriver read/write semphore */
