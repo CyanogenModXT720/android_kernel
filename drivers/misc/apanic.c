@@ -290,7 +290,7 @@ static void apanic_remove_proc_work(struct work_struct *work)
 static int apanic_proc_write(struct file *file, const char __user *buffer,
 		unsigned long count, void *data)
 {
-#ifndef CONFIG_APANIC_APR	
+#ifndef CONFIG_APANIC_APR
 	schedule_work(&proc_removal_work);
 #endif	
 	return count;
@@ -612,12 +612,12 @@ static int apanic(struct notifier_block *this, unsigned long event,
 	if (!ctx->mtd)
 		goto out;
 
-	/*
+#ifndef CONFIG_APANIC_APR
 	if (ctx->curr.magic) {
 		printk(KERN_EMERG "Crash partition in use!\n");
 		goto out;
 	}
-	*/
+#endif
 
 	/*
 	 * Delete the last data on new panic occurs for UMTS phone.
