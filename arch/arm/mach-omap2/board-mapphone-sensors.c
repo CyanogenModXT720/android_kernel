@@ -136,10 +136,10 @@ static struct regulator *mapphone_lis331dlh_regulator;
 static int mapphone_lis331dlh_initialization(void)
 {
 	struct regulator *reg;
-		reg = regulator_get(NULL, "vhvio");
-		if (IS_ERR(reg))
-			return PTR_ERR(reg);
-		mapphone_lis331dlh_regulator = reg;
+	reg = regulator_get(NULL, "vhvio");
+	if (IS_ERR(reg))
+		return PTR_ERR(reg);
+	mapphone_lis331dlh_regulator = reg;
 	return 0;
 }
 
@@ -166,18 +166,18 @@ struct lis331dlh_platform_data mapphone_lis331dlh_data = {
 	.power_on = mapphone_lis331dlh_power_on,
 	.power_off = mapphone_lis331dlh_power_off,
 
-	.min_interval = 1,
-	.poll_interval = 200,
+	.min_interval	= 1,
+	.poll_interval	= 200,
 
-	.g_range = LIS331DLH_G_8G,
+	.g_range	= LIS331DLH_G_8G,
 
-	.axis_map_x = 0,
-	.axis_map_y = 1,
-	.axis_map_z = 2,
+	.axis_map_x	= 0,
+	.axis_map_y	= 1,
+	.axis_map_z	= 2,
 
-	.negate_x = 0,
-	.negate_y = 0,
-	.negate_z = 0,
+	.negate_x	= 0,
+	.negate_y	= 0,
+	.negate_z	= 0,
 };
 
 static struct regulator *mapphone_akm8973_regulator;
@@ -251,15 +251,15 @@ struct platform_device sfh7743_platform_device = {
 	.id = -1,
 	.dev = {
 		.platform_data = &mapphone_sfh7743_data,
-		},
+	},
 };
 
 static struct platform_device omap3430_hall_effect_dock = {
-	.name = BU52014HFV_MODULE_NAME,
-	.id = -1,
-	.dev = {
-		.platform_data = &bu52014hfv_platform_data,
-		},
+	.name	= BU52014HFV_MODULE_NAME,
+	.id	= -1,
+	.dev	= {
+		.platform_data  = &bu52014hfv_platform_data,
+	},
 };
 
 static void mapphone_vibrator_init(void)

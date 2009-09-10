@@ -108,9 +108,9 @@ config BATTERY_CPCAP
 	 Say Y to include support for CPCAP Main Battery.
 
 config TTA_CHARGER
-   tristate "Support for TTA charger"
-   depends on BATTERY_CPCAP
-   help
-    Say Y to include support for the TTA CHARGER.
+        tristate "Support for TTA charger"
+        depends on BATTERY_CPCAP
+        help
+         Say Y to include support for the TTA CHARGER.
 
 endif # POWER_SUPPLY

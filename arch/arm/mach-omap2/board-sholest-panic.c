@@ -250,7 +250,7 @@ static void mtd_panic_notify_add(struct mtd_info *mtd)
 
 	for (i = 0; i < hdr->threads_length; i += mtd->writesize) {
 		rc = mtd->read(mtd,
-			       i + hdr->threads_offset,
+				i + hdr->threads_offset,
 				mtd->writesize,
 				&len, kmsg_data + kmsg_data_len + i);
 		if (rc) {
