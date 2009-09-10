@@ -2813,7 +2813,12 @@ static void dispc_error_worker(struct work_struct *work)
 				continue;
 
 			if (ovl->id == 0) {
-				dispc_enable_plane(ovl->id, 0);
+				/* **** HACK ****
+				 * Removing the disable of the graphics plane
+				 * for a underflow until we can figure out
+				 * why the underflows are occurring.
+				dispc_enable_plane(ovl->id, 0); */
+
 				dispc_go(ovl->manager->id);
 				mdelay(50);
 				break;

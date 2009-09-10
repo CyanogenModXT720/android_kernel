@@ -477,9 +477,9 @@ static int omapvout_dss_perform_vrfb_dma(struct omapvout_device *vout,
 
 		dss_fmt = omapvout_dss_color_mode(vout->pix.pixelformat);
 		omap_vrfb_setup(&vrfb->ctx[0], vrfb->phy_addr[0],
-							w, h, dss_fmt);
+							w, h, dss_fmt, 0);
 		omap_vrfb_setup(&vrfb->ctx[1], vrfb->phy_addr[1],
-							w, h, dss_fmt);
+							w, h, dss_fmt, 0);
 
 		bytespp = omapvout_dss_format_bytespp(vout->pix.pixelformat);
 		vrfb->en = (w * bytespp) / 4; /* 32 bit ES */
@@ -573,17 +573,13 @@ static int omapvout_dss_update_overlay(struct omapvout_device *vout,
 		return rc;
 	}
 
-#ifdef CONFIG_PANEL_HDTV
 	if (ovly->manager->device->update) {
-#endif
 	rc = ovly->manager->device->update(ovly->manager->device,
 					o_info.pos_x, o_info.pos_y,
 					o_info.out_width, o_info.out_height);
 	if (rc)
 		DBG("Overlay update failed %d\n", rc);
-#ifdef CONFIG_PANEL_HDTV
 	}
-#endif
 
 	return rc;
 }
@@ -663,7 +659,7 @@ static void omapvout_dss_perform_update(struct work_struct *work)
 		 * is unlocked since the sync may take some time.
 		 */
 		dev = dss->overlay->manager->device;
-		if (dev->sync)
+		if (dev && dev->sync)
 			dev->sync(dev);
 
 		/* Since the mutex was unlocked, it is possible that the DSS
@@ -860,16 +856,12 @@ void omapvout_dss_disable(struct omapvout_device *vout)
 	if (rc)
 		DBG("Overlay manager apply failed %d\n", rc);
 
-#ifdef CONFIG_PANEL_HDTV
 	if (ovly->manager->device->update) {
-#endif
 	rc = ovly->manager->device->update(ovly->manager->device,
 				0, 0, vout->disp_width, vout->disp_height);
 	if (rc)
 		DBG("Display update failed %d\n", rc);
-#ifdef CONFIG_PANEL_HDTV
 	}
-#endif
 }
 
 int omapvout_dss_update(struct omapvout_device *vout)
