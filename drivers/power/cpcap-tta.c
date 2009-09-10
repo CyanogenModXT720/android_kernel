@@ -132,16 +132,16 @@ static void tta_detection_work(struct work_struct *work)
   case TTA_CONFIG:
       get_sense(data);
 
-      if (!(data->gpio_val)) {
-	if (!(data->sense.vbus_4v4)) {
-		data->state = TTA_ATTACHED;
-	} else {
-		data->state = FTM_CABLE;
-	}
+	if (!(data->gpio_val)) {
+		if (!(data->sense.vbus_4v4))
+			data->state = TTA_ATTACHED;
+		else
+			data->state = FTM_CABLE;
+
 	schedule_delayed_work(&data->work, msecs_to_jiffies(0));
-      } else {
-      data->state = TTA_NONE;
-      }
+	} else {
+	data->state = TTA_NONE;
+	}
 
       break;
 
