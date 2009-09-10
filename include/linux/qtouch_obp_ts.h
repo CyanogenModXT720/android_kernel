@@ -22,7 +22,10 @@
 
 #define QTOUCH_TS_NAME "qtouch-obp-ts"
 
+#ifdef CONFIG_MACH_SHOLEST
 #define QTOUCH_TS_ATMEGA64A1_SUPPORT
+#endif
+
 #ifdef QTOUCH_TS_ATMEGA64A1_SUPPORT
 extern struct qtouch_ts_platform_data sholest_ts_platform_data_atmega64a1;
 #endif
@@ -173,7 +176,7 @@ struct qtm_gen_power_cfg {
 /* GEN_ACQUIRECONFIG_T8 */
 struct qtm_gen_acquire_cfg {
 	uint8_t			charge_time;       /* in 250ns */
-	uint8_t			reserved;
+	uint8_t			atouch_drift;      /* in 200ms */
 	uint8_t			touch_drift;       /* in 200ms */
 	uint8_t			drift_susp;        /* in 200ms */
 	uint8_t			touch_autocal;     /* in 200ms */
@@ -405,7 +408,7 @@ struct qtouch_key_array {
 struct qtouch_ts_platform_data {
 	uint32_t		flags;
 	unsigned long		irqflags;
-	uint32_t                reverse_x;
+	uint32_t        reverse_x;
 
 	uint32_t		abs_min_x;
 	uint32_t		abs_max_x;

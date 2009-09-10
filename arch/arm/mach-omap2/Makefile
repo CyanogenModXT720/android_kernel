@@ -110,7 +110,7 @@ obj-$(CONFIG_MACH_MAPPHONE)		+= board-mapphone.o \
 					   board-mapphone-keypad.o \
 					   board-mapphone-wifi.o \
 					   board-mapphone-gpio.o \
-                                           board-mapphone-panic.o
+					   board-mapphone-panic.o
 obj-$(CONFIG_MOT_FEAT_MDTV)             += board-mapphone-mdtv.o
 endif
 obj-$(CONFIG_MACH_OMAP_APOLLON)		+= board-apollon.o \

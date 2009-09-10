@@ -44,13 +44,6 @@
 
 static struct gpio_device gpio_devs[GPIO_DEVICE_SIZE] = {
 	{
-		111,
-		"slide_interrupt",
-		GPIODEV_CONFIG_INPUT | GPIODEV_CONFIG_INT_LLEV,
-		GPIODEV_CONFIG_INVALID,
-		GPIODEV_FLAG_CONFIGURABLE | GPIODEV_FLAG_LOWLEVELACCESS,
-	},
-	{
 		149,
 		"gps_rts",
 		GPIODEV_CONFIG_OUTPUT_LOW,
