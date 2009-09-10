@@ -34,6 +34,9 @@
 #define SHOLEST_AKM8973_INT_GPIO	175
 #define SHOLEST_AKM8973_RESET_GPIO	28
 #define SHOLEST_VIBRATOR_GPIO		181
+#ifdef CONFIG_VIB_PWM
+#define SHOLEST_VIBRATOR_EN_GPIO	9
+#endif
 #define SHOLEST_LVIBRATOR_PERIOD	5714
 #define SHOLEST_LVIBRATOR_DUTY		2857
 
@@ -116,11 +119,17 @@ static void sholest_lvibrator_exit(void)
 
 static void sholest_lvibrator_power_on(void)
 {
+#ifdef CONFIG_VIB_PWM
+	gpio_set_value(SHOLEST_VIBRATOR_EN_GPIO, 1);
+#endif
 	omap_dm_timer_start(vib_pwm_timer);
 }
 
 static void sholest_lvibrator_power_off(void)
 {
+#ifdef CONFIG_VIB_PWM
+	gpio_set_value(SHOLEST_VIBRATOR_EN_GPIO, 0);
+#endif
 	omap_dm_timer_stop(vib_pwm_timer);
 }
 
@@ -229,13 +238,13 @@ struct lis331dlh_platform_data sholest_lis331dlh_data = {
 
 	.g_range	= LIS331DLH_G_8G,
 
-	.axis_map_x	= 0,
-	.axis_map_y	= 1,
+	.axis_map_x	= 1,
+	.axis_map_y	= 0,
 	.axis_map_z	= 2,
 
-	.negate_x	= 0,
-	.negate_y	= 0,
-	.negate_z	= 0,
+	.negate_x	= 1,
+	.negate_y	= 1,
+	.negate_z	= 1,
 };
 
 static struct regulator *sholest_akm8973_regulator;
@@ -325,6 +334,12 @@ static void sholest_vibrator_init(void)
 	gpio_request(SHOLEST_VIBRATOR_GPIO, "vibrator");
 	gpio_direction_output(SHOLEST_VIBRATOR_GPIO, 0);
 	omap_cfg_reg(Y4_34XX_GPIO181);
+
+#ifdef CONFIG_VIB_PWM
+	gpio_request(SHOLEST_VIBRATOR_EN_GPIO, "vibrator en");
+	gpio_direction_output(SHOLEST_VIBRATOR_EN_GPIO, 0);
+	omap_cfg_reg(AF22_34XX_GPIO9_OUT);
+#endif
 }
 
 static struct platform_device *sholest_sensors[] __initdata = {

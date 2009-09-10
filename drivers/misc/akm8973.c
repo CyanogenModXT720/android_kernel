@@ -229,6 +229,17 @@ static void akm8973_device_power_off(struct akm8973_data *akm)
 	}
 }
 
+static void akm8973_device_power_off_mutex_lock(struct akm8973_data *akm)
+{
+	if (akm->pdata->power_off) {
+		disable_irq_nosync(akm->client->irq);
+		mutex_unlock(&akm->lock);
+		akm->pdata->power_off();
+		akm->hw_initialized = 0;
+		mutex_lock(&akm->lock);
+	}
+}
+
 static int akm8973_device_power_on(struct akm8973_data *akm)
 {
 	int err;
@@ -726,7 +737,7 @@ static int akm8973_probe(struct i2c_client *client,
 		goto err5;
 	}
 
-	akm8973_device_power_off(akm);
+	akm8973_device_power_off_mutex_lock(akm);
 
 	/* As default, do not report information */
 	akm->state = 0;
