@@ -653,6 +653,8 @@ extern void smsspi_unregister(void);
 extern int smsmdtv_power_control(int pwrup_enable);
 
 /* ------------------------------------------------------------------------ */
+/* Klockwork issue fixed */
+#define MOT_FEAT_KERNEL_KLOCKWORK_FIEXED
 
 extern int sms_debug;
 

@@ -211,12 +211,16 @@ static int lp3907_power_on_sequence(struct lp3907_data *pLP3907)
 					       lp3907_init_tbl[i].reg, \
 					       lp3907_init_tbl[i].data);
 			if (!ret) {
-				dev_info(&pLP3907->client->dev, "[LP3907]WR: reg = 0x%x, data = 0x%x\n",
-						lp3907_init_tbl[i].reg, lp3907_init_tbl[i].data);
+				dev_dbg(&pLP3907->client->dev,
+					"[LP3907]WR: reg = 0x%x, data = 0x%x\n",
+					lp3907_init_tbl[i].reg,
+					lp3907_init_tbl[i].data);
 			}
 		} else {
-			dev_err(&pLP3907->client->dev, "lp3907_i2c_write(0x%x, 0x%x) is failed!\n",
-			       lp3907_init_tbl[i].reg, lp3907_init_tbl[i].data);
+			dev_err(&pLP3907->client->dev,
+				"lp3907_i2c_write(0x%x, 0x%x) is failed!\n",
+				lp3907_init_tbl[i].reg,
+				lp3907_init_tbl[i].data);
 			line = __LINE__;
 			goto lp3907_configure_exit;
 		}
@@ -258,7 +262,8 @@ static int lp3907_power_off_sequence(struct lp3907_data *pLP3907)
 					       lp3907_pwr_off_tbl[i].reg, \
 					       lp3907_pwr_off_tbl[i].data);
 			if (!ret) {
-				dev_info(&pLP3907->client->dev, "[LP3907]WR: reg = 0x%x, data = 0x%x\n",
+				dev_dbg(&pLP3907->client->dev,
+				"[LP3907]WR: reg = 0x%x, data = 0x%x\n",
 						lp3907_init_tbl[i].reg, lp3907_init_tbl[i].data);
 			}
 		} else {
@@ -291,7 +296,6 @@ static int lp3907_open(struct inode *inode, struct file *file)
 
 static int lp3907_release(struct inode *inode, struct file *file)
 {
-  printk(KERN_INFO "%s is called.\n", __func__);
   return 0;
 }
 
@@ -460,8 +464,6 @@ static int __init lp3907_init(void)
 	int ret = -1;
 	int line;
 
-	printk(KERN_INFO "LP3907 voltage regulator driver : init.\n");
-
 	devno = MKDEV(lp3907_major_num, lp3907_minor_num);
 	ret = register_chrdev_region(devno, 1, "lp3907");
 	if (ret < 0) {
@@ -500,7 +502,6 @@ static int __init lp3907_init(void)
     }
 	}
 
-	printk(KERN_INFO "LP3907 voltage regulator driver : init is completed.\n");
 	return ret;
 init_exit_path:
 	printk(KERN_ERR "[FATAL] Unable to register LP3907 i2c driver!\n");

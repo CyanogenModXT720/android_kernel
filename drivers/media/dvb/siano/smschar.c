@@ -179,8 +179,7 @@ static int smschar_open(struct inode *inode, struct file *file)
 						    cdev);
 	int rc = -ENODEV;
 
-	/*sms_info("entering dev->device_index = %d\n", dev->device_index);*/
-	printk(KERN_INFO "%s: dev->device_index = %d\n", __func__, dev->device_index);
+	sms_info("entering dev->device_index = %d\n", dev->device_index);
 
 	if (dev->coredev) {
 		struct smsclient_params_t params;
@@ -236,6 +235,9 @@ static ssize_t smschar_read(struct file *file, char __user *buf,
 	struct smschar_device_t *dev = file->private_data;
 	unsigned long flags;
 	int rc, copied = 0;
+#ifdef MOT_FEAT_KERNEL_KLOCKWORK_FIEXED
+	int actual_size = 0;
+#endif
 
 	if (!buf) {
 		sms_err("Bad pointer recieved from user.\n");
@@ -263,7 +265,14 @@ static ssize_t smschar_read(struct file *file, char __user *buf,
 	while (!list_empty(&dev->pending_data) && (copied < count)) {
 		struct smscore_buffer_t *cb =
 		    (struct smscore_buffer_t *)dev->pending_data.next;
+#ifdef MOT_FEAT_KERNEL_KLOCKWORK_FIEXED
+		if (((int) count - copied) < cb->size)
+			actual_size = (int) count;
+		else
+			actual_size = cb->size;
+#else
 		int actual_size = min(((int)count - copied), cb->size);
+#endif
 		if (copy_to_user(&buf[copied], &((char *)cb->p)[cb->offset],
 				 actual_size)) {
 			sms_err("copy_to_user failed\n");

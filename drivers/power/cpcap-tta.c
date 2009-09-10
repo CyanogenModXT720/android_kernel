@@ -33,14 +33,9 @@
 
 
 #define SHOLEST_TTA_CHRG_DET_N_GPIO  34
-#define TIME_INTERVAL_FOR_TTA        1400
-/*!
- * @brief The time for holding GPIO as high
- */
+
 #define TIME_FOR_GPIO_HIGH          100
-/*!
- * @brief The name of the IRQ for TTA charger
- */
+
 #define TTA_IRQ_NAME "tta IRQ"
 
 enum cpcap_tta_det_state {
@@ -52,6 +47,7 @@ enum cpcap_tta_det_state {
 };
 
 struct read_sense_data {
+  unsigned short clear_int:1;
   unsigned short dplus:1;
   unsigned short dminus:1;
   unsigned short vbus_4v4:1;
@@ -84,40 +80,34 @@ static int get_sense(struct cpcap_tta_det_data *data)
   struct cpcap_device *cpcap;
 
   if (!data)
-	return -EFAULT;
+		return -EFAULT;
   cpcap = data->cpcap;
 
   retval = cpcap_regacc_read(cpcap, CPCAP_REG_INTS2, &value);
   if (retval)
-	return retval;
-
-  /* Clear ASAP after read. */
-	retval = cpcap_regacc_write(cpcap, CPCAP_REG_INT2,
-				    (CPCAP_BIT_CHRGCURR1_I |
-				     CPCAP_BIT_SE1_I),
-				    (CPCAP_BIT_CHRGCURR1_I |
-				     CPCAP_BIT_SE1_I));
-	if (retval)
 		return retval;
 
   data->sense.vbus_4v4  = ((value & CPCAP_BIT_VBUSVLD_S) ? 1 : 0);
 
   retval = cpcap_regacc_read(cpcap, CPCAP_REG_INTS4, &value);
   if (retval)
-	return retval;
+		return retval;
+
+  /* Clear ASAP after read. */
+  if (data->sense.clear_int) {
+	retval = cpcap_regacc_write(cpcap, CPCAP_REG_INT1,
+				     CPCAP_BIT_DP_I,
+				     CPCAP_BIT_DP_I);
+
+	data->sense.clear_int = 0;
+  }
+  if (retval)
+		return retval;
 
   data->sense.dplus    = ((value & CPCAP_BIT_DP_S) ? 1 : 0);
   data->sense.dminus   = ((value & CPCAP_BIT_DM_S) ? 1 : 0);
 
   return 0;
-}
-
-void swing_gpio(void)
-{
-  gpio_direction_output(SHOLEST_TTA_CHRG_DET_N_GPIO, 1);
-  gpio_get_value(SHOLEST_TTA_CHRG_DET_N_GPIO);
-  mdelay(TIME_FOR_GPIO_HIGH);
-  gpio_direction_input(SHOLEST_TTA_CHRG_DET_N_GPIO);
 }
 
 static void tta_detection_work(struct work_struct *work)
@@ -129,10 +119,11 @@ static void tta_detection_work(struct work_struct *work)
 
   switch (data->state) {
   case TTA_NONE:
+      cpcap_irq_mask(data->cpcap, CPCAP_IRQ_DPI);
       data->gpio_val = gpio_get_value(SHOLEST_TTA_CHRG_DET_N_GPIO);
       if (!(data->gpio_val)) {
-	data->is_xcvr_enabled = 1;
-	set_transceiver(data);
+				data->is_xcvr_enabled = 1;
+				set_transceiver(data);
       }
       data->state = TTA_CONFIG;
       schedule_delayed_work(&data->work, msecs_to_jiffies(100));
@@ -141,37 +132,51 @@ static void tta_detection_work(struct work_struct *work)
   case TTA_CONFIG:
       get_sense(data);
 
-      if (!(data->gpio_val)) {
-	if (!(data->sense.vbus_4v4)) {
-		data->state = TTA_ATTACHED;
-		cpcap_irq_mask(data->cpcap, CPCAP_IRQ_CHRG_DET);
-		cpcap_irq_mask(data->cpcap, CPCAP_IRQ_CHRG_CURR1);
-		cpcap_irq_mask(data->cpcap, CPCAP_IRQ_SE1);
-		cpcap_irq_mask(data->cpcap, CPCAP_IRQ_IDGND);
-		cpcap_irq_mask(data->cpcap, CPCAP_IRQ_VBUSVLD);
+	if (!(data->gpio_val)) {
+		if (!(data->sense.vbus_4v4))
+			data->state = TTA_ATTACHED;
+		else
+			data->state = FTM_CABLE;
+
+	schedule_delayed_work(&data->work, msecs_to_jiffies(0));
 	} else {
-	data->state = FTM_CABLE;
+	data->state = TTA_NONE;
 	}
-	schedule_delayed_work(&data->work, msecs_to_jiffies(20));
-      } else {
-      data->state = TTA_NONE;
-      }
 
       break;
 
   case TTA_ATTACHED:
+     cpcap_regacc_read(data->cpcap, CPCAP_REG_VUSBC, &reg_mask);
+     if ((reg_mask & (CPCAP_BIT_VUSB_MODE0 | CPCAP_BIT_VUSB_MODE1 |
+					CPCAP_BIT_VUSB_MODE2)) == 0) {
+			cpcap_regacc_write(data->cpcap, CPCAP_REG_VUSBC,
+				(CPCAP_BIT_VUSB_MODE0 | CPCAP_BIT_VUSB_MODE1) ,
+				(CPCAP_BIT_VUSB_MODE0 | CPCAP_BIT_VUSB_MODE1 |
+				CPCAP_BIT_VUSB_MODE2));
+			data->state = TTA_ATTACHED;
+     }
+
       cpcap_regacc_read(data->cpcap, CPCAP_REG_USBC2, &reg_mask);
       data->is_xcvr_enabled = ((reg_mask & CPCAP_BIT_USBXCVREN) ? 1 : 0);
       if (!(data->is_xcvr_enabled)) {
-	data->is_xcvr_enabled = 1;
-	set_transceiver(data);
+				data->is_xcvr_enabled = 1;
+				set_transceiver(data);
       }
+
+      cpcap_regacc_write(data->cpcap, CPCAP_REG_USBC3,
+				     CPCAP_BIT_PU_SPI,
+				     CPCAP_BIT_PU_SPI);
+	    cpcap_regacc_write(data->cpcap, CPCAP_REG_USBC1,
+				    CPCAP_BIT_DM1K5PU,
+				    (CPCAP_BIT_DP150KPU | CPCAP_BIT_DP1K5PU |
+				     CPCAP_BIT_DM1K5PU | CPCAP_BIT_DPPD |
+				     CPCAP_BIT_DMPD));
 
       get_sense(data);
 
       if ((data->sense.dplus) == (data->sense.dminus)) {
-	schedule_delayed_work(&data->work,
-			msecs_to_jiffies(TIME_INTERVAL_FOR_TTA));
+				data->state = TTA_ATTACHED;
+				cpcap_irq_unmask(data->cpcap, CPCAP_IRQ_DPI);
       } else {
       data->state = TTA_DETACHED;
       schedule_delayed_work(&data->work, msecs_to_jiffies(0));
@@ -180,21 +185,28 @@ static void tta_detection_work(struct work_struct *work)
 
   case FTM_CABLE:
       data->state = TTA_NONE;
-      disable_tta_irq();
-      swing_gpio();
+      disable_tta();
       break;
 
   case TTA_DETACHED:
+      cpcap_irq_mask(data->cpcap, CPCAP_IRQ_DPI);
       data->state = TTA_NONE;
-      swing_gpio();
+      disable_tta();
+      enable_tta();
+
+      cpcap_regacc_write(data->cpcap, CPCAP_REG_VUSBC,
+					0 ,
+				(CPCAP_BIT_VUSB_MODE0 | CPCAP_BIT_VUSB_MODE1 |
+				CPCAP_BIT_VUSB_MODE2));
+
       data->is_xcvr_enabled = 0;
       set_transceiver(data);
-      cpcap_irq_unmask(data->cpcap, CPCAP_IRQ_CHRG_DET);
-		cpcap_irq_unmask(data->cpcap, CPCAP_IRQ_CHRG_CURR1);
-		cpcap_irq_unmask(data->cpcap, CPCAP_IRQ_SE1);
-		cpcap_irq_unmask(data->cpcap, CPCAP_IRQ_IDGND);
-		cpcap_irq_unmask(data->cpcap, CPCAP_IRQ_VBUSVLD);
 
+      cpcap_regacc_write(data->cpcap, CPCAP_REG_USBC1,
+				    CPCAP_BIT_DP150KPU,
+				    (CPCAP_BIT_DP150KPU | CPCAP_BIT_DP1K5PU |
+				     CPCAP_BIT_DM1K5PU | CPCAP_BIT_DPPD |
+				     CPCAP_BIT_DMPD));
       break;
 
   default:
@@ -212,14 +224,22 @@ irqreturn_t isr_handler(int irq, void *dev_id, struct pt_regs *regs)
   return IRQ_HANDLED;
 }
 
-void enable_tta_irq(void)
+static void int_handler(enum cpcap_irqs int_event, void *data)
 {
-  enable_irq(OMAP_GPIO_IRQ(SHOLEST_TTA_CHRG_DET_N_GPIO));
+  struct cpcap_tta_det_data *tta_det_data = data;
+  tta_det_data->sense.clear_int = 1;
+  schedule_delayed_work(&(tta_det_data->work), 0);
 }
 
-void disable_tta_irq(void)
+void enable_tta(void)
 {
-  disable_irq(OMAP_GPIO_IRQ(SHOLEST_TTA_CHRG_DET_N_GPIO));
+  mdelay(TIME_FOR_GPIO_HIGH);
+  gpio_direction_input(SHOLEST_TTA_CHRG_DET_N_GPIO);
+}
+
+void disable_tta(void)
+{
+  gpio_direction_output(SHOLEST_TTA_CHRG_DET_N_GPIO, 1);
 }
 
 static int cpcap_tta_chgr_probe(struct platform_device *pdev)
@@ -246,11 +266,15 @@ static int cpcap_tta_chgr_probe(struct platform_device *pdev)
 
   set_irq_type(OMAP_GPIO_IRQ(SHOLEST_TTA_CHRG_DET_N_GPIO),
 			IRQ_TYPE_EDGE_FALLING);
-  retval = request_irq(
+  retval |= request_irq(
 			OMAP_GPIO_IRQ(SHOLEST_TTA_CHRG_DET_N_GPIO),
 			(void *)isr_handler,
 			IRQF_DISABLED, TTA_IRQ_NAME,
 			data);
+
+  set_irq_type(CPCAP_IRQ_DPI, IRQ_TYPE_EDGE_FALLING);
+  retval |= cpcap_irq_register(data->cpcap, CPCAP_IRQ_DPI,
+				     int_handler, data);
 
   if (retval != 0) {
 		dev_err(&pdev->dev, "Initialization Error\n");

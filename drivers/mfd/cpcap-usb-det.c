@@ -98,7 +98,7 @@ static const char *accy_devices[] = {
 
 static void vusb_enable(struct cpcap_usb_det_data *data)
 {
-	if ((!data->is_vusb_enabled) || NULL) {
+	if (!data->is_vusb_enabled) {
 		wake_lock(&data->wake_lock);
 		regulator_enable(data->regulator);
 		data->is_vusb_enabled = 1;
@@ -107,7 +107,7 @@ static void vusb_enable(struct cpcap_usb_det_data *data)
 
 static void vusb_disable(struct cpcap_usb_det_data *data)
 {
-	if ((data->is_vusb_enabled) || NULL) {
+	if (data->is_vusb_enabled) {
 		wake_unlock(&data->wake_lock);
 		regulator_disable(data->regulator);
 		data->is_vusb_enabled = 0;
@@ -381,7 +381,9 @@ static void detection_work(struct work_struct *work)
 		 * charger is attached.
 		 */
 		if (data->sense & CPCAP_BIT_SE1_S) {
-			enable_tta_irq();
+#ifdef CONFIG_TTA_CHARGER
+			enable_tta();
+#endif
 			data->state = CONFIG;
 			schedule_delayed_work(&data->work, 0);
 		} else {

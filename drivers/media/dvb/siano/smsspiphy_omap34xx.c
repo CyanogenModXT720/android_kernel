@@ -50,6 +50,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <mach/dma.h>
 
 #include <linux/gpio_mapping.h>
+#include <mach/mux.h>
 
 /* debug macro */
 #define tdmblog(fmt, arg...) printk(KERN_DEBUG "TDMB_SEQ: "fmt, ##arg)
@@ -196,6 +197,11 @@ int smsmdtv_power_control(int pwrup_enable)
 
   if (pwrup_enable == 1) {
 
+	ret = omap_cfg_reg(AC3_34XX_MDTV_SIMO_ON);
+	ret = omap_cfg_reg(AD4_34XX_MDTV_SOMI_ON);
+	ret = omap_cfg_reg(AD3_34XX_MDTV_CS_ON);
+	ret = omap_cfg_reg(AA3_34XX_MDTV_CLK_ON);
+
 	/* PWDN High */
 	gpio_set_value(MDTV_PWDN_GPIO, 1);
 	udelay(20);  /* at least, T = 10usec */
@@ -225,8 +231,12 @@ int smsmdtv_power_control(int pwrup_enable)
 
 	/* PWDN Low */
 	gpio_set_value(MDTV_PWDN_GPIO, 0);
-	msleep(1);
+	/*msleep(1);*/
 
+	ret = omap_cfg_reg(AC3_34XX_MDTV_SIMO_OFF);
+	ret = omap_cfg_reg(AD4_34XX_MDTV_SOMI_OFF);
+	ret = omap_cfg_reg(AD3_34XX_MDTV_CS_OFF);
+	ret = omap_cfg_reg(AA3_34XX_MDTV_CLK_OFF);
 	}
 
   if (ret < 0)
@@ -306,6 +316,11 @@ void *smsspiphy_init(void *context,
 		sms_info("Unable to request irq %d", ret);
 		goto err_irq;
 	}
+
+	/* interrupt disable */
+	disable_irq(OMAP_GPIO_IRQ(SMS_IRQ_GPIO));
+	smsmdtv_int_enable_flag = INTERRUPT_DISABLE;
+	printk(KERN_INFO "smsspiphy_init(): disable_irq\n");
 
 	spiphy_dev->txpad = dma_alloc_coherent(NULL, TX_BUFFER_SIZE,
 			&spiphy_dev->txpad_phy_addr,

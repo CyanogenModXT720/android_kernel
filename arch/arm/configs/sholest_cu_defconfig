@@ -2144,7 +2144,8 @@ CONFIG_SMS_HOSTLIB_SUBSYS=m
 #
 # TTA charger
 #
-CONFIG_TTA_CHARGER=y
+CONFIG_TTA_CHARGER=n
+
 #
 # End of Motorola Features
 #
