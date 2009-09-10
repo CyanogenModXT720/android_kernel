@@ -42,7 +42,7 @@
 
 #ifdef CONFIG_APANIC_APR
 #define WDOG_AP_REBOOT	0x00020000
-#define POWER_DOWN	0x00000200
+#define POWER_CUT	0x00000200
 #define CPCAP_RESET	0x00040000
 #define INFO_SIZE 64
 
@@ -76,7 +76,7 @@ struct apanic_data {
 	struct proc_dir_entry	*apanic_threads;
 
 #ifdef CONFIG_APANIC_APR
-	struct proc_dir_entry   *last_kmsg;
+	struct proc_dir_entry   *last_kmsg_apr;
 #endif
 };
 
@@ -156,7 +156,7 @@ static int apanic_proc_read(char *buffer, char **start, off_t offset,
 		file_offset = ctx->curr.threads_offset;
 		break;
 #ifdef CONFIG_APANIC_APR
-	case 3:	/* last_kmsg */
+	case 3:	/* last_kmsg_apr */
 		file_length = ctx->curr.threads_length
 						+ ctx->curr.console_length;
 		file_offset = ctx->curr.console_offset;
@@ -279,9 +279,9 @@ static void apanic_remove_proc_work(struct work_struct *work)
 		ctx->apanic_threads = NULL;
 	}
 #ifdef CONFIG_APANIC_APR
-	if (ctx->last_kmsg) {
-		remove_proc_entry("last_kmsg", NULL);
-		ctx->last_kmsg = NULL;
+	if (ctx->last_kmsg_apr) {
+		remove_proc_entry("last_kmsg_apr", NULL);
+		ctx->last_kmsg_apr = NULL;
 	}
 #endif
 	mutex_unlock(&drv_mutex);
@@ -290,7 +290,9 @@ static void apanic_remove_proc_work(struct work_struct *work)
 static int apanic_proc_write(struct file *file, const char __user *buffer,
 		unsigned long count, void *data)
 {
-	/* schedule_work(&proc_removal_work); */
+#ifndef CONFIG_APANIC_APR	
+	schedule_work(&proc_removal_work);
+#endif	
 	return count;
 }
 
@@ -388,7 +390,7 @@ static void mtd_panic_notify_add(struct mtd_info *mtd)
 			rst_len = sprintf(rst_buf,
 				"POWERUPREASON : WDOG_AP_RESET(0x%08x)\n",
 				powerup_reason);
-		else if (powerup_reason == POWER_DOWN)
+		else if (powerup_reason == POWER_CUT)
 			rst_len = sprintf(rst_buf,
 				"POWERUPREASON : POWER_CUT(0x%08x)\n",
 				powerup_reason);
@@ -398,7 +400,7 @@ static void mtd_panic_notify_add(struct mtd_info *mtd)
 				powerup_reason);
 
 		if (rst_len) {
-			entry = create_proc_entry("last_kmsg",
+			entry = create_proc_entry("last_kmsg_apr",
 					S_IFREG | S_IRUGO, NULL);
 			if (!entry)
 				printk(KERN_ERR "%s: failed creating procfile\n",
@@ -447,18 +449,18 @@ static void mtd_panic_notify_add(struct mtd_info *mtd)
 
 #ifdef CONFIG_APANIC_APR
 	if (hdr->console_length || hdr->threads_length) {
-		ctx->last_kmsg = create_proc_entry("last_kmsg",
+		ctx->last_kmsg_apr = create_proc_entry("last_kmsg_apr",
 				S_IFREG | S_IRUGO |
 				S_IWUSR | S_IWGRP, NULL);
-		if (!ctx->last_kmsg)
+		if (!ctx->last_kmsg_apr)
 			printk(KERN_ERR "%s: failed creating procfile\n",
 					__func__);
 		else {
-			ctx->last_kmsg->read_proc = apanic_proc_read;
-			ctx->last_kmsg->write_proc = apanic_proc_write;
-			ctx->last_kmsg->size = hdr->console_length +
+			ctx->last_kmsg_apr->read_proc = apanic_proc_read;
+			ctx->last_kmsg_apr->write_proc = apanic_proc_write;
+			ctx->last_kmsg_apr->size = hdr->console_length +
 				hdr->threads_length;
-			ctx->last_kmsg->data = (void *) 3;
+			ctx->last_kmsg_apr->data = (void *) 3;
 		}
 	}
 
