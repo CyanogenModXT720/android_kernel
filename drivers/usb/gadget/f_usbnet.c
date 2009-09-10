@@ -447,7 +447,7 @@ static void ether_out_complete(struct usb_ep *ep, struct usb_request *req)
 	}
 
 	/* don't bother requeuing if we just went offline */
-	if (req->status == -ESHUTDOWN) {
+	if ((req->status == -ENODEV) || (req->status == -ESHUTDOWN)) {
 		unsigned long flags;
 		spin_lock_irqsave(&g_usbnet_context->lock, flags);
 		list_add_tail(&req->list, &g_usbnet_context->rx_reqs);
@@ -619,6 +619,21 @@ static void do_set_config(u16 new_config)
 			printk(KERN_INFO "%s:  failed to enable BULK_OUT EP ret = %d\n",
 			      __func__, result);
 		}
+
+		if (high_speed_flag)
+			result = usb_ep_enable(g_usbnet_context->intr_out,
+					&hs_intr_out_desc);
+		else
+			result = usb_ep_enable(g_usbnet_context->intr_out,
+					&fs_intr_out_desc);
+
+		if (result != 0) {
+			printk(KERN_INFO "%s: failed to enable INTR_OUT EP ret = %d\n",
+				__func__, result);
+		}
+
+
+
 
 		/* we're online -- get all rx requests queued */
 		for (;;) {
