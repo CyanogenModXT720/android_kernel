@@ -532,6 +532,8 @@ static int omap_ehci_bus_suspend(struct usb_hcd *hcd)
 	ehci_clocks = (struct ehci_omap_clock_defs *)
 			(((char *)hcd_to_ehci(hcd)) + sizeof(struct ehci_hcd));
 	ret = ehci_bus_suspend(hcd);
+	if (ret < 0)
+		return ret;
 
 #if defined(CONFIG_USB_OHCI_HCD) || defined(CONFIG_USB_OHCI_HCD_MODULE)
 	if (!is_cdma_phone() && !ehci_clocks->suspended) {
