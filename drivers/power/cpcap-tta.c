@@ -80,18 +80,18 @@ static int get_sense(struct cpcap_tta_det_data *data)
   struct cpcap_device *cpcap;
 
   if (!data)
-	return -EFAULT;
+		return -EFAULT;
   cpcap = data->cpcap;
 
   retval = cpcap_regacc_read(cpcap, CPCAP_REG_INTS2, &value);
   if (retval)
-	return retval;
+		return retval;
 
   data->sense.vbus_4v4  = ((value & CPCAP_BIT_VBUSVLD_S) ? 1 : 0);
 
   retval = cpcap_regacc_read(cpcap, CPCAP_REG_INTS4, &value);
   if (retval)
-	return retval;
+		return retval;
 
   /* Clear ASAP after read. */
   if (data->sense.clear_int) {
@@ -101,8 +101,8 @@ static int get_sense(struct cpcap_tta_det_data *data)
 
 	data->sense.clear_int = 0;
   }
-   if (retval)
-	return retval;
+  if (retval)
+		return retval;
 
   data->sense.dplus    = ((value & CPCAP_BIT_DP_S) ? 1 : 0);
   data->sense.dminus   = ((value & CPCAP_BIT_DM_S) ? 1 : 0);
@@ -122,8 +122,8 @@ static void tta_detection_work(struct work_struct *work)
       cpcap_irq_mask(data->cpcap, CPCAP_IRQ_DPI);
       data->gpio_val = gpio_get_value(SHOLEST_TTA_CHRG_DET_N_GPIO);
       if (!(data->gpio_val)) {
-	data->is_xcvr_enabled = 1;
-	set_transceiver(data);
+				data->is_xcvr_enabled = 1;
+				set_transceiver(data);
       }
       data->state = TTA_CONFIG;
       schedule_delayed_work(&data->work, msecs_to_jiffies(100));
@@ -149,18 +149,18 @@ static void tta_detection_work(struct work_struct *work)
      cpcap_regacc_read(data->cpcap, CPCAP_REG_VUSBC, &reg_mask);
      if ((reg_mask & (CPCAP_BIT_VUSB_MODE0 | CPCAP_BIT_VUSB_MODE1 |
 					CPCAP_BIT_VUSB_MODE2)) == 0) {
-	cpcap_regacc_write(data->cpcap, CPCAP_REG_VUSBC,
-		(CPCAP_BIT_VUSB_MODE0 | CPCAP_BIT_VUSB_MODE1) ,
-		(CPCAP_BIT_VUSB_MODE0 | CPCAP_BIT_VUSB_MODE1 |
-		CPCAP_BIT_VUSB_MODE2));
-	data->state = TTA_ATTACHED;
+			cpcap_regacc_write(data->cpcap, CPCAP_REG_VUSBC,
+				(CPCAP_BIT_VUSB_MODE0 | CPCAP_BIT_VUSB_MODE1) ,
+				(CPCAP_BIT_VUSB_MODE0 | CPCAP_BIT_VUSB_MODE1 |
+				CPCAP_BIT_VUSB_MODE2));
+			data->state = TTA_ATTACHED;
      }
 
       cpcap_regacc_read(data->cpcap, CPCAP_REG_USBC2, &reg_mask);
       data->is_xcvr_enabled = ((reg_mask & CPCAP_BIT_USBXCVREN) ? 1 : 0);
       if (!(data->is_xcvr_enabled)) {
-	data->is_xcvr_enabled = 1;
-	set_transceiver(data);
+				data->is_xcvr_enabled = 1;
+				set_transceiver(data);
       }
 
       cpcap_regacc_write(data->cpcap, CPCAP_REG_USBC3,
@@ -175,8 +175,8 @@ static void tta_detection_work(struct work_struct *work)
       get_sense(data);
 
       if ((data->sense.dplus) == (data->sense.dminus)) {
-	data->state = TTA_ATTACHED;
-	cpcap_irq_unmask(data->cpcap, CPCAP_IRQ_DPI);
+				data->state = TTA_ATTACHED;
+				cpcap_irq_unmask(data->cpcap, CPCAP_IRQ_DPI);
       } else {
       data->state = TTA_DETACHED;
       schedule_delayed_work(&data->work, msecs_to_jiffies(0));
@@ -195,9 +195,9 @@ static void tta_detection_work(struct work_struct *work)
       enable_tta();
 
       cpcap_regacc_write(data->cpcap, CPCAP_REG_VUSBC,
-		0 ,
-		(CPCAP_BIT_VUSB_MODE0 | CPCAP_BIT_VUSB_MODE1 |
-		CPCAP_BIT_VUSB_MODE2));
+					0 ,
+				(CPCAP_BIT_VUSB_MODE0 | CPCAP_BIT_VUSB_MODE1 |
+				CPCAP_BIT_VUSB_MODE2));
 
       data->is_xcvr_enabled = 0;
       set_transceiver(data);
