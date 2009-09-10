@@ -3,28 +3,31 @@
 
 #include <linux/types.h>
 
-/*#define TDA19989_CEC_AVAILABLE*/
+/*#define TMFL_CEC_AVAILABLE*/
 
-#define HDMI_I2C_WRITE		0
-#define HDMI_I2C_READ		1
-#define HDMI_PWR_ONOFF	2
-#define HDMI_INT_ENABLE	3
-#ifdef TDA19989_CEC_AVAILABLE
-#define HDMI_CEC_CAL_TIME	4
+#define TDA19989_I2C_ARG_MAX_DATA	(128)
+
+struct i2cMsgArg {
+    unsigned char slaveAddr;
+    unsigned char firstRegister;
+    unsigned char lenData;
+    unsigned char Data[TDA19989_I2C_ARG_MAX_DATA];
+};
+
+#define TDA19989_IOCTL_MAGIC	'g'
+#define TDA19989_IOCTL_BASE	0x40
+#define TDA19989_I2C_WRITE	_IOW(TDA19989_IOCTL_MAGIC, \
+				    TDA19989_IOCTL_BASE+0, struct i2cMsgArg)
+#define TDA19989_I2C_READ	_IOWR(TDA19989_IOCTL_MAGIC, \
+				    TDA19989_IOCTL_BASE+1, struct i2cMsgArg)
+#define TDA19989_PWR_ENABLE	_IOW(TDA19989_IOCTL_MAGIC, \
+				    TDA19989_IOCTL_BASE+2, int)
+#define TDA19989_INT_ENABLE	_IOW(TDA19989_IOCTL_MAGIC, \
+				    TDA19989_IOCTL_BASE+3, int)
+#ifdef TMFL_CEC_AVAILABLE
+#define TDA19989_CEC_CAL_TIME	_IO(TDA19989_IOCTL_MAGIC, \
+				    TDA19989_IOCTL_BASE+4)
 #endif
-
-#define HDMI_TRNS_NAME  "tda19989"
-
-#define HDMI_INT_PIN_GPIO_NUM 25
-#define HDMI_PWR_EN_GPIO_NUM 26
-
-typedef struct _i2cKernelModeArg
-{
-    u8 slaveAddr;
-    u8 firstRegister;
-    u8 lenData;
-    u8 Data[128];
-} i2cKernelModeArg;
 
 #endif
 

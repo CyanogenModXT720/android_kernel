@@ -814,9 +814,11 @@ static struct i2c_board_info __initdata sholest_i2c_bus3_board_info[] = {
 		.platform_data = &sholest_hplens_platform_data,
 	},
 #endif
+#ifdef CONFIG_HDMI_TDA19989
 	{
 		I2C_BOARD_INFO("tda19989", 0x70),
 	},
+#endif
 };
 
 static int __init sholest_i2c_init(void)
