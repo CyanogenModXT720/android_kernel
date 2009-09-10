@@ -606,10 +606,16 @@ enum ltt_lite_config_cmd {
  */
 static void __init ltt_lite_cmdline_setup(char **arg)
 {
-	int res;
+	int res, i;
 	unsigned long pagenum;
+	char string[5];
 
-	res = strict_strtoul(*arg, 10, &pagenum);
+	for (i = 0; i < 5 && isxdigit((*arg)[i]); i++)
+		string[i] = (*arg)[i];
+	string[i] = '\0';
+
+	res = strict_strtoul(string, 10, &pagenum);
+
 	if (res)
 		DPRINT(KERN_INFO   "Ltt-lite pagenum may be incorret\n");
 
@@ -814,7 +820,7 @@ static void wq_init(struct work_struct *ignore)
 	}
 
 	if (!ltt_lite_buf) {
-		printk(KERN_DEBUG "Ltt-lite wq-int ltt-lite-buff trure\n");
+		printk(KERN_DEBUG "Ltt-lite wq-int ltt-lite-buff true\n");
 		if (!use_private_ram_file) {
 			buf = alloc_reserved_pages(&page_array,
 						   1 <<
@@ -1255,7 +1261,7 @@ static int ltt_lite_proc_write_init(struct file *filp,
 					loff_t *data)
 {
 	int buf, mode;
-	int res;
+	int res, i;
 	char string[5];
 	UNUSED_PARAM(filp);
 	UNUSED_PARAM(data);
@@ -1263,7 +1269,11 @@ static int ltt_lite_proc_write_init(struct file *filp,
 	if (copy_from_user(string, buffer, 5))
 		return -EFAULT;
 
-	string[4] = '\0';
+	i = 0;
+	while (isdigit(string[i]) && i < 5)
+		i++;
+
+	string[i] = '\0';
 
 	if (proc_init_char_command(string))
 		return count;
@@ -2239,8 +2249,6 @@ void ltt_lite_ev_log_process(int type, struct task_struct *p)
 	process_log.tgid = p->tgid;
 
 	res = get_proc_pid_cmdline(p, buffer);
-	DPRINT(KERN_DEBUG "lttlite cmdline ltt_lite_ev_log_process : \
-		%s res value: %d \n", buffer, res);
 	if (!res)
 		buffer = p->comm;
 
@@ -2548,9 +2556,6 @@ static int get_proc_pid_cmdline(struct task_struct *task, char *buffer)
 		}
 	}
 
-	DPRINT(KERN_DEBUG "lttlite cmdline value get_proc_pid_cmdline:\
-			%s res value: %d \n", buffer, res);
-
 out_mm:
 	mmput(mm);
 out:
@@ -2682,7 +2687,7 @@ void ltt_lite_log_printk(char *string, int size)
 		memcpy(ltt_lite_small_buffer + sizeof(record_header_t),
 					string, LTT_LITE_SMALL_BUFFER_SIZE);
 		/* Truncate/terminate string */
-		ltt_lite_small_buffer[LTT_LITE_SMALL_BUFFER_SIZE] = 0;
+		ltt_lite_small_buffer[LTT_LITE_SMALL_BUFFER_SIZE - 1] = 0;
 		commit_log(ltt_lite_small_buffer,
 						LTT_LITE_SMALL_BUFFER_SIZE,
 						LTT_LITE_EV_PRINTK);
