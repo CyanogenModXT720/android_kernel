@@ -112,6 +112,14 @@ static int ehci_bus_suspend (struct usb_hcd *hcd)
 	int			port;
 	int			mask;
 
+	port = HCS_N_PORTS(ehci->hcs_params);
+	while (port--) {
+		u32 __iomem	*reg = &ehci->regs->port_status[port];
+		u32		t1 = ehci_readl(ehci, reg);
+		if (t1 & PORT_RESUME)
+			return -EBUSY;
+	}
+
 	ehci_dbg(ehci, "suspend root hub\n");
 
 	if (time_before (jiffies, ehci->next_statechange))
@@ -481,10 +489,9 @@ ehci_hub_status_data (struct usb_hcd *hcd, char *buf)
 	int		ports, i, retval = 1;
 	unsigned long	flags;
 
-	/* if !USB_SUSPEND, root hub timers won't get shut down ...
+	/* if !USB_SUSPEND, root hub timers won't get shut down ... */
 	if (!HC_IS_RUNNING(hcd->state))
 		return 0;
-	*/
 
 	/* init status to no-changes */
 	buf [0] = 0;
@@ -529,9 +536,6 @@ ehci_hub_status_data (struct usb_hcd *hcd, char *buf)
 			else
 			    buf [1] |= 1 << (i - 7);
 			status = STS_PCD;
-			if (!HC_IS_RUNNING(hcd->state)) {
-				usb_hcd_resume_root_hub(hcd);
-			}
 		}
 	}
 	/* FIXME autosuspend idle root hubs */
