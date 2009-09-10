@@ -107,7 +107,6 @@ config BATTERY_CPCAP
 	help
 	 Say Y to include support for CPCAP Main Battery.
 
-# TTA charger driver
 config TTA_CHARGER
    tristate "Support for TTA charger"
    depends on BATTERY_CPCAP

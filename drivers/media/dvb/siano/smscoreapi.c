@@ -51,7 +51,7 @@
 #endif
 
 /* Debug level is low */
-int sms_debug = 7;
+int sms_debug; /*7;*/
 
 module_param_named(debug, sms_debug, int, 0644);
 MODULE_PARM_DESC(debug, "set debug level (info=1, adv=2 (or-able))");
@@ -1680,6 +1680,7 @@ int smscore_gpio_get_level(struct smscore_device_t *coredev, u8 PinNum,
 static int __init smscore_module_init(void)
 {
 	int rc = 0;
+	sms_debug = 0;
 
 	sms_info("entering... smscore_module_init....\n");
 	INIT_LIST_HEAD(&g_smscore_notifyees);

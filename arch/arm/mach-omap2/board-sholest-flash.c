@@ -15,11 +15,6 @@
  * published by the Free Software Foundation.
  */
 
-/* Date	 Author	  Comment
- * ===========  ==============  ==============================================
- * 20-May-2009  Motorola	Initial revision.
- */
-
 #include <linux/kernel.h>
 #include <linux/platform_device.h>
 #include <linux/mtd/mtd.h>

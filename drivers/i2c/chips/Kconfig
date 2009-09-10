@@ -158,7 +158,6 @@ config SENSORS_PCA963X
 	 This driver can also be built as a module.  If so, the module
 	 will be called pca963X.
 
-##w21558, LP3907 regulator feature
 config MOT_FEAT_LP3907
 	tristate "LP3907 Voltage Regulator chip"
 	depends on I2C

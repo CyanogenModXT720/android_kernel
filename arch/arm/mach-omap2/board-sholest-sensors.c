@@ -194,12 +194,10 @@ static struct regulator *sholest_lis331dlh_regulator;
 static int sholest_lis331dlh_initialization(void)
 {
 	struct regulator *reg;
-	if (sholest_lis331dlh_regulator == NULL) {
 		reg = regulator_get(NULL, "vhvio");
 		if (IS_ERR(reg))
 			return PTR_ERR(reg);
 		sholest_lis331dlh_regulator = reg;
-	}
 	return 0;
 }
 

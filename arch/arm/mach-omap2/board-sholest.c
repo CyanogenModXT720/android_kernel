@@ -353,24 +353,18 @@ static void sholest_misc_init(void)
     printk(KERN_INFO "%s:Initializing\n", __func__);
     if (gpio_request(SHOLEST_HDMI_MUX_SELECT_GPIO, "HDMI-mux-select") >= 0)
     {
-        msleep(1);
         gpio_direction_output(SHOLEST_HDMI_MUX_SELECT_GPIO, 0);
         gpio_set_value(SHOLEST_HDMI_MUX_SELECT_GPIO, 0);
-        msleep(5);
     }
     if (gpio_request(SHOLEST_HDMI_MUX_EN_N_GPIO, "HDMI-mux-enable-n") >= 0)
     {
-        msleep(1);
         gpio_direction_output(SHOLEST_HDMI_MUX_EN_N_GPIO, 0);
         gpio_set_value(SHOLEST_HDMI_MUX_EN_N_GPIO, 0);
-        msleep(5);
     }
     if (gpio_request(SHOLEST_LM_3530_EN_GPIO, "led-enable") >= 0)
     {
-        msleep(1);
         gpio_direction_output(SHOLEST_LM_3530_EN_GPIO, 0);
         gpio_set_value(SHOLEST_LM_3530_EN_GPIO, 1);
-        msleep(5);
     }
 }
 
@@ -428,7 +422,7 @@ struct qtouch_ts_platform_data sholest_ts_platform_data_atmega64a1 = {
 	},
 	.acquire_cfg	= {
 		.charge_time	= 10,
-		.reserved	= 5, /* atouch_drift */
+		.atouch_drift	= 5,
 		.touch_drift	= 20,
 		.drift_susp	= 20,
 		.touch_autocal	= 0,
@@ -592,7 +586,7 @@ static struct qtouch_ts_platform_data sholest_ts_platform_data = {
 	},
 	.acquire_cfg	= {
 		.charge_time	= 0x06,
-		.reserved	= 0x00,
+		.atouch_drift	= 0x00,
 		.touch_drift	= 0x0a,
 		.drift_susp	= 0x01,
 		.touch_autocal	= 0,
@@ -1241,6 +1235,9 @@ static void sholest_pm_init(void)
 	platform_device_register(&sholest_bpwake_device);
 	platform_driver_register(&sholest_bpwake_driver);
 
+	/* set cold reset, will move to warm reset once ready */
+	sholest_pm_set_reset(1);
+
 	register_reboot_notifier(&sholest_pm_reboot_notifier);
 }
 
@@ -1526,11 +1523,11 @@ static void __init sholest_init(void)
 	sholest_omap_mdm_ctrl_init();
 	sholest_spi_init();
 	sholest_flash_init();
-	/* sholest_panic_init(); */
+	sholest_panic_init();
  	sholest_serial_init();
+    sholest_misc_init();
  	sholest_als_init();
  	sholest_panel_init();
-	sholest_misc_init();
 	sholest_sensors_init();
 	sholest_camera_init();
 	sholest_touch_init();
