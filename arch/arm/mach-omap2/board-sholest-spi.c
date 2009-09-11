@@ -342,6 +342,7 @@ static struct cpcap_platform_data sholest_cpcap_data = {
 	.regulator_mode_values = cpcap_regulator_mode_values,
 	.regulator_init = cpcap_regulator,
 	.adc_ato = &sholest_cpcap_adc_ato,
+	.barrel_capability = BARREL_CAP_NONE,
 };
 
 static struct spi_board_info sholest_spi_board_info[] __initdata = {
@@ -530,6 +531,8 @@ void __init sholest_spi_init(void)
 	}
 	sholest_cpcap_data.init_len = i;
 
+	sholest_cpcap_data.barrel_capability = BARREL_CAP_DETECT_TV_OUT;
+
 	ret = gpio_request(CPCAP_GPIO, "cpcap-irq");
 	if (ret)
 		return;
@@ -549,3 +552,4 @@ void __init sholest_spi_init(void)
 
 	/* regulator_has_full_constraints(); */
 }
+

@@ -33,6 +33,12 @@
 #define CPCAP_IRQ_INT4_INDEX 48
 #define CPCAP_IRQ_INT5_INDEX 64
 
+enum {
+	BARREL_CAP_NONE = 0,
+	BARREL_CAP_DETECT_HEADSET,
+	BARREL_CAP_DETECT_TV_OUT,
+};
+
 enum cpcap_regulator_id {
 	CPCAP_SW5,
 	CPCAP_VCAM,
@@ -485,6 +491,7 @@ struct cpcap_platform_data {
 	unsigned short *regulator_mode_values;
 	struct regulator_init_data *regulator_init;
 	struct cpcap_adc_ato *adc_ato;
+	int barrel_capability;
 };
 
 struct cpcap_batt_data {
@@ -684,3 +691,4 @@ void disable_tta(void);
 
 #endif /* __KERNEL__ */
 #endif /* _LINUX_SPI_CPCAP_H */
+
