@@ -53,7 +53,8 @@ int __init omap_mux_register(struct omap_mux_cfg *arch_mux_cfg)
 int __init_or_module omap_cfg_reg(const unsigned long index)
 {
 	struct pin_config *reg;
-#if defined(CONFIG_MOT_FEAT_MDTV) || defined(CONFIG_PANEL_HDTV)
+#if defined(CONFIG_MOT_FEAT_MDTV) || defined(CONFIG_PANEL_HDTV)\
+    || defined(CONFIG_VIB_PWM)
 	int is_mux_config = 0;
 #endif
 
@@ -74,7 +75,7 @@ int __init_or_module omap_cfg_reg(const unsigned long index)
 	if (!mux_cfg->cfg_reg)
 		return -ENODEV;
 
-#if CONFIG_MOT_FEAT_MDTV
+#ifdef CONFIG_MOT_FEAT_MDTV
 	if (index >= F1_34XX_MDTV_INT_OFF && index <= AA3_34XX_MDTV_CLK_ON)
 		is_mux_config = 1;
 #endif
