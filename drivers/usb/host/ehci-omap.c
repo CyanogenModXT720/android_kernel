@@ -878,11 +878,6 @@ static int ehci_hcd_omap_drv_remove(struct platform_device *dev)
 
 	dev_dbg(&dev->dev, "ehci_hcd_omap_drv_remove()\n");
 
-	#ifdef CONFIG_HAS_WAKELOCK
-	wake_lock_destroy(&wake_lock_ehci_rwu);
-	wake_lock_destroy(&wake_lock_ehci_pm);
-	#endif
-
 	spin_lock_irqsave(&usbtll_clock_lock, flags);
        if (ehci_clocks->suspended) {
 #if 0
@@ -905,6 +900,11 @@ static int ehci_hcd_omap_drv_remove(struct platform_device *dev)
 	usb_remove_hcd(hcd);
 	omap_stop_ehc(dev, hcd);
 	usb_put_hcd(hcd);
+
+#ifdef CONFIG_HAS_WAKELOCK
+	wake_lock_destroy(&wake_lock_ehci_rwu);
+	wake_lock_destroy(&wake_lock_ehci_pm);
+#endif
 
 #ifdef CONFIG_MOT_FEAT_IPC_CORERETENTION
         sysfs_remove_file(power_kobj, &usbtll_disable_irq_attr.attr);
