@@ -284,13 +284,8 @@ struct manager_attribute {
 	__ATTR(_name, _mode, _show, _store)
 
 static MANAGER_ATTR(name, S_IRUGO, manager_name_show, NULL);
-#ifdef CONFIG_PANEL_HDTV /* charlotte change permission S_IRUGO->S_IRWXUGO */
-static MANAGER_ATTR(display, S_IRWXUGO|S_IWUSR,
-		manager_display_show, manager_display_store);
-#else
 static MANAGER_ATTR(display, S_IRUGO|S_IWUSR,
 		manager_display_show, manager_display_store);
-#endif
 static MANAGER_ATTR(default_color, S_IRUGO|S_IWUSR,
 		manager_default_color_show, manager_default_color_store);
 static MANAGER_ATTR(trans_key_type, S_IRUGO|S_IWUSR,
@@ -706,8 +701,6 @@ static int configure_overlay(enum omap_plane plane)
 	struct manager_cache_data *mc;
 	u16 outw, outh;
 	u16 x, y, w, h;
-	u32 dw = 0;
-	u32 dh = 0;
 	u32 paddr;
 	int r;
 
@@ -762,41 +755,38 @@ static int configure_overlay(enum omap_plane plane)
 			BUG();
 		}
 
-		if (mc->x > c->pos_x) {
-			x = 0;
-			w -= (mc->x - c->pos_x);
-			paddr += (mc->x - c->pos_x) * bpp / 8;
-		} else {
+		if (dispc_is_overlay_scaled(c)) {
+			/* If the overlay is scaled, the update area has
+			 * already been enlarged to cover the whole overlay.
+			 * We only need to adjust x/y here */
 			x = c->pos_x - mc->x;
-		}
-
-		if (mc->y > c->pos_y) {
-			y = 0;
-			h -= (mc->y - c->pos_y);
-			paddr += (mc->y - c->pos_y) * c->screen_width * bpp / 8;
-		} else {
 			y = c->pos_y - mc->y;
-		}
-
-		if (mc->w < (x+outw)) {
-			dw = (x+outw) - (mc->w);
-			outw -= dw;
-		}
-
-		if (mc->h < (y+outh)) {
-			dh = (y+outh) - (mc->h);
-			outh -= dh;
-		}
-
-		if (!dispc_is_overlay_scaled(c)) {
-			w = outw;
-			h = outh;
 		} else {
-			if (dw)
-				w -= (u16) ((((dw << 16) / w) * outw) >> 16);
+			if (mc->x > c->pos_x) {
+				x = 0;
+				w -= (mc->x - c->pos_x);
+				paddr += (mc->x - c->pos_x) * bpp / 8;
+			} else {
+				x = c->pos_x - mc->x;
+			}
 
-			if (dh)
-				h -= (u16) ((((dh << 16) / h) * outh) >> 16);
+			if (mc->y > c->pos_y) {
+				y = 0;
+				h -= (mc->y - c->pos_y);
+				paddr += (mc->y - c->pos_y) * c->screen_width *
+					bpp / 8;
+			} else {
+				y = c->pos_y - mc->y;
+			}
+
+			if (mc->w < (x+w))
+				w -= (x+w) - (mc->w);
+
+			if (mc->h < (y+h))
+				h -= (y+h) - (mc->h);
+
+			outw = w;
+			outh = h;
 		}
 	}
 
@@ -1367,11 +1357,6 @@ static void omap_dss_add_overlay_manager(struct omap_overlay_manager *manager)
 	list_add_tail(&manager->list, &manager_list);
 }
 
-static void omap_dss_mgr_enable_alpha_blending(struct omap_overlay_manager *mgr,
-		bool enable)
-{
-	dispc_enable_alpha_blending(mgr->id, enable);
-}
 
 int dss_init_overlay_managers(struct platform_device *pdev)
 {
@@ -1410,8 +1395,6 @@ int dss_init_overlay_managers(struct platform_device *pdev)
 		mgr->set_manager_info = &omap_dss_mgr_set_info;
 		mgr->get_manager_info = &omap_dss_mgr_get_info;
 		mgr->wait_for_go = &dss_mgr_wait_for_go;
-		mgr->enable_alpha_blending =
-			&omap_dss_mgr_enable_alpha_blending,
 
 		mgr->caps = OMAP_DSS_OVL_MGR_CAP_DISPC;
 

@@ -678,8 +678,8 @@ unsigned char cpcap_uc_status(struct cpcap_device *cpcap,
 			      enum cpcap_macro macro);
 
 #ifdef CONFIG_TTA_CHARGER
-void enable_tta_irq(void);
-void disable_tta_irq(void);
+void enable_tta(void);
+void disable_tta(void);
 #endif
 
 #endif /* __KERNEL__ */

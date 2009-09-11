@@ -87,12 +87,6 @@ static int sholest_panel_enable_hdtv(struct omap_dss_device *dssdev)
 	omap_cfg_reg(AG24_34XX_DSS_DATA4);
 	omap_cfg_reg(AH24_34XX_DSS_DATA5);
 
-	gpio_request(SHOLEST_HDMI_MUX_ENABLE_N_GPIO, "HDMI-mux-enable");
-	gpio_direction_output(SHOLEST_HDMI_MUX_ENABLE_N_GPIO, 0);
-	gpio_set_value(SHOLEST_HDMI_MUX_ENABLE_N_GPIO, 0);
-
-	gpio_request(SHOLEST_HDMI_MUX_SELECT_GPIO, "HDMI-mux-select");
-	gpio_direction_output(SHOLEST_HDMI_MUX_SELECT_GPIO, 0);
 	gpio_set_value(SHOLEST_HDMI_MUX_SELECT_GPIO, 1);
 
 	printk(KERN_INFO "%s OUT\n", __func__);
@@ -111,8 +105,6 @@ static void sholest_panel_disable_hdtv(struct omap_dss_device *dssdev)
 	omap_cfg_reg(AG24_34XX_DSI_DX2);
 	omap_cfg_reg(AH24_34XX_DSI_DY2);
 
-	gpio_request(SHOLEST_HDMI_MUX_SELECT_GPIO, "HDMI-mux-select");
-	gpio_direction_output(SHOLEST_HDMI_MUX_SELECT_GPIO, 0);
 	gpio_set_value(SHOLEST_HDMI_MUX_SELECT_GPIO, 0);
 
 	printk(KERN_INFO "%s OUT\n", __func__);
@@ -171,6 +163,14 @@ void __init sholest_panel_init(void)
 		printk(KERN_ERR "failed to get display reset gpio\n");
 		goto error;
 	}
+
+	gpio_request(SHOLEST_HDMI_MUX_ENABLE_N_GPIO, "HDMI-mux-enable");
+	gpio_direction_output(SHOLEST_HDMI_MUX_ENABLE_N_GPIO, 0);
+	gpio_set_value(SHOLEST_HDMI_MUX_ENABLE_N_GPIO, 0);
+	
+	gpio_request(SHOLEST_HDMI_MUX_SELECT_GPIO, "HDMI-mux-select");
+	gpio_direction_output(SHOLEST_HDMI_MUX_SELECT_GPIO, 0);
+	gpio_set_value(SHOLEST_HDMI_MUX_SELECT_GPIO, 0);
 
 	platform_device_register(&sholest_dss_device);
 	return;

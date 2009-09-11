@@ -16,38 +16,39 @@
 #define DBG(format, ...)
 #endif
 
-/* 720X480, Virtual 858X525*/
-static struct omap_video_timings hdtv_480p_panel_timings = {
-	.x_res          = 720,
-	.y_res          = 480,
-	.pixel_clock    = 27027,
-	.hfp            = 16,
-	.hsw            = 62,
-	.hbp            = 60,
-	.vfp            = 9,
-	.vsw            = 6,
-	.vbp            = 30,
+/* 720X480P */
+const struct omap_video_timings hdtv_480p_panel_timings = {
+	.x_res			= 720,
+	.y_res			= 480,
+	.pixel_clock		= 27027,
+	.hsw			= 62,
+	.hfp			= 16,
+	.hbp			= 60,
+	.vsw			= 6,
+	.vfp			= 9,
+	.vbp			= 30,
 };
 
-
-/* 1280X720, Virtual 1650X750*/
-static struct omap_video_timings hdtv_720p_panel_timings = {
-	.x_res					= 1280,
-	.y_res					= 270,
+/* 1280X720P */
+const struct omap_video_timings hdtv_720p_panel_timings = {
+	.x_res			= 1280,
+	.y_res			= 720,
 	.pixel_clock		= 74250,
-	.hfp						= 63,
-	.hsw						= 52,
-	.hbp						= 255,
-	.vfp						= 5,
-	.vsw						= 4,
-	.vbp						= 20,
+	.hsw			= 40,
+	.hfp			= 110,
+	.hbp			= 220,
+	.vsw			= 5,
+	.vfp			= 5,
+	.vbp			= 20,
 };
 
 static int hdtv_panel_probe(struct omap_dss_device *dssdev)
 {
 	DBG("%s IN\n", __func__);
-    /* TODO: timings should be configured by EDID data */
-	dssdev->panel.timings = hdtv_480p_panel_timings;
+
+	/* 720p is default */
+	dssdev->panel.timings = hdtv_720p_panel_timings;
+
 	DBG("%s OUT\n", __func__);
 	return 0;
 }
