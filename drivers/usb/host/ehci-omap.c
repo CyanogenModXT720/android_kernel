@@ -650,10 +650,6 @@ static void omap_ehci_shutdown(struct usb_hcd *hcd)
 
 	ehci_clocks = (struct ehci_omap_clock_defs *)
 			((char *)hcd_to_ehci(hcd) + sizeof(struct ehci_hcd));
-#ifdef CONFIG_HAS_WAKELOCK
-	wake_lock_destroy(&wake_lock_ehci_rwu);
-	wake_lock_destroy(&wake_lock_ehci_pm);
-#endif
 	spin_lock_irqsave(&usbtll_clock_lock, flags);
 
 #if defined(CONFIG_USB_OHCI_HCD) || defined(CONFIG_USB_OHCI_HCD_MODULE)
