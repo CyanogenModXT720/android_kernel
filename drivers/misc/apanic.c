@@ -41,10 +41,11 @@
 #include <linux/console.h>
 
 #ifdef CONFIG_APANIC_APR
-#define WDOG_AP_REBOOT	0x00020000
+//#define UNPLUGBATTERY_OR_WDOG_ABNORMAL_RESET	0x00020000
+#define WDOG_ABNORMAL_RESET 0x00008000
 #define POWER_CUT	0x00000200
 #define CPCAP_RESET	0x00040000
-#define INFO_SIZE 64
+#define INFO_SIZE 128
 
 extern u32 bi_powerup_reason(void);
 #endif
@@ -386,9 +387,9 @@ static void mtd_panic_notify_add(struct mtd_info *mtd)
 		memset(rst_buf, 0, INFO_SIZE);
 		rst_len = 0;
 
-		if (powerup_reason == WDOG_AP_REBOOT)
+		if (powerup_reason == WDOG_ABNORMAL_RESET)
 			rst_len = sprintf(rst_buf,
-				"POWERUPREASON : WDOG_AP_RESET(0x%08x)\n",
+			"POWERUPREASON : WDOG_ABNORMAL_RESET(0x%08x)\n",
 				powerup_reason);
 		else if (powerup_reason == POWER_CUT)
 			rst_len = sprintf(rst_buf,
