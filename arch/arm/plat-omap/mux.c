@@ -87,7 +87,7 @@ int __init_or_module omap_cfg_reg(const unsigned long index)
 	if (index == AF22_34XX_GPIO9_OUT)
 		is_mux_config = 1;
 #endif
-#if defined(CONFIG_MOT_FEAT_MDTV) || defined(CONFIG_PANEL_HDTV)
+#if defined(CONFIG_MOT_FEAT_MDTV) || defined(CONFIG_PANEL_HDTV)\
 	|| defined(CONFIG_VIB_PWM)
 	if (is_mux_config == 1)
 		return mux_cfg->cfg_reg(reg);
