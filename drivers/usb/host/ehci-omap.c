@@ -103,8 +103,7 @@ static DEFINE_SPINLOCK(usbtll_clock_lock);
 /*-------------------------------------------------------------------------*/
 
 #ifdef CONFIG_HAS_WAKELOCK
-struct wake_lock wake_lock_ehci_rwu; /* wakelock for remote wakeup */
-struct wake_lock wake_lock_ehci_pm; /* wakelock for suspend/resume */
+struct wake_lock wake_lock_ehci;
 #endif
 
 #ifdef CONFIG_MOT_FEAT_IPC_CORERETENTION
@@ -560,7 +559,7 @@ static int omap_ehci_bus_suspend(struct usb_hcd *hcd)
 
 		/* Ports suspended: Stop All Clks */
 #if 0
-		/* ICKs are Autoidled. No need for explicit control*/
+	/* ICKs are Autoidled. No need for explicit control*/
 		clk_disable(ehci_clocks->usbhost_ick_clk);
 		clk_disable(ehci_clocks->usbtll_ick_clk);
 #endif
@@ -592,9 +591,7 @@ static int omap_ehci_bus_suspend(struct usb_hcd *hcd)
 		clk_disable(ehci_clocks->usbhost_ick_clk);
 		spin_unlock_irqrestore(&usbtll_clock_lock, flags);
 	}
-#ifdef CONFIG_HAS_WAKELOCK
-	wake_unlock(&wake_lock_ehci_pm);
-#endif
+
 	return ret;
 }
 
@@ -606,9 +603,6 @@ static int omap_ehci_bus_resume(struct usb_hcd *hcd)
 
 	ehci_clocks = (struct ehci_omap_clock_defs *)
 			(((char *)hcd_to_ehci(hcd)) + sizeof(struct ehci_hcd));
-#ifdef CONFIG_HAS_WAKELOCK
-	wake_lock(&wake_lock_ehci_pm);
-#endif
 	spin_lock_irqsave(&usbtll_clock_lock, flags);
 
 #if defined(CONFIG_USB_OHCI_HCD) || defined(CONFIG_USB_OHCI_HCD_MODULE)
@@ -652,10 +646,6 @@ static void omap_ehci_shutdown(struct usb_hcd *hcd)
 
 	ehci_clocks = (struct ehci_omap_clock_defs *)
 			((char *)hcd_to_ehci(hcd) + sizeof(struct ehci_hcd));
-#ifdef CONFIG_HAS_WAKELOCK
-	wake_lock_destroy(&wake_lock_ehci_rwu);
-	wake_lock_destroy(&wake_lock_ehci_pm);
-#endif
 	spin_lock_irqsave(&usbtll_clock_lock, flags);
 
 #if defined(CONFIG_USB_OHCI_HCD) || defined(CONFIG_USB_OHCI_HCD_MODULE)
@@ -744,7 +734,7 @@ static irqreturn_t usbtll_irq(int irq, void *tll)
 
 	if (usbtll_irqstatus & 1) {
 		#ifdef CONFIG_HAS_WAKELOCK
-		wake_lock_timeout(&wake_lock_ehci_rwu, HZ/2);
+		wake_lock_timeout(&wake_lock_ehci , HZ/2);
 		#endif
 		clk_enable(ehci_clocks->usbhost_ick_clk);
 		clk_enable(ehci_clocks->usbtll_fck_clk);
@@ -787,8 +777,7 @@ static int ehci_hcd_omap_drv_probe(struct platform_device *dev)
 		return -ENODEV;
 
 	#ifdef CONFIG_HAS_WAKELOCK
-	wake_lock_init(&wake_lock_ehci_rwu, WAKE_LOCK_SUSPEND, "ehci_rwu");
-	wake_lock_init(&wake_lock_ehci_pm, WAKE_LOCK_SUSPEND, "ehci_pm");
+	wake_lock_init(&wake_lock_ehci, WAKE_LOCK_SUSPEND, "ehci_omap");
 	#endif
 
 	retval = request_irq(78, usbtll_irq, IRQF_DISABLED | IRQF_SHARED,
@@ -885,8 +874,7 @@ static int ehci_hcd_omap_drv_remove(struct platform_device *dev)
 	dev_dbg(&dev->dev, "ehci_hcd_omap_drv_remove()\n");
 
 	#ifdef CONFIG_HAS_WAKELOCK
-	wake_lock_destroy(&wake_lock_ehci_rwu);
-	wake_lock_destroy(&wake_lock_ehci_pm);
+	wake_lock_destroy(&wake_lock_ehci);
 	#endif
 
 	spin_lock_irqsave(&usbtll_clock_lock, flags);
