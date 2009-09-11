@@ -31,7 +31,6 @@
 #include <linux/uaccess.h>
 #include <linux/mtd/mtd.h>
 #include <linux/notifier.h>
-#include <linux/mtd/mtd.h>
 #include <linux/debugfs.h>
 #include <linux/fs.h>
 #include <linux/proc_fs.h>
@@ -41,11 +40,11 @@
 #include <linux/console.h>
 
 #ifdef CONFIG_APANIC_APR
-//#define UNPLUGBATTERY_OR_WDOG_ABNORMAL_RESET	0x00020000
-#define WDOG_ABNORMAL_RESET 0x00008000
+/* #define WDOG_ABNORMAL_RESET	0x00020000 */
+#define WDOG_ABNORMAL_RESET	0x00008000
 #define POWER_CUT	0x00000200
 #define CPCAP_RESET	0x00040000
-#define INFO_SIZE 128
+#define INFO_SIZE	128
 
 extern u32 bi_powerup_reason(void);
 #endif
@@ -620,6 +619,7 @@ static int apanic(struct notifier_block *this, unsigned long event,
 	}
 #endif
 
+#ifdef CONFIG_APANIC_APR	
 	/*
 	 * Delete the last data on new panic occurs for UMTS phone.
 	 */
@@ -627,7 +627,7 @@ static int apanic(struct notifier_block *this, unsigned long event,
 		printk(KERN_EMERG "apanic: erase error on panic\n");
 		goto out;
 	}
-
+#endif	
 
 	/*
 	 * Add timestamp to displays current UTC time and uptime (in seconds).
