@@ -616,11 +616,12 @@ static int wakeup_timer_suspend(struct platform_device *pdev,
 	unsigned long   expire = get_nearest_wakeup_timer_ktime();
 	if (expire == ULONG_MAX) {
 		wakeup_timer_seconds = 0;
+		wakeup_timer_nseconds = 0;
 		return 0;
 	}
 
 	/* If expire time less that 1s, dont get into suspend */
-	if (expire <= (1 * MSEC_PER_SEC)) {
+	if (expire <= 150) {
 #ifdef CONFIG_HAS_WAKELOCK
 		timeout = (HZ*expire)/MSEC_PER_SEC + 1;
 		wake_lock_timeout(&driver_wake_lock , timeout);
@@ -629,7 +630,9 @@ static int wakeup_timer_suspend(struct platform_device *pdev,
 	}
 
 	wakeup_timer_seconds = expire/MSEC_PER_SEC;
-	DPRINTK("Set wakeup_timer_seconds: %d \n", wakeup_timer_seconds);
+	wakeup_timer_nseconds = expire%MSEC_PER_SEC*NSEC_PER_MSEC;
+	DPRINTK("Set wakeup_timer_seconds: %d.%d \n",
+		wakeup_timer_seconds, wakeup_timer_nseconds);
 	list_for_each_entry(pwkup_cascade, &parent_node, node) {
 		hrtimer_cancel(&(pwkup_cascade->alarm_timer));
 	}
@@ -639,9 +642,25 @@ static int wakeup_timer_suspend(struct platform_device *pdev,
 static int wakeup_timer_resume(struct platform_device *pdev)
 {
 	struct timer_cascade_root *pwkup_cascade;
+	unsigned long   expire = get_nearest_wakeup_timer_ktime();
+	long timeout;
 	list_for_each_entry(pwkup_cascade, &parent_node, node) {
 		cascade_start_hrtimer(pwkup_cascade);
 	}
+
+#ifdef CONFIG_HAS_WAKELOCK
+	DPRINTK("wakeup_timer_resume : expire = %lu ms\n", expire);
+	if (expire > (1 * MSEC_PER_SEC))
+		return 0;
+	else if (expire <= 50)
+		timeout = (HZ*50)/MSEC_PER_SEC + 1;
+	else
+		timeout = (HZ*expire)/MSEC_PER_SEC + 1;
+
+	wake_lock_timeout(&driver_wake_lock , timeout);
+	DPRINTK("Taking wakelock for %ld tick in wakeup_timer_resume\n",
+								timeout);
+#endif
 	return 0;
 }
 

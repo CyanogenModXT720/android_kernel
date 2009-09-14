@@ -43,6 +43,7 @@ unsigned short enable_off_mode;
 EXPORT_SYMBOL(enable_off_mode);
 unsigned short voltage_off_while_idle;
 unsigned short wakeup_timer_seconds;
+unsigned int wakeup_timer_nseconds;
 atomic_t sleep_block = ATOMIC_INIT(0);
 
 static ssize_t idle_show(struct kobject *, struct kobj_attribute *, char *);
