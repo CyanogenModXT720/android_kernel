@@ -968,7 +968,6 @@ enum omap34xx_index {
 #ifdef CONFIG_VIB_PWM
 	AF22_34XX_GPIO9_OUT,
 #endif
-=======
 #if defined (CONFIG_VIDEO_MIPI_INTERFACE)
 	/*MIPI Camra*/
 	AG17_34XX_CAM_D0,
