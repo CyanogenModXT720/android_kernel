@@ -74,6 +74,29 @@
 #include <media/mt9p012.h>
 
 #endif
+#if defined(CONFIG_VIDEO_OV8810) || defined(CONFIG_VIDEO_OV8810_MODULE)
+#include <../drivers/media/video/ov8810.h>
+#include <../drivers/media/video/oldisp/ispcsi2.h>
+#define OV8810_CSI2_CLOCK_POLARITY	0	/* +/- pin order */
+#define OV8810_CSI2_DATA0_POLARITY	0	/* +/- pin order */
+#define OV8810_CSI2_DATA1_POLARITY	0	/* +/- pin order */
+#define OV8810_CSI2_CLOCK_LANE		1	 /* Clock lane position: 1 */
+#define OV8810_CSI2_DATA0_LANE		2	 /* Data0 lane position: 2 */
+#define OV8810_CSI2_DATA1_LANE		3	 /* Data1 lane position: 3 */
+#define OV8810_CSI2_PHY_THS_TERM	1  /* GVH */
+#define OV8810_CSI2_PHY_THS_SETTLE	21  /* GVH */
+#define OV8810_CSI2_PHY_TCLK_TERM	0
+#define OV8810_CSI2_PHY_TCLK_MISS	1
+#define OV8810_CSI2_PHY_TCLK_SETTLE	14
+#endif
+
+#if defined(CONFIG_LEDS_BD7885)
+#include <linux/leds-bd7885.h>
+#endif
+#if defined(CONFIG_LEDS_BU9847)
+#include <linux/leds-bu9847.h>
+#endif
+
 #ifdef CONFIG_VIDEO_OMAP3_HPLENS
 #include <../drivers/media/video/hplens.h>
 #endif
@@ -802,6 +825,12 @@ static struct i2c_board_info __initdata sholest_i2c_bus3_board_info[] = {
 		.platform_data = &sholest_mt9p012_platform_data,
 	},
 #endif
+#if defined(CONFIG_VIDEO_OV8810)
+	{
+		I2C_BOARD_INFO("ov8810", OV8810_I2C_ADDR),
+		.platform_data = &sholest_ov8810_platform_data,
+	},
+#endif
 #ifdef CONFIG_VIDEO_OMAP3_HPLENS
 	{
 		I2C_BOARD_INFO("HP_GEN_LENS", 0x04),
@@ -813,6 +842,16 @@ static struct i2c_board_info __initdata sholest_i2c_bus3_board_info[] = {
 		I2C_BOARD_INFO("tda19989", 0x70),
 	},
 #endif
+#if defined(CONFIG_LEDS_BD7885)
+	{
+		I2C_BOARD_INFO(BD7885_DEVICE_NAME, BD7885_SLAVE_ADDR),
+	},
+#endif	/* CONFIG_LEDS_BD7885 */
+#if defined(CONFIG_LEDS_BU9847)
+	{
+		I2C_BOARD_INFO(BU9847_DEVICE_NAME, BU9847_SLAVE_ADDR),
+	},
+#endif/*CONFIG_LEDS_BU9847*/
 };
 
 static int __init sholest_i2c_init(void)

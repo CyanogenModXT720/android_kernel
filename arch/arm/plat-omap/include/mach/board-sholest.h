@@ -48,12 +48,19 @@ extern void __init sholest_camera_init(void);
 #if defined(CONFIG_VIDEO_MT9P012) || defined(CONFIG_VIDEO_MT9P012_MODULE)
 extern struct mt9p012_platform_data sholest_mt9p012_platform_data;
 #endif
+#if defined(CONFIG_VIDEO_OV8810)
+extern struct ov8810_platform_data sholest_ov8810_platform_data;
+#endif
 #ifdef CONFIG_VIDEO_OMAP3_HPLENS
 extern struct hplens_platform_data sholest_hplens_platform_data;
 #endif
 
 #define GPIO_CAMERA_RESET       98
 #define GPIO_SILENCE_KEY        110
+#if defined(CONFIG_VIDEO_OV8810)
+#define GPIO_OV8810_RESET	98
+#define GPIO_OV8810_STANDBY	64
+#endif
 
 #define is_cdma_phone() (!strcmp("CDMA", bp_model))
 extern char *bp_model;
