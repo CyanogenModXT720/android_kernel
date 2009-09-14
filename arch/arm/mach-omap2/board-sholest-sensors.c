@@ -238,13 +238,13 @@ struct lis331dlh_platform_data sholest_lis331dlh_data = {
 
 	.g_range	= LIS331DLH_G_8G,
 
-	.axis_map_x	= 1,
-	.axis_map_y	= 0,
+	.axis_map_x	= 0,
+	.axis_map_y	= 1,
 	.axis_map_z	= 2,
 
-	.negate_x	= 1,
-	.negate_y	= 1,
-	.negate_z	= 1,
+	.negate_x	= 0,
+	.negate_y	= 0,
+	.negate_z	= 0,
 };
 
 static struct regulator *sholest_akm8973_regulator;
