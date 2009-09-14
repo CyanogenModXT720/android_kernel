@@ -321,6 +321,12 @@ config APANIC
 	 Driver which handles kernel panics and attempts to write
 	 critical debugging data to flash.
 
+config APANIC_APR
+    bool "Android kernel panic interface to APR"
+	default n
+	---help---
+	If support APR to report exception reboot reason, open this switch.
+
 config APANIC_PLABEL
 	string "Android panic dump flash partition label"
 	default "kpanic"
