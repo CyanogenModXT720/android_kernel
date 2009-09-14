@@ -40,7 +40,7 @@
 #include <linux/console.h>
 
 #ifdef CONFIG_APANIC_APR
-#define WDOG_ABNORMAL_RESET	0x00020000 
+#define WDOG_ABNORMAL_RESET	0x00020000
 /* #define WDOG_ABNORMAL_RESET	0x00008000 */
 #define POWER_CUT	0x00000200
 #define CPCAP_RESET	0x00040000
@@ -292,7 +292,7 @@ static int apanic_proc_write(struct file *file, const char __user *buffer,
 {
 #ifndef CONFIG_APANIC_APR
 	schedule_work(&proc_removal_work);
-#endif	
+#endif
 	return count;
 }
 
@@ -379,7 +379,7 @@ static void mtd_panic_notify_add(struct mtd_info *mtd)
 #ifdef CONFIG_APANIC_APR
 	if (hdr->is_panic_data != PANIC_DATA) {
 		powerup_reason = bi_powerup_reason();
-		printk(KERN_INFO 
+		printk(KERN_INFO
 				"apanic: Record powerup_reason = 0x%08x\n",
 				powerup_reason);
 
@@ -388,7 +388,8 @@ static void mtd_panic_notify_add(struct mtd_info *mtd)
 
 		if (powerup_reason == WDOG_ABNORMAL_RESET)
 			rst_len = sprintf(rst_buf,
-			"POWERUPREASON : POSSIBLE_WDOG_ABNORMAL_RESET(0x%08x)\n",
+				"POWERUPREASON : %s(0x%08x)\n",
+				"POSSIBLE_WDOG_ABNORMAL_RESET",
 				powerup_reason);
 		else if (powerup_reason == POWER_CUT)
 			rst_len = sprintf(rst_buf,
@@ -619,7 +620,7 @@ static int apanic(struct notifier_block *this, unsigned long event,
 	}
 #endif
 
-#ifdef CONFIG_APANIC_APR	
+#ifdef CONFIG_APANIC_APR
 	/*
 	 * Delete the last data on new panic occurs for UMTS phone.
 	 */
@@ -627,7 +628,7 @@ static int apanic(struct notifier_block *this, unsigned long event,
 		printk(KERN_EMERG "apanic: erase error on panic\n");
 		goto out;
 	}
-#endif	
+#endif
 
 	/*
 	 * Add timestamp to displays current UTC time and uptime (in seconds).
