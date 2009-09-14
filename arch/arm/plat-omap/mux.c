@@ -54,7 +54,7 @@ int __init_or_module omap_cfg_reg(const unsigned long index)
 {
 	struct pin_config *reg;
 #if defined(CONFIG_MOT_FEAT_MDTV) || defined(CONFIG_PANEL_HDTV)\
-    || defined(CONFIG_VIB_PWM)
+    || defined(CONFIG_VIB_PWM) || defined(CONFIG_VIDEO_MIPI_INTERFACE)
 	int is_mux_config = 0;
 #endif
 
@@ -88,8 +88,13 @@ int __init_or_module omap_cfg_reg(const unsigned long index)
 	if (index == AF22_34XX_GPIO9_OUT)
 		is_mux_config = 1;
 #endif
+#if defined(CONFIG_VIDEO_MIPI_INTERFACE)
+	if ((index >= A24_34XX_CAM_HS && index <= H2_34XX_GPMC_A3) ||\
+		(index >= AG17_34XX_CAM_D0 && index <= AE17_34XX_CSI2_DY1))
+		is_mux_config = 1;
+#endif
 #if defined(CONFIG_MOT_FEAT_MDTV) || defined(CONFIG_PANEL_HDTV)\
-	|| defined(CONFIG_VIB_PWM)
+	|| defined(CONFIG_VIB_PWM) ||defined(CONFIG_VIDEO_MIPI_INTERFAC)
 	if (is_mux_config == 1)
 		return mux_cfg->cfg_reg(reg);
 	else

@@ -1809,7 +1809,7 @@ void isp_csi2_isr(void)
 		printk(KERN_DEBUG "CSI2: ECC correction done\n");
 
 	if (csi2_irqstatus & ISPCSI2_IRQSTATUS_ECC_NO_CORRECTION_IRQ)
-		printk(KERN_ERR "CSI2: ECC correction failed\n");
+		/*printk(KERN_ERR "CSI2: ECC correction failed\n");*/
 
 	if (csi2_irqstatus & ISPCSI2_IRQSTATUS_COMPLEXIO2_ERR_IRQ)
 		printk(KERN_ERR "CSI2: ComplexIO #2 failed\n");

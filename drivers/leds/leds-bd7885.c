@@ -618,4 +618,3 @@ module_exit(bd7885_exit);
 MODULE_AUTHOR("Motorola");
 MODULE_DESCRIPTION("BD7885 flash regulator driver");
 MODULE_LICENSE("GPL");
-
