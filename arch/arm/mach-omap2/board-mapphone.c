@@ -74,6 +74,22 @@
 #include <media/mt9p012.h>
 
 #endif
+#if defined(CONFIG_VIDEO_OV8810) || defined(CONFIG_VIDEO_OV8810_MODULE)
+#include <../drivers/media/video/ov8810.h>
+#include <../drivers/media/video/oldisp/ispcsi2.h>
+#define OV8810_CSI2_CLOCK_POLARITY	0	/* +/- pin order */
+#define OV8810_CSI2_DATA0_POLARITY	0	/* +/- pin order */
+#define OV8810_CSI2_DATA1_POLARITY	0	/* +/- pin order */
+#define OV8810_CSI2_CLOCK_LANE		1	 /* Clock lane position: 1 */
+#define OV8810_CSI2_DATA0_LANE		2	 /* Data0 lane position: 2 */
+#define OV8810_CSI2_DATA1_LANE		3	 /* Data1 lane position: 3 */
+#define OV8810_CSI2_PHY_THS_TERM	1  /* GVH */
+#define OV8810_CSI2_PHY_THS_SETTLE	21  /* GVH */
+#define OV8810_CSI2_PHY_TCLK_TERM	0
+#define OV8810_CSI2_PHY_TCLK_MISS	1
+#define OV8810_CSI2_PHY_TCLK_SETTLE	14
+#endif
+
 #ifdef CONFIG_VIDEO_OMAP3_HPLENS
 #include <../drivers/media/video/hplens.h>
 #endif
@@ -488,6 +504,12 @@ static struct i2c_board_info __initdata mapphone_i2c_bus2_board_info[] = {
 };
 
 static struct i2c_board_info __initdata mapphone_i2c_bus3_board_info[] = {
+#if defined(CONFIG_VIDEO_OV8810)
+	{
+		I2C_BOARD_INFO("ov8810", OV8810_I2C_ADDR),
+		.platform_data = &mapphone_ov8810_platform_data,
+	},
+#endif
 	{
 		I2C_BOARD_INFO("lm3554_led", 0x53),
 		.platform_data = &mapphone_camera_flash,

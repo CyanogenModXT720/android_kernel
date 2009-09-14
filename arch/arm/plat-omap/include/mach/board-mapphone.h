@@ -48,6 +48,9 @@ extern void __init mapphone_camera_init(void);
 #if defined(CONFIG_VIDEO_MT9P012) || defined(CONFIG_VIDEO_MT9P012_MODULE)
 extern struct mt9p012_platform_data mapphone_mt9p012_platform_data;
 #endif
+#if defined(CONFIG_VIDEO_OV8810)
+extern struct ov8810_platform_data mapphone_ov8810_platform_data;
+#endif
 #ifdef CONFIG_VIDEO_OMAP3_HPLENS
 extern struct hplens_platform_data mapphone_hplens_platform_data;
 #endif

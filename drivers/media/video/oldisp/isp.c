@@ -54,7 +54,7 @@
 #include "ispcsi2.h"
 
 #ifdef CONFIG_VIDEO_OMAP3_HP3A
-#include "hp3a.h"
+#include "../hp3a/hp3a.h"
 #endif
 static DECLARE_MUTEX(isp_mutex);
 
@@ -1522,9 +1522,6 @@ void isp_vbq_done(unsigned long status, isp_vbq_callback_ptr arg1, void *arg2)
 	case HS_VS:
 		spin_lock(&isp_obj.isp_temp_buf_lock);
 		if (ispmodule_obj.isp_temp_state == ISP_BUF_TRAN) {
-#ifdef CONFIG_VIDEO_OMAP3_HP3A
-			hp3a_isp_status(1);
-#endif
 			isp_CCDC_VD01_enable();
 			ispmodule_obj.isp_temp_state = ISP_BUF_INIT;
 		}
@@ -1658,9 +1655,6 @@ void isp_sgdma_process(struct isp_sgdma *sgdma, int irq, int *dma_notify,
 		spin_lock(&isp_obj.isp_temp_buf_lock);
 		isp_CCDC_VD01_disable();
 		ispresizer_enable(0);
-#ifdef CONFIG_VIDEO_OMAP3_HP3A
-		hp3a_isp_status(0);
-#endif
 		ispmodule_obj.isp_temp_state = ISP_FREE_RUNNING;
 		spin_unlock(&isp_obj.isp_temp_buf_lock);
 	}
@@ -2139,34 +2133,15 @@ int isp_try_fmt_cap(struct v4l2_pix_format *pix_input,
 					struct v4l2_pix_format *pix_output)
 {
 	int rval = 0;
-	u32 out_aspect_ratio = 0;
-	u32 adjusted_height = 0;
-
-	if (pix_output->width > pix_output->height) {
-		out_aspect_ratio = (pix_output->width * 256)/pix_output->height;
-	}
-
-	if (out_aspect_ratio > 409 && out_aspect_ratio < 512) {
-		/* Adjusted for 16:9 aspect ratio. */
-		adjusted_height = (pix_input->width*9)/16;
-		ispccdc_config_crop(0,
-		(pix_input->height-adjusted_height)/2,
-		adjusted_height + (pix_input->height-adjusted_height)/2,
-		pix_input->width);
-	} else {
-		ispccdc_config_crop(0, 0, 0, 0);
-	}
-
-	DPRINTK_ISPCTRL("Aspect ratio:%d setting - adjusted height=%d!\n",
-		out_aspect_ratio, adjusted_height);
 
 	isp_calc_pipeline(pix_input, pix_output);
-
 	rval = isp_try_size(pix_input, pix_output);
+
 	if (rval)
 		goto out;
 
 	rval = isp_try_fmt(pix_input, pix_output);
+
 	if (rval)
 		goto out;
 

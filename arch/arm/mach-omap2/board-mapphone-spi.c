@@ -131,6 +131,10 @@ struct regulator_consumer_supply cpcap_vcsi_consumers[] = {
 	REGULATOR_CONSUMER("vdds_dsi", &mapphone_dss_device.dev),
 };
 
+struct regulator_consumer_supply cpcap_vwlan1_consumers[] = {
+	REGULATOR_CONSUMER("vwlan1", NULL /* cpcap_cam_device */),
+};
+
 struct regulator_consumer_supply cpcap_vwlan2_consumers[] = {
 	REGULATOR_CONSUMER("vwlan2", NULL /* sd slot */),
 };
@@ -264,6 +268,8 @@ static struct regulator_init_data cpcap_regulator[CPCAP_NUM_REGULATORS] = {
 			.max_uV			= 1900000,
 			.valid_ops_mask		= 0,
 		},
+		.num_consumer_supplies	= ARRAY_SIZE(cpcap_vwlan1_consumers),
+		.consumer_supplies	= cpcap_vwlan1_consumers,
 	},
 	[CPCAP_VWLAN2] = {
 		.constraints = {
