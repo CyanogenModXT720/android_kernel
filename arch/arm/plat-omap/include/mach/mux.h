@@ -944,7 +944,6 @@ enum omap34xx_index {
 	H2_34XX_GPMC_A3,
 
 	/* MDTV, INT&SPI */
-#ifdef CONFIG_MOT_FEAT_MDTV
 	F1_34XX_MDTV_INT_OFF,
 	AC3_34XX_MDTV_SIMO_OFF,
 	AD4_34XX_MDTV_SOMI_OFF,
@@ -955,7 +954,6 @@ enum omap34xx_index {
 	AD4_34XX_MDTV_SOMI_ON,
 	AD3_34XX_MDTV_CS_ON,
 	AA3_34XX_MDTV_CLK_ON,
-#endif
 
 	/* DSS */
 #ifdef CONFIG_PANEL_HDTV
@@ -970,6 +968,7 @@ enum omap34xx_index {
 #ifdef CONFIG_VIB_PWM
 	AF22_34XX_GPIO9_OUT,
 #endif
+=======
 #if defined (CONFIG_VIDEO_MIPI_INTERFACE)
 	/*MIPI Camra*/
 	AG17_34XX_CAM_D0,

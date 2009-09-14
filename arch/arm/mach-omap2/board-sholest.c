@@ -837,11 +837,9 @@ static struct i2c_board_info __initdata sholest_i2c_bus3_board_info[] = {
 		.platform_data = &sholest_hplens_platform_data,
 	},
 #endif
-#ifdef CONFIG_HDMI_TDA19989
 	{
 		I2C_BOARD_INFO("tda19989", 0x70),
 	},
-#endif
 #if defined(CONFIG_LEDS_BD7885)
 	{
 		I2C_BOARD_INFO(BD7885_DEVICE_NAME, BD7885_SLAVE_ADDR),
@@ -1565,11 +1563,11 @@ static void __init sholest_init(void)
 	sholest_spi_init();
 	sholest_flash_init();
 	sholest_panic_init();
- 	sholest_serial_init();
+	sholest_serial_init();
     sholest_misc_init();
- 	sholest_als_init();
- 	sholest_panel_init();
-	sholest_sensors_init();
+	sholest_als_init();
+    sholest_panel_init();
+    sholest_sensors_init();
 	sholest_camera_init();
 	sholest_touch_init();
 	sholest_audio_init();
