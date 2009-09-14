@@ -41,7 +41,6 @@
 
 #ifdef CONFIG_APANIC_APR
 #define WDOG_ABNORMAL_RESET	0x00020000
-/* #define WDOG_ABNORMAL_RESET	0x00008000 */
 #define POWER_CUT	0x00000200
 #define CPCAP_RESET	0x00040000
 #define INFO_SIZE	128
@@ -318,7 +317,7 @@ static ssize_t rst_info_proc_read(struct file *file, char __user *buf,
 	return count;
 }
 
-static struct file_operations rst_info_file_ops = {
+static const struct file_operations rst_info_file_ops = {
 	.owner = THIS_MODULE,
 	.read = rst_info_proc_read,
 };
