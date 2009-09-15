@@ -776,6 +776,15 @@ static void serial_omap_shutdown(struct uart_port *port)
 	u8 lcr, efr;
 
 	DPRINTK("serial_omap_shutdown+%d\n", up->pdev->id);
+
+	if (up->pdev->id != 3) {
+		serial_out(up, UART_LCR, UART_LCR_DLAB);
+		serial_out(up, UART_DLL, 0);
+		serial_out(up, UART_DLM, 0);
+		serial_out(up, UART_LCR, 0);
+		serial_out(up, UART_OMAP_MDR1, OMAP_MDR1_DISABLE);
+	}
+
 	/* 
 	 * If we're using auto-rts then disable it.
 	 */
