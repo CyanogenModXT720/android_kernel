@@ -705,7 +705,7 @@ static void omap2_pm_wakeup_on_timer(u32 seconds, u32 nseconds)
 
 	tick_rate = clk_get_rate(omap_dm_timer_get_fclk(gptimer_wakeup));
 	cycles = tick_rate * seconds;
-	cycles += (nseconds / NSEC_PER_MSEC) * tick_rate / MSEC_PER_SEC;
+	cycles += (nseconds * tick_rate) / NSEC_PER_SEC;
 	omap_dm_timer_stop(gptimer_wakeup);
 	omap_dm_timer_set_load_start(gptimer_wakeup, 0, 0xffffffff - cycles);
 
