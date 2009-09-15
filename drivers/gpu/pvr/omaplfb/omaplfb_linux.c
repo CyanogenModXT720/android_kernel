@@ -235,7 +235,7 @@ void OMAPLFBFlip(OMAPLFB_SWAPCHAIN *psSwapChain, unsigned long paddr)
 						  &gfxoverlayinfo);
 		gfxoverlayinfo.paddr = paddr;
 		/* TODO: plumb vaddr in to this function */
-		gfxoverlayinfo.vaddr = paddr - 0x81314000 + 0xd2800000;
+		gfxoverlayinfo.vaddr = (void *)paddr - 0x81314000 + 0xd2800000;
 
 		omap_gfxoverlay->set_overlay_info(omap_gfxoverlay,
 						  &gfxoverlayinfo);

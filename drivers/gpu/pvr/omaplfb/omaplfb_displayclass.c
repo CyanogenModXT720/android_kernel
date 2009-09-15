@@ -980,7 +980,7 @@ static IMG_BOOL ProcessFlip(IMG_HANDLE  hCmdCookie,
 #if defined(CONFIG_PVR_OMAP_USE_VSYNC)
 	OMAPLFB_VSYNC_FLIP_ITEM* psFlipItem;
 #endif
-	unsigned long ulLockFlags;
+	unsigned long ulLockFlags = 0;
 
 	if(!hCmdCookie || !pvData)
 	{
