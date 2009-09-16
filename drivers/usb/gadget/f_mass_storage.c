@@ -272,7 +272,6 @@ static struct lun *dev_to_lun(struct device *dev)
 
 /* Big enough to hold our biggest descriptor */
 #define EP0_BUFSIZE	256
-#define DELAYED_STATUS	(EP0_BUFSIZE + 999)	/* An impossibly large value */
 
 /* Number of buffers we will use.  2 is enough for double-buffering */
 #define NUM_BUFFERS	2
@@ -689,7 +688,6 @@ static int fsg_function_setup(struct usb_function *f,
 	u16			w_index = le16_to_cpu(ctrl->wIndex);
 	u16			w_value = le16_to_cpu(ctrl->wValue);
 	u16			w_length = le16_to_cpu(ctrl->wLength);
-	int rc;
 
 	DBG(fsg, "fsg_function_setup\n");
 	/* Handle Bulk-only class-specific requests */
@@ -729,14 +727,13 @@ static int fsg_function_setup(struct usb_function *f,
 
 	/* respond with data transfer or status phase? */
 	if (value >= 0) {
+		int rc;
 		cdev->req->zero = value < w_length;
 		cdev->req->length = value;
 		rc = usb_ep_queue(cdev->gadget->ep0, cdev->req, GFP_ATOMIC);
 		if (rc < 0)
-			printk(KERN_INFO"%s setup response queue error\n",
-					__func__);
+			printk("%s setup response queue error\n", __func__);
 	}
-
 
 	if (value == -EOPNOTSUPP)
 		VDBG(fsg,
@@ -2242,8 +2239,12 @@ static int get_next_command(struct fsg_dev *fsg)
 	bh = fsg->next_buffhd_to_fill;
 	while (bh->state != BUF_STATE_EMPTY) {
 		rc = sleep_thread(fsg);
-		if (rc)
+		if (rc) {
+			usb_ep_dequeue(fsg->bulk_out, bh->outreq);
+			bh->outreq_busy = 0;
+			bh->state = BUF_STATE_EMPTY;
 			return rc;
+		}
 	}
 
 	/* Queue a request to read a Bulk-only CBW */
@@ -2324,8 +2325,6 @@ reset:
 		usb_ep_disable(fsg->bulk_out);
 		fsg->bulk_out_enabled = 0;
 	}
-
-
 
 	/* Deallocate the requests */
 	for (i = 0; i < NUM_BUFFERS; ++i) {
@@ -2462,8 +2461,8 @@ static void handle_exception(struct fsg_dev *fsg)
 	}
 
 	/*
-	* Do NOT flush fifo after set_interface()
-	* Otherwise, it cause some data lost
+	* Do NOT flush the fifo after set_interface()
+	* Otherwise, it results in some data being lost
 	*/
 	if ((fsg->state != FSG_STATE_CONFIG_CHANGE) ||
 		(fsg->new_config != 1))   {
@@ -2473,7 +2472,6 @@ static void handle_exception(struct fsg_dev *fsg)
 		if (fsg->bulk_out_enabled)
 			usb_ep_fifo_flush(fsg->bulk_out);
 	}
-
 	/* Reset the I/O buffer states and pointers, the SCSI
 	 * state, and the exception.  Then invoke the handler. */
 	spin_lock_irq(&fsg->lock);
@@ -3151,7 +3149,7 @@ int __init mass_storage_function_add(struct usb_composite_dev *cdev,
 		goto err_platform_driver_register;
 
 	wake_lock_init(&the_fsg->wake_lock, WAKE_LOCK_SUSPEND,
-		       "usb_mass_storage");
+			   "usb_mass_storage");
 
 	fsg->cdev = cdev;
 	fsg->function.name = shortname;
@@ -3178,6 +3176,7 @@ int __init mass_storage_function_add(struct usb_composite_dev *cdev,
 	return 0;
 
 err_usb_add_function:
+	wake_lock_destroy(&the_fsg->wake_lock);
 	platform_driver_unregister(&fsg_platform_driver);
 err_platform_driver_register:
 	switch_dev_unregister(&the_fsg->sdev);
