@@ -405,7 +405,7 @@ static struct cpcap_platform_data mapphone_cpcap_data = {
 	.regulator_mode_values = cpcap_regulator_mode_values,
 	.regulator_init = cpcap_regulator,
 	.adc_ato = &mapphone_cpcap_adc_ato,
-	.ac_changed = ac_changed,
+	.ac_changed = NULL,
 	.batt_changed = batt_changed,
 	.usb_changed = NULL,
 };
