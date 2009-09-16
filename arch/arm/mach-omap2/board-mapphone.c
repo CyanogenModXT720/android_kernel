@@ -515,8 +515,9 @@ static struct qtouch_ts_platform_data mapphone_ts_platform_data = {
 };
 
 static struct lm3530_platform_data omap3430_als_light_data = {
-	.gen_config = 0x19,
-	.als_config = 0x7c,
+	.power_up_gen_config = 0x0b,
+	.gen_config = 0x0b,
+	.als_config = 0x6c,
 	.brightness_ramp = 0x36,
 	.als_zone_info = 0x00,
 	.als_resistor_sel = 0xf4,
@@ -530,7 +531,7 @@ static struct lm3530_platform_data omap3430_als_light_data = {
 	.zone_target_2 = 0x6e,
 	.zone_target_3 = 0x79,
 	.zone_target_4 = 0x7e,
-	.manual_current = 0x33,
+	.manual_current = 0x13,
 	.upper_curr_sel = 6,
 	.lower_curr_sel = 3,
 	.lens_loss_coeff = 6,
@@ -539,10 +540,10 @@ static struct lm3530_platform_data omap3430_als_light_data = {
 static struct lm3554_platform_data mapphone_camera_flash = {
 	.torch_brightness_def = 0xa0,
 	.flash_brightness_def = 0x78,
-	.flash_duration_def = 0x48,
+	.flash_duration_def = 0x28,
 	.config_reg_1_def = 0xe0,
 	.config_reg_2_def = 0xf0,
-	.vin_monitor_def = 0x07,
+	.vin_monitor_def = 0x03,
 	.gpio_reg_def = 0x0,
 };
 
@@ -825,7 +826,6 @@ static struct prm_setup_vc mapphone_prm_setup = {
 #define R_SMPS_VOL_OPP2_RA0		0x03
 #define R_SMPS_VOL_OPP2_RA1		0x03
 
-#define CPCAP_SMPS_UPDATE_DELAY     170 /* In uSec */
 
 #ifdef CONFIG_OMAP_SMARTREFLEX
 int mapphone_voltagescale_vcbypass(u32 target_opp, u32 current_opp,
@@ -858,7 +858,8 @@ int mapphone_voltagescale_vcbypass(u32 target_opp, u32 current_opp,
 	/* Update the CPCAP SWx voltage register, change the output voltage */
 	omap3_bypass_cmd(slave_addr, volt_reg_addr, target_vsel);
 
-	udelay(CPCAP_SMPS_UPDATE_DELAY);
+	if (target_vsel > current_vsel)
+		udelay(target_vsel - current_vsel + 4);
 
 	if (sr_status) {
 		if (vdd == VDD1_OPP)
@@ -873,10 +874,16 @@ int mapphone_voltagescale_vcbypass(u32 target_opp, u32 current_opp,
 
 /* Mapphone specific PM */
 
+extern void omap_uart_block_sleep(int num);
 static struct wake_lock baseband_wakeup_wakelock;
 static int mapphone_bpwake_irqhandler(int irq, void *unused)
 {
-	wake_lock_timeout(&baseband_wakeup_wakelock, (HZ / 2));
+	omap_uart_block_sleep(1);
+	/*
+	 * uart_block_sleep keeps uart clock active for 500 ms,
+	 * prevent suspend for 1 sec to be safe
+	 */
+	wake_lock_timeout(&baseband_wakeup_wakelock, HZ);
 	return IRQ_HANDLED;
 }
 
@@ -887,7 +894,7 @@ static int mapphone_bpwake_probe(struct platform_device *pdev)
 	gpio_request(MAPPHONE_APWAKE_TRIGGER_GPIO, "BP -> AP IPC trigger");
 	gpio_direction_input(MAPPHONE_APWAKE_TRIGGER_GPIO);
 
-	wake_lock_init(&baseband_wakeup_wakelock, WAKE_LOCK_IDLE, "bpwake");
+	wake_lock_init(&baseband_wakeup_wakelock, WAKE_LOCK_SUSPEND, "bpwake");
 
 	rc = request_irq(gpio_to_irq(MAPPHONE_APWAKE_TRIGGER_GPIO),
 			 mapphone_bpwake_irqhandler,
