@@ -2815,8 +2815,9 @@ static void dispc_error_worker(struct work_struct *work)
 			if (ovl->id == 0) {
 				/* **** HACK ****
 				 * Removing the disable of the graphics plane
-				 * for a underflow until we can figure out
-				 * why the underflows are occurring.
+				 * for underflows as this causes problems
+				 * when switching displays.
+				 * Need more investigation.
 				dispc_enable_plane(ovl->id, 0); */
 
 				dispc_go(ovl->manager->id);
