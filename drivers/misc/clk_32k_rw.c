@@ -62,10 +62,8 @@ struct timespec clock_32k_read(void)
 	/* Check if sched_clock returned value has rolled over */
 	if (curr_val < last_val) {
 		roll_over += (1ULL << (32-15))*1000000000ULL;
-		printk(KERN_DEBUG "roll over happened\n");
 		}
 	current_time = curr_val + roll_over ;
-	printk(KERN_DEBUG "current time= %llu ns\n", current_time);
 	my_time_32k = ns_to_timespec(current_time);
 	last_val = curr_val;
 	/* Restart the 24 hrs timer to be sure that
@@ -100,13 +98,11 @@ static int clock_32k_ioctl(struct inode *inode,
 
 static int clock_32k_open(struct inode *inode, struct file *file)
 {
-	/* DBG_PRINTK("clock_32k : clock_32k_open()\n"); */
 	return 0;
 }
 
 static int clock_32k_free(struct inode *inode, struct file *file)
 {
-	/* DBG_PRINTK("clock_32k : clock_32k_free()\n"); */
 	return 0;
 }
 
