@@ -30,28 +30,15 @@
 
 /*
  * These #defines are used for the bits in powerup_reason.
- *
- * If a soft reset occurs, then the powerup reason contains the value
- * PU_REASON_SOFT_RESET.  In this case, it is guaranteed that no other
- * bits are set.  If the powerup reason is not PU_REASON_SOFT_RESET,
- * then the powerup reason is a bitfield and any of the remaining reasons
- * defined below may be set.  Multiple bits may be set in the powerup reason
- * if it is not PU_REASON_SOFT_RESET.
  */
-#define PU_REASON_SOFT_RESET            0x00000000
-#define PU_REASON_WARM_BOOT	        0x80000000
-#define PU_REASON_WATCHDOG              0x00008000
-#define PU_REASON_MODEL_ASSEMBLY        0x00001000
-#define PU_REASON_SYSTEM_REBOOT         0x00000800
-#define PU_REASON_CBL_DETECT_REGRESSION 0x00000400
-#define PU_REASON_POWERCUT              0x00000200
-#define PU_REASON_CBL_DETECT_CHARGER    0x00000100
-#define PU_REASON_PWR_KEY_PRESS         0x00000080
-#define PU_REASON_PDA_MODE              0x00000040
-#define PU_REASON_CBL_DETECT_FACTORY    0x00000020
-#define PU_REASON_CBL_DETECT_USB        0x00000010
-#define PU_REASON_PCAP_RTC              0x00000008
-#define PU_REASON_RESUME_FROM_SLEEP     0x00000004
+#define PU_REASON_USB_CABLE             0x00000010 /* Bit 4  */
+#define PU_REASON_FACTORY_CABLE         0x00000020 /* Bit 5  */
+#define PU_REASON_PWR_KEY_PRESS         0x00000080 /* Bit 7  */
+#define PU_REASON_CHARGER               0x00000100 /* Bit 8  */
+#define PU_REASON_POWER_CUT             0x00000200 /* bit 9  */
+#define PU_REASON_SW_AP_RESET           0x00004000 /* Bit 14 */
+#define PU_REASON_WDOG_AP_RESET         0x00008000 /* Bit 15 */
+#define PU_REASON_AP_KERNEL_PANIC       0x00020000 /* Bit 17 */
 
 
 /*
