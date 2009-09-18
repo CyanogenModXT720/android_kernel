@@ -42,6 +42,7 @@
 #define DT_PROP_KEYPAD_COLREG	"columnregister"
 #define DT_PROP_KEYPAD_MAPNUM	"mapnum"
 #define DT_PROP_KEYPAD_MAPS	"maps"
+#define DT_PROP_KEYPAD_CLOSED_MAPS "closed_maps"
 #define DT_PROP_KEYPAD_NAME	"name"
 
 /* GPIODev Node */
