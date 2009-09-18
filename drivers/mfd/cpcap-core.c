@@ -311,7 +311,7 @@ static int __devinit cpcap_probe(struct spi_device *spi)
 	if (retval < 0)
 		goto free_cpcap_irq;
 
-	if (bi_powerup_reason() != 0x100) {
+	if (bi_powerup_reason() != PU_REASON_CHARGER) {
 		/* Set Kpanic bit, which will be cleared at normal reboot */
 		cpcap_regacc_write(cpcap, CPCAP_REG_VAL1,
 			CPCAP_BIT_AP_KERNEL_PANIC, CPCAP_BIT_AP_KERNEL_PANIC);
