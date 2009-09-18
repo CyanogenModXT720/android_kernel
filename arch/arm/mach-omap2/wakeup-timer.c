@@ -67,7 +67,7 @@
 #define DPRINTK(fmt, args...) do {} while (0)
 #endif
 
-#define SUSPEND_RESUME_LATENCY 5000
+#define WAKEUP_LATENCY 200
 
 /*
  * Wakeup timer state definition:
@@ -611,7 +611,6 @@ static int wakeup_timer_suspend(struct platform_device *pdev,
 				pm_message_t state)
 {
 	struct timer_cascade_root *pwkup_cascade;
-	long latency;
 #ifdef CONFIG_HAS_WAKELOCK
 	long timeout;
 #endif
@@ -628,9 +627,7 @@ static int wakeup_timer_suspend(struct platform_device *pdev,
 	* Currently we suppose it will no more than 200ms in worst case,
 	* right? this might need change later with more statistic.
 	*/
-	latency = SUSPEND_RESUME_LATENCY;
-
-	if (expire <= latency) {
+	if (expire <= 5000) {
 #ifdef CONFIG_HAS_WAKELOCK
 		timeout = (HZ*expire)/MSEC_PER_SEC + 1;
 		wake_lock_timeout(&driver_wake_lock , timeout);
@@ -642,8 +639,9 @@ static int wakeup_timer_suspend(struct platform_device *pdev,
 	* then the latency could be off-set and timer could be scheduled
 	* at accurate point.
 	*/
-	wakeup_timer_seconds = (expire-latency)/MSEC_PER_SEC;
-	wakeup_timer_nseconds = ((expire-latency)%MSEC_PER_SEC)*NSEC_PER_MSEC;
+	wakeup_timer_seconds = (expire-WAKEUP_LATENCY)/MSEC_PER_SEC;
+	wakeup_timer_nseconds = ((expire-WAKEUP_LATENCY)%MSEC_PER_SEC)
+				*NSEC_PER_MSEC;
 
 	DPRINTK("set wakeup_timer_seconds: %d.%d \n",
 		wakeup_timer_seconds, wakeup_timer_nseconds);
@@ -673,7 +671,7 @@ static int wakeup_timer_resume(struct platform_device *pdev)
 	* if expire <50ms, hold a 50ms wakelock to make sure timer is scheduled.
 	* if 50~200ms, disable suspend but allow idle by setting wakelock.
 	*/
-	if (expire > SUSPEND_RESUME_LATENCY)
+	if (expire > 5000)
 		return 0;
 	else if (expire <= 50)
 		timeout = (HZ*50)/MSEC_PER_SEC + 1;
