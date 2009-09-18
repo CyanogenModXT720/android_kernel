@@ -39,14 +39,6 @@
 #include <linux/workqueue.h>
 #include <linux/console.h>
 
-#ifdef CONFIG_APANIC_APR
-#define WDOG_ABNORMAL_RESET	0x00020000
-#define POWER_CUT	0x00000200
-#define CPCAP_RESET	0x00040000
-#define INFO_SIZE	128
-
-extern u32 bi_powerup_reason(void);
-#endif
 
 struct panic_header {
 	u32 magic;
@@ -54,11 +46,6 @@ struct panic_header {
 
 	u32 version;
 #define PHDR_VERSION   0x01
-
-#ifdef CONFIG_APANIC_APR
-	u32 is_panic_data;
-#define PANIC_DATA 0x1
-#endif
 
 	u32 console_offset;
 	u32 console_length;
@@ -74,16 +61,8 @@ struct apanic_data {
 	struct proc_dir_entry	*apanic_console;
 	struct proc_dir_entry	*apanic_threads;
 
-#ifdef CONFIG_APANIC_APR
-	struct proc_dir_entry   *last_kmsg_apr;
-#endif
 };
 
-#ifdef CONFIG_APANIC_APR
-static char rst_buf[INFO_SIZE];
-static u32 rst_len;
-static u32 powerup_reason;
-#endif
 static struct apanic_data drv_ctx;
 static struct work_struct proc_removal_work;
 static DEFINE_MUTEX(drv_mutex);
@@ -92,41 +71,6 @@ static void apanic_erase_callback(struct erase_info *done)
 {
 	wait_queue_head_t *wait_q = (wait_queue_head_t *) done->priv;
 	wake_up(wait_q);
-}
-
-static int apanic_emergency_erase(struct mtd_info *mtd)
-{
-	struct erase_info erase;
-	int rc, i;
-
-	/* set up the erase structure */
-	erase.mtd = mtd;
-	erase.len = mtd->erasesize;
-	erase.callback = NULL;
-	for (i = 0; i < mtd->size; i += mtd->erasesize) {
-		erase.addr = i;
-		rc = mtd->block_isbad(mtd, erase.addr);
-		if (rc < 0) {
-			printk(KERN_ERR
-					"apanic: Bad block check "
-					"rc = %d\n", rc);
-			return 1;
-		}
-		if (rc) {
-			printk(KERN_WARNING
-					"apanic: Skipping bad "
-					"block @%llx\n", erase.addr);
-			continue;
-		}
-
-		/* erase the kpanic flash block partition */
-		if (mtd->erase(mtd, &erase)) {
-			printk(KERN_EMERG "apanic: erase fail\n");
-			return 1;
-		}
-	}
-
-	return 0;
 }
 
 static int apanic_proc_read(char *buffer, char **start, off_t offset,
@@ -154,13 +98,6 @@ static int apanic_proc_read(char *buffer, char **start, off_t offset,
 		file_length = ctx->curr.threads_length;
 		file_offset = ctx->curr.threads_offset;
 		break;
-#ifdef CONFIG_APANIC_APR
-	case 3:	/* last_kmsg_apr */
-		file_length = ctx->curr.threads_length
-						+ ctx->curr.console_length;
-		file_offset = ctx->curr.console_offset;
-		break;
-#endif
 	default:
 		pr_err("Bad dat (%d)\n", (int) dat);
 		mutex_unlock(&drv_mutex);
@@ -277,51 +214,15 @@ static void apanic_remove_proc_work(struct work_struct *work)
 		remove_proc_entry("apanic_threads", NULL);
 		ctx->apanic_threads = NULL;
 	}
-#ifdef CONFIG_APANIC_APR
-	if (ctx->last_kmsg_apr) {
-		remove_proc_entry("last_kmsg_apr", NULL);
-		ctx->last_kmsg_apr = NULL;
-	}
-#endif
 	mutex_unlock(&drv_mutex);
 }
 
 static int apanic_proc_write(struct file *file, const char __user *buffer,
 		unsigned long count, void *data)
 {
-#ifndef CONFIG_APANIC_APR
 	schedule_work(&proc_removal_work);
-#endif
 	return count;
 }
-
-#ifdef CONFIG_APANIC_APR
-static ssize_t rst_info_proc_read(struct file *file, char __user *buf,
-		size_t len, loff_t *offset)
-{
-	ssize_t count = 0;
-	loff_t pos = *offset;
-
-
-	if (pos >= rst_len)
-		return 0;
-
-	count = min(len, rst_len);
-	if (copy_to_user(buf, rst_buf + pos, count)) {
-		printk(KERN_EMERG "apanic: copy fail\n");
-		return -EFAULT;
-	}
-
-	*offset += count;
-
-	return count;
-}
-
-static const struct file_operations rst_info_file_ops = {
-	.owner = THIS_MODULE,
-	.read = rst_info_proc_read,
-};
-#endif
 
 static void mtd_panic_notify_add(struct mtd_info *mtd)
 {
@@ -329,10 +230,6 @@ static void mtd_panic_notify_add(struct mtd_info *mtd)
 	struct panic_header *hdr = ctx->bounce;
 	size_t len;
 	int rc;
-#ifdef CONFIG_APANIC_APR
-	size_t wlen;
-	struct proc_dir_entry *entry;
-#endif
 
 	if (strcmp(mtd->name, CONFIG_APANIC_PLABEL))
 		return;
@@ -375,46 +272,6 @@ static void mtd_panic_notify_add(struct mtd_info *mtd)
 
 	memcpy(&ctx->curr, hdr, sizeof(struct panic_header));
 
-#ifdef CONFIG_APANIC_APR
-	if (hdr->is_panic_data != PANIC_DATA) {
-		powerup_reason = bi_powerup_reason();
-		printk(KERN_INFO
-				"apanic: Record powerup_reason = 0x%08x\n",
-				powerup_reason);
-
-		memset(rst_buf, 0, INFO_SIZE);
-		rst_len = 0;
-
-		if (powerup_reason == WDOG_ABNORMAL_RESET)
-			rst_len = sprintf(rst_buf,
-				"POWERUPREASON : %s(0x%08x)\n",
-				"POSSIBLE_WDOG_ABNORMAL_RESET",
-				powerup_reason);
-		else if (powerup_reason == POWER_CUT)
-			rst_len = sprintf(rst_buf,
-				"POWERUPREASON : POWER_CUT(0x%08x)\n",
-				powerup_reason);
-		else if (powerup_reason == CPCAP_RESET)
-			rst_len = sprintf(rst_buf,
-				"POWERUPREASON : CPCAP_RESET(0x%08x)\n",
-				powerup_reason);
-
-		if (rst_len) {
-			entry = create_proc_entry("last_kmsg_apr",
-					S_IFREG | S_IRUGO, NULL);
-			if (!entry)
-				printk(KERN_ERR "%s: failed creating procfile\n",
-						 __func__);
-			else {
-				entry->proc_fops = &rst_info_file_ops;
-				entry->size = rst_len;
-			}
-		}
-
-		return;
-	}
-#endif
-
 	printk(KERN_INFO "apanic: c(%u, %u) t(%u, %u)\n",
 	       hdr->console_offset, hdr->console_length,
 	       hdr->threads_offset, hdr->threads_length);
@@ -446,31 +303,6 @@ static void mtd_panic_notify_add(struct mtd_info *mtd)
 			ctx->apanic_threads->data = (void *) 2;
 		}
 	}
-
-#ifdef CONFIG_APANIC_APR
-	if (hdr->console_length || hdr->threads_length) {
-		ctx->last_kmsg_apr = create_proc_entry("last_kmsg_apr",
-				S_IFREG | S_IRUGO |
-				S_IWUSR | S_IWGRP, NULL);
-		if (!ctx->last_kmsg_apr)
-			printk(KERN_ERR "%s: failed creating procfile\n",
-					__func__);
-		else {
-			ctx->last_kmsg_apr->read_proc = apanic_proc_read;
-			ctx->last_kmsg_apr->write_proc = apanic_proc_write;
-			ctx->last_kmsg_apr->size = hdr->console_length +
-				hdr->threads_length;
-			ctx->last_kmsg_apr->data = (void *) 3;
-		}
-	}
-
-	hdr->is_panic_data = 0;
-	rc = mtd->write(ctx->mtd, 0, mtd->writesize, &wlen, ctx->bounce);
-	if (rc) {
-		printk(KERN_EMERG "apanic: Header write failed (%d)\n",
-				rc);
-	}
-#endif
 
 	return;
 out_err:
@@ -525,7 +357,6 @@ static int apanic_writeflashpage(struct mtd_info *mtd, loff_t to,
 
 extern int log_buf_copy(char *dest, int idx, int len);
 extern void log_buf_clear(void);
-extern void console_stop(struct console *console);
 
 /*
  * Writes the contents of the console to the specified offset in flash.
@@ -612,22 +443,10 @@ static int apanic(struct notifier_block *this, unsigned long event,
 	if (!ctx->mtd)
 		goto out;
 
-#ifndef CONFIG_APANIC_APR
 	if (ctx->curr.magic) {
 		printk(KERN_EMERG "Crash partition in use!\n");
 		goto out;
 	}
-#endif
-
-#ifdef CONFIG_APANIC_APR
-	/*
-	 * Delete the last data on new panic occurs for UMTS phone.
-	 */
-	if (0 != apanic_emergency_erase(ctx->mtd)) {
-		printk(KERN_EMERG "apanic: erase error on panic\n");
-		goto out;
-	}
-#endif
 
 	/*
 	 * Add timestamp to displays current UTC time and uptime (in seconds).
@@ -673,7 +492,7 @@ static int apanic(struct notifier_block *this, unsigned long event,
 	log_buf_clear();
 
 	for (con = console_drivers; con; con = con->next) {
-		console_stop(con);
+		con->flags &= ~CON_ENABLED;
 	}
 
 	show_state_filter(0);
@@ -690,9 +509,6 @@ static int apanic(struct notifier_block *this, unsigned long event,
 	memset(ctx->bounce, 0, PAGE_SIZE);
 	hdr->magic = PANIC_MAGIC;
 	hdr->version = PHDR_VERSION;
-#ifdef CONFIG_APANIC_APR
-	hdr->is_panic_data = PANIC_DATA;
-#endif
 
 	hdr->console_offset = console_offset;
 	hdr->console_length = console_len;
