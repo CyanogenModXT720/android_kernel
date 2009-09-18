@@ -67,7 +67,7 @@
 #define DPRINTK(fmt, args...) do {} while (0)
 #endif
 
-#define SUSPEND_RESUME_LATENCY 200
+#define SUSPEND_RESUME_LATENCY 5000
 
 /*
  * Wakeup timer state definition:
@@ -310,6 +310,7 @@ static int cascade_attach(struct timer_cascade_root *new_pwkup_cascade)
 	spin_unlock_irqrestore(&wakeup_timer_lock, flags);
 
 	cascade_start_hrtimer(new_pwkup_cascade);
+
 	return 0;
 }
 
