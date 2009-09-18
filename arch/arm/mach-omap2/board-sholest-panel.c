@@ -124,10 +124,36 @@ static struct omap_dss_device sholest_hdtv_device = {
 };
 #endif
 
+#ifdef CONFIG_TVOUT_SHOLEST
+static int sholest_panel_enable_tv(struct omap_dss_device *dssdev)
+{
+	printk(KERN_WARNING "Enter sholest_panel_enable_tv\n");
+
+	return 0;
+}
+
+static void sholest_panel_disable_tv(struct omap_dss_device *dssdev)
+{
+	printk(KERN_WARNING "Enter sholest_panel_disable_tv\n");
+}
+
+static struct omap_dss_device sholest_tvout_device = {
+	.type = OMAP_DISPLAY_TYPE_VENC,
+	.name = "tv",
+	.driver_name = "venc",	
+	.phy.venc.type   = OMAP_DSS_VENC_TYPE_COMPOSITE,
+	.platform_enable  = sholest_panel_enable_tv,
+	.platform_disable = sholest_panel_disable_tv,
+};
+#endif
+
 static struct omap_dss_device *sholest_dss_devices[] = {
 	&sholest_lcd_device,
 #ifdef CONFIG_PANEL_HDTV /* charlotte */
 	&sholest_hdtv_device,
+#endif
+#ifdef CONFIG_TVOUT_SHOLEST
+	&sholest_tvout_device,
 #endif
 };
 
