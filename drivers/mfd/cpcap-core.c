@@ -188,15 +188,6 @@ static int cpcap_reboot(struct notifier_block *this, unsigned long code,
 					"outofcharge cpcap set failure.\n");
 				result = NOTIFY_BAD;
 			}
-			/* Set Kpanic bit */
-			ret = cpcap_regacc_write(misc_cpcap, CPCAP_REG_VAL1,
-				CPCAP_BIT_AP_KERNEL_PANIC,
-				CPCAP_BIT_AP_KERNEL_PANIC);
-			if (ret) {
-				dev_err(&(misc_cpcap->spi->dev),
-					"kpanic cpcap set failure.\n");
-				result = NOTIFY_BAD;
-			}
 			/* Set the soft reset bit in the cpcap */
 			cpcap_regacc_write(misc_cpcap, CPCAP_REG_VAL1,
 				CPCAP_BIT_SOFT_RESET,
