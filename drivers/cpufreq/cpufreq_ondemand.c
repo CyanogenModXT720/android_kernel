@@ -21,6 +21,7 @@
 #include <linux/hrtimer.h>
 #include <linux/tick.h>
 #include <linux/ktime.h>
+#include <linux/platform_device.h>
 
 /*
  * dbs is used in this file as a shortform for demandbased switching
@@ -538,6 +539,56 @@ static inline void dbs_timer_exit(struct cpu_dbs_info_s *dbs_info)
 	cancel_delayed_work(&dbs_info->work);
 }
 
+
+static int __devinit ondemand_probe(struct platform_device *dev)
+{
+    return 0;
+}
+
+static int __devexit ondemand_remove(struct platform_device *dev)
+{
+    return 0;
+}
+static int ondemand_suspend(struct platform_device *dev, pm_message_t state)
+{
+    /* only for mono-cpu system */
+    int cpu = 0;
+    struct cpu_dbs_info_s *this_dbs_info;
+
+    this_dbs_info = &per_cpu(cpu_dbs_info, cpu);
+
+    dbs_timer_exit(this_dbs_info);
+    flush_workqueue(kondemand_wq);
+
+    /* force lowest opp available */
+    __cpufreq_driver_target(this_dbs_info->cur_policy, 0,
+		CPUFREQ_RELATION_L);
+    return 0;
+}
+
+static int ondemand_resume(struct platform_device *dev)
+{
+    int cpu = 0;
+    struct cpu_dbs_info_s *this_dbs_info;
+
+    this_dbs_info = &per_cpu(cpu_dbs_info, cpu);
+    dbs_timer_init(this_dbs_info);
+    return 0;
+}
+
+static struct platform_driver ondemand_dummy_driver = {
+    .probe      = ondemand_probe,
+    .remove     = ondemand_remove,
+    .suspend    = ondemand_suspend,
+    .resume     = ondemand_resume,
+    .driver     = {
+		.name   = "ondemand",
+		.owner  = THIS_MODULE,
+    },
+};
+
+static struct platform_device *pd;
+
 static int cpufreq_governor_dbs(struct cpufreq_policy *policy,
 				   unsigned int event)
 {
@@ -597,6 +648,8 @@ static int cpufreq_governor_dbs(struct cpufreq_policy *policy,
 				def_sampling_rate = MIN_STAT_SAMPLING_RATE;
 
 			dbs_tuners_ins.sampling_rate = def_sampling_rate;
+			pd = platform_device_register_simple("ondemand", -1,
+					NULL, 0);
 		}
 		dbs_timer_init(this_dbs_info);
 
@@ -608,6 +661,8 @@ static int cpufreq_governor_dbs(struct cpufreq_policy *policy,
 		dbs_timer_exit(this_dbs_info);
 		sysfs_remove_group(&policy->kobj, &dbs_attr_group);
 		dbs_enable--;
+		if (dbs_enable == 0)
+			platform_device_unregister(pd);
 		mutex_unlock(&dbs_mutex);
 
 		break;
@@ -661,13 +716,26 @@ static int __init cpufreq_gov_dbs_init(void)
 	}
 	err = cpufreq_register_governor(&cpufreq_gov_ondemand);
 	if (err)
-		destroy_workqueue(kondemand_wq);
+		goto err2;
+
+    err = platform_driver_register(&ondemand_dummy_driver);
+    if (err)
+		goto err1;
+
+    return 0;
+
+ err1:
+    cpufreq_unregister_governor(&cpufreq_gov_ondemand);
+
+ err2:
+    destroy_workqueue(kondemand_wq);
 
 	return err;
 }
 
 static void __exit cpufreq_gov_dbs_exit(void)
 {
+	platform_driver_unregister(&ondemand_dummy_driver);
 	cpufreq_unregister_governor(&cpufreq_gov_ondemand);
 	destroy_workqueue(kondemand_wq);
 }
