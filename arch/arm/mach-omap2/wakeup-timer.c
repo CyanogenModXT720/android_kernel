@@ -60,7 +60,6 @@
 
 #include "pm.h"
 
-#define WAKEUP_TIMER_DEBUG
 
 #ifdef WAKEUP_TIMER_DEBUG
 #define DPRINTK(fmt, args...) printk(KERN_INFO "%s: " fmt, __func__ , ## args)
@@ -439,7 +438,7 @@ static int wakeup_timer_ioctl(struct inode *inode,
 			return -EINVAL;
 		}
 
-		printk(KERN_ERR "Period wake up timer has been set.\n");
+		DPRINTK("Period wake up timer has been set.\n");
 		ret = wakeup_timer_add(TYPE_PERIODIC, filp, (unsigned long)arg);
 		break;
 
@@ -449,7 +448,7 @@ static int wakeup_timer_ioctl(struct inode *inode,
 			return -EINVAL;
 		}
 
-		printk(KERN_ERR "Oneshot wake up timer has been set.\n");
+		DPRINTK("Oneshot wake up timer has been set.\n");
 		ret = wakeup_timer_add(TYPE_ONESHOT, filp, (unsigned long)arg);
 		break;
 
