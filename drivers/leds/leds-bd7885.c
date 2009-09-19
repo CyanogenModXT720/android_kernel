@@ -267,18 +267,21 @@ static int bd7885_io_init(void)
 }
 
 #if defined(CONFIG_LEDS_BU9847)
-static int bd7885_quench_levle_set(struct i2c_client *client, unsigned char level)
+static int bd7885_quench_level_set(
+	struct i2c_client *client,
+	unsigned char level)
 {
     int ret = 0;
 
-    /*Quench level is from 1 to 12.*/
-    if ((level < 1) || (level > 12))
+    /*Quench level is from 1 to 31 if bypassing bu9847.*/
+    if ((level < 1) || (level > 31))
 	return -1;
 
-    ret = bd7885_reg_write(client, BD7885_QUENCHADJ_REG, bu9847_reg_info_tbl[BU9847_QCHC1_REG + level - 1]);
+    ret = bd7885_reg_write(client, BD7885_QUENCHADJ_REG, \
+		level << BD7885_VSTOPADJ_SHIFT);
 
     if (ret != 0) {
-	printk(KERN_ERR "bd7885_quench_levle_set failed\n");
+	printk(KERN_ERR "bd7885_quench_level_set failed\n");
 	return -1;
     }
 
@@ -432,7 +435,7 @@ static int bd7885_release(struct inode *inode, struct file *file)
 static int bd7885_ioctl(struct inode *inode, struct file *file, unsigned int cmd, unsigned long arg)
 {
     void __user *argp = (void __user *)arg;
-    unsigned char rwbuf;
+    unsigned char rwbuf, data1, data2;
     bd7885_cfg rw_reg_buf;
     unsigned char reg_cnt = 0;
 
@@ -447,8 +450,8 @@ static int bd7885_ioctl(struct inode *inode, struct file *file, unsigned int cmd
 	break;
 
     case BD7885_IOCTL_SET_CHARGING:
-    case BD7885_IOCTL_SET_CHARG_LEVEL:
-    case BD7885_IOCTL_SET_QUENCH_MODE:
+    case BD7885_IOCTL_SET_CHARGE_LEVEL:
+    case BD7885_IOCTL_SET_MODE:
     case BD7885_IOCTL_SET_QUENCH_THRESHOLD:
     case BD7885_IOCTL_SET_AF_LED:
     case BD7885_IOCTL_READY_STROBE_MANUAL:
@@ -501,11 +504,11 @@ static int bd7885_ioctl(struct inode *inode, struct file *file, unsigned int cmd
 	}
 	break;
 
-    case BD7885_IOCTL_SET_CHARG_LEVEL:
+    case BD7885_IOCTL_SET_CHARGE_LEVEL:
 	rwbuf &= BD7885_FULL_ADJ_LVL_MASK;
 
        /*Apply FULLADJ setting.*/
-       error = bd7885_reg_write(bd7885_i2c_client, BD7885_QUENCHCNT_REG, rwbuf);
+       error = bd7885_reg_write(bd7885_i2c_client, BD7885_FULLADJ_REG, rwbuf);
        if (error != 0)
 		return error;
 	break;
@@ -517,30 +520,55 @@ static int bd7885_ioctl(struct inode *inode, struct file *file, unsigned int cmd
        }
 	break;
 
-    case BD7885_IOCTL_SET_QUENCH_MODE:
-       /*Apply Quench setting.*/
-       if (rwbuf)
-		/*Enable Quench register.*/
-		rwbuf = bd7885_reg_status_tbl[BD7885_QUENCHCNT_REG] | BD7885_QUENCH_EN_MASK;
-       else
-		/*Disable Quench register.*/
-		rwbuf = bd7885_reg_status_tbl[BD7885_QUENCHCNT_REG] & (~BD7885_QUENCH_EN_MASK);
+    case BD7885_IOCTL_SET_MODE:
+       /*Apply Mode setting.*/
+       if (rwbuf == BD7885_STROBE_QUENCH_MODE) {
+		/* Set QUENCH_EN, Set PCNT_EN */
+		data1 = bd7885_reg_status_tbl[BD7885_QUENCHCNT_REG] | \
+				BD7885_QUENCH_EN_MASK;
+		data2 = bd7885_reg_status_tbl[BD7885_DRVCNT_REG] | \
+				BD7885_PCNT_EN_MASK;
+       }
+      else if (rwbuf == BD7885_STROBE_MANUAL_MODE) {
+		/* Clr QUENCH_EN, Set PCNT_EN */
+		data1 = bd7885_reg_status_tbl[BD7885_QUENCHCNT_REG] & \
+				(~BD7885_QUENCH_EN_MASK);
+		data2 = bd7885_reg_status_tbl[BD7885_DRVCNT_REG] | \
+				BD7885_PCNT_EN_MASK;
+      }
+       else {
+		/* Clr QUENCH_EN & PCNT_EN */
+		data1 = bd7885_reg_status_tbl[BD7885_QUENCHCNT_REG] & \
+				(~BD7885_QUENCH_EN_MASK);
+		data2 = bd7885_reg_status_tbl[BD7885_DRVCNT_REG] & \
+				(~BD7885_PCNT_EN_MASK);
+       }
 
-       error = bd7885_reg_write(bd7885_i2c_client, BD7885_QUENCHCNT_REG, rwbuf);
+       error = bd7885_reg_write(bd7885_i2c_client, BD7885_QUENCHCNT_REG, data1);
+       error |= bd7885_reg_write(bd7885_i2c_client, BD7885_DRVCNT_REG, data2);
        if (error != 0)
 		return error;
        break;
 
     case BD7885_IOCTL_SET_QUENCH_THRESHOLD:
        /*Apply VSTOPADJ & PTR value to Xenon flash.*/
+
 #if defined(CONFIG_LEDS_BU9847)
-
        /*Quench level fetch from EEPROM.*/
-       error = bu9847_fetch_regs();
-       if (error != 0)
-		return error;
-
-       error = bd7885_quench_levle_set(bd7885_i2c_client, rwbuf);
+       if (rwbuf != 0) {
+		/*Enable PCNT_EN*/
+		data1 = bd7885_reg_status_tbl[BD7885_DRVCNT_REG] | \
+				BD7885_PCNT_EN_MASK;
+		error = bd7885_reg_write(bd7885_i2c_client, \
+				BD7885_DRVCNT_REG, data1);
+		error |= bd7885_quench_level_set(bd7885_i2c_client, rwbuf);
+       } else {
+		/*Disable PCNT_EN*/
+		data1 = bd7885_reg_status_tbl[BD7885_DRVCNT_REG] & \
+				(~BD7885_PCNT_EN_MASK);
+		error = bd7885_reg_write(bd7885_i2c_client, \
+				BD7885_DRVCNT_REG, data1);
+       }
        if (error != 0)
 		return error;
 #endif
@@ -618,3 +646,4 @@ module_exit(bd7885_exit);
 MODULE_AUTHOR("Motorola");
 MODULE_DESCRIPTION("BD7885 flash regulator driver");
 MODULE_LICENSE("GPL");
+

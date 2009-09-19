@@ -24,7 +24,6 @@
 #include "oldisp/ispcsi2.h"
 
 /*It for manual trigger oepration.*/
-//~ #include "linux/leds-bd7885.h"
 
 #define OV8810_DRIVER_NAME  "ov8810"
 #define MOD_NAME "OV8810: "
@@ -74,7 +73,7 @@ struct ov8810_sensor_params {
 
 struct ov8810_flash_params {
 	u16 flash_time;
-	u8 flash_mode;
+	u8 flash_type;
 	u8 shutter_type;
 };
 
@@ -525,9 +524,8 @@ int ov8810_set_exposure_time(u32 exp_time, struct v4l2_int_device *s,
 		dev_err(&client->dev, "Error setting exposure time...%d\n",
 									err);
 	else {
-		if (lvc) {
+		if (lvc)
 			lvc->current_value = exp_time;
-		}
 	}
 
 	return err;
@@ -578,9 +576,8 @@ int ov8810_set_gain(u16 linear_gain_Q8, struct v4l2_int_device *s,
 		gain_fraction = linear_gain_Q8 >> shift_bits;
 		 /* subt 1 (Q8) and take upper 4 bits */
 		gain_fraction = (gain_fraction - (1*256)) >> 4;
-		if (gain_fraction > 0x0f) {
+		if (gain_fraction > 0x0f)
 			gain_fraction = 0x0f;
-		}
 
 		gain_register = gain_stage_2x | gain_fraction;
 
@@ -594,9 +591,8 @@ int ov8810_set_gain(u16 linear_gain_Q8, struct v4l2_int_device *s,
 		dev_err(&client->dev, "Error setting analog gain: %d\n", err);
 		return err;
 	} else {
-		if (lvc) {
+		if (lvc)
 			lvc->current_value = linear_gain_Q8;
-		}
 	}
 
 	return err;
@@ -632,9 +628,8 @@ int ov8810_set_color_bar_mode(u16 enable, struct v4l2_int_device *s,
 	if (err)
 		dev_err(&client->dev, "Error setting color bar mode\n");
 	else {
-		if (lvc) {
+		if (lvc)
 			lvc->current_value = enable;
-		}
 	}
 
 	return err;
@@ -664,8 +659,8 @@ int ov8810_set_flash_next_frame(
 	u32	line_time_q8 = sensor->exposure.line_time;
 
 	dev_dbg(&client->dev, "set_flash_next_frame: time=%dusec, " \
-		"flash_mode=%d, shutter_type=%d, power=%d\n",
-		flash_params->flash_time, flash_params->flash_mode,
+		"flash_type=%d, shutter_type=%d, power=%d\n",
+		flash_params->flash_time, flash_params->flash_type,
 		flash_params->shutter_type,
 		(current_power_state == V4L2_POWER_ON) || sensor->resuming);
 
@@ -674,12 +669,11 @@ int ov8810_set_flash_next_frame(
 
 			/* Set strobe source frame type */
 			ov8810_read_reg(client, 1, OV8810_FRS4, &data);
-			if (flash_params->shutter_type ==
-				ROLLING_SHUTTER_TYPE) {
+			if (flash_params->shutter_type == ROLLING_SHUTTER_TYPE)
 				data |= 1 << OV8810_FRS4_STRB_SOURCE_SEL_SHIFT;
-			} else {
-				data &= ~(1 << OV8810_FRS4_STRB_SOURCE_SEL_SHIFT);
-			}
+			else
+				data &= \
+				~(1 << OV8810_FRS4_STRB_SOURCE_SEL_SHIFT);
 			err = ov8810_write_reg(client, OV8810_FRS4, data);
 
 			dev_dbg(&client->dev, "set_flash_next_frame:  " \
@@ -688,13 +682,12 @@ int ov8810_set_flash_next_frame(
 			/* Set Strobe Ctrl Reg */
 			data = 0;
 			if (flash_params->shutter_type ==
-							ROLLING_SHUTTER_TYPE) {
+							ROLLING_SHUTTER_TYPE)
 				data |= 1 <<
 					OV8810_FRS5_ROLLING_SHUT_STRB_EN_SHIFT;
-			}
-			if (flash_params->flash_mode == LED_FLASH_MODE) {
+
+			if (flash_params->flash_type == LED_FLASH_TYPE)
 				data |= 1 << OV8810_FRS5_STROBE_MODE_SHIFT;
-			}
 
 			strb_pulse_width = (flash_params->flash_time << 8) /
 				line_time_q8;
@@ -714,8 +707,11 @@ int ov8810_set_flash_next_frame(
 
 			/* Set Frame Mode Strobe Pulse Width */
 			if (flash_params->shutter_type == MECH_SHUTTER_TYPE) {
-				strb_pulse_width = flash_params->flash_time /
-					line_time_q8;
+				strb_pulse_width = \
+				(flash_params->flash_time << 8) / line_time_q8;
+
+				if (strb_pulse_width > 15)
+					strb_pulse_width = 15;
 
 				err |= ov8810_write_reg(client, OV8810_FRS6,
 					strb_pulse_width);
@@ -735,7 +731,7 @@ int ov8810_set_flash_next_frame(
 		dev_err(&client->dev, "Error setting flash register\n");
 	else {
 		sensor->flash.flash_time = flash_params->flash_time;
-		sensor->flash.flash_mode = flash_params->flash_mode;
+		sensor->flash.flash_type = flash_params->flash_type;
 		sensor->flash.shutter_type = flash_params->shutter_type;
 	}
 	return err;
@@ -866,11 +862,10 @@ static int ov8810_calc_pclk(struct v4l2_int_device *s)
 	sensor->clk.op_sys_div = lut1[(val >> 4) & 0xf];
 	sensor->clk.op_pix_div = lut1[val & 0xf];
 
-	if ((val & 0xc) >> 2 == 1) {
+	if ((val & 0xc) >> 2 == 1)
 		sensor->clk.num_mipi_lanes = 2;
-	} else {
+	else
 		sensor->clk.num_mipi_lanes = 1;
-	}
 
 	ov8810_read_reg(client, 1, OV8810_R_PLL3, &val);
 	sensor->clk.pll_mult = val & 0x7f;
@@ -1023,9 +1018,12 @@ static int ov8810_configure(struct v4l2_int_device *s)
 	isize = ov8810_find_size(s, pix->width, pix->height);
 
 	dev_dbg(&client->dev, "ov8810_configure: isize=%d, Req Size=%dx%d, " \
-		"Find Size = %dx%d\n", isize, pix->width, pix->height,
+			"Find Size = %dx%d, fps=%d/%d\n", \
+			isize, pix->width, pix->height,
 		(int)ov8810_sizes[isize].width,
-		(int)ov8810_sizes[isize].height);
+		(int)ov8810_sizes[isize].height,
+		sensor->timeperframe.denominator,
+		sensor->timeperframe.numerator);
 
 	/* Reset */
 	isp_csi2_ctrl_config_if_enable(false);
@@ -1361,8 +1359,7 @@ static int ioctl_s_ctrl(struct v4l2_int_device *s,
 	case V4L2_CID_PRIVATE_FLASH_NEXT_FRAME:
 		if (copy_from_user(&flash_params,
 				(struct ov8810_flash_params *)vc->value,
-				sizeof(struct ov8810_flash_params)) == 0)
-		{
+				sizeof(struct ov8810_flash_params)) == 0) {
 			retval = ov8810_set_flash_next_frame(&flash_params,
 				s, lvc);
 		}
@@ -1370,8 +1367,7 @@ static int ioctl_s_ctrl(struct v4l2_int_device *s,
 	case V4L2_CID_PRIVATE_START_MECH_SHUTTER_CAPTURE:
 		if (copy_from_user(&shutter_params,
 				(struct ov8810_shutter_params *)vc->value,
-				sizeof(struct ov8810_shutter_params)) == 0)
-		{
+				sizeof(struct ov8810_shutter_params)) == 0) {
 			retval = ov8810_start_mech_shutter_capture(
 				&shutter_params, s, lvc);
 		}
@@ -1550,6 +1546,7 @@ static int ioctl_s_parm(struct v4l2_int_device *s,
 {
 	int rval = 0;
 	struct ov8810_sensor *sensor = s->priv;
+	struct i2c_client *client = sensor->i2c_client;
 	struct v4l2_fract *timeperframe = &a->parm.capture.timeperframe;
 	struct v4l2_fract timeperframe_old;
 	int desired_fps;
@@ -1564,6 +1561,8 @@ static int ioctl_s_parm(struct v4l2_int_device *s,
 		sensor->timeperframe = timeperframe_old;
 	else
 		*timeperframe = sensor->timeperframe;
+
+	dev_dbg(&client->dev, "Setting FPS=%d\n", desired_fps);
 
 	return rval;
 }
@@ -1724,8 +1723,8 @@ static int ioctl_enum_framesizes(struct v4l2_int_device *s,
 }
 
 const struct v4l2_fract ov8810_frameintervals[] = {
-	{ .numerator = 2, .denominator = 15 },
-	{ .numerator = 1, .denominator = 15 },
+	{ .numerator = 3, .denominator = 15 },
+	{ .numerator = 1, .denominator = 21 },
 	{ .numerator = 1, .denominator = 30 },
 };
 
@@ -1746,10 +1745,16 @@ static int ioctl_enum_frameintervals(struct v4l2_int_device *s,
 
 	if ((frmi->width == ov8810_sizes[3].width) &&
 				(frmi->height == ov8810_sizes[3].height)) {
-		/* FIXME: The only frameinterval supported by SIZE_8M capture is
-		 * 2/15 fps
+		/* The only framerate supported by SIZE_8M capture is 5 fps
 		 */
 		if (frmi->index != 0)
+			return -EINVAL;
+	} else if ((frmi->width == ov8810_sizes[2].width) &&
+				(frmi->height == ov8810_sizes[2].height)) {
+		/* The only framerates supported by SIZE_2M capture are
+		 * 5 & 21 fps
+		 */
+		if (frmi->index > 1)
 			return -EINVAL;
 	} else {
 		if (frmi->index >= 3)

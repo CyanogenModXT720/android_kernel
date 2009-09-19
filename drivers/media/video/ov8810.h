@@ -17,7 +17,6 @@
 #define OV8810_I2C_ADDR		(0x6c >> 1)
 
 /* ISP uses a 10-bit value, OV8810 uses a 12-bit value */
-//~ #define OV8810_BLACK_LEVEL_10BIT	64
 #define OV8810_BLACK_LEVEL_10BIT	8
 
 /* ISP Private IOCTLs */
@@ -26,7 +25,7 @@
 #define V4L2_CID_PRIVATE_FLASH_NEXT_FRAME	(V4L2_CID_PRIVATE_BASE + 24)
 #define V4L2_CID_PRIVATE_ORIENTATION     	(V4L2_CID_PRIVATE_BASE + 25)
 #define V4L2_CID_PRIVATE_SENSOR_PARAMS_REQ	(V4L2_CID_PRIVATE_BASE + 27)
-#define V4L2_CID_PRIVATE_START_MECH_SHUTTER_CAPTURE	(V4L2_CID_PRIVATE_BASE + 28)
+#define V4L2_CID_PRIVATE_START_MECH_SHUTTER_CAPTURE (V4L2_CID_PRIVATE_BASE + 28)
 #define V4L2_CID_PRIVATE_SENSOR_REG_REQ		(V4L2_CID_PRIVATE_BASE + 29)
 
 /* Register initialization tables for ov8810 */
@@ -253,9 +252,9 @@ enum ov8810_shutter_type {
 	MECH_SHUTTER_TYPE
 };
 
-enum ov8810_flash_mode {
-	XENON_FLASH_MODE = 0,
-	LED_FLASH_MODE
+enum ov8810_flash_type {
+	LED_FLASH_TYPE = 0,
+	XENON_FLASH_TYPE
 };
 
 /* define a structure for ov8810 register initialization values */
@@ -415,7 +414,10 @@ const static struct ov8810_reg ov8810_common[OV_NUM_IMAGE_SIZES][140] = {
 		{0x3000 , 0x0f},	/* 2x analog gain */
 		{0x3002 , 0x01},	/* max exposure line */
 		{0x3003 , 0x57},
-		{0x300e , 0x25},	/* 2-lane, RAW 10, PCLK = 12MHz, MIPI_PCLK = 1.25x12 = 15MHz, MIPI_CLK = 60MHz, 30fps */
+		{0x300e , 0x25},
+		/* 2-lane, RAW 10,
+		PCLK = 12MHz, MIPI_PCLK = 1.25x12 = 15MHz,
+		MIPI_CLK = 60MHz, 30fps */
 		{0x300f , 0x84},
 		{0x3010 , 0x28},
 		{0x3011 , 0x22},
@@ -456,8 +458,12 @@ const static struct ov8810_reg ov8810_common[OV_NUM_IMAGE_SIZES][140] = {
 		{0x30b3 , 0x09},
 		{0x33e5 , 0x01},
 		{0x30f8 , 0x4a},
-		{0x3020 , 0x02},
-		{0x3021 , 0x90},
+		/* {0x3020 , 0x02}, */   /* 31.5 fps */
+		/* {0x3021 , 0x90}, */   /* 31.5 fps */
+		/* {0x3020 , 0x02}, */   /* 28.8 fps, 4.7ms blanking */
+		/* {0x3021 , 0xce}, */   /* 28.8 fps, 4.7ms blanking */
+		{0x3020 , 0x03},   /* 25.0 fps, 10ms blanking */
+		{0x3021 , 0x3e},   /* 25.0 fps, 10ms blanking */
 		{0x3022 , 0x09},
 		{0x3023 , 0x08},
 		{0x3024 , 0x00},
@@ -553,8 +559,9 @@ const static struct ov8810_reg ov8810_common[OV_NUM_IMAGE_SIZES][140] = {
 		{0x3000 , 0x0f},	/* 2x analog gain */
 		{0x3002 , 0x02},	/* max exposure line */
 		{0x3003 , 0x89},
-
-		{0x300e , 0x25},	/* 2-lane, RAW 10, PCLK = 24MHz, MIPI_PCLK = 1.25x24 = 30MHz, MIPI_CLK = 120MHz, 6.34fps */
+		{0x300e , 0x25},	/* 2-lane, RAW 10, PCLK = 24MHz,
+					MIPI_PCLK = 1.25x24 = 30MHz,
+					MIPI_CLK = 120MHz, 31.5fps */
 		{0x300f , 0x44},
 		{0x3010 , 0x28},
 		{0x3011 , 0x22},
@@ -595,16 +602,16 @@ const static struct ov8810_reg ov8810_common[OV_NUM_IMAGE_SIZES][140] = {
 		{0x30b3 , 0x08},
 		{0x33e5 , 0x00},
 		{0x30f8 , 0x45},
-		{0x3020 , 0x04},
-		{0x3021 , 0xf4},
-		{0x3022 , 0x09},
-		{0x3023 , 0x20},
 		{0x302c , 0x06},
 		{0x302d , 0x60},
 		{0x302e , 0x04},
 		{0x302f , 0xc8},
-		{0x3020 , 0x04},
-		{0x3021 , 0xf4},
+		/* {0x3020 , 0x04}, */  /* 21.5 fps */
+		/* {0x3021 , 0xf4}, */  /* 21.5 fps */
+		/* {0x3020 , 0x05}, */  /* 20.0 fps, 4.7ms blanking */
+		/* {0x3021 , 0x53}, */  /* 20.0 fps, 4.7ms blanking */
+		{0x3020 , 0x05},  /* 17.9 fps, 10ms blanking */
+		{0x3021 , 0xE3},  /* 17.9 fps, 10ms blanking */
 		{0x3022 , 0x09},
 		{0x3023 , 0x10},
 		{0x3024 , 0x00},
@@ -697,7 +704,10 @@ const static struct ov8810_reg ov8810_common[OV_NUM_IMAGE_SIZES][140] = {
 		{0x3000 , 0x0f},	/* 2x analog gain */
 		{0x3002 , 0x04},	/* max exposure line */
 		{0x3003 , 0xed},
-		{0x300e , 0x25},	/* 2-lane, RAW 10, PCLK = 62.4MHz, MIPI_PCLK = 1.25x62.4 = 78MHz, MIPI_CLK = 312MHz, 21fps */
+		{0x300e , 0x25},
+		/* 2-lane, RAW 10, PCLK = 62.4MHz,
+		MIPI_PCLK = 1.25x62.4 = 78MHz,
+		MIPI_CLK = 312MHz, 21fps */
 		{0x300f , 0x24},
 		{0x3010 , 0x34},
 		{0x3011 , 0x22},
@@ -823,15 +833,15 @@ const static struct ov8810_reg ov8810_common[OV_NUM_IMAGE_SIZES][140] = {
 		{0x30f4 , 0x90},
 		{0x3071 , 0x40},
 		{0x3347 , 0x00},
-		{0x3071 , 0x50},
-		{0x3347 , 0x06},
+		/* {0x3071 , 0x50}, */
+		/* {0x3347 , 0x06}, */
 		{0x3100 , 0x88},
 		{0x3101 , 0x77},
 		{0x3601 , 0x16},
 		{0x300f , 0x04},
 		/* {0x30fa , 0x01}, */
 		{0x308d , 0x01},
-		{0x300e , 0x25},
+		{0x300e , 0x25},  /* 4.87 fps */
 		{0x300f , 0x24},
 		{0x3010 , 0x28},
 		{0x3011 , 0x22},
