@@ -155,6 +155,12 @@ struct regulator_consumer_supply cpcap_vaudio_consumers[] = {
 	REGULATOR_CONSUMER("vaudio", NULL /* mic opamp */),
 };
 
+#ifdef CONFIG_TVOUT_SHOLEST
+struct regulator_consumer_supply cpcap_vdac_consumers[] = {
+    REGULATOR_CONSUMER("vdac", NULL /*vdac voltage */),
+};
+#endif
+
 static struct regulator_init_data cpcap_regulator[CPCAP_NUM_REGULATORS] = {
 	[CPCAP_SW5] = {
 		.constraints = {
@@ -192,9 +198,18 @@ static struct regulator_init_data cpcap_regulator[CPCAP_NUM_REGULATORS] = {
 		.constraints = {
 			.min_uV			= 1800000,
 			.max_uV			= 1800000,
+#ifdef CONFIG_TVOUT_SHOLEST
+			.valid_ops_mask		= (REGULATOR_CHANGE_VOLTAGE|
+						   REGULATOR_CHANGE_STATUS),
+#else
 			.valid_ops_mask		= REGULATOR_CHANGE_STATUS,
+#endif
 			.apply_uV		= 1,
 		},
+#ifdef CONFIG_TVOUT_SHOLEST	
+		.num_consumer_supplies = ARRAY_SIZE(cpcap_vdac_consumers),
+		.consumer_supplies = cpcap_vdac_consumers,
+#endif
 	},
 	[CPCAP_VDIG] = {
 		.constraints = {

@@ -6,8 +6,9 @@
 
 #include <mach/display.h>
 #include <mach/dma.h>
+#include <mach/omap-pm.h>
 
-#define DEBUG
+/* #define DEBUG */
 
 #ifdef DEBUG
 #define DBG(format, ...) (\
@@ -65,6 +66,9 @@ static int hdtv_panel_enable(struct omap_dss_device *dssdev)
 
 	DBG("%s IN\n", __func__);
 
+	/* Set min throughput to 1280 x 720 x 2bpp x 60fps x 3 L3 accesses */
+	omap_pm_set_min_bus_tput(&dssdev->dev, OCP_INITIATOR_AGENT, 331776);
+
 	if (dssdev->platform_enable)
 		ret = dssdev->platform_enable(dssdev);
 	else
@@ -80,6 +84,9 @@ static void hdtv_panel_disable(struct omap_dss_device *dssdev)
 
 	if (dssdev->platform_disable)
 		dssdev->platform_disable(dssdev);
+
+	/* Remove throughput requirement */
+	omap_pm_set_min_bus_tput(&dssdev->dev, OCP_INITIATOR_AGENT, 0);
 
 	DBG("%s OUT\n", __func__);
 }
