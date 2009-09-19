@@ -478,7 +478,6 @@ void __init sholest_camera_init(void)
 	omap_cfg_reg(AG17_34XX_CAM_D0);
 	omap_cfg_reg(AH17_34XX_CAM_D1);
 #endif
-	omap_cfg_reg(K8_34XX_GPMC_WAIT2);
 	omap_cfg_reg(H2_34XX_GPMC_A3);
 
 #if defined (CONFIG_VIDEO_MIPI_INTERFACE)

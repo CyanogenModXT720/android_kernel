@@ -94,7 +94,7 @@ int __init_or_module omap_cfg_reg(const unsigned long index)
 		is_mux_config = 1;
 #endif
 #if defined(CONFIG_MOT_FEAT_MDTV) || defined(CONFIG_PANEL_HDTV)\
-	|| defined(CONFIG_VIB_PWM) ||defined(CONFIG_VIDEO_MIPI_INTERFAC)
+	|| defined(CONFIG_VIB_PWM) || defined(CONFIG_VIDEO_MIPI_INTERFACE)
 	if (is_mux_config == 1)
 		return mux_cfg->cfg_reg(reg);
 	else

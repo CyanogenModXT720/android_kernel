@@ -9,7 +9,8 @@
 
 #define DEBUG
 #ifdef DEBUG
-#define DBG(format, ...) (printk(KERN_DEBUG "sholes-panel: " format, ## __VA_ARGS__))
+#define DBG(format, ...) \
+		(printk(KERN_DEBUG "sholes-panel: " format, ## __VA_ARGS__))
 #else
 #define DBG(format, ...)
 #endif
