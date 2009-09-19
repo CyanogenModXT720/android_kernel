@@ -1436,9 +1436,9 @@ static int __init sholest_omap_mdm_ctrl_init(void)
 }
 
 static struct omap_vout_config sholest_vout_platform_data = {
-	.max_width = 864,
-	.max_height = 648,
-	.max_buffer_size = 0x112000,
+	.max_width = 1280,
+	.max_height = 720,
+	.max_buffer_size = 0x1C2000,
 	.num_buffers = 6,
 	.num_devices = 2,
 	.device_ids = {1, 2},
