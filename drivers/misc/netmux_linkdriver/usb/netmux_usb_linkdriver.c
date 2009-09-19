@@ -55,6 +55,8 @@
  *   2009/07/23  Motorola    Add wake lock functionality                      *
  *   2009/08/06  Motorola    Change permissions for /proc/linkdriver to 660   *
  *   2009/08/07  Motorola    Fix minitrace functionality                      *
+ *   2009/09/16  Motorola    Comment out cleanup_module() since linkdriver    *
+ *                           should not be removed and causes rmmod to panic  *
  ******************************************************************************/
  
 /* netmux_usb_linkdriver.c is responsible for communicating with the NetMUX  *
@@ -859,7 +861,11 @@ int init_module (void)
 
 /*
  * cleanup_module cleans up everything.
+ *
+ * NOTE: commented out at this time since LD should not be removed
+ *       Maybe reinstated later
  */
+/*
 void cleanup_module (void)
 {
     int index;
@@ -888,4 +894,6 @@ void cleanup_module (void)
     wake_lock_destroy(&netmux_to_usb);
     wake_lock_destroy(&usb_to_netmux);
 
+
 }
+*/

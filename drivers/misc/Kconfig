@@ -309,7 +309,7 @@ config WL127X_RFKILL
 
 config WL127X_TEST
 	tristate "TI wl127x Bluetooth GPIO test driver for board-sholes"
-	depends on MACH_SHOLES && WL127X_RFKILL && BT
+	depends on (MACH_SHOLES || MACH_MAPPHONE) && WL127X_RFKILL && BT
 	default n
 	---help---
 	 Creates sysfs GPIO entries for testing TI wl127x BT on board-sholes.
@@ -320,12 +320,6 @@ config APANIC
 	---help---
 	 Driver which handles kernel panics and attempts to write
 	 critical debugging data to flash.
-
-config APANIC_APR
-    bool "Android kernel panic interface to APR"
-	default n
-	---help---
-	If support APR to report exception reboot reason, open this switch.
 
 config APANIC_PLABEL
 	string "Android panic dump flash partition label"

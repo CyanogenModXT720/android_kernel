@@ -217,7 +217,7 @@ static void omap3_save_secure_ram_context(u32 target_mpu_state)
 	}
 }
 
-#ifdef CONFIG_PM_DEBUG
+#ifdef PM_DEBUG_INFO
 
 #define LAST_IDLE_ST_ARR_SIZE 10
 #define POWER_DOM_ARR_SIZE    16
@@ -307,7 +307,7 @@ static void pwrdm_post_transition_log(void)
 	modem_sad2d_idle_counter[1][i]++;
 }
 
-#endif /* CONFIG_PM_DEBUG */
+#endif /* PM_DEBUG_INFO */
 
 #ifdef CONFIG_SUSPEND
 static void dump_wkst_regs(s16 module, u16 wkst_off, u32 wkst)
@@ -480,7 +480,7 @@ void omap_sram_idle(void)
 		return;
 	}
 
-#ifdef CONFIG_PM_DEBUG
+#ifdef PM_DEBUG_INFO
 	pwrdm_pre_transition_log();
 #endif
 	pwrdm_pre_transition();
@@ -610,7 +610,7 @@ void omap_sram_idle(void)
 
 
 	pwrdm_post_transition();
-#ifdef CONFIG_PM_DEBUG
+#ifdef PM_DEBUG_INFO
 	pwrdm_post_transition_log();
 #endif
 
@@ -1167,7 +1167,7 @@ void omap_push_sram_idle(void)
 				save_secure_ram_context_sz);
 }
 
-#ifdef CONFIG_PM_DEBUG
+#ifdef PM_DEBUG_INFO
 static ssize_t pm_info_show(struct kobject *kobj, struct kobj_attribute *attr,
 		char *buf)
 {
@@ -1265,7 +1265,7 @@ static ssize_t pm_info_show(struct kobject *kobj, struct kobj_attribute *attr,
 static struct kobj_attribute pm_info_attr =
 __ATTR(pm_info, 0444, pm_info_show, NULL);
 
-#endif /* CONFIG_PM_DEBUG */
+#endif /* PM_DEBUG_INFO */
 
 #ifdef CONFIG_OMAP_PM_SRF
 static int prcm_prepare_reboot(struct notifier_block *this, unsigned long code,
@@ -1377,7 +1377,7 @@ int __init omap3_pm_init(void)
 		local_fiq_enable();
 	}
 
-#ifdef CONFIG_PM_DEBUG
+#ifdef PM_DEBUG_INFO
 	if (sysfs_create_file(power_kobj, &pm_info_attr.attr))
 		printk(KERN_ERR "sysfs_create_file failed: pm_info\n");
 #endif
