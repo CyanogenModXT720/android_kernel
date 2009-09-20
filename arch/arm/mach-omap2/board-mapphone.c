@@ -1367,6 +1367,8 @@ static void mapphone_pm_power_off(void)
 	printk(KERN_INFO "mapphone_pm_power_off start...\n");
 	local_irq_disable();
 
+	/* config gpio 176 back from safe mode to reset the device */
+	omap_writew(0x4, 0x480021D2);
 	gpio_direction_output(MAPPHONE_POWER_OFF_GPIO, 0);
 
 	do {} while (1);
@@ -1380,6 +1382,9 @@ static void __init mapphone_power_off_init(void)
 	gpio_direction_output(MAPPHONE_POWER_OFF_GPIO, 1);
 	omap_cfg_reg(AB1_34XX_GPIO176_OUT);
 
+	/* config gpio176 into safe mode with the pull up enabled to avoid
+	 * glitch at reboot */
+	omap_writew(0x1F, 0x480021D2);
 	pm_power_off = mapphone_pm_power_off;
 }
 
