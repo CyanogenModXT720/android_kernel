@@ -208,7 +208,7 @@ static void ld_lm3530_brightness_set(struct led_classdev *led_cdev,
 		       __func__, error);
 		return;
 	}
-	if (value > LED_OFF) {
+	if (value > LED_OFF && als_data->mode == AUTOMATIC) {
 		error = lm3530_read_reg(als_data,
 					LM3530_BRIGHTNESS_RAMP_RATE,
 					&ramp_rate_val);
@@ -255,7 +255,15 @@ static ssize_t ld_lm3530_als_store(struct device *dev, struct device_attribute
 			als_data->mode = -1;
 			return -1;
 		}
+		error = lm3530_write_reg(als_data,
+				LM3530_BRIGHTNESS_RAMP_RATE,
+				als_data->als_pdata->brightness_ramp);
+		if (error != 0)
+			pr_err("%s:Unable to set the ramp rate: %d\n",
+				__func__, error);
+
 		als_data->mode = AUTOMATIC;
+
 	} else {
 		als_data->mode = MANUAL;
 
@@ -266,6 +274,13 @@ static ssize_t ld_lm3530_als_store(struct device *dev, struct device_attribute
 			       __func__, error);
 			return -1;
 		}
+
+		error = lm3530_write_reg(als_data, LM3530_BRIGHTNESS_RAMP_RATE,
+			     0x00);
+		if (error != 0)
+			pr_err("%s:Unable to set the ramp rate: %d\n",
+			       __func__, error);
+
 		error = lm3530_write_reg(als_data,
 					 LM3530_BRIGHTNESS_CTRL_REG,
 					 als_data->last_requested_brightness /

@@ -193,15 +193,15 @@ static int configure_hardware(struct cpcap_usb_det_data *data,
 		/* Give USB driver control of pull up via ULPI. */
 		retval  = cpcap_regacc_write(data->cpcap, CPCAP_REG_USBC3,
 					     0,
-					     CPCAP_BIT_PU_SPI);
+					     CPCAP_BIT_PU_SPI |
+					     CPCAP_BIT_DMPD_SPI |
+					     CPCAP_BIT_DPPD_SPI);
 		break;
 
 	case CPCAP_ACCY_CHARGER:
 		retval |= cpcap_regacc_write(data->cpcap, CPCAP_REG_USBC1,
 					     CPCAP_BIT_VBUSPD,
 					     CPCAP_BIT_VBUSPD);
-		retval |= cpcap_regacc_write(data->cpcap, CPCAP_REG_USBC2, 0,
-					     CPCAP_BIT_USBXCVREN);
 		break;
 
 	case CPCAP_ACCY_NONE:
@@ -363,6 +363,19 @@ static void detection_work(struct work_struct *work)
 		if ((data->sense & CPCAP_BIT_SE1_S) ||
 		    (data->sense & CPCAP_BIT_ID_GROUND_S) ||
 		    (!(data->sense & CPCAP_BIT_VBUSVLD_S))) {
+			if (data->sense & CPCAP_BIT_SE1_S) {
+				/* A partially inserted charger is now fully
+				 * seated in the jack. Give SPI control of
+				 * PullUp/down bits so SE1 can not be lost. */
+				cpcap_regacc_write(data->cpcap, CPCAP_REG_USBC3,
+						   CPCAP_BIT_PU_SPI |
+						   CPCAP_BIT_DMPD_SPI |
+						   CPCAP_BIT_DPPD_SPI,
+						   CPCAP_BIT_PU_SPI |
+						   CPCAP_BIT_DMPD_SPI |
+						   CPCAP_BIT_DPPD_SPI);
+			}
+
 			data->state = CONFIG;
 			schedule_delayed_work(&data->work, 0);
 		} else {

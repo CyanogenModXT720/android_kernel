@@ -176,6 +176,16 @@ static int cpcap_reboot(struct notifier_block *this, unsigned long code,
 	int result = NOTIFY_DONE;
 	char *mode = cmd;
 
+	/* Disable the USB transceiver */
+	ret = cpcap_regacc_write(misc_cpcap, CPCAP_REG_USBC2, 0,
+				 CPCAP_BIT_USBXCVREN);
+
+	if (ret) {
+		dev_err(&(misc_cpcap->spi->dev),
+			"Disable Transciever failure.\n");
+		result = NOTIFY_BAD;
+	}
+
 	if (code == SYS_RESTART) {
 
 		if (mode != NULL && !strncmp("outofcharge", mode, 12)) {
