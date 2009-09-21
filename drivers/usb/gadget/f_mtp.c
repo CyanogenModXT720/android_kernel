@@ -941,9 +941,13 @@ static void mtp_function_disable(struct usb_function *f)
 	g_usb_mtp_context.ctl_cancel = 1;
 	g_usb_mtp_context.error = 1;
 
+	printk(KERN_DEBUG "%s(): prepare disable ep\n", __func__);
 	usb_ep_disable(g_usb_mtp_context.bulk_in);
+	printk(KERN_DEBUG "%s(): bulk_in disabled\n", __func__);
 	usb_ep_disable(g_usb_mtp_context.bulk_out);
+	printk(KERN_DEBUG "%s(): bulk_out disabled\n", __func__);
 	usb_ep_disable(g_usb_mtp_context.intr_in);
+	printk(KERN_DEBUG "%s(): intr_in disabled\n", __func__);
 
 	g_usb_mtp_context.cur_read_req = 0;
 	g_usb_mtp_context.read_buf = 0;
@@ -977,6 +981,7 @@ static int mtp_function_set_alt(struct usb_function *f,
 {
 	int ret;
 
+	printk(KERN_DEBUG "%s intf=%d alt=%d\n", __func__, intf, alt);
 	ret = usb_ep_enable(g_usb_mtp_context.bulk_in,
 			ep_choose(g_usb_mtp_context.cdev->gadget,
 				&hs_bulk_in_desc,
@@ -1159,6 +1164,7 @@ int __init mtp_function_add(struct usb_composite_dev *cdev,
 
 struct usb_function *mtp_function_enable(int enable, int id)
 {
+	printk(KERN_DEBUG "%s enable=%d id=%d\n", __func__, enable, id);
 	if (enable) {
 		g_usb_mtp_context.function.descriptors = fs_mtp_descs;
 		g_usb_mtp_context.function.hs_descriptors = hs_mtp_descs;

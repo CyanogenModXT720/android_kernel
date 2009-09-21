@@ -185,6 +185,9 @@ static void nuke(struct musb_ep *ep, const int status)
 		ep->dma = NULL;
 	}
 
+	printk(KERN_DEBUG "%s(): epnum=%d is_in=%d status=%d\n",
+	__func__, ep->current_epnum, ep->is_in, status);
+
 	while (!list_empty(&(ep->req_list))) {
 		req = container_of(ep->req_list.next, struct musb_request,
 				request.list);
