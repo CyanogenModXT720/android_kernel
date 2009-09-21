@@ -47,7 +47,7 @@
 #define ltt_ev_process_exit(DATA1, DATA2) ltt_lite_ev_process_exit()
 #define ltt_lite_ev_process(DATA1, DATA2) ltt_lite_ev_log_process(DATA1, DATA2)
 
-#define CONFIG_LTT_LITE_ANDROID_LOG 1
+#define CONFIG_LTT_LITE_ANDROID_LOG
 
 extern struct resource ltt_lite_res;
 

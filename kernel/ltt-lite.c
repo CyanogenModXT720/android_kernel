@@ -1420,16 +1420,22 @@ static ssize_t ltt_lite_proc_config_read(struct file *file,
 		return 0;
 	}
 
+#ifdef CONFIG_LTT_LITE_ANDROID_LOG
 	len = snprintf(config_buf, OUT_STR_LEN,
 			   "filesz:%luM\npriram: %d\nramfil: %d\nmemint: \
 			   %d\nsysftg: %d\nlogfil: %s\nlogmod: %d\npidflt: ",
 				ltt_lite_file_size, use_private_ram,
 				use_private_ram_file, mem_profile_interval,
 				syscall_mask_group_id, log_file,
-#ifdef CONFIG_LTT_LITE_ANDROID_LOG
-				android_logging_mode
+				android_logging_mode);
+#else
+	len = snprintf(config_buf, OUT_STR_LEN,
+			   "filesz:%luM\npriram: %d\nramfil: %d\nmemint: \
+			   %d\nsysftg: %d\nlogfil: %s\npidflt: ",
+				ltt_lite_file_size, use_private_ram,
+				use_private_ram_file, mem_profile_interval,
+				syscall_mask_group_id, log_file);
 #endif
-				);
 
 	for (i = 0; i < ltt_lite_pid_filter_num; i++) {
 		if (ltt_lite_pid_filter[i][0] == ltt_lite_pid_filter[i][1])
