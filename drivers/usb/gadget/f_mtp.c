@@ -303,8 +303,11 @@ static void mtp_in_complete(struct usb_ep *ep, struct usb_request *req)
 	if (req->status == -ECONNRESET)
 		usb_ep_fifo_flush(ep);
 
-	if (req->status != 0)
+	if (req->status != 0) {
 		g_usb_mtp_context.error = 1;
+		printk(KERN_DEBUG "%s():status is %d %p len=%d\n",
+		__func__, req->status, req, req->actual);
+	}
 
 	req_put(&g_usb_mtp_context.tx_reqs, req);
 	wake_up(&g_usb_mtp_context.tx_wq);
@@ -316,6 +319,8 @@ static void mtp_out_complete(struct usb_ep *ep, struct usb_request *req)
 	if (req->status == 0) {
 		req_put(&g_usb_mtp_context.rx_done_reqs, req);
 	} else {
+		printk(KERN_DEBUG "%s():status is %d %p len=%d\n",
+		__func__, req->status, req, req->actual);
 		g_usb_mtp_context.error = 1;
 		if (req->status == -ECONNRESET)
 			usb_ep_fifo_flush(ep);
@@ -330,6 +335,10 @@ static void mtp_int_complete(struct usb_ep *ep, struct usb_request *req)
 
 	if (req->status == -ECONNRESET)
 		usb_ep_fifo_flush(ep);
+
+	if (req->status != 0)
+		printk(KERN_DEBUG "%s():status is %d %p len=%d\n",
+		__func__, req->status, req, req->actual);
 
 	return;
 }
@@ -352,6 +361,8 @@ static ssize_t mtp_read(struct file *fp, char __user *buf,
 			(g_usb_mtp_context.online || g_usb_mtp_context.cancel));
 		if (g_usb_mtp_context.cancel) {
 			mtp_debug("cancel return in mtp_read at beginning\n");
+			printk(KERN_DEBUG "%s():cancel return in mtp_read at beginning\n",
+			__func__);
 			g_usb_mtp_context.cancel = 0;
 			return -EINVAL;
 		}
@@ -573,6 +584,7 @@ static int mtp_ioctl(struct inode *inode, struct file *file,
 		if (!req)
 			return -EINVAL;
 		req->length = 0;
+		req->zero = 0;
 		if (usb_ep_queue(g_usb_mtp_context.bulk_in, req, GFP_ATOMIC)) {
 			req_put(&g_usb_mtp_context.tx_reqs, req);
 			return -EINVAL;
@@ -591,6 +603,8 @@ static int mtp_ioctl(struct inode *inode, struct file *file,
 			req = pending_reqs[n];
 			if (req && req->actual) {
 				mtp_debug("%p %d\n", req, req->actual);
+				printk(KERN_DEBUG "%s():%p %d\n", __func__,
+				req, req->actual);
 				req->actual = 0;
 			}
 		}
@@ -1044,7 +1058,7 @@ static int mtp_function_setup(struct usb_function *f,
 				req->length = value;
 				if (usb_ep_queue(cdev->gadget->ep0, req,
 					GFP_ATOMIC))
-					mtp_err("kevin:ep0 in queue failed\n");
+					mtp_err("ep0 in queue failed\n");
 			}
 			break;
 		default:
@@ -1057,7 +1071,7 @@ static int mtp_function_setup(struct usb_function *f,
 		case MTP_CLASS_GET_EXTEND_EVEVT_DATA:
 		case MTP_CLASS_RESET_REQ:
 		case MTP_CLASS_GET_DEVICE_STATUS:
-			mtp_debug("kevin:request=0x%x\n", ctrl->bRequest);
+			mtp_debug("ctl request=0x%x\n", ctrl->bRequest);
 			ctl_req = ctl_req_get(&g_usb_mtp_context.ctl_rx_reqs);
 			if (!ctl_req) {
 				mtp_err("get free ctl req failed\n");
@@ -1082,7 +1096,7 @@ static int mtp_function_setup(struct usb_function *f,
 
 				if (usb_ep_queue(cdev->gadget->ep0,
 						req, GFP_ATOMIC)) {
-					mtp_err("kevin:ep0 out queue failed\n");
+					mtp_err("ep0 out queue failed\n");
 					mtp_ctl_read_complete(cdev->gadget->ep0,
 							req);
 				}
