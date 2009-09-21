@@ -31,6 +31,7 @@
 #include <mach/resource.h>
 #include <linux/regulator/consumer.h>
 
+
 #define SLEEP_ACTIVATE_POWER 2
 
 #define CLOCK_TREE_RESET_TIME 1
@@ -192,13 +193,59 @@ static inline int is_output_changed(struct cpcap_audio_state *state,
 	return 0;
 }
 
+static void
+audioic_state_dump
+(
+	struct cpcap_audio_state *state
+)
+{
+	CPCAP_AUDIO_DEBUG_LOG("***************************************\n");
+	CPCAP_AUDIO_DEBUG_LOG("state->mode = %d\n",  state->mode);
+	CPCAP_AUDIO_DEBUG_LOG("state->codec_mode = %d\n", state->codec_mode);
+	CPCAP_AUDIO_DEBUG_LOG("state->codec_rate = %d\n", state->codec_rate);
+	CPCAP_AUDIO_DEBUG_LOG("state->codec_mute = %d\n", state->codec_mute);
+	CPCAP_AUDIO_DEBUG_LOG("state->stdac_mode = %d\n", state->stdac_mode);
+	CPCAP_AUDIO_DEBUG_LOG("state->stdac_rate = %d\n", state->stdac_rate);
+	CPCAP_AUDIO_DEBUG_LOG("state->stdac_mute = %d\n", state->stdac_mute);
+	CPCAP_AUDIO_DEBUG_LOG("state->analog_source = %d\n",
+						state->analog_source);
+	CPCAP_AUDIO_DEBUG_LOG("state->codec_primary_speaker = %d\n",
+						state->codec_primary_speaker);
+	CPCAP_AUDIO_DEBUG_LOG("state->stdac_primary_speaker = %d\n",
+						state->stdac_primary_speaker);
+	CPCAP_AUDIO_DEBUG_LOG("state->ext_primary_speaker = %d\n",
+						state->ext_primary_speaker);
+	CPCAP_AUDIO_DEBUG_LOG("state->codec_secondary_speaker = %d\n",
+						state->codec_secondary_speaker);
+	CPCAP_AUDIO_DEBUG_LOG("state->stdac_secondary_speaker = %d\n",
+						state->stdac_secondary_speaker);
+	CPCAP_AUDIO_DEBUG_LOG("state->ext_secondary_speaker   = %d\n",
+						state->ext_secondary_speaker);
+	CPCAP_AUDIO_DEBUG_LOG("state->stdac_primary_balance   = %d\n",
+						state->stdac_primary_balance);
+	CPCAP_AUDIO_DEBUG_LOG("state->ext_primary_balance     = %d\n",
+						state->ext_primary_balance);
+	CPCAP_AUDIO_DEBUG_LOG("state->output_gain             = %d\n",
+						state->output_gain);
+	CPCAP_AUDIO_DEBUG_LOG("state->microphone              = %d\n",
+						state->microphone);
+	CPCAP_AUDIO_DEBUG_LOG("state->input_gain              = %d\n",
+						state->input_gain);
+	CPCAP_AUDIO_DEBUG_LOG("state->rat_type                = %d\n",
+						state->rat_type);
+	CPCAP_AUDIO_DEBUG_LOG("***************************************\n");
+}
+
 /* this is only true for audio registers, but those are the only ones we use */
 #define CPCAP_REG_FOR_POWERIC_REG(a) ((a) + (0x200 - CPCAP_REG_VAUDIOC))
 
 static void logged_cpcap_write(struct cpcap_device *cpcap, unsigned int reg,
 			unsigned short int value, unsigned short int mask)
 {
+
     int ret_val = 0;
+	if (mask == 0)
+		return;
 
 #ifdef CPCAP_AUDIO_SPI_LOG
 	printk(KERN_INFO
@@ -311,52 +358,35 @@ static unsigned short int cpcap_audio_get_stdac_output_amp_switches(
 
 static unsigned short int cpcap_audio_get_ext_output_amp_switches(
 						int speaker,
-						int balance,
-						int source)
+						int balance)
 {
 	unsigned short int value = 0;
 	CPCAP_AUDIO_DEBUG_LOG("%s() called with speaker %d\n", __func__,
 								speaker);
 
-	switch (source) {
-	case CPCAP_AUDIO_ANALOG_SOURCE_L:
-		value |= CPCAP_BIT_MONO_EXT1 |
-			CPCAP_BIT_PGA_EXT_L_EN;
-		break;
-	case CPCAP_AUDIO_ANALOG_SOURCE_R:
-		value |= CPCAP_BIT_MONO_EXT1 |
-			CPCAP_BIT_PGA_EXT_R_EN;
-		break;
-	case CPCAP_AUDIO_ANALOG_SOURCE_STEREO:
-		value |= CPCAP_BIT_PGA_EXT_L_EN |
-			CPCAP_BIT_PGA_EXT_R_EN;
-		break;
-	}
-
 	switch (speaker) {
 	case CPCAP_AUDIO_OUT_HANDSET:
-		value |= CPCAP_BIT_A1_EAR_EXT_SW;
-		break;
-
-	case CPCAP_AUDIO_OUT_STEREO_HEADSET:
-		if (balance != CPCAP_AUDIO_BALANCE_L_ONLY)
-			value |= CPCAP_BIT_ARIGHT_HS_EXT_SW;
-		if (balance != CPCAP_AUDIO_BALANCE_R_ONLY)
-			value |= CPCAP_BIT_ALEFT_HS_EXT_SW;
+		value |= CPCAP_BIT_A1_EAR_EXT_SW | CPCAP_BIT_PGA_EXT_R_EN;
 		break;
 
 	case CPCAP_AUDIO_OUT_MONO_HEADSET:
-		value |= CPCAP_BIT_ARIGHT_HS_EXT_SW | CPCAP_BIT_ALEFT_HS_EXT_SW;
+	case CPCAP_AUDIO_OUT_STEREO_HEADSET:
+		if (balance != CPCAP_AUDIO_BALANCE_L_ONLY)
+			value |= CPCAP_BIT_ARIGHT_HS_EXT_SW |
+				CPCAP_BIT_PGA_EXT_R_EN;
+		if (balance != CPCAP_AUDIO_BALANCE_R_ONLY)
+			value |= CPCAP_BIT_ALEFT_HS_EXT_SW |
+				CPCAP_BIT_PGA_EXT_L_EN;
 		break;
 
 	case CPCAP_AUDIO_OUT_LOUDSPEAKER:
-		value |= CPCAP_BIT_A2_LDSP_L_EXT_SW | CPCAP_BIT_MONO_EXT0 |
-			CPCAP_BIT_MONO_EXT1;
+		value |= CPCAP_BIT_A2_LDSP_L_EXT_SW | CPCAP_BIT_PGA_EXT_L_EN;
 		break;
 
 	case CPCAP_AUDIO_OUT_LINEOUT:
 		value |= CPCAP_BIT_A4_LINEOUT_R_EXT_SW |
-			CPCAP_BIT_A4_LINEOUT_L_EXT_SW;
+			CPCAP_BIT_A4_LINEOUT_L_EXT_SW |
+			CPCAP_BIT_PGA_EXT_L_EN | CPCAP_BIT_PGA_EXT_R_EN;
 		break;
 
 	case CPCAP_AUDIO_OUT_BT_MONO:
@@ -417,13 +447,11 @@ static void cpcap_audio_set_output_amp_switches(struct cpcap_audio_state *state)
 	value1 =
 	    cpcap_audio_get_ext_output_amp_switches(state->
 				ext_primary_speaker,
-				state->ext_primary_balance,
-				state->analog_source);
+				state->ext_primary_balance);
 	value2 =
 	    cpcap_audio_get_ext_output_amp_switches(state->
 				ext_secondary_speaker,
-				state->ext_primary_balance,
-				state->analog_source);
+				state->ext_primary_balance);
 
 	reg_changes.mask = value1 | value2 | ext_prev_settings;
 	reg_changes.value = value1 | value2;
@@ -472,57 +500,47 @@ static bool cpcap_audio_set_bits_for_speaker(int speaker, int balance,
 }
 
 static void cpcap_audio_configure_aud_mute(struct cpcap_audio_state *state,
-				struct cpcap_audio_state *previous_state)
+				struct cpcap_audio_state *prev_state)
 {
-	static unsigned int prev_codec_mute_data;
-	static unsigned int prev_stdac_mute_data;
-	static unsigned int prev_ext_mute_data;
+	struct cpcap_regacc reg_changes = { 0 };
+	unsigned short int value1 = 0, value2 = 0;
 
-	if (state->codec_mute != previous_state->codec_mute) {
-		struct cpcap_regacc codec_changes = { 0 };
+	if (state->codec_mute != prev_state->codec_mute) {
+		value1 = cpcap_audio_get_codec_output_amp_switches(
+				prev_state->codec_primary_speaker,
+				prev_state->codec_primary_balance);
+
+		value2 = cpcap_audio_get_codec_output_amp_switches(
+				prev_state->codec_secondary_speaker,
+				prev_state->codec_primary_balance);
+
+		reg_changes.mask = value1 | value2 | CPCAP_BIT_CDC_SW;
 
 		if (state->codec_mute == CPCAP_AUDIO_CODEC_UNMUTE)
-			codec_changes.value |= CPCAP_BIT_CDC_SW;
-
-		codec_changes.mask = codec_changes.value | prev_codec_mute_data;
-
-		prev_codec_mute_data = codec_changes.value;
+			reg_changes.value = reg_changes.mask;
 
 		logged_cpcap_write(state->cpcap, CPCAP_REG_RXCOA,
-				codec_changes.value, codec_changes.mask);
+					reg_changes.value, reg_changes.mask);
 	}
 
-	if (state->stdac_mute != previous_state->stdac_mute) {
-		struct cpcap_regacc stdac_changes = { 0 };
+	if (state->stdac_mute != prev_state->stdac_mute) {
+		value1 = cpcap_audio_get_stdac_output_amp_switches(
+				prev_state->stdac_primary_speaker,
+				prev_state->stdac_primary_balance);
+
+		value2 = cpcap_audio_get_stdac_output_amp_switches(
+				prev_state->stdac_secondary_speaker,
+				prev_state->stdac_primary_balance);
+
+		reg_changes.mask = value1 | value2 | CPCAP_BIT_ST_DAC_SW;
 
 		if (state->stdac_mute == CPCAP_AUDIO_STDAC_UNMUTE)
-			stdac_changes.value |= CPCAP_BIT_ST_DAC_SW;
-
-		stdac_changes.mask = stdac_changes.value | prev_stdac_mute_data;
-
-		prev_stdac_mute_data = stdac_changes.value;
+			reg_changes.value = reg_changes.mask;
 
 		logged_cpcap_write(state->cpcap, CPCAP_REG_RXSDOA,
-				stdac_changes.value, stdac_changes.mask);
+					reg_changes.value, reg_changes.mask);
 	}
 
-	if (state->analog_source != previous_state->analog_source) {
-		struct cpcap_regacc ext_changes = { 0 };
-
-		if (state->analog_source == CPCAP_AUDIO_ANALOG_SOURCE_STEREO)
-			ext_changes.value |=
-			    CPCAP_BIT_PGA_IN_R_SW | CPCAP_BIT_PGA_IN_L_SW;
-		else if (state->analog_source == CPCAP_AUDIO_ANALOG_SOURCE_L)
-			ext_changes.value |= CPCAP_BIT_PGA_IN_L_SW;
-		else if (state->analog_source == CPCAP_AUDIO_ANALOG_SOURCE_R)
-			ext_changes.value |= CPCAP_BIT_PGA_IN_R_SW;
-		ext_changes.mask = ext_changes.value | prev_ext_mute_data;
-
-		prev_ext_mute_data = ext_changes.value;
-
-		logged_cpcap_write(state->cpcap, CPCAP_REG_RXEPOA,
-				ext_changes.value, ext_changes.mask);
-	}
 }
 
 static void cpcap_audio_configure_codec(struct cpcap_audio_state *state,
@@ -567,7 +585,7 @@ static void cpcap_audio_configure_codec(struct cpcap_audio_state *state,
 		case CPCAP_AUDIO_CODEC_LOOPBACK:
 		case CPCAP_AUDIO_CODEC_ON:
 			if (state->codec_primary_speaker !=
-				CPCAP_AUDIO_OUT_NONE)
+						CPCAP_AUDIO_OUT_NONE)
 				codec_changes.value |= CPCAP_BIT_CDC_EN_RX;
 
 			/* Turning on the input HPF */
@@ -634,7 +652,7 @@ static void cpcap_audio_configure_codec(struct cpcap_audio_state *state,
 					CODEC_RESET_FREQ_MASK);
 
 			/* Wait for clock tree reset to complete */
-			msleep(CLOCK_TREE_RESET_TIME);
+			mdelay(CLOCK_TREE_RESET_TIME);
 		}
 
 		/* Clear old settings */
@@ -737,7 +755,7 @@ static void cpcap_audio_configure_stdac(struct cpcap_audio_state *state,
 					SDAC_RESET_FREQ_MASK);
 
 			/* Wait for clock tree reset to complete */
-			msleep(CLOCK_TREE_RESET_TIME);
+			mdelay(CLOCK_TREE_RESET_TIME);
 		}
 
 		/* Clear old settings */
@@ -749,6 +767,38 @@ static void cpcap_audio_configure_stdac(struct cpcap_audio_state *state,
 	}
 }
 
+static void cpcap_audio_configure_analog_source(
+	struct cpcap_audio_state *state,
+	struct cpcap_audio_state *previous_state)
+{
+	if (state->analog_source != previous_state->analog_source) {
+		struct cpcap_regacc ext_changes = { 0 };
+		static unsigned int prev_ext_data;
+		switch (state->analog_source) {
+		case CPCAP_AUDIO_ANALOG_SOURCE_STEREO:
+			ext_changes.value |= CPCAP_BIT_MONO_EXT0 |
+			CPCAP_BIT_PGA_IN_R_SW | CPCAP_BIT_PGA_IN_L_SW;
+			break;
+		case CPCAP_AUDIO_ANALOG_SOURCE_L:
+			ext_changes.value |= CPCAP_BIT_MONO_EXT1 |
+						CPCAP_BIT_PGA_IN_L_SW;
+			break;
+		case CPCAP_AUDIO_ANALOG_SOURCE_R:
+			ext_changes.value |= CPCAP_BIT_MONO_EXT1 |
+						CPCAP_BIT_PGA_IN_R_SW;
+			break;
+		default:
+			break;
+		}
+
+		ext_changes.mask = ext_changes.value | prev_ext_data;
+
+		prev_ext_data = ext_changes.value;
+
+		logged_cpcap_write(state->cpcap, CPCAP_REG_RXEPOA,
+				ext_changes.value, ext_changes.mask);
+	}
+}
 static void cpcap_audio_configure_input_gains(
 	struct cpcap_audio_state *state,
 	struct cpcap_audio_state *previous_state)
@@ -933,6 +983,7 @@ static void cpcap_audio_configure_power(int power)
 			regulator_enable(audio_reg);
 			regulator_set_mode(audio_reg, REGULATOR_MODE_NORMAL);
 		} else {
+			printk(KERN_INFO "turning off regulator\n");
 			regulator_set_mode(audio_reg, REGULATOR_MODE_STANDBY);
 			regulator_disable(audio_reg);
 		}
@@ -940,7 +991,7 @@ static void cpcap_audio_configure_power(int power)
 		previous_power = power;
 
 		if (power)
-			msleep(SLEEP_ACTIVATE_POWER);
+			mdelay(SLEEP_ACTIVATE_POWER);
 	}
 }
 
@@ -1002,10 +1053,11 @@ void cpcap_audio_set_audio_state(struct cpcap_audio_state *state)
 	     state->codec_primary_speaker != CPCAP_AUDIO_OUT_BT_MONO) ||
 	    state->stdac_primary_speaker != CPCAP_AUDIO_OUT_NONE ||
 	    state->ext_primary_speaker != CPCAP_AUDIO_OUT_NONE ||
-	    state->microphone != CPCAP_AUDIO_IN_NONE)
+	    (state->microphone != CPCAP_AUDIO_IN_NONE &&
+		state->microphone != CPCAP_AUDIO_IN_BT_MONO))
 		cpcap_audio_configure_power(1);
 
-	if (is_speaker_turning_off(previous_state, state))
+	if (is_speaker_turning_off(state, previous_state))
 		cpcap_audio_configure_output(state, previous_state);
 
 	if (is_codec_changed(state, previous_state) ||
@@ -1028,17 +1080,17 @@ void cpcap_audio_set_audio_state(struct cpcap_audio_state *state)
 		cpcap_audio_configure_stdac(state, previous_state);
 	}
 
+	cpcap_audio_configure_analog_source(state, previous_state);
+
 	cpcap_audio_configure_input(state, previous_state);
 
 	cpcap_audio_configure_input_gains(state, previous_state);
 
+	cpcap_audio_configure_output(state, previous_state);
+
 	cpcap_audio_configure_output_gains(state, previous_state);
 
 	cpcap_audio_configure_aud_mute(state, previous_state);
-
-	msleep(SLEEP_OUTPUT_AMPS_ENABLE);
-
-	cpcap_audio_configure_output(state, previous_state);
 
 	if ((state->codec_mode == CPCAP_AUDIO_CODEC_OFF ||
 	     state->codec_mode == CPCAP_AUDIO_CODEC_CLOCK_ONLY) &&
@@ -1047,7 +1099,8 @@ void cpcap_audio_set_audio_state(struct cpcap_audio_state *state)
 	     state->codec_primary_speaker == CPCAP_AUDIO_OUT_BT_MONO) &&
 	    state->stdac_primary_speaker == CPCAP_AUDIO_OUT_NONE &&
 	    state->ext_primary_speaker == CPCAP_AUDIO_OUT_NONE &&
-	    state->microphone == CPCAP_AUDIO_IN_NONE)
+	    (state->microphone == CPCAP_AUDIO_IN_NONE ||
+		state->microphone == CPCAP_AUDIO_IN_BT_MONO))
 		cpcap_audio_configure_power(0);
 
 	previous_state_struct = *state;
