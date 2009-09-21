@@ -27,6 +27,7 @@
 #include <linux/uaccess.h>
 #include <linux/reboot.h>
 #include <linux/notifier.h>
+#include <asm/bootinfo.h>
 
 
 static int ioctl(struct inode *inode,
@@ -187,6 +188,15 @@ static int cpcap_reboot(struct notifier_block *this, unsigned long code,
 					"outofcharge cpcap set failure.\n");
 				result = NOTIFY_BAD;
 			}
+			/* Set the soft reset bit in the cpcap */
+			cpcap_regacc_write(misc_cpcap, CPCAP_REG_VAL1,
+				CPCAP_BIT_SOFT_RESET,
+				CPCAP_BIT_SOFT_RESET);
+			if (ret) {
+				dev_err(&(misc_cpcap->spi->dev),
+					"reset cpcap set failure.\n");
+				result = NOTIFY_BAD;
+			}
 		}
 
 		/* Check if we are starting recovery mode */
@@ -301,13 +311,15 @@ static int __devinit cpcap_probe(struct spi_device *spi)
 	if (retval < 0)
 		goto free_cpcap_irq;
 
-	/* Set Kpanic bit, which will be cleared at normal reboot */
-	cpcap_regacc_write(cpcap, CPCAP_REG_VAL1,
+	if (bi_powerup_reason() != PU_REASON_CHARGER) {
+		/* Set Kpanic bit, which will be cleared at normal reboot */
+		cpcap_regacc_write(cpcap, CPCAP_REG_VAL1,
 			CPCAP_BIT_AP_KERNEL_PANIC, CPCAP_BIT_AP_KERNEL_PANIC);
 
 	/* Set the soft reset bit in the cpcap */
 	cpcap_regacc_write(misc_cpcap, CPCAP_REG_VAL1,
 			CPCAP_BIT_SOFT_RESET, CPCAP_BIT_SOFT_RESET);
+	}
 
 	cpcap_vendor_read(cpcap);
 
