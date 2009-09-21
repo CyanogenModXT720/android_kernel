@@ -357,7 +357,7 @@ struct process_table_log {
 	unsigned short ppid;	/* parent pid */
 	unsigned short tgid;	/* fork/clone record */
 	unsigned long sub_type;
-	char comm[TASK_COMM_LEN];
+	char comm[LTT_LITE_TASK_COMM_LEN];
 };
 struct ltt_lite_trap_log {
 	struct record_header_t header;
@@ -422,6 +422,7 @@ struct ltt_lite_report_event {
 	unsigned long reports[LTT_LITE_EV_LAST - 2];
 };
 
+#ifdef CONFIG_LTT_LITE_ANDROID_LOG
 #define LTT_LITE_SMALL_BUFFER_SIZE 1024
 
 static char ltt_lite_small_buffer[LTT_LITE_SMALL_BUFFER_SIZE];
@@ -435,6 +436,7 @@ struct ltt_lite_android_event {
 	unsigned short  reserved;
 	unsigned long   data;
 };
+#endif
 
 static void commit_log(void *addr, int size, unsigned short type);
 
@@ -501,19 +503,23 @@ enum ltt_lite_mode_t {
 	LTT_LITE_MODE_SOFTIRQ = 1 << 5,
 	LTT_LITE_MODE_SIG = 1 << 6,
 	LTT_LITE_MODE_TMR = 1 << 7,
+#ifdef CONFIG_LTT_LITE_ANDROID_LOG
 	LTT_LITE_MODE_PRINTK  = 1 << 8,
 	LTT_LITE_MODE_ANDROID_RADIO = 1 << 9,
 	LTT_LITE_MODE_ANDROID = 1 << 10,
+#endif
 };
 
 /*indicate ltt lite working mode */
 static enum ltt_lite_mode_t ltt_lite_mode;
 
+#ifdef CONFIG_LTT_LITE_ANDROID_LOG
 /* indicate Android message stream logigng mode
  * 0 = Log Android message via existing method and into the LTT-Lite log file
  * 1 = Log Android message into the LTT-Lite log file only
  */
 static int android_logging_mode = 1;
+#endif
 
 #define MASK_ARRAY_LEN 18
 
@@ -589,7 +595,9 @@ enum ltt_lite_config_cmd {
 	CMD_RAM_FILE,		/* set private ram and writing file mode */
 	CMD_FILE_SIZE,		/* set file size */
 	CMD_INT_FILTER,		/* set intterrupt number filter */
+#ifdef CONFIG_LTT_LITE_ANDROID_LOG
 	CMD_ANDROID_LOGMODE, /* set logging mode for Android streams */
+#endif
 };
 
 /*
@@ -745,7 +753,7 @@ static int process_name_table_init(void)
 
 	struct process_table_log process_log;
 	struct task_struct *t, *p = &init_task;
-	int res = 0;
+	int res = 0, size = 0;
 	char *buffer = "cmdline";
 
 	memset(&process_log.header, 0, sizeof(struct record_header_t));
@@ -770,7 +778,11 @@ static int process_name_table_init(void)
 			if (!res)
 				buffer = t->comm;
 
-			memcpy(process_log.comm, buffer, TASK_COMM_LEN);
+			memset(process_log.comm, 0, sizeof(process_log.comm));
+			size = strlen(buffer);
+			if (size >= LTT_LITE_TASK_COMM_LEN)
+				size = LTT_LITE_TASK_COMM_LEN - 1;
+			memcpy(process_log.comm, buffer, size);
 
 			commit_log(&process_log, sizeof(process_log),
 				   LTT_LITE_EV_PROCESS);
@@ -1269,14 +1281,14 @@ static int ltt_lite_proc_write_init(struct file *filp,
 	if (copy_from_user(string, buffer, 5))
 		return -EFAULT;
 
+	if (proc_init_char_command(string))
+		return count;
+
 	i = 0;
 	while (isdigit(string[i]) && i < 5)
 		i++;
 
 	string[i] = '\0';
-
-	if (proc_init_char_command(string))
-		return count;
 
 	res = strict_strtol(string, 0, (long *)&buf);
 	if (res)
@@ -1285,8 +1297,14 @@ static int ltt_lite_proc_write_init(struct file *filp,
 	mode =
 		LTT_LITE_MODE_SCHD | LTT_LITE_MODE_SYSC | LTT_LITE_MODE_MEM |
 		LTT_LITE_MODE_TRAP | LTT_LITE_MODE_INT | LTT_LITE_MODE_SOFTIRQ
-		| LTT_LITE_MODE_SIG | LTT_LITE_MODE_TMR | LTT_LITE_MODE_PRINTK
-		| LTT_LITE_MODE_ANDROID | LTT_LITE_MODE_ANDROID_RADIO;
+		| LTT_LITE_MODE_SIG | LTT_LITE_MODE_TMR
+#ifdef CONFIG_LTT_LITE_ANDROID_LOG
+		| LTT_LITE_MODE_PRINTK
+		| LTT_LITE_MODE_ANDROID
+		| LTT_LITE_MODE_ANDROID_RADIO
+#endif
+		;
+
 	if (buf < 0 || buf > mode)
 		return count;
 
@@ -1408,7 +1426,11 @@ static ssize_t ltt_lite_proc_config_read(struct file *file,
 				ltt_lite_file_size, use_private_ram,
 				use_private_ram_file, mem_profile_interval,
 				syscall_mask_group_id, log_file,
-				android_logging_mode);
+#ifdef CONFIG_LTT_LITE_ANDROID_LOG
+				android_logging_mode
+#endif
+				);
+
 	for (i = 0; i < ltt_lite_pid_filter_num; i++) {
 		if (ltt_lite_pid_filter[i][0] == ltt_lite_pid_filter[i][1])
 			len +=
@@ -1683,10 +1705,12 @@ static void do_cmd(char *cmd_line, int cmd_type)
 			ltt_lite_file_size = file_size;
 		}
 		break;
+#ifdef CONFIG_LTT_LITE_ANDROID_LOG
 	case CMD_ANDROID_LOGMODE:
 		param_num = split(cmd_line, &char_sub_pos, ' ', 1);
 		android_logging_mode = *char_sub_pos - '0';
 		break;
+#endif
 	}
 }
 
@@ -1730,8 +1754,10 @@ static ssize_t ltt_lite_proc_config_write(struct file *file,
 		cmd_type = CMD_FILE_SIZE;
 	else if (strncmp(cmd_line, "intflt", CFG_SELECTOR_LEN) == 0)
 		cmd_type = CMD_INT_FILTER;
+#ifdef CONFIG_LTT_LITE_ANDROID_LOG
 	else if (strncmp(cmd_line, "logmod", CFG_SELECTOR_LEN) == 0)
 		cmd_type = CMD_ANDROID_LOGMODE;
+#endif
 
 	if (cmd_type != NONCMD) {
 		for (i = 0; i < count; i++) {
@@ -2094,7 +2120,7 @@ complete:
 void ltt_lite_ev_process_exit(void)
 {
 	struct process_table_log process_log;
-	int res = 0;
+	int res = 0, size = 0;
 	char *buffer = "cmdline";
 
 	if (!(ltt_lite_is_enabled | early_enabled_mode))
@@ -2109,7 +2135,11 @@ void ltt_lite_ev_process_exit(void)
 	if (!res)
 		buffer = current->comm;
 
-	memcpy(process_log.comm, buffer, TASK_COMM_LEN);
+	size = strlen(buffer);
+	if (size >= LTT_LITE_TASK_COMM_LEN)
+		size = LTT_LITE_TASK_COMM_LEN - 1;
+	memset(process_log.comm, 0, sizeof(process_log.comm));
+	memcpy(process_log.comm, buffer, size);
 
 	commit_log(&process_log, sizeof(process_log), LTT_LITE_EV_PROCESS);
 }
@@ -2237,7 +2267,7 @@ void ltt_lite_log_syscall(char sign, int scno)
 void ltt_lite_ev_log_process(int type, struct task_struct *p)
 {
 	struct process_table_log process_log;
-	int res = 0;
+	int res = 0, size = 0;
 	char *buffer = "cmdline";
 
 	if (!(ltt_lite_is_enabled | early_enabled_mode))
@@ -2252,7 +2282,11 @@ void ltt_lite_ev_log_process(int type, struct task_struct *p)
 	if (!res)
 		buffer = p->comm;
 
-	memcpy(process_log.comm, buffer, TASK_COMM_LEN);
+	size = strlen(buffer);
+	if (size >= LTT_LITE_TASK_COMM_LEN)
+		size = LTT_LITE_TASK_COMM_LEN - 1;
+	memset(process_log.comm, 0, sizeof(process_log.comm));
+	memcpy(process_log.comm, buffer, size);
 
 	commit_log(&process_log, sizeof(process_log), LTT_LITE_EV_PROCESS);
 }
@@ -2587,6 +2621,7 @@ static int set_ltt_version(void)
 	return 0;
 }
 
+#ifdef CONFIG_LTT_LITE_ANDROID_LOG
 /*
  * This interface is for logging custom LTT-lite events from
  * Android userspace (/dev/log/xxx), for graphical interpretation
@@ -2693,3 +2728,4 @@ void ltt_lite_log_printk(char *string, int size)
 						LTT_LITE_EV_PRINTK);
 	}
 }
+#endif
