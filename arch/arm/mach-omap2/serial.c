@@ -39,7 +39,7 @@
 #include "pm.h"
 #include "prm-regbits-34xx.h"
 
-#define DEFAULT_TIMEOUT (HZ / 2)
+#define DEFAULT_TIMEOUT HZ
 
 struct omap_uart_state {
 	int num;
