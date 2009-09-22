@@ -39,8 +39,8 @@
 
 #include "dss.h"
 
-#ifdef CONFIG_TVDET_SHOLEST
 #include <mach/prcm.h>
+#ifdef CONFIG_TVDET_SHOLEST
 #include <mach/gpio.h>
 #define OMAP_TVINT_GPIO 33
 #endif
