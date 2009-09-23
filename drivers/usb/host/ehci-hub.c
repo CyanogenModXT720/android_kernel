@@ -439,13 +439,13 @@ static int check_reset_complete (
 
 		/* with integrated TT, there's nobody to hand it to! */
 		if (ehci_is_TDI(ehci)) {
-			ehci_dbg (ehci,
+			ehci_err(ehci,
 				"Failed to enable port %d on root hub TT\n",
 				index+1);
 			return port_status;
 		}
 
-		ehci_dbg (ehci, "port %d full speed --> companion\n",
+		ehci_info(ehci, "port %d full speed --> companion\n",
 			index + 1);
 
 		/* when detect a full speed device, it's compliant with EHCI
