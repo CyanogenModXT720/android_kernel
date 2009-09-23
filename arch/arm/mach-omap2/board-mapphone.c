@@ -416,7 +416,8 @@ static struct qtouch_ts_platform_data mapphone_ts_platform_data = {
 	.irqflags	= (IRQF_TRIGGER_FALLING | IRQF_TRIGGER_LOW),
 	.flags		= (QTOUCH_SWAP_XY |
 			   QTOUCH_USE_MULTITOUCH |
-			   QTOUCH_CFG_BACKUPNV),
+			   QTOUCH_CFG_BACKUPNV |
+			   QTOUCH_EEPROM_CHECKSUM),
 	.abs_min_x	= 20,
 	.abs_max_x	= 1004,
 	.abs_min_y	= 0,
@@ -425,7 +426,7 @@ static struct qtouch_ts_platform_data mapphone_ts_platform_data = {
 	.abs_max_p	= 255,
 	.abs_min_w	= 0,
 	.abs_max_w	= 15,
-	.nv_checksum	= 0xb834,
+	.nv_checksum	= 0x6da8,
 	.fuzz_x		= 0,
 	.fuzz_y		= 0,
 	.fuzz_p		= 2,
@@ -445,7 +446,7 @@ static struct qtouch_ts_platform_data mapphone_ts_platform_data = {
 		.sync		= 0,
 	},
 	.multi_touch_cfg	= {
-		.ctrl		= 0x0f,
+		.ctrl		= 0x0b,
 		.x_origin	= 0,
 		.y_origin	= 0,
 		.x_size		= 12,
@@ -460,6 +461,7 @@ static struct qtouch_ts_platform_data mapphone_ts_platform_data = {
 		.num_touch	= 4,
 		.merge_hyst	= 0,
 		.merge_thresh	= 3,
+		.amp_hyst = 2,
 		.x_res = 0x0000,
 		.y_res = 0x0000,
 		.x_low_clip = 0x00,
@@ -516,8 +518,8 @@ static struct qtouch_ts_platform_data mapphone_ts_platform_data = {
 
 static struct lm3530_platform_data omap3430_als_light_data = {
 	.power_up_gen_config = 0x0b,
-	.gen_config = 0x0b,
-	.als_config = 0x6c,
+	.gen_config = 0x19,
+	.als_config = 0x7c,
 	.brightness_ramp = 0x36,
 	.als_zone_info = 0x00,
 	.als_resistor_sel = 0xf4,
@@ -1224,7 +1226,6 @@ static void __init mapphone_bt_init(void)
 	platform_device_register(&mapphone_wl1271_device);
 	platform_device_register(&mapphone_wl1271_test_device);
 }
-
 
 static struct omap_mdm_ctrl_platform_data omap_mdm_ctrl_platform_data = {
 	.bp_ready_ap_gpio = MAPPHONE_BP_READY_AP_GPIO,

@@ -30,11 +30,6 @@ static int mapphone_panel_enable(struct omap_dss_device *dssdev)
 {
 	int ret;
 
-	/* pin the memory bus bw to the highest value */
-	ret = resource_request("vdd2_opp", &dssdev->dev, 400000);
-	if (ret)
-		printk("%s: resource request failed\n", __func__);
-
 	if (!display_regulator) {
 		display_regulator = regulator_get(NULL, "vhvio");
 		if (IS_ERR(display_regulator)) {
@@ -62,11 +57,6 @@ static void mapphone_panel_disable(struct omap_dss_device *dssdev)
 {
 	int ret;
 
-	/* unpin the memory bus */
-	ret = resource_release("vdd2_opp", &dssdev->dev);
-	if (ret)
-		printk("%s: resource request failed\n", __func__);
-
 	gpio_direction_output(MAPPHONE_DISPLAY_RESET_GPIO, 1);
 	gpio_set_value(MAPPHONE_DISPLAY_RESET_GPIO, 0);
 	msleep(1);
@@ -78,7 +68,7 @@ static struct omapfb_platform_data mapphone_fb_data = {
 		.region_cnt = 1,
 		.region = {
 			{
-				.format = OMAPFB_COLOR_RGB565,
+				.format = OMAPFB_COLOR_ARGB32,
 				.format_used = 1,
 			},
 		},
