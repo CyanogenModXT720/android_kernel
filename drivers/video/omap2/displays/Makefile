@@ -7,4 +7,6 @@ obj-$(CONFIG_PANEL_N800) += panel-n800.o
 
 obj-$(CONFIG_PANEL_ACX565AKM) += panel-acx565akm.o
 obj-$(CONFIG_PANEL_SHOLES) += panel-sholes.o
+
+obj-$(CONFIG_PANEL_HDTV) += panel-hdtv.o
 obj-$(CONFIG_PANEL_ZOOM2) += panel-zoom2.o

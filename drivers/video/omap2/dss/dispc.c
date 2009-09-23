@@ -1789,12 +1789,14 @@ void dispc_enable_digit_out(bool enable)
 		DSSERR("failed to unregister EVSYNC isr\n");
 
 	if (enable) {
+#ifndef CONFIG_TVOUT_SHOLEST
 		unsigned long flags;
 		spin_lock_irqsave(&dispc.irq_lock, flags);
 		dispc.irq_error_mask = DISPC_IRQ_MASK_ERROR;
 		dispc_write_reg(DISPC_IRQSTATUS, DISPC_IRQ_SYNC_LOST_DIGIT);
 		_omap_dispc_set_irqs();
 		spin_unlock_irqrestore(&dispc.irq_lock, flags);
+#endif
 	}
 
 	enable_clocks(0);
@@ -2813,7 +2815,13 @@ static void dispc_error_worker(struct work_struct *work)
 				continue;
 
 			if (ovl->id == 0) {
-				dispc_enable_plane(ovl->id, 0);
+				/* **** HACK ****
+				 * Removing the disable of the graphics plane
+				 * for underflows as this causes problems
+				 * when switching displays.
+				 * Need more investigation.
+				dispc_enable_plane(ovl->id, 0); */
+
 				dispc_go(ovl->manager->id);
 				mdelay(50);
 				break;

@@ -51,4 +51,7 @@
 #define LD_DISP_BUTTON_MED_HIGH	0xC0
 #define LD_DISP_BUTTON_HIGH		0xF0
 
+#define LD_BLED_CPCAP_MASK      0x3FF
+#define LD_BLED_CPCAP_CURRENT   0xE
+
 #endif  /* __LED_LD_CPCAP_H__ */

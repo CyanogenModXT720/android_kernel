@@ -2106,12 +2106,31 @@ static int omapfb_probe(struct platform_device *pdev)
 					OMAP_DSS_UPDATE_AUTO);
 	}
 
+	for (i = 0; i < fbdev->num_displays; i++) {
+		struct omap_dss_device *display = fbdev->displays[i];
+		u16 w, h;
+
+		if (!display->get_update_mode || !display->update)
+			continue;
+
+		if (display->get_update_mode(display) ==
+				OMAP_DSS_UPDATE_MANUAL) {
+
+			display->get_resolution(display, &w, &h);
+			display->update(display, 0, 0, w, h);
+		}
+	}
+
 	DBG("display->updated\n");
 
 	return 0;
 
 cleanup:
-	omapfb_free_resources(fbdev);
+#if 1 /* for Test */
+    return 0;
+#else
+    omapfb_free_resources(fbdev);
+#endif
 err0:
 	dev_err(&pdev->dev, "failed to setup omapfb\n");
 	return r;

@@ -382,6 +382,9 @@ static void detection_work(struct work_struct *work)
 		 * charger is attached.
 		 */
 		if (data->sense & CPCAP_BIT_SE1_S) {
+#ifdef CONFIG_TTA_CHARGER
+			enable_tta();
+#endif
 			data->state = CONFIG;
 			schedule_delayed_work(&data->work, 0);
 		} else {

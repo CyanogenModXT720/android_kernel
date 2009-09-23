@@ -146,6 +146,14 @@ static struct platform_device cpcap_rtc_device = {
 	.dev.platform_data = NULL,
 };
 
+#ifdef CONFIG_TTA_CHARGER
+static struct platform_device cpcap_tta_det_device = {
+  .name           = "cpcap_tta_charger",
+  .id             = -1,
+  .dev.platform_data = NULL,
+};
+#endif
+
 static struct platform_device *cpcap_devices[] = {
 	&cpcap_adc_device,
 	&cpcap_key_device,
@@ -164,6 +172,9 @@ static struct platform_device *cpcap_devices[] = {
 	&cpcap_3mm5_device,
 	&cpcap_rtc_device,
 	&cpcap_uc_device,
+#ifdef CONFIG_TTA_CHARGER
+	&cpcap_tta_det_device,
+#endif
 };
 
 static struct cpcap_device *misc_cpcap;
@@ -176,6 +187,14 @@ static int cpcap_reboot(struct notifier_block *this, unsigned long code,
 	char *mode = cmd;
 
 	if (code == SYS_RESTART) {
+		/* Set the soft reset bit in the cpcap */
+		ret = cpcap_regacc_write(misc_cpcap, CPCAP_REG_VAL1,
+				CPCAP_BIT_SOFT_RESET, CPCAP_BIT_SOFT_RESET);
+		if (ret) {
+			dev_err(&(misc_cpcap->spi->dev),
+				"SW Reset cpcap set failure.\n");
+			result = NOTIFY_BAD;
+		}
 
 		if (mode != NULL && !strncmp("outofcharge", mode, 12)) {
 			/* Set the outofcharge bit in the cpcap */

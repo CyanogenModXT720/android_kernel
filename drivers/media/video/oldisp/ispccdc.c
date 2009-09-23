@@ -49,6 +49,8 @@ static unsigned long fpc_table_add_m;
  * @ccdcout_h: CCDC output height.
  * @ccdcin_w: CCDC input width.
  * @ccdcin_h: CCDC input height.
+ * @ccdcin_wstart: CCDC input horizontal offset due to color order.
+ * @ccdcin_hstart: CCDC input vertical offset due to color order.
  * @ccdcin_woffset: CCDC input horizontal offset.
  * @ccdcin_hoffset: CCDC input vertical offset.
  * @crop_w: Crop width.
@@ -70,6 +72,8 @@ static struct isp_ccdc {
 	u32 ccdcout_h;
 	u32 ccdcin_w;
 	u32 ccdcin_h;
+	u8 ccdcin_wstart;
+	u8 ccdcin_hstart;
 	u32 ccdcin_woffset;
 	u32 ccdcin_hoffset;
 	u32 crop_w;
@@ -505,22 +509,24 @@ void ispccdc_set_crop_offset(enum ispccdc_raw_fmt raw_fmt)
 {
 	switch (raw_fmt) {
 	case ISPCCDC_INPUT_FMT_GR_BG:
-		ispccdc_obj.ccdcin_woffset = 1;
-		ispccdc_obj.ccdcin_hoffset = 0;
+		ispccdc_obj.ccdcin_wstart = 1;
+		ispccdc_obj.ccdcin_hstart = 0;
 		break;
 	case ISPCCDC_INPUT_FMT_BG_GR:
-		ispccdc_obj.ccdcin_woffset = 1;
-		ispccdc_obj.ccdcin_hoffset = 1;
+		ispccdc_obj.ccdcin_wstart = 1;
+		ispccdc_obj.ccdcin_hstart = 1;
 		break;
 	case ISPCCDC_INPUT_FMT_RG_GB:
-		ispccdc_obj.ccdcin_woffset = 0;
-		ispccdc_obj.ccdcin_hoffset = 0;
+		ispccdc_obj.ccdcin_wstart = 0;
+		ispccdc_obj.ccdcin_hstart = 0;
 		break;
 	case ISPCCDC_INPUT_FMT_GB_RG:
-		ispccdc_obj.ccdcin_woffset = 0;
-		ispccdc_obj.ccdcin_hoffset = 1;
+		ispccdc_obj.ccdcin_wstart = 0;
+		ispccdc_obj.ccdcin_hstart = 1;
 		break;
 	}
+	ispccdc_obj.ccdcin_woffset = ispccdc_obj.ccdcin_wstart;
+	ispccdc_obj.ccdcin_hoffset = ispccdc_obj.ccdcin_hstart;
 }
 EXPORT_SYMBOL(ispccdc_set_crop_offset);
 
@@ -542,8 +548,10 @@ EXPORT_SYMBOL(ispccdc_set_crop_offset);
  **/
 void ispccdc_config_crop(u32 left, u32 top, u32 height, u32 width)
 {
-	ispccdc_obj.ccdcin_woffset = left + ((left + 1) % 2);
-	ispccdc_obj.ccdcin_hoffset = top + (top % 2);
+	ispccdc_obj.ccdcin_woffset =\
+		left + ((left + ispccdc_obj.ccdcin_wstart) % 2);
+	ispccdc_obj.ccdcin_hoffset =\
+		top + ((top + ispccdc_obj.ccdcin_hstart) % 2);
 
 	ispccdc_obj.crop_w = width - (width % 16);
 	ispccdc_obj.crop_h = height + (height % 2);

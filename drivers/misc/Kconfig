@@ -261,8 +261,8 @@ config UID_STAT
 	bool "UID based statistics tracking exported to /proc/uid_stat"
 	default n
 
-config VIB_OMAP_PWM
-	bool "OMAP PWM Vibrator"
+config VIB_PWM
+	bool "PWM Vibrator"
 	default n
 
 config VIB_GPIO

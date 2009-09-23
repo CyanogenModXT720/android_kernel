@@ -747,18 +747,18 @@ void ispresizer_write_filter_coef(void)
 			for (i = 0; i < 16; i++) {
 				if ((i + 1) % 4 == 0) {
 					omap_writel((ispres_obj.coeflist.
-							h_filter_coef_7tap[j] <<
-							ISPRSZ_HFILT10_COEF0_SHIFT),
-							ISPRSZ_HFILT10 + (i * 0x04));
+						h_filter_coef_7tap[j] <<
+						ISPRSZ_HFILT10_COEF0_SHIFT),
+						ISPRSZ_HFILT10 + (i * 0x04));
 					j += 1;
 				} else {
 					omap_writel((ispres_obj.coeflist.
-							h_filter_coef_7tap[j] <<
-							ISPRSZ_HFILT10_COEF0_SHIFT) |
-							(ispres_obj.coeflist.
-							h_filter_coef_7tap[j+1] <<
-							ISPRSZ_HFILT10_COEF1_SHIFT),
-							ISPRSZ_HFILT10 + (i * 0x04));
+						h_filter_coef_7tap[j] <<
+						ISPRSZ_HFILT10_COEF0_SHIFT) |
+						(ispres_obj.coeflist.
+						h_filter_coef_7tap[j+1] <<
+						ISPRSZ_HFILT10_COEF1_SHIFT),
+						ISPRSZ_HFILT10 + (i * 0x04));
 					j += 2;
 				}
 			}
@@ -780,18 +780,18 @@ void ispresizer_write_filter_coef(void)
 			for (i = 0; i < 16; i++) {
 				if ((i + 1) % 4 == 0) {
 					omap_writel((ispres_obj.coeflist.
-							v_filter_coef_7tap[j] <<
-							ISPRSZ_VFILT10_COEF0_SHIFT),
-							ISPRSZ_VFILT10 + (i * 0x04));
+						v_filter_coef_7tap[j] <<
+						ISPRSZ_VFILT10_COEF0_SHIFT),
+						ISPRSZ_VFILT10 + (i * 0x04));
 					j += 1;
 				} else {
 					omap_writel((ispres_obj.coeflist.
-							v_filter_coef_7tap[j] <<
-							ISPRSZ_VFILT10_COEF0_SHIFT) |
-							(ispres_obj.coeflist.
-							v_filter_coef_7tap[j+1] <<
-							ISPRSZ_VFILT10_COEF1_SHIFT),
-							ISPRSZ_VFILT10 + (i * 0x04));
+						v_filter_coef_7tap[j] <<
+						ISPRSZ_VFILT10_COEF0_SHIFT) |
+						(ispres_obj.coeflist.
+						v_filter_coef_7tap[j+1] <<
+						ISPRSZ_VFILT10_COEF1_SHIFT),
+						ISPRSZ_VFILT10 + (i * 0x04));
 					j += 2;
 				}
 			}

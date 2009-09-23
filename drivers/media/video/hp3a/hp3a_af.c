@@ -130,9 +130,8 @@ void hp3a_disable_af(void)
 static void hp3a_af_isr(unsigned long status, isp_vbq_callback_ptr arg1,
 			void *arg2)
 {
-	if (unlikely((H3A_AF_DONE & status) != H3A_AF_DONE)) {
+	if (unlikely((H3A_AF_DONE & status) != H3A_AF_DONE))
 		return;
-	}
 
 	/* clear IRQ status bit.*/
 	omap_writel(IRQ0STATUS_H3A_AF_DONE_IRQ,
@@ -163,9 +162,8 @@ int hp3a_config_af(struct hp3a_af_config *config, struct hp3a_fh *fh)
 		/* Install AF callback. */
 		ret = isp_set_callback(CBK_H3A_AF_DONE, hp3a_af_isr,
 					(void *)NULL, (void *)NULL);
-		if (ret) {
+		if (ret)
 			return ret;
-		}
 
 		if (hp3a_af_busy()) {
 			dev_info(device->dev, "Error: AF engine is busy!\n");
@@ -213,7 +211,7 @@ int hp3a_config_af(struct hp3a_af_config *config, struct hp3a_fh *fh)
 		if (config->paxel.width < 16 || config->paxel.width > 256 ||
 			config->paxel.height < 2 ||  config->paxel.height > 256) {
 			dev_info(device->dev,
-				"Error: Invalid paxel dimention %d-%d\n",
+				"Error: Invalid paxel dimention %d-%d\n", \
 				config->paxel.width, config->paxel.height);
 			goto func_exit;
 		}

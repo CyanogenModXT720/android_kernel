@@ -194,6 +194,12 @@ config LEDS_SHOLES
 	depends on LEDS_CLASS
 	help
 	  This option enables support for LEDs on Sholes.
+          
+config LEDS_SHOLEST
+	tristate "LED Support for Sholes Tablet device"
+	depends on LEDS_CLASS
+	help
+	  This option enables support for LEDs on Sholes Tablet.
 
 config LEDS_LM3530
 	tristate "LM3530 ALS driver"
@@ -206,6 +212,20 @@ config LEDS_LM3554
 	depends on LEDS_CLASS && I2C
 	help
 	  This option enables support for the LM3554 .
+
+config LEDS_BD7885
+	tristate "LED Support for BD7885 I2C chips"
+	depends on LEDS_CLASS && I2C
+	help
+	  This option enables support for LEDs connected to BD7885
+	  LED driver chips accessed via the I2C bus.  Supported
+
+config LEDS_BU9847
+	tristate "LED Support for BU9847 I2C chips"
+	depends on LEDS_CLASS && I2C
+	help
+	  This option enables support for LEDs connected to BU9847
+	  LED driver chips accessed via the I2C bus.  Supported
 
 comment "LED Triggers"
 

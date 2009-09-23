@@ -364,15 +364,18 @@ void hp3a_update_statistics(void)
 	for (i = MAX_STAT_BUFFERS_PER_FRAME; i--;) {
 		ibuffer = NULL;
 		if (hp3a_dequeue(&g_tc.ready_stats_queue, &ibuffer) == 0) {
-			if (ibuffer->type == HISTOGRAM && g_tc.histogram_buffer == NULL)
+			if (ibuffer->type == HISTOGRAM && \
+					g_tc.histogram_buffer == NULL)
 				g_tc.histogram_buffer = ibuffer;
-			else if (ibuffer->type == PAXEL && g_tc.af_buffer == NULL)
+			else if (ibuffer->type == PAXEL && \
+					g_tc.af_buffer == NULL)
 				g_tc.af_buffer = ibuffer;
-			else if (ibuffer->type == BAYER && g_tc.raw_buffer == NULL)
+			else if (ibuffer->type == BAYER && \
+					g_tc.raw_buffer == NULL)
 				g_tc.raw_buffer = ibuffer;
 			else {
-				printk(KERN_ERR "hp3a: Error unknown buffer type(%d) in"
-							" ready queue\n", ibuffer->type);
+				printk(KERN_ERR "hp3a: Error unknown "
+				"buffer type(%d)\n", ibuffer->type);
 			}
 		} else {
 			break;
@@ -384,11 +387,14 @@ void hp3a_update_statistics(void)
 		if ((++g_tc.raw_cap_sched_count) == g_tc.raw_frequency) {
 			g_tc.raw_cap_sched_count = 0;
 			ibuffer = NULL;
-			if (hp3a_dequeue(&g_tc.raw_frame_queue, &ibuffer) == 0) {
-				if (ibuffer->buffer_size >= g_tc.req_raw_buffer_size) {
+			if (hp3a_dequeue(&g_tc.raw_frame_queue, \
+					&ibuffer) == 0) {
+				if (ibuffer->buffer_size >= \
+						g_tc.req_raw_buffer_size) {
 					hp3a_enable_raw(ibuffer->isp_addr);
 					ibuffer->type = BAYER;
-					hp3a_enqueue(&g_tc.ready_stats_queue, &ibuffer);
+					hp3a_enqueue(&g_tc.ready_stats_queue, \
+						&ibuffer);
 				}
 			}
 		} else if (g_tc.raw_cap_sched_count == 1) {
@@ -409,7 +415,8 @@ void hp3a_update_statistics(void)
 				if (sensor_param.gain)
 					g_tc.gain = sensor_param.gain;
 			} else if (sensor_param.frame_id > g_tc.frame_count) {
-				hp3a_enqueue(&g_tc.sensor_read_queue, &sensor_param);
+				hp3a_enqueue(&g_tc.sensor_read_queue, \
+					&sensor_param);
 			}
 		} else {
 			break;
@@ -473,7 +480,8 @@ static void hp3a_task(struct work_struct *work)
 			sensor_param.exposure = 0;
 			sensor_param.gain = sensor_settings.gain;
 			/* Queue new value for stats collecton. */
-			hp3a_enqueue_irqsave(&g_tc.sensor_read_queue, &sensor_param);
+			hp3a_enqueue_irqsave(&g_tc.sensor_read_queue, \
+				&sensor_param);
 			/* Save new programmed in gain value. */
 			g_tc.current_gain = sensor_settings.gain;
 		}
@@ -483,7 +491,8 @@ static void hp3a_task(struct work_struct *work)
 			sensor_param.exposure = sensor_settings.exposure;
 			sensor_param.gain = 0;
 			/* Queue new value for stats collecton. */
-			hp3a_enqueue_irqsave(&g_tc.sensor_read_queue, &sensor_param);
+			hp3a_enqueue_irqsave(&g_tc.sensor_read_queue, \
+				&sensor_param);
 			/* Save new programmed in exposure value. */
 			g_tc.current_exposure = sensor_settings.exposure;
 		}

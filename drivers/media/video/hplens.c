@@ -192,12 +192,14 @@ int hplens_reg_write(u8 dev_addr, u8 *write_buf, u16 len)
 	struct i2c_client *client = lens->i2c_client;
 	int err;
 	struct i2c_msg msg[1];
+	int retry = 0;
 
 	if (!client->adapter)
 		return -ENODEV;
 
 	client->addr = dev_addr;  /* set slave address */
 
+again:
 	msg->addr = client->addr;
 	msg->flags = 0;
 	msg->len = len;
@@ -208,6 +210,13 @@ int hplens_reg_write(u8 dev_addr, u8 *write_buf, u16 len)
 	if (err >= 0)
 		return 0;
 
+	if (retry <= HPLENS_I2C_RETRY_COUNT) {
+		dev_dbg(&client->dev, "retry ... %d", retry);
+		retry++;
+		set_current_state(TASK_UNINTERRUPTIBLE);
+		schedule_timeout(msecs_to_jiffies(20));
+		goto again;
+	}
 	return err;
 }
 EXPORT_SYMBOL(hplens_reg_write);
