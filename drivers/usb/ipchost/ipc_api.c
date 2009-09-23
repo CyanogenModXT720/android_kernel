@@ -378,13 +378,23 @@ void usb_ipc_api_read_callback(USB_IPC_CHANNEL_INDEX ch_index, int read_flag, in
 		
 	}
 //change for endian end
-	if(header->version != IPC_FRAME_VERSION) {
-		printk("The version(0x%x) is not equal to expected version(0x%x)\n", header->version, IPC_FRAME_VERSION);
-		panic("panic for wrong verion");
-	}
-	if(header->sequence_number != recv_sequence_number) {
-		printk("The sequence number(%d) is not equal to expected sequence number(%d)\n", header->sequence_number, recv_sequence_number);
-		panic("panic for wrong sequence number");
+	if ((header->version != IPC_FRAME_VERSION) ||
+	    (header->sequence_number != recv_sequence_number)) {
+		if (header->version != IPC_FRAME_VERSION)
+			printk(KERN_INFO "Wrong IPC Frame Header Version\n");
+		else
+			printk(KERN_INFO "Wrong Frame Sequence Number\n");
+		printk(KERN_INFO "channel:%d, buffer:%08x,\
+			header:%08x\n", ch_index,
+			(unsigned int)
+				usb_ipc_channels[ch_index].read_ptr.temp_buff,
+			(unsigned int) header);
+		printk(KERN_INFO "version:%04x, nb_frame:%04x,\
+			sequence:%02x, options:%02x, checksum:%04x\n",
+			header->version, header->nb_frame,
+			header->sequence_number, header->options,
+			header->checksum);
+		panic("panic for wrong verion or sequence number");
 	}
 	DEBUG("%s:version(0x%x), sequence number(%d)\n", __FUNCTION__, header->version, header->sequence_number);
 	/* recv_sequence_number will increase 1 on every read operation, and modulo 256 by using wrap around on a unsigned char.*/
