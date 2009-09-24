@@ -592,6 +592,8 @@ device_mode_change_write(struct file *file, const char __user *buffer,
 		return -EFAULT;
 	cmd[cnt] = 0;
 
+	printk(KERN_DEBUG "%s cmd=%s\n", __func__, cmd);
+
 	/* USB cable detached Command */
 	if (strncmp(cmd, "usb_cable_detach", 16) == 0) {
 		usb_data_transfer_flag = 0;
