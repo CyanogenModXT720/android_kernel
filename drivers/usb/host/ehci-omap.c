@@ -513,16 +513,15 @@ static const struct hc_driver ehci_omap_hc_driver;
 
 static int omap_ehci_bus_suspend(struct usb_hcd *hcd)
 {
-	struct ehci_hcd *ehci;
 	struct ehci_omap_clock_defs *ehci_clocks;
 	int ret = 0;
 	unsigned long flags;
+	struct ehci_hcd *ehci = hcd_to_ehci(hcd);
 
 #if defined(CONFIG_ARCH_OMAP34XX)
 	int res = 0;
 	struct omap_usb_platform_data *config = hcd->self.controller->platform_data;
 #endif
-	ehci = hcd_to_ehci(hcd);
 	ehci_clocks = (struct ehci_omap_clock_defs *)
 			(((char *)hcd_to_ehci(hcd)) + sizeof(struct ehci_hcd));
 	ret = ehci_bus_suspend(hcd);
