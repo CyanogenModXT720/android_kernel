@@ -13,20 +13,12 @@
  * support for the platform displays.
  */
 
-#include <mach/display.h>
-
-#include "dispsw.h"
+#include <mach/dispsw.h>
 
 #ifndef __DISPSW_MR_H__
 #define __DISPSW_MR_H__
 
 #define DISPSW_MR_MAX_RES_SUPPORTED	(20)
-
-struct dispsw_mr_support {
-	char dev_name[DISPSW_MAX_NAME_SIZE + 1];
-	char res_name[DISPSW_MAX_NAME_SIZE + 1];
-	struct omap_video_timings dev_timing;
-};
 
 struct dispsw_mr_data {
 	struct mutex mtx; /* Lock for all device accesses */
@@ -39,8 +31,8 @@ struct dispsw_mr_data {
 int  dispsw_mr_init(struct dispsw_mr_data *mr);
 void dispsw_mr_remove(struct dispsw_mr_data *mr);
 
-int  dispsw_mr_set_supported_mode(struct dispsw_mr_data *mr, int idx,
-				struct dispsw_mr_support *mode);
+void dispsw_mr_set_board_info(struct dispsw_mr_data *mr,
+				struct dispsw_board_info *info);
 
 bool  dispsw_mr_is_multi_res(struct dispsw_mr_data *mr,
 				struct omap_dss_device *dssdev);

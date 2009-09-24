@@ -18,8 +18,8 @@
 #include <linux/platform_device.h>
 
 #include <mach/display.h>
+#include <mach/dispsw.h>
 
-#include "dispsw.h"
 #include "dispsw-mr.h"
 #include "dispsw-rotate.h"
 
@@ -46,7 +46,7 @@ struct dispsw_osi {
 	int id;
 	int idx;
 
-	ovl_set_info func;
+	ovl_set_info set_func;
 	struct omap_overlay *ovl;
 
 	bool override;
@@ -58,6 +58,7 @@ struct dispsw_osi {
 
 	bool force_disabled;
 	bool stored_enable;
+	int  force_cnt;
 
 	bool lock_aspect_ratio;
 	enum dispsw_rotate rotate;
@@ -90,18 +91,42 @@ struct dispsw_device {
 	struct omap_overlay_info def_info[MAX_OVERLAYS];
 	/* Data, per overlay, for overriding the overlay set info call */
 	struct dispsw_osi osi[MAX_OVERLAYS];
+
+	bool no_update;
 };
 
 #define DEVICE_NAME  "dispsw"
-#define DEVICE_SYSFS "dispsw-omap"
 
 static struct dispsw_device *gDev;
 
+extern int omapvout_force_rotation(int plane, int enable, int rotation);
 
 static void dispsw_update_default_overlay_info(struct dispsw_osi *osi,
 					struct omap_overlay_info *info);
 
 /*=== Local Functions ==================================================*/
+
+static int dispsw_convert_to_dss_rotation(enum dispsw_rotate rotate)
+{
+	int rot;
+
+	switch (rotate) {
+	case DISPSW_ROTATE_90:
+		rot = 1;
+		break;
+	case DISPSW_ROTATE_180:
+		rot = 2;
+		break;
+	case DISPSW_ROTATE_270:
+		rot = 3;
+		break;
+	default:
+		rot = 0;
+		break;
+	}
+	
+	return rot;
+}
 
 static bool dispsw_crop_side(int max, int offset, int *side)
 {
@@ -167,8 +192,8 @@ static void dispsw_scale(struct dispsw_osi *osi,
 	int ratio;
 	const int shift = 10; /* Fixed point shift factor */
 
-	w = info->out_width;
-	h = info->out_height;
+	w = info->width;
+	h = info->height;
 
 	switch (osi->scale) {
 	case DISPSW_SCALE_FIT_TO_SCREEN:
@@ -178,6 +203,8 @@ static void dispsw_scale(struct dispsw_osi *osi,
 			ratio = (tw < th) ? tw : th;
 			w = (w * ratio) >> shift;
 			h = (h * ratio) >> shift;
+			w = (w + 1) & ~1;
+			h = (h + 1) & ~1;
 		} else {
 			w = osi->disp_w;
 			h = osi->disp_h;
@@ -218,25 +245,11 @@ static void dispsw_rotate(struct dispsw_osi *osi,
 	if (osi->rotate == DISPSW_ROTATE_IGNORE)
 		return;
 
-	switch (osi->rotate) {
-	case DISPSW_ROTATE_90:
-		rotate = 1;
-		break;
-	case DISPSW_ROTATE_180:
-		rotate = 2;
-		break;
-	case DISPSW_ROTATE_270:
-		rotate = 3;
-		break;
-	default:
-		rotate = 0;
-		break;
-	}
-
+	rotate = dispsw_convert_to_dss_rotation(osi->rotate);
 	if (rotate == info->rotation)
 		return;
 
-	/* For now only handle rotation of the GFX plane */
+	/* Video plane rotation is handled else where */
 	if (osi->id != OMAP_DSS_GFX)
 		return;
 
@@ -336,7 +349,7 @@ static void dispsw_align(struct dispsw_osi *osi,
 		break;
 	case DISPSW_ALIGN_PERCENT:
 		x = (dw * osi->v_align_percent) / 100;
-		y = (dw * osi->h_align_percent) / 100;
+		y = (dh * osi->h_align_percent) / 100;
 		break;
 	}
 
@@ -363,10 +376,7 @@ static void dispsw_override_ovl(struct dispsw_osi *osi,
 		info->enabled = false;
 }
 
-/* This is the substitute "set_overlay_info" function.
- * All calls to the "set_overlay_info" function of any overlay will
- * come here, so we overlay info can be adjusted as requested by
- * the client
+/* This function performs the substitute "set_overlay_info" operation
  */
 static int dispsw_ovl_set_info(struct omap_overlay *ovl,
 				struct omap_overlay_info *info)
@@ -375,7 +385,7 @@ static int dispsw_ovl_set_info(struct omap_overlay *ovl,
 	int rc = 0;
 	int i;
 
-	mutex_lock(&gDev->mtx);
+	/* It is assumed the caller has the mutex locked */
 
 	for (i = 0; i < MAX_OVERLAYS; i++) {
 		if (gDev->osi[i].id == ovl->id) {
@@ -387,18 +397,48 @@ static int dispsw_ovl_set_info(struct omap_overlay *ovl,
 	if (!osi) {
 		rc = -EINVAL;
 	} else {
-		dispsw_update_default_overlay_info(osi, info);
+		if (!gDev->no_update)
+			dispsw_update_default_overlay_info(osi, info);
+
+		if (osi->force_disabled) {
+                        osi->stored_enable = info->enabled;
+                        info->enabled = false;
+		} else if (osi->id == OMAP_DSS_GFX && osi->force_cnt > 0) {
+			/* HACK: The FB (frame buffer), which feeds the GFX 
+			 * plane, has an assumption that the enable flag stays
+			 * the same.  When display's are switched, a GFX plane
+			 * under-run can happen which disables the plane and,
+			 * do to the FB assumption, causes a continuation of
+			 * the state, which is not good.  This hack attempts 
+			 * to work-around this issue, until a better fix can
+			 * be found, likely in the FB code.
+			 */
+			osi->force_cnt --;
+			info->enabled = osi->stored_enable;
+		}
 
 		if (info->enabled && osi->override)
 			dispsw_override_ovl(osi, info);
 
-		if (osi->force_disabled) {
-			osi->stored_enable = info->enabled;
-			info->enabled = false;
-		}
-
-		rc = osi->func(ovl, info);
+		rc = osi->set_func(ovl, info);
 	}
+
+	return rc;
+}
+
+/* This is the substitute "set_overlay_info" function.
+ * All calls to the "set_overlay_info" function of any overlay will
+ * come here, so we overlay info can be adjusted as requested by
+ * the client
+ */
+static int dispsw_ovl_set_info_lock(struct omap_overlay *ovl,
+				struct omap_overlay_info *info)
+{
+	int rc;
+
+	mutex_lock(&gDev->mtx);
+
+	rc = dispsw_ovl_set_info(ovl, info);
 
 	mutex_unlock(&gDev->mtx);
 
@@ -423,11 +463,16 @@ static void dispsw_store_default_overlay_info(struct dispsw_osi *osi,
 		return;
 
 	for (i = 0; i < gDev->num_mgrs; i++) {
+		/* Make sure the device is a (power-on-time) default device
+		 * for one of managers
+		 */
 		if (gDev->def_dssdev[i] && dssdev != gDev->def_dssdev[i])
 			continue;
 
-		if (def->width == 0)
+		if (def->enabled == false) {
 			osi->ovl->get_overlay_info(osi->ovl, def);
+			def->enabled = true; /* Used to mark as filled */
+		}
 		break;
 	}
 }
@@ -441,7 +486,7 @@ static void dispsw_update_default_overlay_info(struct dispsw_osi *osi,
 	struct omap_overlay_info *def;
 
 	def = &gDev->def_info[osi->idx];
-	if (def->width != 0) {
+	if (def->enabled == true) {
 		def->paddr = info->paddr;
 		def->vaddr = info->vaddr;
 		def->width = info->width;
@@ -458,10 +503,10 @@ static void dispsw_get_default_overlay_info(struct dispsw_osi *osi,
 {
 	struct omap_overlay_info *def;
 
-	/* The info width is used to denote if the structure contains valid
+	/* The info enable is used to denote if the structure contains valid
 	 * stored overlay info
 	 */
-	if (gDev->def_info[osi->idx].width) {
+	if (gDev->def_info[osi->idx].enabled == true) {
 		def = &gDev->def_info[osi->idx];
 
 		info->paddr = def->paddr;
@@ -473,6 +518,8 @@ static void dispsw_get_default_overlay_info(struct dispsw_osi *osi,
 		info->pos_y = def->pos_y;
 		info->out_width = def->out_width;
 		info->out_height = def->out_height;
+		info->rotation = def->rotation;
+		info->rotation_type = def->rotation_type;
 	}
 }
 
@@ -485,20 +532,24 @@ static void dispsw_restore_default_overlay_info(struct dispsw_osi *osi,
 	struct omap_overlay_info info;
 	int i;
 
-	if (gDev->def_info[osi->idx].width) {
+	if (gDev->def_info[osi->idx].enabled == true) {
 		osi->ovl->get_overlay_info(osi->ovl, &info);
 		dispsw_get_default_overlay_info(osi, &info);
-		osi->func(osi->ovl, &info);
+		osi->set_func(osi->ovl, &info);
 
 		if (osi->override)
 			return;
+
+		/* Make sure the rotation gets reset for video planes */
+		if (osi->id != OMAP_DSS_GFX)
+			omapvout_force_rotation(osi->id, 0, 0);
 
 		for (i = 0; i < gDev->num_mgrs; i++) {
 			if (gDev->def_dssdev[i] &&
 					dssdev != gDev->def_dssdev[i])
 				continue;
 
-			gDev->def_info[osi->idx].width = 0;
+			gDev->def_info[osi->idx].enabled = false;
 			break;
 		}
 	}
@@ -510,6 +561,7 @@ static void dispsw_restore_default_overlay_info(struct dispsw_osi *osi,
 static void dispsw_force_ovl_update(struct dispsw_osi *osi)
 {
 	struct omap_overlay_info info;
+	int rot;
 
 	osi->ovl->get_overlay_info(osi->ovl, &info);
 	dispsw_get_default_overlay_info(osi, &info);
@@ -518,9 +570,14 @@ static void dispsw_force_ovl_update(struct dispsw_osi *osi)
 		info.width, info.height, info.screen_width,
 		info.out_width, info.out_height, info.pos_x, info.pos_y);
 
-	if (osi->stored_enable || info.enabled) {
+	if (osi->id != OMAP_DSS_GFX && osi->rotate != DISPSW_ROTATE_IGNORE) {
+		rot = dispsw_convert_to_dss_rotation(osi->rotate);
+		omapvout_force_rotation(osi->id, 1, rot);
+	}
+
+	if (info.enabled) {
 		dispsw_override_ovl(osi, &info);
-		osi->func(osi->ovl, &info);
+		osi->set_func(osi->ovl, &info);
 	}
 
 	DBG("Override/out/%dx%d(%d)-> %dx%d @ %d,%d\n",
@@ -580,12 +637,6 @@ static int dispsw_store_ovl_data(struct dispsw_plane *plane,
 		return -EINVAL;
 	}
 
-	/* For the moment rotation is only supported on the GFX plane */
-	if (plane->rotate != DISPSW_ROTATE_IGNORE && osi->id != OMAP_DSS_GFX) {
-		DBG("invalid rotate (VIDEO)\n");
-		return -EINVAL;
-	}
-
 	if (plane->align < DISPSW_ALIGN_IGNORE ||
 	    plane->align > DISPSW_ALIGN_PERCENT ||
 	    (plane->align == DISPSW_ALIGN_PERCENT &&
@@ -641,6 +692,28 @@ static int dispsw_process_planes(struct dispsw_cmd *cmd,
 	return rc;
 }
 
+static void dispsw_get_planes(struct dispsw_cmd *cmd)
+{
+	int i;
+
+	/* Get the plane data */
+	memset(cmd->planes, 0, sizeof(cmd->planes));
+	for (i = 0; i < gDev->num_ovls; i++) {
+		cmd->planes[i].plane 		= gDev->osi[i].id + 1;
+		cmd->planes[i].override 	= gDev->osi[i].override;
+		cmd->planes[i].persist 		= gDev->osi[i].persist;
+		cmd->planes[i].lock_aspect_ratio =
+						gDev->osi[i].lock_aspect_ratio;
+		cmd->planes[i].rotate 		= gDev->osi[i].rotate;
+		cmd->planes[i].scale 		= gDev->osi[i].scale;
+		cmd->planes[i].v_scale_percent 	= gDev->osi[i].v_scale_percent;
+		cmd->planes[i].h_scale_percent 	= gDev->osi[i].h_scale_percent;
+		cmd->planes[i].align 		= gDev->osi[i].align;
+		cmd->planes[i].v_align_percent 	= gDev->osi[i].v_align_percent;
+		cmd->planes[i].h_align_percent 	= gDev->osi[i].h_align_percent;
+	}
+}
+
 static void dispsw_unset_display(struct omap_dss_device *dssdev,
 				struct omap_overlay_manager *dssmgr)
 {
@@ -663,7 +736,7 @@ static void dispsw_unset_display(struct omap_dss_device *dssdev,
 		gDev->osi[i].force_disabled = true;
 		gDev->osi[i].stored_enable = info.enabled;
 		info.enabled = false;
-		gDev->osi[i].func(ovl, &info);
+		gDev->osi[i].set_func(ovl, &info);
 	}
 	rc = dssmgr->apply(dssmgr);
 	if (rc != 0)
@@ -716,8 +789,12 @@ static int dispsw_set_display(struct dispsw_cmd *cmd,
 		ovl->get_overlay_info(ovl, &info);
 		gDev->osi[i].force_disabled = false;
 		info.enabled = gDev->osi[i].stored_enable;
-		gDev->osi[i].func(ovl, &info);
+		gDev->osi[i].force_cnt = 5;
+		gDev->no_update = true;
+		dispsw_ovl_set_info(ovl, &info);
+		gDev->no_update = false;
 	}
+
 	rc = dssmgr->apply(dssmgr);
 	if (rc != 0)
 		goto exit;
@@ -737,7 +814,6 @@ static int dispsw_switch_to_display(struct dispsw_cmd *cmd,
 
 	if (dssmgr->device) {
 		olddev = dssmgr->device;
-		dssmgr->device->leave_image = cmd->leave_image;
 		dispsw_unset_display(dssmgr->device, dssmgr);
 	}
 
@@ -795,17 +871,44 @@ static struct omap_overlay_manager *dispsw_get_dssmgr(
 	return dssmgr;
 }
 
+static int dispsw_g_cmd(struct dispsw_cmd *disp_cmd)
+{
+	struct dispsw_cmd cmd;
+	int rc = 0;
+
+	rc = copy_from_user(&cmd, disp_cmd, sizeof(cmd));
+	if (rc != 0) {
+		DBG("G_CMD copy from user failed\n");
+		return rc;
+	}
+
+	mutex_lock(&gDev->mtx);
+
+	switch (cmd.type) {
+	case DISPSW_CMD_CONFIG:
+		dispsw_get_planes(&cmd);
+		rc = copy_to_user(disp_cmd, &cmd, sizeof(cmd));
+		break;
+	default:
+		rc = -EINVAL;
+		break;
+	}
+
+	mutex_unlock(&gDev->mtx);
+
+	return rc;
+}
+
 static int dispsw_s_cmd(struct dispsw_cmd *disp_cmd)
 {
 	struct dispsw_cmd cmd;
 	struct omap_dss_device *dssdev;
 	struct omap_overlay_manager *dssmgr;
 	int rc = 0;
-	int force_update = 1;
 
 	rc = copy_from_user(&cmd, disp_cmd, sizeof(cmd));
 	if (rc != 0) {
-		DBG("s_cmd copy from user failed\n");
+		DBG("S_CMD copy from user failed\n");
 		return rc;
 	}
 
@@ -838,67 +941,49 @@ static int dispsw_s_cmd(struct dispsw_cmd *disp_cmd)
 		if (rc == 0)
 			rc = dssmgr->apply(dssmgr);
 		break;
-	case DISPSW_CMD_RESOLUTION:
-		rc = dispsw_mr_set_res(&gDev->mr, dssdev,
-						cmd.resolution_name);
-		force_update = 0;
-		break;
 	default:
 		rc = -EINVAL;
 		break;
 	}
 
-	if (force_update && rc == 0 && dssdev->update) {
+	if (rc == 0 && dssdev->update) {
 		u16 w, h;
 		dssdev->get_resolution(dssdev, &w, &h);
 		dssdev->update(dssdev, 0, 0, w, h);
 	}
 
-	if (dssdev)
-		omap_dss_put_device(dssdev);
+	omap_dss_put_device(dssdev);
 
 	mutex_unlock(&gDev->mtx);
 
 	return rc;
 }
 
-static int dispsw_setgfxposition(struct dispsw_position *p)
+static int dispsw_s_res(struct dispsw_res *disp_res)
 {
-    int i;
-    struct omap_overlay *ovl = NULL;
-	struct omap_overlay_info info;
+	struct dispsw_res res;
+	struct omap_dss_device *dssdev;
 	int rc = 0;
 
-    /* get overlay for GFX */
-    for (i = 0; i < MAX_OVERLAYS; i++) {
-    	if (gDev->osi[i].id == OMAP_DSS_GFX) {
-            ovl = gDev->osi[i].ovl;
-            break;
-        }
-    }
+	rc = copy_from_user(&res, disp_res, sizeof(res));
+	if (rc != 0) {
+		DBG("S_RES copy from user failed\n");
+		return rc;
+	}
 
-    /* set overlay position */
-    if ( (ovl != 0) && (ovl->manager != 0) ) {
-        /* disable */
-        ovl->get_overlay_info(ovl, &info);
-        info.enabled = false;
-        ovl->set_overlay_info(ovl, &info);
-        ovl->manager->apply(ovl->manager);
-        /* positioning */
-        ovl->get_overlay_info(ovl, &info);
-        info.pos_x = p->x;
-        info.pos_y = p->y;
-        ovl->set_overlay_info(ovl, &info);
-        ovl->manager->apply(ovl->manager);
-        /* enable */
-        ovl->get_overlay_info(ovl, &info);
-        info.enabled = true;
-        ovl->set_overlay_info(ovl, &info);
-        ovl->manager->apply(ovl->manager);
-    }
-    else {
-    	rc = -EINVAL;
-    }
+	dssdev = dispsw_get_dssdev(res.name);
+	if (!dssdev) {
+		DBG("invalid device name\n");
+		return -EINVAL;
+	}
+
+	mutex_lock(&gDev->mtx);
+
+	rc = dispsw_mr_set_res(&gDev->mr, dssdev, res.resolution_name);
+
+	omap_dss_put_device(dssdev);
+
+	mutex_unlock(&gDev->mtx);
 
     return rc;
 }
@@ -912,7 +997,7 @@ static int dispsw_queryres(struct dispsw_res_info *res_info)
 
 	rc = copy_from_user(&info, res_info, sizeof(info));
 	if (rc != 0) {
-		DBG("queryres copy from user failed\n");
+		DBG("QUERYRES copy from user failed\n");
 		goto failed;
 	}
 
@@ -924,10 +1009,12 @@ static int dispsw_queryres(struct dispsw_res_info *res_info)
 	}
 
 	res = dispsw_mr_get_idx_res(&gDev->mr, dssdev, info.idx);
-	if (res)
+	if (res) {
 		strncpy(info.resolution_name, res, DISPSW_MAX_NAME_SIZE);
-	else
+		rc = copy_to_user(res_info, &info, sizeof(info));
+	} else {
 		rc = -EINVAL;
+	}
 
 failed:
 	return rc;
@@ -943,7 +1030,7 @@ static int dispsw_querydisp(struct dispsw_info *disp_info)
 
 	rc = copy_from_user(&info, disp_info, sizeof(info));
 	if (rc != 0) {
-		DBG("querydisp copy from user failed\n");
+		DBG("QUERYDISP copy from user failed\n");
 		goto failed;
 	}
 
@@ -987,15 +1074,6 @@ failed:
 }
 
 /*=== Driver Interface Functions =======================================*/
-
-int dispsw_set_supported_mode(int idx, struct dispsw_mr_support *mode)
-{
-	if (gDev == NULL)
-		return -EFAULT;
-
-	return dispsw_mr_set_supported_mode(&gDev->mr, idx, mode);
-}
-EXPORT_SYMBOL(dispsw_set_supported_mode);
 
 static int dispsw_open(struct inode *inode, struct file *file)
 {
@@ -1067,11 +1145,14 @@ static int dispsw_ioctl(struct inode *inode, struct file *file,
 	case DISPSW_QUERYRES:
 		rc = dispsw_queryres((struct dispsw_res_info *) arg);
 		break;
+	case DISPSW_G_CMD:
+		rc = dispsw_g_cmd((struct dispsw_cmd *) arg);
+		break;
 	case DISPSW_S_CMD:
 		rc = dispsw_s_cmd((struct dispsw_cmd *) arg);
 		break;
-	case DISPSW_SETGFXPOSITION:
-		rc = dispsw_setgfxposition((struct dispsw_position *) arg);
+	case DISPSW_S_RES:
+		rc = dispsw_s_res((struct dispsw_res *) arg);
 		break;
 	default:
 		DBG("Invalid ioctl (%x)\n", cmd);
@@ -1093,6 +1174,7 @@ static int __init dispsw_probe(struct platform_device *pdev)
 {
 	struct omap_overlay *ovl;
 	struct omap_overlay_manager *mgr;
+	struct dispsw_board_info *info;
 	int rc = 0;
 	int num_ovls;
 	int num_mgrs;
@@ -1110,7 +1192,7 @@ static int __init dispsw_probe(struct platform_device *pdev)
 
 	gDev->opened = 0;
 
-	gDev->major = register_chrdev(0, DEVICE_SYSFS, &dispsw_fops);
+	gDev->major = register_chrdev(0, DEVICE_NAME, &dispsw_fops);
 	if (gDev->major < 0) {
 		printk(KERN_ERR "failed chrdev register\n");
 		rc = -ENODEV;
@@ -1128,6 +1210,11 @@ static int __init dispsw_probe(struct platform_device *pdev)
 	if (rc != 0) {
 		printk(KERN_DEBUG "failed multi-resolution init\n");
 		goto failed_mr;
+	}
+
+	if (pdev->dev.platform_data) {
+		info = (struct dispsw_board_info *) pdev->dev.platform_data;
+		dispsw_mr_set_board_info(&gDev->mr, info);
 	}
 
 	rc = dispsw_rotate_init(&gDev->rot, MAX_ROTATION_WIDTH,
@@ -1171,11 +1258,11 @@ static int __init dispsw_probe(struct platform_device *pdev)
 		ovl = omap_dss_get_overlay(i);
 		gDev->osi[i].id = ovl->id;
 		gDev->osi[i].idx = i;
-		gDev->osi[i].func = ovl->set_overlay_info;
+		gDev->osi[i].set_func = ovl->set_overlay_info;
 		gDev->osi[i].ovl = ovl;
-		ovl->set_overlay_info = dispsw_ovl_set_info;
+		ovl->set_overlay_info = dispsw_ovl_set_info_lock;
 
-		if (gDev->osi[i].func == NULL) {
+		if (gDev->osi[i].set_func == NULL) {
 			printk(KERN_ERR "No set overlay info function\n");
 			rc = -ENODEV;
 			goto failed;
@@ -1184,7 +1271,7 @@ static int __init dispsw_probe(struct platform_device *pdev)
 	gDev->num_ovls = num_ovls;
 
 	gDev->dev = device_create(gDev->cls, gDev->dev, MKDEV(gDev->major, 0),
-							NULL, DEVICE_SYSFS);
+							NULL, DEVICE_NAME);
 
 	return 0;
 
@@ -1195,7 +1282,7 @@ failed_rotate:
 failed_mr:
 	class_destroy(gDev->cls);
 failed_class:
-	unregister_chrdev(gDev->major, DEVICE_SYSFS);
+	unregister_chrdev(gDev->major, DEVICE_NAME);
 failed_chrdev:
 	kfree(gDev);
 	gDev = NULL;
@@ -1212,21 +1299,16 @@ static int dispsw_remove(struct platform_device *pdev)
 		dispsw_rotate_remove(&dsw->rot);
 		dispsw_mr_remove(&dsw->mr);
 		class_destroy(dsw->cls);
-		unregister_chrdev(dsw->major, DEVICE_SYSFS);
+		unregister_chrdev(dsw->major, DEVICE_NAME);
 		kfree(dsw);
 	}
 
 	return 0;
 }
 
-static struct platform_device dispsw_dev = {
-	.name = DEVICE_NAME,
-	.id = -1,
-};
-
 static struct platform_driver dispsw_driver = {
-	.remove         = dispsw_remove,
-	.driver         = {
+	.remove		= dispsw_remove,
+	.driver		= {
 		.name   = DEVICE_NAME,
 	},
 };
@@ -1237,24 +1319,13 @@ static int __init dispsw_init(void)
 
 	DBG("dispsw_init\n");
 
-	rc = platform_device_register(&dispsw_dev);
-	if (rc != 0) {
-		printk(KERN_ERR "failed dispsw device register %d\n", rc);
-		goto faildev1;
-	}
-
 	rc = platform_driver_probe(&dispsw_driver, dispsw_probe);
 	if (rc != 0) {
 		printk(KERN_ERR "failed dispsw register/probe %d\n", rc);
-		goto faildrv1;
+		return -ENODEV;
 	}
 
 	return 0;
-
-faildrv1:
-	platform_device_unregister(&dispsw_dev);
-faildev1:
-	return -ENODEV;
 }
 
 static void __exit dispsw_exit(void)
@@ -1262,7 +1333,6 @@ static void __exit dispsw_exit(void)
 	DBG("dispsw_exit\n");
 
 	platform_driver_unregister(&dispsw_driver);
-	platform_device_unregister(&dispsw_dev);
 }
 
 module_init(dispsw_init);
