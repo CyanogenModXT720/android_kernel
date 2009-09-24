@@ -24,7 +24,7 @@ PWD=$(shell pwd)
 
 TOPDIR=$(PWD)
 KERNEL_CONF_OUT_DIR= \
-$(PWD)/out/target/product/generic/obj/PARTITIONS/kernel_intermediates
+$(PWD)/out/target/pr/generic/obj/PARTITIONS/kernel_intermediates
 KERNEL_BUILD_DIR=$(KERNEL_CONF_OUT_DIR)/build
 KERNEL_SRC_DIR=$(PWD)/kernel
 KERNEL_CROSS_COMPILE=$(PWD)/prebuilt/linux-x86/toolchain/arm-eabi-4.4.0/bin/arm-eabi-
