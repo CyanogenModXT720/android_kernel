@@ -26,6 +26,8 @@
 #include <asm/prom.h>
 #endif
 
+#define OMAP_TVINT_GPIO 33
+
 extern struct platform_device cpcap_disp_button_led;
 extern struct platform_device cpcap_rgb_led;
 
@@ -364,12 +366,17 @@ static struct cpcap_adc_ato sholest_cpcap_adc_ato = {
 	.atox_ps_factor_out = 0,
 };
 
+struct cpcap_3mm5_tvint sholest_tvint = {
+	.tvint_irq = 0,
+};
+
 static struct cpcap_platform_data sholest_cpcap_data = {
 	.init = sholest_cpcap_spi_init,
 	.regulator_mode_values = cpcap_regulator_mode_values,
 	.regulator_init = cpcap_regulator,
 	.adc_ato = &sholest_cpcap_adc_ato,
 	.barrel_capability = BARREL_CAP_NONE,
+	.tvint = &sholest_tvint,
 };
 
 static struct spi_board_info sholest_spi_board_info[] __initdata = {
@@ -558,8 +565,6 @@ void __init sholest_spi_init(void)
 	}
 	sholest_cpcap_data.init_len = i;
 
-	sholest_cpcap_data.barrel_capability = BARREL_CAP_DETECT_TV_OUT;
-
 	ret = gpio_request(CPCAP_GPIO, "cpcap-irq");
 	if (ret)
 		return;
@@ -572,6 +577,18 @@ void __init sholest_spi_init(void)
 	irq = gpio_to_irq(CPCAP_GPIO);
 	set_irq_type(irq, IRQ_TYPE_EDGE_RISING);
 	omap_cfg_reg(AF26_34XX_GPIO0);
+
+	ret = gpio_request(OMAP_TVINT_GPIO, "cpcap_tv_out");
+	if (ret)
+		return;
+	ret = gpio_direction_input(OMAP_TVINT_GPIO);
+	if (ret) {
+		gpio_free(OMAP_TVINT_GPIO);
+		return;
+	}
+
+	sholest_tvint.tvint_irq = gpio_to_irq(OMAP_TVINT_GPIO);
+	sholest_cpcap_data.barrel_capability = BARREL_CAP_DETECT_TV_OUT;
 
 	sholest_spi_board_info[0].irq = irq;
 	spi_register_board_info(sholest_spi_board_info,
