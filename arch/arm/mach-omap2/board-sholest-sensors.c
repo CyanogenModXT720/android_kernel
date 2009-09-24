@@ -17,11 +17,15 @@
 #include <linux/sfh7743.h>
 #include <linux/bu52014hfv.h>
 #include <linux/lis331dlh.h>
-#include <linux/akm8973.h>
 #include <linux/delay.h>
 #include <linux/regulator/consumer.h>
 #include <linux/vib-gpio.h>
 #include <linux/vib-pwm.h>
+
+#ifdef CONFIG_ARM_OF
+#include <mach/dt_path.h>
+#include <asm/prom.h>
+#endif
 
 #include <mach/mux.h>
 #include <mach/gpio.h>
@@ -58,7 +62,7 @@ static void sholest_vibrator_exit(void)
 
 static int sholest_vibrator_power_on(void)
 {
-	regulator_set_voltage(sholest_vibrator_regulator, 2000000, 2000000);
+	regulator_set_voltage(sholest_vibrator_regulator, 3000000, 3000000);
 	return regulator_enable(sholest_vibrator_regulator);
 }
 
@@ -73,7 +77,7 @@ static struct vib_gpio_platform_data sholest_vib_gpio_data = {
 	.gpio = SHOLEST_VIBRATOR_GPIO,
 	.max_timeout = 15000,
 	.active_low = 0,
-	.initial_vibrate = 500,
+	.initial_vibrate = 0,
 
 	.init = sholest_vibrator_initialization,
 	.exit = sholest_vibrator_exit,
@@ -199,6 +203,51 @@ static struct bu52014hfv_platform_data bu52014hfv_platform_data = {
 	.north_is_desk = 1,
 };
 
+struct lis331dlh_platform_data sholest_lis331dlh_data;
+static void __init sholest_lis331dlh_init(void)
+{
+#ifdef CONFIG_ARM_OF
+	struct device_node *lis331dlh_node;
+	const void *lis331dlh_prop;
+	int len = 0;
+
+	lis331dlh_node = of_find_node_by_path(DT_PATH_LIS331DLH);
+	if (lis331dlh_node) {
+		lis331dlh_prop = of_get_property(lis331dlh_node, \
+						"axis_map_x", &len);
+		if (lis331dlh_prop && len)
+			sholest_lis331dlh_data.axis_map_x = \
+						*(u8 *)lis331dlh_prop;
+		lis331dlh_prop = of_get_property(lis331dlh_node, \
+						"axis_map_y", &len);
+		if (lis331dlh_prop && len)
+			sholest_lis331dlh_data.axis_map_y = \
+						*(u8 *)lis331dlh_prop;
+		lis331dlh_prop = of_get_property(lis331dlh_node, \
+						"axis_map_z", &len);
+		if (lis331dlh_prop && len)
+			sholest_lis331dlh_data.axis_map_z = \
+						*(u8 *)lis331dlh_prop;
+		lis331dlh_prop = of_get_property(lis331dlh_node, \
+						"negate_x", &len);
+		if (lis331dlh_prop && len)
+			sholest_lis331dlh_data.negate_x = \
+						*(u8 *)lis331dlh_prop;
+		lis331dlh_prop = of_get_property(lis331dlh_node, \
+						"negate_x", &len);
+		if (lis331dlh_prop && len)
+			sholest_lis331dlh_data.negate_x = \
+						*(u8 *)lis331dlh_prop;
+		lis331dlh_prop = of_get_property(lis331dlh_node, \
+						"negate_z", &len);
+		if (lis331dlh_prop && len)
+			sholest_lis331dlh_data.negate_z = \
+						*(u8 *)lis331dlh_prop;
+		of_node_put(lis331dlh_node);
+	}
+#endif
+}
+
 static struct regulator *sholest_lis331dlh_regulator;
 static int sholest_lis331dlh_initialization(void)
 {
@@ -243,63 +292,8 @@ struct lis331dlh_platform_data sholest_lis331dlh_data = {
 	.axis_map_z	= 2,
 
 	.negate_x	= 0,
-	.negate_y	= 0,
-	.negate_z	= 0,
-};
-
-static struct regulator *sholest_akm8973_regulator;
-static int sholest_akm8973_initialization(void)
-{
-	struct regulator *reg;
-	reg = regulator_get(NULL, "vhvio");
-	if (IS_ERR(reg))
-		return PTR_ERR(reg);
-	sholest_akm8973_regulator = reg;
-	return 0;
-}
-
-static void sholest_akm8973_exit(void)
-{
-	regulator_put(sholest_akm8973_regulator);
-}
-
-static int sholest_akm8973_power_on(void)
-{
-	int ret;
-
-	ret = regulator_enable(sholest_akm8973_regulator);
-	gpio_set_value(SHOLEST_AKM8973_RESET_GPIO, 0);
-	udelay(10);
-	gpio_set_value(SHOLEST_AKM8973_RESET_GPIO, 1);
-	return ret;
-}
-
-static int sholest_akm8973_power_off(void)
-{
-	if (sholest_akm8973_regulator)
-		return regulator_disable(sholest_akm8973_regulator);
-	return 0;
-}
-
-struct akm8973_platform_data sholest_akm8973_data = {
-	.init = sholest_akm8973_initialization,
-	.exit = sholest_akm8973_exit,
-	.power_on = sholest_akm8973_power_on,
-	.power_off = sholest_akm8973_power_off,
-
-	.min_interval = 27,
-	.poll_interval = 200,
-
-	.cal_min_threshold = 8,
-	.cal_max_threshold = 247,
-
-	.hxda = 132,
-	.hyda = 134,
-	.hzda = 114,
-
-	.orientation = 270,
-	.xy_swap = 1,
-	.z_flip = 1,
+	.negate_y	= 1,
+	.negate_z	= 1,
 };
 
 static void __init sholest_akm8973_init(void)
@@ -366,5 +360,6 @@ void __init sholest_sensors_init(void)
 	sholest_hall_effect_init();
 	sholest_vibrator_init();
 	sholest_akm8973_init();
+	sholest_lis331dlh_init();
 	platform_add_devices(sholest_sensors, ARRAY_SIZE(sholest_sensors));
 }
