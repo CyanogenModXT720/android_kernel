@@ -1783,7 +1783,7 @@ static int audio_ioctl(struct inode *inode, struct file *file,
 		ret = audio_select_speakers(spkr);
 		break;
 	}
-/* FM radio Begin */
+	/* FM radio Begin */
 	case SOUND_MIXER_FMPATH:
 		{
 			int spkr;

@@ -109,6 +109,7 @@ static inline int is_stdac_changed(struct cpcap_audio_state *state,
 	return 0;
 }
 
+
 static inline int is_output_bt_only(struct cpcap_audio_state *state)
 {
 	if (state->codec_primary_speaker == CPCAP_AUDIO_OUT_BT_MONO
