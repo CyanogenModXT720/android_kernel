@@ -26,6 +26,7 @@
 #define LTT_EV_SOFT_IRQ_TASKLET_ACTION LTT_LITE_EV_TASKLET
 #define LTT_EV_SOFT_IRQ_TASKLET_HI_ACTION LTT_LITE_EV_TASKLET_HI
 #define LTT_LITE_MAX_LOG_STRING_SIZE 50
+#define LTT_LITE_TASK_COMM_LEN 32
 #define LTT_LITE_LOG_STRING(var) ltt_lite_log_string(var, sizeof(var) - 1)
 /* Performance tracking commands*/
 #define LL_CMD 'l'
@@ -45,6 +46,8 @@
 				OUT, IN)
 #define ltt_ev_process_exit(DATA1, DATA2) ltt_lite_ev_process_exit()
 #define ltt_lite_ev_process(DATA1, DATA2) ltt_lite_ev_log_process(DATA1, DATA2)
+
+#define CONFIG_LTT_LITE_ANDROID_LOG
 
 extern struct resource ltt_lite_res;
 
@@ -90,10 +93,12 @@ enum {
 	LTT_LITE_EV_TIMER_RUN,
 	/* keep LTT_LITE_EV_REPORT as the last event type */
 	LTT_LITE_EV_REPORT,
+#ifdef CONFIG_LTT_LITE_ANDROID_LOG
 	LTT_LITE_EV_ANDROID_LOG,      /* /dev/log/main  */
 	LTT_LITE_EV_ANDROID_EVENTLOG, /* /dev/log/event */
 	LTT_LITE_EV_ANDROID_RADIO,    /* /dev/log/radio */
 	LTT_LITE_EV_PRINTK,
+#endif
 	/* the item below is used as array length */
 	LTT_LITE_EV_LAST,
 };
@@ -159,10 +164,12 @@ void ltt_lite_printf(char *fmt, ...);
 void ltt_lite_syscall_param(int scno, char *string, int size);
 int ltt_lite_get_ms_time(struct timeval *ktv);
 int ltt_lite_log_string(char *string, int size);
+#ifdef CONFIG_LTT_LITE_ANDROID_LOG
 int  ltt_lite_log_android(const struct iovec *iov,
 						unsigned long nr_segs,
 						char logchar);
 void ltt_lite_log_printk(char *string, int size);
+#endif
 
 #endif /* __KERNEL__ */
 #endif /* _LINUX_TRACE_H */

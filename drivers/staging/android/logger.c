@@ -346,6 +346,7 @@ ssize_t logger_aio_write(struct kiocb *iocb, const struct iovec *iov,
 	ssize_t ret = 0;
 
 #ifdef CONFIG_LTT_LITE
+#ifdef CONFIG_LTT_LITE_ANDROID_LOG
 	/*
 	 * If LTT-lite logging for Android messages is enabled, the LTT Lite
 	 * driver will aggregate the Android log message with LTT-lite kernel
@@ -356,6 +357,7 @@ ssize_t logger_aio_write(struct kiocb *iocb, const struct iovec *iov,
 	 */
 	if (ltt_lite_log_android(iov, nr_segs, log->misc.name[4]))
 		return 0;
+#endif
 #endif
 	now = current_kernel_time();
 
