@@ -17,8 +17,7 @@
 
 #include <mach/display.h>
 #include <mach/vrfb.h>
-
-#include "dispsw.h"
+#include <mach/dispsw.h>
 
 #ifndef __DISPSW_ROTATE_H__
 #define __DISPSW_ROTATE_H__
@@ -61,6 +60,8 @@ struct dispsw_rotate_data {
 	int buf_rot;	/* 1 = 90; 2 = 180; 3 = 270; */
 	enum omap_color_mode buf_fmt;
 	int buf_offset;
+
+	int dss_rot;	/* 1 = 90; 2 = 180; 3 = 270; */
 };
 
 /* Intended to be called at driver init and removal times */

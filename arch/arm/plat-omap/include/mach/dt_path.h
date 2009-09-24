@@ -60,6 +60,9 @@
 #define DT_PROP_TOUCH_KEYMAP	"touch_key_map"
 #define DT_PROP_TOUCH_REVERSE_X "reverse_x"
 
+/* Accelerometer Node */
+#define DT_PATH_LIS331DLH	"/System@0/I2C@0/Accelerometer@0"
+
 /* GPIO Node */
 #define DT_PATH_GPIO        "/System@0/GPIO@0"
 #define DT_PROP_GPIO_MAP    "signalmap"

@@ -21,6 +21,7 @@
 #include <mach/gpio.h>
 #include <mach/mux.h>
 #include <mach/resource.h>
+#include <mach/dispsw.h>
 
 #define SHOLEST_DISPLAY_RESET_GPIO	136
 
@@ -203,6 +204,60 @@ struct platform_device sholest_dss_device = {
 	},
 };
 
+#ifdef CONFIG_PANEL_HDTV
+static struct dispsw_mr_support sholest_dispsw_hdtv_2 = {
+	.dev_name = "hdtv",
+	.res_name = "480p",
+	.dev_timing = {
+		.x_res	= 720,
+		.y_res	= 480,
+		.pixel_clock = 27027,
+	 	.hsw			= 62,
+	 	.hfp			= 16,
+	 	.hbp			= 60,
+	 	.vsw			= 6,
+	 	.vfp			= 9,
+	 	.vbp			= 30,
+	},
+	.panel_config = (OMAP_DSS_LCD_TFT|OMAP_DSS_LCD_IVS|OMAP_DSS_LCD_IHS),
+};
+
+static struct dispsw_mr_support sholest_dispsw_hdtv_4 = {
+	.dev_name = "hdtv",
+	.res_name = "720p",
+	.dev_timing = {
+		.x_res	= 1280,
+		.y_res	= 720,
+		.pixel_clock = 74250,
+		.hsw	= 40,
+		.hfp	= 110,
+		.hbp	= 220,
+		.vsw	= 5,
+		.vfp	= 5,
+		.vbp	= 20,
+	},
+	.panel_config = OMAP_DSS_LCD_TFT,
+};
+
+static struct dispsw_mr_support *sholest_dispsw_resolutions[] = {
+	&sholest_dispsw_hdtv_2,
+	&sholest_dispsw_hdtv_4,
+};
+
+static struct dispsw_board_info sholest_dispsw_data = {
+	.num_resolutions = ARRAY_SIZE(sholest_dispsw_resolutions),
+	.resolutions = sholest_dispsw_resolutions,
+};
+
+static struct platform_device sholest_dispsw_device = {
+	.name = "dispsw",
+	.id = -1,
+	.dev = {
+		.platform_data = &sholest_dispsw_data,
+	},
+};
+#endif
+
 void __init sholest_panel_init(void)
 {
 	int ret;
@@ -224,7 +279,19 @@ void __init sholest_panel_init(void)
 		goto error;
 	}
 
+	gpio_request(SHOLEST_HDMI_MUX_ENABLE_N_GPIO, "HDMI-mux-enable");
+	gpio_direction_output(SHOLEST_HDMI_MUX_ENABLE_N_GPIO, 0);
+	gpio_set_value(SHOLEST_HDMI_MUX_ENABLE_N_GPIO, 0);
+	
+	gpio_request(SHOLEST_HDMI_MUX_SELECT_GPIO, "HDMI-mux-select");
+	gpio_direction_output(SHOLEST_HDMI_MUX_SELECT_GPIO, 0);
+	gpio_set_value(SHOLEST_HDMI_MUX_SELECT_GPIO, 0);
+
 	platform_device_register(&sholest_dss_device);
+#ifdef CONFIG_PANEL_HDTV
+	platform_device_register(&sholest_dispsw_device);
+#endif
+
 	return;
 
 error:

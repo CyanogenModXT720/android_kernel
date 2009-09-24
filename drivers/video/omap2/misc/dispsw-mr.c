@@ -8,41 +8,9 @@
  * kind, whether express or implied.
  */
 
-#include "dispsw.h"
+#include <mach/dispsw.h>
+
 #include "dispsw-mr.h"
-
-/* FIXME: These really should be from the platform */
-static struct dispsw_mr_support hdtv_2 = {
-	.dev_name = "hdtv",
-	.res_name = "480p",
-	.dev_timing = {
-		.x_res	= 720,
-		.y_res	= 480,
-		.pixel_clock = 27026,
-		.hsw	= 6,
-		.hfp	= 4,
-		.hbp	= 128,
-		.vsw	= 4,
-		.vfp	= 4,
-		.vbp	= 37,
-	},
-};
-
-static struct dispsw_mr_support hdtv_4 = {
-	.dev_name = "hdtv",
-	.res_name = "720p",
-	.dev_timing = {
-		.x_res	= 1280,
-		.y_res	= 720,
-		.pixel_clock = 74250,
-		.hsw	= 10,
-		.hfp	= 50,
-		.hbp	= 310,
-		.vsw	= 4,
-		.vfp	= 4,
-		.vbp	= 22,
-	},
-};
 
 /*=== Local Functions ==================================================*/
 
@@ -59,11 +27,6 @@ int dispsw_mr_init(struct dispsw_mr_data *mr)
 
 	mutex_init(&mr->mtx);
 
-	/* FIXME: These should come from the platform */
-	mr->num_entries = 2;
-	mr->res[0] = &hdtv_2;
-	mr->res[1] = &hdtv_4;
-
 	return 0;
 }
 
@@ -72,24 +35,27 @@ void dispsw_mr_remove(struct dispsw_mr_data *mr)
 	/* Nothing to do */
 }
 
-int dispsw_mr_set_supported_mode(struct dispsw_mr_data *mr, int idx,
-				struct dispsw_mr_support *mode)
+void dispsw_mr_set_board_info(struct dispsw_mr_data *mr,
+				struct dispsw_board_info *info)
 {
-	if (mode == NULL)
-		return -EINVAL;
+	int i;
+	int cnt;
 
-	if (idx >= DISPSW_MR_MAX_RES_SUPPORTED)
-		return -EINVAL;
+	if (!mr || !info)
+		return;
 
 	mutex_lock(&mr->mtx);
 
-	mr->res[idx] = mode;
-	if (mr->num_entries < (idx + 1))
-		mr->num_entries = (idx + 1);
+	cnt = info->num_resolutions;
+	if (cnt > DISPSW_MR_MAX_RES_SUPPORTED)
+		cnt = DISPSW_MR_MAX_RES_SUPPORTED;
+
+	for (i = 0; i < cnt; i++) {
+		mr->res[i] = info->resolutions[i];
+		mr->num_entries++;
+	}
 
 	mutex_unlock(&mr->mtx);
-
-	return 0;
 }
 
 bool dispsw_mr_is_multi_res(struct dispsw_mr_data *mr,
@@ -201,6 +167,7 @@ int dispsw_mr_set_res(struct dispsw_mr_data *mr,
 		if (strcmp(name, mr->res[i]->res_name) != 0)
 			continue;
 
+		dssdev->panel.config = mr->res[i]->panel_config;
 		dssdev->set_timings(dssdev, &(mr->res[i]->dev_timing));
 		rc = 0;
 	}
