@@ -701,8 +701,6 @@ static int configure_overlay(enum omap_plane plane)
 	struct manager_cache_data *mc;
 	u16 outw, outh;
 	u16 x, y, w, h;
-	u32 dw = 0;
-	u32 dh = 0;
 	u32 paddr;
 	int r;
 
@@ -1359,11 +1357,6 @@ static void omap_dss_add_overlay_manager(struct omap_overlay_manager *manager)
 	list_add_tail(&manager->list, &manager_list);
 }
 
-static void omap_dss_mgr_enable_alpha_blending(struct omap_overlay_manager *mgr,
-		bool enable)
-{
-	dispc_enable_alpha_blending(mgr->id, enable);
-}
 
 int dss_init_overlay_managers(struct platform_device *pdev)
 {
@@ -1402,8 +1395,6 @@ int dss_init_overlay_managers(struct platform_device *pdev)
 		mgr->set_manager_info = &omap_dss_mgr_set_info;
 		mgr->get_manager_info = &omap_dss_mgr_get_info;
 		mgr->wait_for_go = &dss_mgr_wait_for_go;
-		mgr->enable_alpha_blending =
-			&omap_dss_mgr_enable_alpha_blending,
 
 		mgr->caps = OMAP_DSS_OVL_MGR_CAP_DISPC;
 

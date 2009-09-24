@@ -230,10 +230,6 @@ struct omap_video_timings {
 	u16 y_res;
 	/* Unit: KHz */
 	u32 pixel_clock;
-    /* Unit: kHz */
-    u32 dsi1_pll_fclk;	/* func clk for DISPC from DSI PLL */
-    /* Unit: kHz */
-    u32 dsi2_pll_fclk;	/* func clk for DSI from DSI PLL */
 	/* Unit: pixel clocks */
 	u16 hsw;	/* Horizontal synchronization pulse width */
 	/* Unit: pixel clocks */

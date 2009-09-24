@@ -1783,7 +1783,36 @@ static int audio_ioctl(struct inode *inode, struct file *file,
 		ret = audio_select_speakers(spkr);
 		break;
 	}
+	/* FM radio Begin */
+	case SOUND_MIXER_FMPATH:
+		{
+			int spkr;
+			TRY(copy_from_user(&spkr, (int *)arg, sizeof(int)))
+			AUDIO_LEVEL2_LOG("SOUND_MIXER_FMPATH with spkr = %#x\n",
+				 spkr);
+			cpcap_audio_state.ext_primary_speaker = spkr;
+			/* w21558, test code */
+			/*cpcap_audio_state.output_gain = 15;*/
+			cpcap_audio_set_audio_state(&cpcap_audio_state);
+			break;
+		}
 
+	case SOUND_MIXER_FMON:
+		{
+			AUDIO_LEVEL2_LOG("SOUND_MIXER_FMON\n");
+			cpcap_audio_state.analog_source =
+				CPCAP_AUDIO_ANALOG_SOURCE_STEREO;
+			cpcap_audio_set_audio_state(&cpcap_audio_state);
+			break;
+		}
+
+	case SOUND_MIXER_FMOFF:
+		{
+			AUDIO_LEVEL2_LOG("SOUND_MIXER_FMOFF\n");
+			cpcap_audio_set_audio_state(&cpcap_audio_state);
+			break;
+		}
+/* FM radio End */
 	case SOUND_MIXER_RECSRC:
 	{
 		int mic;

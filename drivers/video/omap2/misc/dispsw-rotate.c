@@ -17,11 +17,11 @@
 #include <mach/display.h>
 #include <mach/dma.h>
 #include <mach/vrfb.h>
+#include <mach/dispsw.h>
 #include <asm/processor.h>
 #include <asm/cacheflush.h>
 #include <asm/page.h>
 
-#include "dispsw.h"
 #include "dispsw-rotate.h"
 
 #define VRFB_TX_TIMEOUT		1000
@@ -83,53 +83,25 @@ static int dispsw_rotate_format_bytespp(enum omap_color_mode fmt)
 	return bpp;
 }
 
-static void dispsw_rotate_calc_offset(struct dispsw_rotate_data *rot)
+static void dispsw_rotate_calc_offset(struct dispsw_rotate_data *rot,
+				int bpp, int ow, int oh)
 {
-	u32 fmt;
-	int bpp;
-	int bpp_mult = 1;
-	u16 ow, oh;
-	int iw, ih;
-	int cx, cy, cw, ch;
-
 	/* It is assumed that the caller has locked the vout mutex */
 
-	fmt = rot->buf_fmt;
-	bpp = dispsw_rotate_format_bytespp(fmt);
-	if (fmt == OMAP_DSS_COLOR_YUV2 || fmt == OMAP_DSS_COLOR_UYVY)
-		bpp_mult = 2;
-
-	iw = rot->buf_w;
-	ih = rot->buf_h;
-	cx = 0;
-	cy = 0;
-	cw = iw;
-	ch = ih;
-
-	ow = iw;
-	oh = ih;
-	omap_vrfb_adjust_size(&ow, &oh, bpp);
-	ow = ow - iw;
-	oh = oh - ih;
-
-	switch (rot->buf_rot) {
+	switch (rot->dss_rot)	{
 	case 1: /* 90 degrees */
-		rot->buf_offset = ((ow + (iw - cx - cw)) * OMAP_VRFB_LINE_LEN
-							* bpp * bpp_mult)
-				+ (cy * bpp * bpp_mult);
+		rot->buf_offset = oh * bpp;
 		break;
 	case 2: /* 180 degrees */
-		rot->buf_offset = ((oh + (ih - cy - ch)) * OMAP_VRFB_LINE_LEN
-							* bpp * bpp_mult)
-				+ ((ow + (iw - cx - cw)) * bpp * bpp_mult);
+		rot->buf_offset = (oh * OMAP_VRFB_LINE_LEN * bpp)
+				+ (ow * bpp);
 		break;
 	case 3: /* 270 degrees */
-		rot->buf_offset = (cx * OMAP_VRFB_LINE_LEN * bpp * bpp_mult)
-				+ ((oh + (ih - cy - ch)) * bpp * bpp_mult);
+		rot->buf_offset = (ow * OMAP_VRFB_LINE_LEN * bpp);
 		break;
 	default:
 	case 0: /* 0 degrees */
-		rot->buf_offset = ((cy * iw) + (cx)) * bpp;
+		rot->buf_offset = 0;
 		break;
 	}
 }
@@ -241,7 +213,6 @@ static void dispsw_rotate_release_vrfb(struct dispsw_rotate_data *rot)
 static unsigned long dispsw_rotate_perform_vrfb_dma(
 			struct dispsw_rotate_data *rot,	unsigned long paddr)
 {
-	int rotate;
 	struct dispsw_vrfb *vrfb;
 	unsigned long src_paddr;
 	unsigned long dst_paddr;
@@ -261,9 +232,12 @@ static unsigned long dispsw_rotate_perform_vrfb_dma(
 		fmt = rot->buf_fmt;
 
 		omap_vrfb_setup(&vrfb->ctx[0], vrfb->paddr[0],
-						w, h, fmt, rot->buf_rot);
+						w, h, fmt, rot->dss_rot);
 		omap_vrfb_setup(&vrfb->ctx[1], vrfb->paddr[1],
-						w, h, fmt, rot->buf_rot);
+						w, h, fmt, rot->dss_rot);
+
+		dispsw_rotate_calc_offset(rot, vrfb->ctx[0].bytespp, 
+				vrfb->ctx[0].xoffset, vrfb->ctx[0].yoffset);
 
 		bytespp = dispsw_rotate_format_bytespp(fmt);
 		vrfb->en = (w * bytespp) / 4; /* 32 bit ES */
@@ -276,15 +250,11 @@ static unsigned long dispsw_rotate_perform_vrfb_dma(
 			vrfb->dst_fi = (OMAP_VRFB_LINE_LEN * bytespp)
 							- (vrfb->en * 4) + 1;
 		}
-
-		dispsw_rotate_calc_offset(rot);
 	}
 
-	rotate = (rot->buf_rot == 1) ? 3 :
-		 (rot->buf_rot == 3) ? 1 : rot->buf_rot;
-
 	src_paddr = paddr;
-	dst_paddr = vrfb->ctx[vrfb->next].paddr[rotate];
+	dst_paddr = vrfb->ctx[vrfb->next].paddr[rot->dss_rot]
+						+ rot->buf_offset;
 
 	omap_set_dma_transfer_params(vrfb->dma_ch, OMAP_DMA_DATA_TYPE_S32,
 				vrfb->en, vrfb->fn, OMAP_DMA_SYNC_ELEMENT,
@@ -380,6 +350,18 @@ int dispsw_rotate_set_params(struct dispsw_rotate_data *rot, int width,
 	rot->buf_stride = stride;
 	rot->buf_rot = rotate;
 	rot->buf_fmt = format;
+
+	switch (rot->buf_rot) {
+	case 1:
+		rot->dss_rot = 3;
+		break;
+	case 3:
+		rot->dss_rot = 1;
+		break;
+	default:
+		rot->dss_rot = rot->buf_rot;
+		break;
+	}
 
 exit:
 	mutex_unlock(&rot->mtx);

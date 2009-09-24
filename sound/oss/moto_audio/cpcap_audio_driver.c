@@ -109,6 +109,7 @@ static inline int is_stdac_changed(struct cpcap_audio_state *state,
 	return 0;
 }
 
+
 static inline int is_output_bt_only(struct cpcap_audio_state *state)
 {
 	if (state->codec_primary_speaker == CPCAP_AUDIO_OUT_BT_MONO
@@ -451,8 +452,12 @@ static bool cpcap_audio_set_bits_for_speaker(int speaker, int balance,
 			(*message) |= CPCAP_BIT_HS_L_EN;
 		if (balance != CPCAP_AUDIO_BALANCE_L_ONLY)
 			(*message) |= CPCAP_BIT_HS_R_EN;
-		break;
 
+/*##w21558, On first boot with headset,
+we can't hear sound via headset. this bit field should be setted */
+		(*message) |= CPCAP_BIT_ST_HS_CP_EN;
+		break;
+/* */
 	case CPCAP_AUDIO_OUT_LOUDSPEAKER:
 		(*message) |= CPCAP_BIT_A2_LDSP_L_EN;
 		break;

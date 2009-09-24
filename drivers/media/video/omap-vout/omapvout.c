@@ -70,7 +70,79 @@ const static struct v4l2_fmtdesc omap2_formats[] = {
 
 #define NUM_OUTPUT_FORMATS (sizeof(omap2_formats)/sizeof(omap2_formats[0]))
 
+/* This is a way to allow other components to force a desired rotation.
+ * This will take effect when streaming is next enabled.
+ */
+struct omapvout_override {
+	int dirty;
+	
+	int force_rotation_dirty;
+	int force_rotation_enable;
+	int forced_rotation;
+	int client_rotation;
+};
+ 
+#define NUM_PLANES (3)
+static struct omapvout_override gOverride[NUM_PLANES];
+
+
+int omapvout_force_rotation(int plane, int enable, int rotation)
+{
+	struct omapvout_override *ovr;
+	int en;
+
+	if (plane < 0 || plane >= NUM_PLANES) {
+		DBG("Invalid plane (%d)\n", plane);
+		return -1;
+	}
+
+	ovr = &gOverride[plane];
+	if (ovr->force_rotation_enable == enable &&
+	    ovr->forced_rotation == rotation)
+	   	return 0;
+
+	en = (enable) ? 1 : 0;
+	if (en) {
+		if (rotation < 0 || rotation > 3) {
+			DBG("Invalid rotation (%d)\n", rotation);
+			return -1;
+		}
+
+		ovr->forced_rotation = rotation;
+	}
+
+	ovr->force_rotation_dirty = 1;
+	ovr->force_rotation_enable = en;
+	ovr->dirty = 1;
+	
+	return 0;
+}
+EXPORT_SYMBOL(omapvout_force_rotation);
+
 /*=== Local Functions ==================================================*/
+
+static void omapvout_chk_overrides(struct omapvout_device *vout)
+{
+	struct omapvout_override *ovr;
+
+	ovr = &gOverride[vout->id];
+
+	if (!ovr->dirty)
+		return;
+
+	if (ovr->force_rotation_dirty) {
+		ovr->force_rotation_dirty = 0;
+		if (ovr->force_rotation_enable) {
+			ovr->client_rotation = vout->rotation;
+			vout->rotation = ovr->forced_rotation;
+		} else {
+			vout->rotation = ovr->client_rotation;
+		}
+printk("omapvout_chk_overrides/%d/%d/%d\n", ovr->force_rotation_enable,ovr->forced_rotation,ovr->client_rotation);
+	}
+
+	ovr->dirty = 0;
+}
 
 static int omapvout_crop_to_size(struct v4l2_rect *rect, int w, int h)
 {
@@ -297,6 +369,8 @@ static int omapvout_open(struct file *file)
 	vout->bg_color = 0;
 
 	vout->mmap_cnt = 0;
+
+	omapvout_chk_overrides(vout);
 
 	mutex_unlock(&vout->mtx);
 
@@ -564,6 +638,8 @@ static int omapvout_vidioc_s_fmt_vid_overlay(struct file *file, void *priv,
 		goto failed;
 	}
 
+	omapvout_chk_overrides(vout);
+
 	rc = omapvout_try_window(vout, win);
 	if (rc != 0)
 		goto failed;
@@ -601,6 +677,8 @@ static int omapvout_vidioc_s_fmt_vid_out(struct file *file, void *priv,
 		rc = -EBUSY;
 		goto failed;
 	}
+
+	omapvout_chk_overrides(vout);
 
 	rc = omapvout_try_pixel_format(vout, pix);
 	if (rc != 0)
@@ -700,6 +778,8 @@ static int omapvout_vidioc_s_crop(struct file *file, void *priv,
 		goto failed;
 	}
 
+	omapvout_chk_overrides(vout);
+
 	rc = omapvout_try_crop(vout, &rect);
 	if (rc != 0)
 		goto failed;
@@ -783,6 +863,10 @@ static int omapvout_vidioc_qbuf(struct file *file, void *priv,
 
 	DBG("Q'ing Frame %d\n", b->index);
 
+	mutex_lock(&vout->mtx);
+	omapvout_chk_overrides(vout);
+	mutex_unlock(&vout->mtx);
+
 	return videobuf_qbuf(&vout->queue, b);
 }
 
@@ -815,6 +899,8 @@ static int omapvout_vidioc_streamon(struct file *file, void *priv,
 	}
 
 	mutex_lock(&vout->mtx);
+
+	omapvout_chk_overrides(vout);
 
 	/* Not sure how else to do this.  We can't truly validate the
 	 * configuration until all of the pieces have been provided, like
@@ -942,6 +1028,12 @@ static int omapvout_vidioc_s_ctrl(struct file *file, void *priv,
 		} else {
 			DBG("Invalid rotation %d\n", v);
 			rc = -ERANGE;
+		}
+		
+		if (rc == 0 && gOverride[vout->id].force_rotation_enable) {
+			gOverride[vout->id].client_rotation = vout->rotation;
+			vout->rotation = gOverride[vout->id].forced_rotation;
+			gOverride[vout->id].force_rotation_dirty = 0;
 		}
 		break;
 	case V4L2_CID_BG_COLOR:
@@ -1118,6 +1210,8 @@ static int __init omapvout_probe_device(struct omap_vout_config *cfg,
 	}
 
 	vout->id = plane;
+
+	memset(gOverride, 0, sizeof(gOverride));
 
 	return 0;
 

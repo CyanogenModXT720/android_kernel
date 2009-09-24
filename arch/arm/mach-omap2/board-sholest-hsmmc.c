@@ -184,16 +184,6 @@ static int hsmmc_set_power(struct device *dev, int slot, int power_on,
 	return 0;
 }
 
-#ifdef CONFIG_MMC_TST
-int ex_hsmmc_set_power(struct device *dev, int slot, int power_on,
-						int vdd)
-{
-    hsmmc_set_power(dev, slot, power_on, vdd);
-    return 0;
-}
-EXPORT_SYMBOL(ex_hsmmc_set_power);
-#endif
-
 #if defined(CONFIG_OMAP_HS_MMC2)
 static int hsmmc2_late_init(struct device *dev)
 {
