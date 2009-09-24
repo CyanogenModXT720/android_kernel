@@ -42,13 +42,13 @@ struct axis_map {
 	int	y;
 };
 
-static struct axis_map axis_map[] = {
-	{ BTN_TOUCH, ABS_X, ABS_Y },
-	{ BTN_2, ABS_HAT0X, ABS_HAT0Y },
-	{ BTN_3, ABS_HAT1X, ABS_HAT1Y },
-	{ BTN_4, ABS_HAT2X, ABS_HAT2Y },
+struct coordinate_map {
+	int x_data;
+	int y_data;
+	int z_data;
+	int w_data;
+	int down;
 };
-#define MAX_FINGERS			ARRAY_SIZE(axis_map)
 
 #define _BITMAP_LEN			BITS_TO_LONGS(QTM_OBP_MAX_OBJECT_NUM)
 struct qtouch_ts_data {
@@ -57,13 +57,15 @@ struct qtouch_ts_data {
 	struct work_struct		init_work;
 	struct work_struct		work;
 	struct qtouch_ts_platform_data	*pdata;
+	struct coordinate_map		finger_data[10];
 	struct early_suspend		early_suspend;
 
 	struct qtm_object		obj_tbl[QTM_OBP_MAX_OBJECT_NUM];
 	unsigned long			obj_map[_BITMAP_LEN];
 
 	uint32_t			last_keystate;
-	uint32_t			down_mask;
+	uint16_t			eeprom_checksum;
+	uint8_t			    checksum_cnt;
 
 	/* Note: The message buffer is reused for reading different messages.
 	 * MUST enforce that there is no concurrent access to msg_buf. */
@@ -475,16 +477,26 @@ static int do_cmd_proc_msg(struct qtouch_ts_data *ts, struct qtm_object *obj,
 {
 	struct qtm_cmd_proc_msg *msg = _msg;
 	int ret = 0;
+	int hw_reset = 0;
 
 	if (msg->status & QTM_CMD_PROC_STATUS_RESET) {
 		if (qtouch_tsdebug)
-			pr_info("%s:EEPROM checksum is 0x%X\n",
-				__func__, msg->checksum);
-		if (msg->checksum != ts->pdata->nv_checksum) {
-			ret = qtouch_hw_init(ts);
-			if (ret != 0)
-				pr_err("%s:Cannot initialize the touch IC\n",
-				       __func__);
+			pr_info("%s:EEPROM checksum is 0x%X cnt %i\n",
+				__func__, msg->checksum, ts->checksum_cnt);
+		if (msg->checksum != ts->eeprom_checksum) {
+			if (ts->checksum_cnt > 2) {
+				/* Assume the checksum is what it is, cannot
+				disable the touch screen so set the checksum*/
+				ts->eeprom_checksum = msg->checksum;
+				ts->checksum_cnt = 0;
+			} else {
+				ret = qtouch_hw_init(ts);
+				if (ret != 0)
+					pr_err("%s:Cannot init the touch IC\n",
+						   __func__);
+				hw_reset = 1;
+				ts->checksum_cnt++;
+			}
 		}
 		pr_info("%s: Reset done.\n", __func__);
 	}
@@ -501,7 +513,7 @@ static int do_cmd_proc_msg(struct qtouch_ts_data *ts, struct qtm_object *obj,
 	if (msg->status & QTM_CMD_PROC_STATUS_CFGERR) {
 		ret = qtouch_hw_init(ts);
 		if (ret != 0)
-			pr_err("%s:Cannot initialize the touch IC\n",
+			pr_err("%s:Cannot init the touch IC\n",
 			       __func__);
 
 		pr_err("%s: Configuration error\n", __func__);
@@ -510,15 +522,27 @@ static int do_cmd_proc_msg(struct qtouch_ts_data *ts, struct qtm_object *obj,
 	the checksum to change during operation so we need to
 	reprogram the EEPROM and reset the IC */
 	if (ts->pdata->flags & QTOUCH_EEPROM_CHECKSUM) {
-		if (msg->checksum != ts->pdata->nv_checksum) {
+		if (msg->checksum != ts->eeprom_checksum) {
 			if (qtouch_tsdebug)
-				pr_info("%s:EEPROM checksum is 0x%X\n",
-					__func__, msg->checksum);
-			ret = qtouch_hw_init(ts);
-			if (ret != 0)
-				pr_err("%s:Cannot initialize the touch IC\n",
-					   __func__);
-			qtouch_force_reset(ts, 0);
+				pr_info("%s:EEPROM checksum is 0x%X cnt %i \
+						hw_reset %i\n",
+					__func__, msg->checksum,
+					ts->checksum_cnt, hw_reset);
+			if (ts->checksum_cnt > 2) {
+				/* Assume the checksum is what it is, cannot
+				disable the touch screen so set the checksum*/
+				ts->eeprom_checksum = msg->checksum;
+				ts->checksum_cnt = 0;
+			} else {
+				if (!hw_reset) {
+					ret = qtouch_hw_init(ts);
+					if (ret != 0)
+						pr_err("%s:Cannot init the touch IC\n",
+						__func__);
+					qtouch_force_reset(ts, 0);
+					ts->checksum_cnt++;
+				}
+			}
 		}
 	}
 	return ret;
@@ -529,6 +553,7 @@ static int do_touch_multi_msg(struct qtouch_ts_data *ts, struct qtm_object *obj,
 			      void *_msg)
 {
 	struct qtm_touch_multi_msg *msg = _msg;
+	int i;
 	int x;
 	int y;
 	int pressure;
@@ -537,7 +562,7 @@ static int do_touch_multi_msg(struct qtouch_ts_data *ts, struct qtm_object *obj,
 	int down;
 
 	finger = msg->report_id - obj->report_id_min;
-	if (finger >= MAX_FINGERS)
+	if (finger >= ts->pdata->multi_touch_cfg.num_touch)
 		return 0;
 
 	/* x/y are 10bit values, with bottom 2 bits inside the xypos_lsb */
@@ -555,19 +580,38 @@ static int do_touch_multi_msg(struct qtouch_ts_data *ts, struct qtm_object *obj,
 
 	down = !(msg->status & QTM_TOUCH_MULTI_STATUS_RELEASE);
 
-	input_report_abs(ts->input_dev, axis_map[finger].x, x);
-	input_report_abs(ts->input_dev, axis_map[finger].y, y);
+	ts->finger_data[finger].x_data = x;
+	ts->finger_data[finger].y_data = y;
+	ts->finger_data[finger].w_data = width;
 
-	if (finger == 0) {
-		input_report_abs(ts->input_dev, ABS_PRESSURE, pressure);
-		input_report_abs(ts->input_dev, ABS_TOOL_WIDTH, width);
+	/* The touch IC will not give back a pressure of zero
+	   so send a 0 when a liftoff is produced */
+	if (!down) {
+		ts->finger_data[finger].z_data = 0;
+	} else {
+		ts->finger_data[finger].z_data = pressure;
+		ts->finger_data[finger].down = down;
 	}
 
-	ts->down_mask &= ~(1 << finger);
-	ts->down_mask |= (down << finger);
-
-	input_report_key(ts->input_dev, axis_map[finger].key, down);
+	for (i = 0; i < ts->pdata->multi_touch_cfg.num_touch; i++) {
+		if (ts->finger_data[finger].down == 0)
+			continue;
+		input_report_abs(ts->input_dev, ABS_MT_TOUCH_MAJOR,
+				 ts->finger_data[i].z_data);
+		input_report_abs(ts->input_dev, ABS_MT_WIDTH_MAJOR,
+				 ts->finger_data[i].w_data);
+		input_report_abs(ts->input_dev, ABS_MT_POSITION_X,
+				 ts->finger_data[i].x_data);
+		input_report_abs(ts->input_dev, ABS_MT_POSITION_Y,
+				 ts->finger_data[i].y_data);
+		input_mt_sync(ts->input_dev);
+	}
 	input_sync(ts->input_dev);
+
+	if (!down) {
+		memset(&ts->finger_data[finger], 0,
+		sizeof(struct coordinate_map));
+	}
 
 	return 0;
 }
@@ -784,6 +828,8 @@ static int qtouch_process_info_block(struct qtouch_ts_data *ts)
 		qtm_info.version, qtm_info.build, qtm_info.matrix_x_size,
 		qtm_info.matrix_y_size, qtm_info.num_objs);
 
+	ts->eeprom_checksum = ts->pdata->nv_checksum;
+
 	return 0;
 
 err_no_checksum:
@@ -831,6 +877,7 @@ static int qtouch_ts_probe(struct i2c_client *client,
 	ts->pdata = pdata;
 	ts->client = client;
 	i2c_set_clientdata(client, ts);
+	ts->checksum_cnt = 0;
 
 	ts->input_dev = input_allocate_device();
 	if (ts->input_dev == NULL) {
@@ -882,23 +929,46 @@ static int qtouch_ts_probe(struct i2c_client *client,
 	obj = find_obj(ts, QTM_OBJ_TOUCH_MULTI);
 	if (obj && obj->entry.num_inst > 0) {
 		set_bit(EV_ABS, ts->input_dev->evbit);
-		for (i = 0; i < obj->entry.num_rids && i < MAX_FINGERS; ++i) {
-			input_set_capability(ts->input_dev, EV_KEY,
-					     axis_map[i].key);
-			input_set_abs_params(ts->input_dev, axis_map[i].x,
-					     pdata->abs_min_x, pdata->abs_max_x,
-					     pdata->fuzz_x, 0);
-			input_set_abs_params(ts->input_dev, axis_map[i].y,
-					     pdata->abs_min_y, pdata->abs_max_y,
-					     pdata->fuzz_y, 0);
-		}
+		/* Legacy support for testing only */
+		input_set_capability(ts->input_dev, EV_KEY, BTN_TOUCH);
+		input_set_capability(ts->input_dev, EV_KEY, BTN_2);
+		input_set_abs_params(ts->input_dev, ABS_X,
+			pdata->abs_min_x, pdata->abs_max_x,
+			pdata->fuzz_x, 0);
+		input_set_abs_params(ts->input_dev, ABS_HAT0X,
+			pdata->abs_min_x, pdata->abs_max_x,
+			pdata->fuzz_x, 0);
+		input_set_abs_params(ts->input_dev, ABS_Y,
+			pdata->abs_min_y, pdata->abs_max_y,
+			pdata->fuzz_y, 0);
+		input_set_abs_params(ts->input_dev, ABS_HAT0Y,
+			pdata->abs_min_x, pdata->abs_max_x,
+			pdata->fuzz_x, 0);
 		input_set_abs_params(ts->input_dev, ABS_PRESSURE,
-				     pdata->abs_min_p, pdata->abs_max_p,
-				     pdata->fuzz_p, 0);
+			pdata->abs_min_p, pdata->abs_max_p,
+			pdata->fuzz_p, 0);
 		input_set_abs_params(ts->input_dev, ABS_TOOL_WIDTH,
-				     pdata->abs_min_w, pdata->abs_max_w,
-				     pdata->fuzz_w, 0);
+			pdata->abs_min_w, pdata->abs_max_w,
+			pdata->fuzz_w, 0);
+
+		/* multi touch */
+		input_set_abs_params(ts->input_dev, ABS_MT_POSITION_X,
+			pdata->abs_min_x, pdata->abs_max_x,
+			pdata->fuzz_x, 0);
+		input_set_abs_params(ts->input_dev, ABS_MT_POSITION_Y,
+			pdata->abs_min_y, pdata->abs_max_y,
+			pdata->fuzz_y, 0);
+		input_set_abs_params(ts->input_dev, ABS_MT_TOUCH_MAJOR,
+			pdata->abs_min_p, pdata->abs_max_p,
+			pdata->fuzz_p, 0);
+		input_set_abs_params(ts->input_dev, ABS_MT_WIDTH_MAJOR,
+			pdata->abs_min_w, pdata->abs_max_w,
+			pdata->fuzz_w, 0);
 	}
+
+	memset(&ts->finger_data[0], 0,
+		(sizeof(struct coordinate_map) *
+		ts->pdata->multi_touch_cfg.num_touch));
 
 	err = input_register_device(ts->input_dev);
 	if (err != 0) {
@@ -989,17 +1059,21 @@ static int qtouch_ts_resume(struct i2c_client *client)
 		pr_info("%s: Resuming\n", __func__);
 
 	/* If we were suspended while a touch was happening
-	we need to tell the upper layers so they do not hang
-	waiting on the liftoff that will not come. */
-	for (i = 0; i < MAX_FINGERS; i++) {
-		if (ts->down_mask & (1 << i)) {
-			if (qtouch_tsdebug & 4)
-				pr_info("%s: Producing liftoff for %i key %i\n",
-				__func__, i, axis_map[i].key);
-			input_report_key(ts->input_dev, axis_map[i].key, 0);
-			input_sync(ts->input_dev);
-		}
+	   we need to tell the upper layers so they do not hang
+	   waiting on the liftoff that will not come. */
+	for (i = 0; i < ts->pdata->multi_touch_cfg.num_touch; i++) {
+		if (qtouch_tsdebug & 4)
+			pr_info("%s: Finger %i down state %i\n",
+				__func__, i, ts->finger_data[i].down);
+		if (ts->finger_data[i].down == 0)
+			continue;
+		input_report_abs(ts->input_dev, ABS_MT_TOUCH_MAJOR, 0);
+		input_mt_sync(ts->input_dev);
+		memset(&ts->finger_data[i], 0,
+		sizeof(struct coordinate_map));
 	}
+	input_sync(ts->input_dev);
+
 	ret = qtouch_power_config(ts, 1);
 	if (ret < 0) {
 		pr_err("%s: Cannot write power config\n", __func__);

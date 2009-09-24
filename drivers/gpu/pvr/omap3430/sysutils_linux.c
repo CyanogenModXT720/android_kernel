@@ -29,11 +29,13 @@
 #include <linux/err.h>
 #include <linux/hardirq.h>
 #include <linux/spinlock.h>
+#include <linux/platform_device.h>
 #include <asm/bug.h>
 
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,26))
 #include <linux/semaphore.h>
 #include <mach/resource.h>
+#include <mach/omap-pm.h>
 #else 
 #include <asm/semaphore.h>
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,22))	
@@ -58,55 +60,22 @@
 #define SGX_PARENT_CLOCK "core_ck"
 #endif
 
+
+extern struct platform_device *gpsPVRLDMDev;
+
 #if !defined(PDUMP) && !defined(NO_HARDWARE)
-static IMG_BOOL PowerLockWrappedOnCPU(SYS_SPECIFIC_DATA *psSysSpecData)
-{
-	IMG_INT iCPU;
-	IMG_BOOL bLocked = IMG_FALSE;
-
-	if (!in_interrupt())
-	{
-		iCPU = get_cpu();
-		bLocked = (iCPU == atomic_read(&psSysSpecData->sPowerLockCPU));
-
-		put_cpu();
-	}
-
-	return bLocked;
-}
 
 static IMG_VOID PowerLockWrap(SYS_SPECIFIC_DATA *psSysSpecData)
 {
-	IMG_INT iCPU;
-
-	if (!in_interrupt())
-	{
-		
-		iCPU = get_cpu();
-
-		
-		PVR_ASSERT(iCPU != -1);
-
-		PVR_ASSERT(!PowerLockWrappedOnCPU(psSysSpecData));
-
-		spin_lock(&psSysSpecData->sPowerLock);
-
-		atomic_set(&psSysSpecData->sPowerLockCPU, iCPU);
-	}
+	BUG_ON(in_atomic());
+	mutex_lock(&psSysSpecData->sPowerLock);
 }
 
 static IMG_VOID PowerLockUnwrap(SYS_SPECIFIC_DATA *psSysSpecData)
 {
-	if (!in_interrupt())
-	{
-		PVR_ASSERT(PowerLockWrappedOnCPU(psSysSpecData));
+	BUG_ON(in_atomic());
+	mutex_unlock(&psSysSpecData->sPowerLock);
 
-		atomic_set(&psSysSpecData->sPowerLockCPU, -1);
-
-		spin_unlock(&psSysSpecData->sPowerLock);
-
-		put_cpu();
-	}
 }
 
 PVRSRV_ERROR SysPowerLockWrap(SYS_DATA *psSysData)
@@ -139,7 +108,7 @@ static IMG_VOID NotifyLock(SYS_SPECIFIC_DATA *psSysSpecData)
 {
 	IMG_INT iCPU;
 
-	BUG_ON(in_interrupt());
+	BUG_ON(in_atomic());
 
 	
 	iCPU = get_cpu();
@@ -190,14 +159,9 @@ IMG_VOID SysPowerLockUnwrap(SYS_DATA unref__ *psSysData)
 
 IMG_BOOL WrapSystemPowerChange(SYS_SPECIFIC_DATA *psSysSpecData)
 {
-	IMG_BOOL bPowerLock = PowerLockWrappedOnCPU(psSysSpecData);
+	PowerLockUnwrap(psSysSpecData);
 
-	if (bPowerLock)
-	{
-		PowerLockUnwrap(psSysSpecData);
-	}
-
-	return bPowerLock;
+	return IMG_TRUE;
 }
 
 IMG_VOID UnwrapSystemPowerChange(SYS_SPECIFIC_DATA *psSysSpecData)
@@ -465,7 +429,9 @@ PVRSRV_ERROR EnableSGXClocks(SYS_DATA *psSysData)
 	}
 #endif
 
-	
+	/* pin the memory bus bw to the highest value */
+	omap_pm_set_min_bus_tput(&gpsPVRLDMDev->dev, OCP_INITIATOR_AGENT, 400000);
+
 	atomic_set(&psSysSpecData->sSGXClocksEnabled, 1);
 
 #else	
@@ -479,8 +445,11 @@ IMG_VOID DisableSGXClocks(SYS_DATA *psSysData)
 {
 #if !defined(NO_HARDWARE)
 	SYS_SPECIFIC_DATA *psSysSpecData = (SYS_SPECIFIC_DATA *) psSysData->pvSysSpecificData;
+	int res;
 
-	
+	/* unpin the memory bus */
+	omap_pm_set_min_bus_tput(&gpsPVRLDMDev->dev, OCP_INITIATOR_AGENT, 0);
+
 	if (atomic_read(&psSysSpecData->sSGXClocksEnabled) == 0)
 	{
 		return;
@@ -529,8 +498,7 @@ PVRSRV_ERROR EnableSystemClocks(SYS_DATA *psSysData)
 	{
 		bPowerLock = IMG_FALSE;
 
-		spin_lock_init(&psSysSpecData->sPowerLock);
-		atomic_set(&psSysSpecData->sPowerLockCPU, -1);
+		mutex_init(&psSysSpecData->sPowerLock);
 		spin_lock_init(&psSysSpecData->sNotifyLock);
 		atomic_set(&psSysSpecData->sNotifyLockCPU, -1);
 
@@ -580,12 +548,8 @@ PVRSRV_ERROR EnableSystemClocks(SYS_DATA *psSysData)
 	}
 	else
 	{
-		
-		bPowerLock = PowerLockWrappedOnCPU(psSysSpecData);
-		if (bPowerLock)
-		{
-			PowerLockUnwrap(psSysSpecData);
-		}
+		bPowerLock = IMG_TRUE;
+		PowerLockUnwrap(psSysSpecData);
 	}
 //FIXME: Comment this out until the support is there in the latest BSP with 2.6.29 kernel support
 #if 0 && (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,22))
@@ -753,7 +717,6 @@ Exit:
 IMG_VOID DisableSystemClocks(SYS_DATA *psSysData)
 {
 	SYS_SPECIFIC_DATA *psSysSpecData = (SYS_SPECIFIC_DATA *) psSysData->pvSysSpecificData;
-	IMG_BOOL bPowerLock;
 #if defined(DEBUG) || defined(TIMING)
 	IMG_CPU_PHYADDR TimerRegPhysBase;
 	IMG_HANDLE hTimerDisable;
@@ -765,12 +728,7 @@ IMG_VOID DisableSystemClocks(SYS_DATA *psSysData)
 	
 	DisableSGXClocks(psSysData);
 
-	bPowerLock = PowerLockWrappedOnCPU(psSysSpecData);
-	if (bPowerLock)
-	{
-		
-		PowerLockUnwrap(psSysSpecData);
-	}
+	PowerLockUnwrap(psSysSpecData);
 
 #if defined(PDUMP) && !defined(NO_HARDWARE) && (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,22))
 	{
@@ -826,8 +784,5 @@ IMG_VOID DisableSystemClocks(SYS_DATA *psSysData)
 	constraint_put(psSysSpecData->pVdd2Handle);
 
 #endif	
-	if (bPowerLock)
-	{
-		PowerLockWrap(psSysSpecData);
-	}
+	PowerLockWrap(psSysSpecData);
 }

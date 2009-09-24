@@ -38,7 +38,9 @@
 #include <linux/mutex.h>
 #include <linux/workqueue.h>
 #include <linux/console.h>
+#include <linux/preempt.h>
 
+extern void ram_console_enable_console(int);
 
 struct panic_header {
 	u32 magic;
@@ -53,6 +55,8 @@ struct panic_header {
 	u32 threads_offset;
 	u32 threads_length;
 };
+
+#define CHECK_BB	0
 
 struct apanic_data {
 	struct mtd_info		*mtd;
@@ -330,7 +334,7 @@ static int apanic_writeflashpage(struct mtd_info *mtd, loff_t to,
 {
 	int rc;
 	size_t wlen;
-	int panic = in_interrupt();
+	int panic = in_interrupt() | in_atomic();
 
 	if (panic && !mtd->panic_write) {
 		printk(KERN_EMERG "%s: No panic_write available\n", __func__);
@@ -385,6 +389,7 @@ static int apanic_write_console(struct mtd_info *mtd, unsigned int off)
 			break;
 		if (rc != mtd->writesize)
 			memset(ctx->bounce + rc, 0, mtd->writesize - rc);
+#if CHECK_BB
 check_badblock:
 		rc = mtd->block_isbad(mtd, off);
 		if (rc < 0) {
@@ -405,6 +410,7 @@ check_badblock:
 			}
 			goto check_badblock;
 		}
+#endif
 
 		rc2 = apanic_writeflashpage(mtd, off, ctx->bounce);
 		if (rc2 <= 0) {
@@ -439,6 +445,10 @@ static int apanic(struct notifier_block *this, unsigned long event,
 	if (in_panic)
 		return NOTIFY_DONE;
 	in_panic = 1;
+#ifdef CONFIG_PREEMPT
+	/* Ensure that cond_resched() won't try to preempt anybody */
+	add_preempt_count(PREEMPT_ACTIVE);
+#endif
 
 	if (!ctx->mtd)
 		goto out;
@@ -489,6 +499,8 @@ static int apanic(struct notifier_block *this, unsigned long event,
 	if (!threads_offset)
 		threads_offset = ctx->mtd->writesize;
 
+	ram_console_enable_console(0);
+
 	log_buf_clear();
 
 	for (con = console_drivers; con; con = con->next) {
@@ -526,6 +538,9 @@ static int apanic(struct notifier_block *this, unsigned long event,
 	printk(KERN_EMERG "apanic: Panic dump sucessfully written to flash\n");
 
  out:
+#ifdef CONFIG_PREEMPT
+	sub_preempt_count(PREEMPT_ACTIVE);
+#endif
 	in_panic = 0;
 	return NOTIFY_DONE;
 }
