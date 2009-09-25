@@ -332,6 +332,9 @@ static void ipc_events(void)
 #endif
 	if ((usb_ipc_data_param.read_urb.status < 0) &&
 	    (usb_ipc_data_param.read_urb.actual_length != 0)) {
+		printk(KERN_INFO "incomplete IN transfer status%d length%d\n",
+			usb_ipc_data_param.read_urb.status,
+			usb_ipc_data_param.read_urb.actual_length);
 		if (usb_ipc_data_param.truncated_buf == NULL)
 			usb_ipc_data_param.truncated_buf = (char *)
 				usb_ipc_data_param.read_urb.transfer_buffer;
@@ -354,6 +357,8 @@ static void ipc_events(void)
 	} else {
 		if ((usb_ipc_data_param.truncated_buf != NULL) &&
 		    (usb_ipc_data_param.truncated_size != 0)) {
+			printk(KERN_INFO "trying to re-assemble \
+				incomplete IN transfer\n");
 			usb_ipc_data_param.read_urb.transfer_buffer =
 				usb_ipc_data_param.truncated_buf;
 			usb_ipc_data_param.read_urb.actual_length +=
