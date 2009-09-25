@@ -22,6 +22,7 @@
 #define LD_MSG_IND_DEV "notification-led"
 #define LD_DISP_BUTTON_DEV "button-backlight"
 #define LD_KPAD_DEV "keyboard-backlight"
+#define LD_AF_LED_DEV "af-led"
 #define LD_SUPPLY "sw5"
 
 #define LD_MSG_IND_ON			0x1
