@@ -41,14 +41,10 @@
 #include <linux/clk.h>
 #include <linux/bitops.h>
 #include <linux/io.h>
-#include <linux/poll.h>
-#include <linux/sched.h>
-#include <linux/jiffies.h>
-#include <linux/time.h>
-#include <linux/ktime.h>
+#include <linux/uaccess.h>
+#ifdef CONFIG_OMAP_WATCHDOG_AUTOPET
 #include <linux/timer.h>
-#include <linux/list.h>
-#include <linux/wait.h>
+#endif
 #include <mach/hardware.h>
 #include <mach/prcm.h>
 
@@ -72,61 +68,12 @@ struct omap_wdt_dev {
 	struct clk      *mpu_wdt_fck;
 	struct resource *mem;
 	struct miscdevice omap_wdt_miscdev;
-	struct hrtimer alarm_timer;
-	unsigned long period_time;
-	unsigned long timer_base_time;
-	wait_queue_head_t wq;
-	int status;
 #ifdef CONFIG_OMAP_WATCHDOG_AUTOPET
 	struct timer_list autopet_timer;
+	unsigned long  jiffies_start;
+	unsigned long  jiffies_exp;
 #endif
 };
-
-inline void start_timer(struct omap_wdt_dev *wdev)
-{
-	unsigned long clock;
-	unsigned long cur_time;
-	long delta;
-	unsigned long k32_max;
-	unsigned long long temp;
-	ktime_t timer_t;
-
-	k32_max = (unsigned long)0x07CFFFFF;
-	clock = wdev->timer_base_time + wdev->period_time;
-	temp = sched_clock();
-	do_div(temp , NSEC_PER_MSEC);
-	cur_time = (unsigned long)temp;
-	if (cur_time >= wdev->timer_base_time) {
-		delta = clock - cur_time;
-	} else {
-		printk(KERN_INFO "32KHz clock roll-over \n");
-		clock = wdev->period_time - (k32_max - wdev->timer_base_time);
-		delta = (long)(clock - cur_time);
-
-	}
-	if (delta < 0)
-		delta = 0;
-
-	timer_t = ktime_set((long)delta/MSEC_PER_SEC,
-				(long)delta%MSEC_PER_SEC*NSEC_PER_MSEC);
-	hrtimer_start(&(wdev->alarm_timer), timer_t, HRTIMER_MODE_REL);
-}
-
-static enum hrtimer_restart watchdog_hrtimer_callback(struct hrtimer *timer)
-{
-	struct omap_wdt_dev *wdev = container_of(timer,
-				struct omap_wdt_dev, alarm_timer);
-
-	printk(KERN_INFO "watchdog callback base=%lu period=%lu now=%llu ns\n",
-			wdev->timer_base_time,
-			wdev->period_time,
-			sched_clock());
-
-	wdev->status = 1;
-	wake_up_interruptible(&(wdev->wq));
-
-	return HRTIMER_NORESTART;
-}
 
 static void omap_wdt_ping(struct omap_wdt_dev *wdev)
 {
@@ -144,6 +91,23 @@ static void omap_wdt_ping(struct omap_wdt_dev *wdev)
 		cpu_relax();
 	/* reloaded WCRR from WLDR */
 }
+
+static int omap_wdt_panic(struct notifier_block *this, unsigned long event,
+				void *ptr)
+{
+	struct omap_wdt_dev *wdev = platform_get_drvdata(omap_wdt_dev);
+	unsigned long flags;
+
+	spin_lock_irqsave(&wdt_lock, flags);
+
+	if (wdev && wdev->omap_wdt_users > 0)
+		omap_wdt_ping(wdev);
+
+	spin_unlock_irqrestore(&wdt_lock, flags);
+
+	return NOTIFY_DONE;
+}
+
 
 static void omap_wdt_enable(struct omap_wdt_dev *wdev)
 {
@@ -277,19 +241,6 @@ static ssize_t omap_wdt_write(struct file *file, const char __user *data,
 	return len;
 }
 
-static unsigned int omap_wdt_poll(struct file *file, poll_table *wait)
-{
-	struct omap_wdt_dev *wdev = file->private_data;
-	int ret = 0;
-
-	poll_wait(file, &(wdev->wq), wait);
-
-	if (wdev->status)
-		ret = POLLIN;
-
-	return ret;
-}
-
 static long omap_wdt_ioctl(struct file *file, unsigned int cmd,
 						unsigned long arg)
 {
@@ -300,7 +251,6 @@ static long omap_wdt_ioctl(struct file *file, unsigned int cmd,
 		.options = WDIOF_SETTIMEOUT,
 		.firmware_version = 0,
 	};
-	unsigned long long cur_time;
 
 	wdev = file->private_data;
 
@@ -337,27 +287,6 @@ static long omap_wdt_ioctl(struct file *file, unsigned int cmd,
 		/* Fall */
 	case WDIOC_GETTIMEOUT:
 		return put_user(timer_margin, (int __user *)arg);
-	case WDIOC_STARTTIMER:
-		if (arg <= 0) {
-			printk(KERN_ERR "Timer Value is not valid.\n");
-			return -EINVAL;
-		}
-
-		hrtimer_cancel(&(wdev->alarm_timer));
-		cur_time = sched_clock();
-		do_div(cur_time, NSEC_PER_MSEC);
-		wdev->timer_base_time = (unsigned long) cur_time;
-		wdev->period_time = ((unsigned long)arg)*1000;
-		wdev->status = 0;
-		start_timer(wdev);
-
-		spin_lock(&wdt_lock);
-		omap_wdt_ping(wdev);
-		spin_unlock(&wdt_lock);
-		printk(KERN_INFO "watchdog Wake up timer has been set base=%lu period=%lu \n",
-						wdev->timer_base_time,
-						wdev->period_time);
-		return 0;
 	default:
 		return -ENOTTY;
 	}
@@ -369,7 +298,6 @@ static const struct file_operations omap_wdt_fops = {
 	.unlocked_ioctl = omap_wdt_ioctl,
 	.open = omap_wdt_open,
 	.release = omap_wdt_release,
-	.poll = omap_wdt_poll,
 };
 
 #ifdef CONFIG_OMAP_WATCHDOG_AUTOPET
@@ -380,7 +308,9 @@ static void autopet_handler(unsigned long data)
 	spin_lock(&wdt_lock);
 	omap_wdt_ping(wdev);
 	spin_unlock(&wdt_lock);
-	mod_timer(&wdev->autopet_timer, jiffies + (HZ * TIMER_AUTOPET_FREQ));
+	wdev->jiffies_start = jiffies;
+	wdev->jiffies_exp = (HZ * TIMER_AUTOPET_FREQ);
+	mod_timer(&wdev->autopet_timer, jiffies + wdev->jiffies_exp);
 }
 #endif
 
@@ -462,11 +392,6 @@ static int __init omap_wdt_probe(struct platform_device *pdev)
 		goto err_ioremap;
 	}
 
-	wdev->status = 0;
-	hrtimer_init(&(wdev->alarm_timer), CLOCK_MONOTONIC, HRTIMER_MODE_REL);
-	wdev->alarm_timer.function = watchdog_hrtimer_callback;
-	init_waitqueue_head(&(wdev->wq));
-
 	platform_set_drvdata(pdev, wdev);
 
 	omap_wdt_disable(wdev);
@@ -496,7 +421,9 @@ static int __init omap_wdt_probe(struct platform_device *pdev)
 	test_and_set_bit(1, (unsigned long *)&(wdev->omap_wdt_users));
 	omap_wdt_startclocks(wdev);
 	omap_wdt_set_timeout(wdev);
-	mod_timer(&wdev->autopet_timer, jiffies + (HZ * TIMER_AUTOPET_FREQ));
+	wdev->jiffies_start = jiffies;
+	wdev->jiffies_exp = (HZ * TIMER_AUTOPET_FREQ);
+	mod_timer(&wdev->autopet_timer, jiffies + wdev->jiffies_exp);
 	omap_wdt_enable(wdev);
 	pr_info("Watchdog auto-pet enabled at %d sec intervals\n",
 		TIMER_AUTOPET_FREQ);
@@ -582,10 +509,11 @@ static int omap_wdt_suspend(struct platform_device *pdev, pm_message_t state)
 {
 	struct omap_wdt_dev *wdev = platform_get_drvdata(pdev);
 
-	if (wdev->omap_wdt_users)
+	if (wdev->omap_wdt_users) {
+		wdev->jiffies_exp -= jiffies - wdev->jiffies_start;
+		del_timer(&wdev->autopet_timer);
 		omap_wdt_disable(wdev);
-
-	hrtimer_cancel(&(wdev->alarm_timer));
+	}
 
 	return 0;
 }
@@ -595,9 +523,9 @@ static int omap_wdt_resume(struct platform_device *pdev)
 	struct omap_wdt_dev *wdev = platform_get_drvdata(pdev);
 
 	if (wdev->omap_wdt_users) {
+		mod_timer(&wdev->autopet_timer, jiffies + wdev->jiffies_exp);
 		omap_wdt_enable(wdev);
 	}
-	start_timer(wdev);
 
 	return 0;
 }
@@ -619,6 +547,10 @@ static struct platform_driver omap_wdt_driver = {
 	},
 };
 
+static struct notifier_block panic_blk = {
+	.notifier_call  = omap_wdt_panic,
+};
+
 static int __init omap_wdt_init(void)
 {
 	spin_lock_init(&wdt_lock);
@@ -632,6 +564,14 @@ static void __exit omap_wdt_exit(void)
 
 module_init(omap_wdt_init);
 module_exit(omap_wdt_exit);
+
+static int __init omap_wdt_panic_init(void)
+{
+	atomic_notifier_chain_register(&panic_notifier_list, &panic_blk);
+	return 0;
+}
+
+arch_initcall(omap_wdt_panic_init);
 
 MODULE_AUTHOR("George G. Davis");
 MODULE_LICENSE("GPL");
