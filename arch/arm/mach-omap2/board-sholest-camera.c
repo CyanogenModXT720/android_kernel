@@ -56,15 +56,6 @@
 #include <../drivers/media/video/hplens.h>
 #endif
 
-#define CAM_IOMUX_SAFE_MODE (OMAP343X_PADCONF_PULL_UP | \
-				OMAP343X_PADCONF_PUD_ENABLED | \
-				OMAP343X_PADCONF_MUXMODE7)
-#define CAM_IOMUX_FUNC_MODE (OMAP343X_PADCONF_INPUT_ENABLED | \
-				OMAP343X_PADCONF_MUXMODE0)
-
-static void sholest_camera_lines_safe_mode(void);
-static void sholest_camera_lines_func_mode(void);
-
 #ifdef CONFIG_VIDEO_OMAP3_HPLENS
 static int hplens_power_set(enum v4l2_power power)
 {
@@ -324,7 +315,6 @@ static int ov8810_sensor_power_set(struct device *dev, enum v4l2_power power)
 	case V4L2_POWER_OFF:
 		/* Release pm constraints */
 		omap_pm_set_min_bus_tput(dev, OCP_INITIATOR_AGENT, 0);
-#if 0
 		/* Turn off power */
 		if (regulator_vcam != NULL) {
 			regulator_disable(regulator_vcam);
@@ -346,10 +336,11 @@ static int ov8810_sensor_power_set(struct device *dev, enum v4l2_power power)
 					"initialized\n", __func__);
 			return -EIO;
 		}
-		/* Power Down Sequence */
-		gpio_set_value(GPIO_OV8810_STANDBY, 1);
-#endif
-		gpio_set_value(GPIO_OV8810_STANDBY, 1);
+		gpio_set_value(GPIO_OV8810_RESET, 0);
+		gpio_set_value(GPIO_OV8810_STANDBY, 0);
+
+		gpio_free(GPIO_OV8810_RESET);
+		gpio_free(GPIO_OV8810_STANDBY);
 	break;
 	case V4L2_POWER_ON:
 	        /* Set min throughput to:
@@ -461,9 +452,7 @@ static int ov8810_sensor_power_set(struct device *dev, enum v4l2_power power)
 			mdelay(10);
 
                      /*Set regulator turned on.*/
-			regulator_poweron = 1;
-		}else {
-			gpio_set_value(GPIO_OV8810_STANDBY, 0);
+			//regulator_poweron = 1;
 		}
 		break;
 	case V4L2_POWER_STANDBY:
@@ -483,63 +472,24 @@ struct ov8810_platform_data sholest_ov8810_platform_data = {
 
 #endif  /* #ifdef CONFIG_VIDEO_OV8810*/
 
-/* We can't change the IOMUX config after bootup
- * with the current pad configuration architecture,
- * the next two functions are hack to configure the
- * camera pads at runtime to save power in standby */
-
-void sholest_camera_lines_safe_mode(void)
-{
-	omap_ctrl_writew(CAM_IOMUX_SAFE_MODE, 0x0122);
-	omap_ctrl_writew(CAM_IOMUX_SAFE_MODE, 0x0124);
-	omap_ctrl_writew(CAM_IOMUX_SAFE_MODE, 0x0126);
-	omap_ctrl_writew(CAM_IOMUX_SAFE_MODE, 0x0128);
-}
-
-void sholest_camera_lines_func_mode(void)
-{
-	omap_ctrl_writew(CAM_IOMUX_FUNC_MODE, 0x0122);
-	omap_ctrl_writew(CAM_IOMUX_FUNC_MODE, 0x0124);
-	omap_ctrl_writew(CAM_IOMUX_FUNC_MODE, 0x0126);
-	omap_ctrl_writew(CAM_IOMUX_FUNC_MODE, 0x0128);
-}
-
 void __init sholest_camera_init(void)
 {
-#if defined (CONFIG_VIDEO_MIPI_INTERFACE)
     omap_cfg_reg(C25_34XX_CAM_XCLKA);
 	omap_cfg_reg(C23_34XX_CAM_FLD);
+#if !defined (CONFIG_VIDEO_MIPI_INTERFACE)
+	omap_cfg_reg(AG17_34XX_CAM_D0);
+	omap_cfg_reg(AH17_34XX_CAM_D1);
+#endif
     omap_cfg_reg(H2_34XX_GPMC_A3);
+
+#if defined (CONFIG_VIDEO_MIPI_INTERFACE)
     omap_cfg_reg(AG17_34XX_CAM_D0);
 	omap_cfg_reg(AH17_34XX_CAM_D1);
 	omap_cfg_reg(AD17_34XX_CSI2_DX0);
 	omap_cfg_reg(AE18_34XX_CSI2_DY0);
 	omap_cfg_reg(AD16_34XX_CSI2_DX1);
 	omap_cfg_reg(AE17_34XX_CSI2_DY1);
-#else
-	omap_cfg_reg(A24_34XX_CAM_HS);
-	omap_cfg_reg(A23_34XX_CAM_VS);
-	omap_cfg_reg(C25_34XX_CAM_XCLKA);
-	omap_cfg_reg(C27_34XX_CAM_PCLK);
-	omap_cfg_reg(C23_34XX_CAM_FLD);
-	omap_cfg_reg(AG17_34XX_CAM_D0);
-	omap_cfg_reg(AH17_34XX_CAM_D1);
-	omap_cfg_reg(B24_34XX_CAM_D2);
-	omap_cfg_reg(C24_34XX_CAM_D3);
-	omap_cfg_reg(D24_34XX_CAM_D4);
-	omap_cfg_reg(A25_34XX_CAM_D5);
-	omap_cfg_reg(K28_34XX_CAM_D6);
-	omap_cfg_reg(L28_34XX_CAM_D7);
-	omap_cfg_reg(K27_34XX_CAM_D8);
-	omap_cfg_reg(L27_34XX_CAM_D9);
-	omap_cfg_reg(B25_34XX_CAM_D10);
-	omap_cfg_reg(C26_34XX_CAM_D11);
-	omap_cfg_reg(B23_34XX_CAM_WEN);
-	omap_cfg_reg(D25_34XX_CAM_STROBE);
-	omap_cfg_reg(K8_34XX_GPMC_WAIT2);
 #endif
-
-	sholest_camera_lines_safe_mode();
 
     /*Initialize F_RDY_N pin for Xenon flash control.*/
     if (gpio_request(36, "xenon flash ready pin") != 0)
