@@ -3058,6 +3058,8 @@ static int fsg_function_set_alt(struct usb_function *f,
 {
 	struct fsg_dev	*fsg = func_to_dev(f);
 	DBG(fsg, "fsg_function_set_alt intf: %d alt: %d\n", intf, alt);
+	printk(KERN_DEBUG "fsg_function_set_alt intf: %d alt: %d\n",
+	intf, alt);
 	fsg->new_config = 1;
 	do_set_interface(fsg, 0);
 	raise_exception(fsg, FSG_STATE_CONFIG_CHANGE);
@@ -3072,6 +3074,7 @@ static void fsg_function_disable(struct usb_function *f)
 {
 	struct fsg_dev	*fsg = func_to_dev(f);
 	DBG(fsg, "fsg_function_disable\n");
+	printk(KERN_DEBUG "fsg_function_disable\n");
 	if (fsg->new_config)
 		do_set_interface(fsg, -1);
 	fsg->new_config = 0;
@@ -3187,6 +3190,7 @@ struct usb_function *msc_function_enable(int enable, int id)
 {
 	struct fsg_dev	*fsg = the_fsg;
 
+	printk(KERN_DEBUG "%s enable = %d id=%d\n", __func__, enable, id);
 	if (fsg) {
 		DBG(fsg, "msc_function_enable(%s)\n",
 			enable ? "true" : "false");

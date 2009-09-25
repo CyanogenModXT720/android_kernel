@@ -725,7 +725,9 @@ asmlinkage int vprintk(const char *fmt, va_list args)
 	printascii(printk_buf);
 #endif
 #ifdef CONFIG_LTT_LITE
+#ifdef CONFIG_LTT_LITE_ANDROID_LOG
 	ltt_lite_log_printk(printk_buf, printed_len);
+#endif
 #endif
 
 	/*

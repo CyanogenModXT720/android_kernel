@@ -317,21 +317,15 @@ static void usbnet_if_config(struct work_struct *work)
 	set_fs(get_ds());
 	err = devinet_ioctl(dev_net(g_usbnet_ifc.usbnet_config_dev),
 			  SIOCSIFADDR, &ifr);
-	if (err)
-		printk(KERN_INFO "%s: Error in SIOCSIFADDR\n", __func__);
 
 	sin->sin_addr.s_addr = g_usbnet_ifc.subnet_mask;
 	err = devinet_ioctl(dev_net(g_usbnet_ifc.usbnet_config_dev),
 			  SIOCSIFNETMASK, &ifr);
-	if (err)
-		printk(KERN_INFO "%s: Error in SIOCSIFNETMASK\n", __func__);
 
 	sin->sin_addr.s_addr =
 	    g_usbnet_ifc.ip_addr | ~(g_usbnet_ifc.subnet_mask);
 	err = devinet_ioctl(dev_net(g_usbnet_ifc.usbnet_config_dev),
 			  SIOCSIFBRDADDR, &ifr);
-	if (err)
-		printk(KERN_INFO "%s: Error in SIOCSIFBRDADDR\n", __func__);
 
 	memset(&ifr, 0, sizeof(ifr));
 	strncpy(ifr.ifr_ifrn.ifrn_name, "usb0", strlen("usb0") + 1);
@@ -339,8 +333,6 @@ static void usbnet_if_config(struct work_struct *work)
 			g_usbnet_ifc.iff_flag);
 	err = devinet_ioctl(dev_net(g_usbnet_ifc.usbnet_config_dev),
 			  SIOCSIFFLAGS, &ifr);
-	if (err)
-		printk(KERN_INFO "%s: Error in SIOCSIFFLAGS\n", __func__);
 
 	set_fs(saved_fs);
 
@@ -395,6 +387,7 @@ static void usbnet_unbind(struct usb_configuration *c, struct usb_function *f)
 	/* Free EP0 Request */
 	usb_ep_disable(g_usbnet_context->bulk_in);
 	usb_ep_disable(g_usbnet_context->bulk_out);
+	usb_ep_disable(g_usbnet_context->intr_out);
 
 	/* Free BULK OUT Requests */
 	for (;;) {
@@ -661,6 +654,8 @@ static void do_set_config(u16 new_config)
 			usb_ep_disable(g_usbnet_context->bulk_in);
 		if (g_usbnet_context->bulk_out)
 			usb_ep_disable(g_usbnet_context->bulk_out);
+		if (g_usbnet_context->intr_out)
+			usb_ep_disable(g_usbnet_context->intr_out);
 	}
 }
 
@@ -810,6 +805,7 @@ err1:
 #ifdef CONFIG_USB_MOT_ANDROID
 struct usb_function *usbnet_function_enable(int enable, int id)
 {
+	printk(KERN_DEBUG "%s enable=%d id = %d\n", __func__, enable, id);
 	if (g_usbnet_context) {
 		if (enable) {
 			g_usbnet_device.function.descriptors = fs_function;

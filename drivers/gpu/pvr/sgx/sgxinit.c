@@ -363,9 +363,8 @@ PVRSRV_ERROR SGXInitialise(PVRSRV_SGXDEV_INFO	*psDevInfo,
 					   PVRSRV_USSE_EDM_INIT_COMPLETE,
 					   PVRSRV_USSE_EDM_INIT_COMPLETE,
 					   MAX_HW_TIME_US/WAIT_TRY_COUNT,
-					   1000) != PVRSRV_OK)
+					   10000) != PVRSRV_OK)
 	{
-		PVR_DPF((PVR_DBG_ERROR, "SGXInitialise: Wait for uKernel initialisation failed"));
 		PVR_DBG_BREAK;
 		return PVRSRV_ERROR_RETRY;
 	}

@@ -868,6 +868,8 @@ int __init acm_function_add(struct usb_composite_dev *cdev,
 
 struct usb_function *acm_function_enable(int enable, int id)
 {
+	printk(KERN_DEBUG "%s(): enable=%d id=%d\n", __func__, enable, id);
+
 	if (g_acm_dev) {
 		if (enable) {
 			acm_control_interface_desc.bInterfaceNumber = id;

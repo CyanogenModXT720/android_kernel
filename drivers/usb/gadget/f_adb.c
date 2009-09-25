@@ -731,6 +731,7 @@ struct usb_function *adb_function_enable_id(int enable, int id)
 {
 	struct adb_dev *dev = _adb_dev;
 
+	printk(KERN_DEBUG "%s enable=%d id =%d\n", __func__, enable, id);
 	if (dev) {
 		if (enable) {
 			dev->function.descriptors = fs_adb_descs;
