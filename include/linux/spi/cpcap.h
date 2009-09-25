@@ -485,6 +485,10 @@ struct cpcap_adc_ato {
 	unsigned short atox_ps_factor_out;
 };
 
+struct cpcap_3mm5_tvint {
+	int tvint_irq;
+};
+
 struct cpcap_platform_data {
 	struct cpcap_spi_init_data *init;
 	int init_len;
@@ -492,6 +496,7 @@ struct cpcap_platform_data {
 	struct regulator_init_data *regulator_init;
 	struct cpcap_adc_ato *adc_ato;
 	int barrel_capability;
+	struct cpcap_3mm5_tvint *tvint;
 };
 
 struct cpcap_batt_data {
@@ -691,6 +696,10 @@ unsigned char cpcap_uc_status(struct cpcap_device *cpcap,
 void enable_tta(void);
 void disable_tta(void);
 #endif
+
+void venc_tv_disconnect(void);
+
+int venc_tv_connect(void);
 
 #endif /* __KERNEL__ */
 #endif /* _LINUX_SPI_CPCAP_H */

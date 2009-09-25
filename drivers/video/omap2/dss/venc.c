@@ -38,9 +38,9 @@
 #include <mach/cpu.h>
 
 #include "dss.h"
-#include <mach/prcm.h>
 
-#ifdef CONFIG_TVDET_SHOLEST
+#ifdef CONFIG_TVOUT_SHOLEST
+#include <mach/prcm.h>
 #include <mach/gpio.h>
 #define OMAP_TVINT_GPIO 33
 #endif
@@ -226,7 +226,7 @@ static const struct venc_config venc_config_ntsc_trm = {
 
 	.tvdetgp_int_start_stop_x		= 0x00140001,
 	.tvdetgp_int_start_stop_y		= 0x00010001,
-#ifdef CONFIG_TVDET_SHOLEST
+#ifdef CONFIG_TVOUT_SHOLEST
 	.gen_ctrl				= 0x00F90001,
 #else
 	.gen_ctrl				= 0x00F90000,
@@ -234,7 +234,7 @@ static const struct venc_config venc_config_ntsc_trm = {
 };
 
 static const struct venc_config venc_config_pal_bdghi = {
-#ifdef CONFIG_TVDET_SHOLEST
+#ifdef CONFIG_TVOUT_SHOLEST
 	.f_control				= 0x0,
 	.vidout_ctrl				= 0x1,
 	.sync_ctrl				= 0x00001040,
@@ -250,7 +250,7 @@ static const struct venc_config venc_config_pal_bdghi = {
 	.htrigger_vtrigger			= 0,
 	.tvdetgp_int_start_stop_x		= 0x00140001,
 	.tvdetgp_int_start_stop_y		= 0x00010001,
-#ifdef CONFIG_TVDET_SHOLEST
+#ifdef CONFIG_TVOUT_SHOLEST
 	.gen_ctrl				= 0x00FB0001,
 #else
 	.gen_ctrl				= 0x00FB0000,
@@ -801,7 +801,7 @@ int venc_init_display(struct omap_dss_device *dssdev)
 	return 0;
 }
 
-#ifdef CONFIG_TVDET_SHOLEST
+#ifdef CONFIG_TVOUT_SHOLEST
 int venc_tv_connect(void)
 {
     int tv_int;
