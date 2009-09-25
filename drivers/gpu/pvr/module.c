@@ -204,13 +204,7 @@ LDM_DEV *gpsPVRLDMDev;
 #if defined(PVR_LDM_PLATFORM_MODULE)
 static IMG_VOID PVRSRVDeviceRelease(struct device *device);
 
-static struct platform_device powervr_device = {
-	.name			= DEVNAME,
-	.id				= -1,
-	.dev 			= {
-		.release		= PVRSRVDeviceRelease
-	}
-};
+
 #endif 
 
 #if defined(PVR_LDM_PLATFORM_MODULE)
@@ -262,7 +256,7 @@ static IMG_VOID __devexit PVRSRVDriverRemove(LDM_DEV *pDevice)
 #if defined(DEBUG) && defined(PVR_MANUAL_POWER_CONTROL)
 		if (gPVRPowerLevel != 0)
 		{
-			if (PVRSRVSetPowerStateKM(PVRSRV_POWER_STATE_D0) == PVRSRV_OK)
+			if (PVRSRVSetPowerStateKM(PVRSRV_SYS_POWER_STATE_D0) == PVRSRV_OK)
 			{
 				gPVRPowerLevel = 0;
 			}
@@ -293,7 +287,7 @@ static IMG_VOID PVRSRVDriverShutdown(LDM_DEV *pDevice)
 {
 	PVR_TRACE(("PVRSRVDriverShutdown(pDevice=%p)", pDevice));
 
-	(IMG_VOID) PVRSRVSetPowerStateKM(PVRSRV_POWER_STATE_D3);
+	(IMG_VOID) PVRSRVSetPowerStateKM(PVRSRV_SYS_POWER_STATE_D3);
 }
 
 
@@ -316,7 +310,7 @@ static IMG_INT PVRSRVDriverSuspend(LDM_DEV *pDevice, pm_message_t state)
 #if !(defined(DEBUG) && defined(PVR_MANUAL_POWER_CONTROL) && !defined(SUPPORT_DRI_DRM))
 	PVR_TRACE(( "PVRSRVDriverSuspend(pDevice=%p)", pDevice));
 
-	if (PVRSRVSetPowerStateKM(PVRSRV_POWER_STATE_D3) != PVRSRV_OK)
+	if (PVRSRVSetPowerStateKM(PVRSRV_SYS_POWER_STATE_D3) != PVRSRV_OK)
 	{
 		return -EINVAL;
 	}
@@ -334,7 +328,7 @@ static IMG_INT PVRSRVDriverResume(LDM_DEV *pDevice)
 #if !(defined(DEBUG) && defined(PVR_MANUAL_POWER_CONTROL) && !defined(SUPPORT_DRI_DRM))
 	PVR_TRACE(("PVRSRVDriverResume(pDevice=%p)", pDevice));
 
-	if (PVRSRVSetPowerStateKM(PVRSRV_POWER_STATE_D0) != PVRSRV_OK)
+	if (PVRSRVSetPowerStateKM(PVRSRV_SYS_POWER_STATE_D0) != PVRSRV_OK)
 	{
 		return -EINVAL;
 	}
@@ -365,14 +359,14 @@ IMG_INT PVRProcSetPowerLevel(struct file *file, const IMG_CHAR *buffer, IMG_UINT
 		{
 			if (PVRPowerLevel != 0)
 			{
-				if (PVRSRVSetPowerStateKM(PVRSRV_POWER_STATE_D3) != PVRSRV_OK)
+				if (PVRSRVSetPowerStateKM(PVRSRV_SYS_POWER_STATE_D3) != PVRSRV_OK)
 				{
 					return -EINVAL;
 				}
 			}
 			else
 			{
-				if (PVRSRVSetPowerStateKM(PVRSRV_POWER_STATE_D0) != PVRSRV_OK)
+				if (PVRSRVSetPowerStateKM(PVRSRV_SYS_POWER_STATE_D0) != PVRSRV_OK)
 				{
 					return -EINVAL;
 				}
@@ -384,6 +378,13 @@ IMG_INT PVRProcSetPowerLevel(struct file *file, const IMG_CHAR *buffer, IMG_UINT
 	return (count);
 }
 
+#ifdef PVR_PROC_USE_SEQ_FILE
+void ProcSeqShowPowerLevel(struct seq_file *sfile,void* el)	
+{
+	seq_printf(sfile, "%lu\n", gPVRPowerLevel);
+}
+
+#else 
 IMG_INT PVRProcGetPowerLevel(IMG_CHAR *page, IMG_CHAR **start, off_t off, IMG_INT count, IMG_INT *eof, IMG_VOID *data)
 {
 	if (off == 0) {
@@ -393,6 +394,8 @@ IMG_INT PVRProcGetPowerLevel(IMG_CHAR *page, IMG_CHAR **start, off_t off, IMG_IN
 	*eof = 1;
 	return 0;
 }
+#endif 
+
 #endif
 
 #if defined(SUPPORT_DRI_DRM)
@@ -468,6 +471,7 @@ static IMG_INT PVRSRVRelease(struct inode unref__ * pInode, struct file *pFile)
 	OSFreeMem(PVRSRV_OS_NON_PAGEABLE_HEAP,
 			  sizeof(PVRSRV_FILE_PRIVATE_DATA),
 			  psPrivateData, psPrivateData->hBlockAlloc);
+	PRIVATE_DATA(pFile) = NULL; 
 
 	LinuxUnLockMutex(&gPVRSRVLock);
 	return 0;
@@ -526,7 +530,8 @@ static IMG_INT __init PVRCore_Init(IMG_VOID)
 
 		goto init_failed;
 	}
-#endif 
+#endif
+
 
 #if defined(PVR_LDM_PCI_MODULE)
 	if ((error = pci_register_driver(&powervr_driver)) != 0)
@@ -590,6 +595,7 @@ static IMG_INT __init PVRCore_Init(IMG_VOID)
 		goto destroy_class;
 	}
 #endif 
+	pr_info("pvrsrvkm: module loaded\n");
 
 	return 0;
 
@@ -608,7 +614,6 @@ sys_deinit:
 #endif
 
 #if defined (PVR_LDM_PLATFORM_MODULE)
-	platform_device_unregister(&powervr_device);
 	platform_driver_unregister(&powervr_driver);
 #endif
 
@@ -674,7 +679,6 @@ static IMG_VOID __exit PVRCore_Cleanup(IMG_VOID)
 #endif
 
 #if defined (PVR_LDM_PLATFORM_MODULE)
-	platform_device_unregister(&powervr_device);
 	platform_driver_unregister(&powervr_driver);
 #endif
 
@@ -682,7 +686,7 @@ static IMG_VOID __exit PVRCore_Cleanup(IMG_VOID)
 #if defined(DEBUG) && defined(PVR_MANUAL_POWER_CONTROL)
 	if (gPVRPowerLevel != 0)
 	{
-		if (PVRSRVSetPowerStateKM(PVRSRV_POWER_STATE_D0) == PVRSRV_OK)
+		if (PVRSRVSetPowerStateKM(PVRSRV_SYS_POWER_STATE_D0) == PVRSRV_OK)
 		{
 			gPVRPowerLevel = 0;
 		}
