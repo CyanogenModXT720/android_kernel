@@ -1649,13 +1649,9 @@ static int audio_ioctl(struct inode *inode, struct file *file,
 		}
 
 		if (minor == state.dev_dsp) {
-			if (samp_rate != cpcap_audio_state.stdac_rate) {
 			cpcap_audio_state.stdac_rate =
 				valid_sample_rates[count].cpcap_audio_rate;
-				cpcap_audio_set_audio_state(&cpcap_audio_state);
-			}
 		} else {
-			if (samp_rate != cpcap_audio_state.codec_rate) {
 			if ((file->f_mode & FMODE_WRITE) &&
 				(samp_rate != 8000 && samp_rate != 16000)) {
 				AUDIO_ERROR_LOG("[%d] Unsupported "
@@ -1666,9 +1662,9 @@ static int audio_ioctl(struct inode *inode, struct file *file,
 			}
 			cpcap_audio_state.codec_rate =
 				valid_sample_rates[count].cpcap_audio_rate;
-				cpcap_audio_set_audio_state(&cpcap_audio_state);
-			}
 		}
+
+				cpcap_audio_set_audio_state(&cpcap_audio_state);
 		break;
 	}
 
