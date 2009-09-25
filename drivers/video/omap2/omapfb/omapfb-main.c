@@ -2120,11 +2120,7 @@ static int omapfb_probe(struct platform_device *pdev)
 	return 0;
 
 cleanup:
-#if 1 /* for Test */
-    return 0;
-#else
     omapfb_free_resources(fbdev);
-#endif
 err0:
 	dev_err(&pdev->dev, "failed to setup omapfb\n");
 	return r;
