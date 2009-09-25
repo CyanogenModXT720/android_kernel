@@ -110,11 +110,34 @@ static const unsigned short mapphone_p3_keymap[ARRAY_SIZE(mapphone_col_gpios) *
 	[KEYMAP_INDEX(7, 7)] = KEY_W,
 };
 
+#ifndef CONFIG_ARM_OF
+static const unsigned short mapphone_keymap_closed[
+	ARRAY_SIZE(mapphone_col_gpios) * ARRAY_SIZE(mapphone_row_gpios)] = {
+	[KEYMAP_INDEX(0, 3)] = KEY_VOLUMEDOWN,
+	[KEYMAP_INDEX(0, 5)] = KEY_VOLUMEUP,
+	[KEYMAP_INDEX(4, 3)] = KEY_CAMERA-1,	/* camera 1 key, steal KEY_HP*/
+	[KEYMAP_INDEX(4, 5)] = KEY_CAMERA,	/* "camera 2" key */
+};
+#else
+static const unsigned short *mapphone_keymap_closed;
+#endif
+
+static int fixup(int index)
+{
+       int slide_open = gpio_get_value(GPIO_SLIDER);
+       if (!slide_open)
+		return mapphone_keymap_closed[index];
+       return 1;
+}
+
 static struct gpio_event_matrix_info mapphone_keypad_matrix_info = {
 	.info.func = gpio_event_matrix_func,
 	.keymap = mapphone_p3_keymap,
 	.output_gpios = mapphone_col_gpios,
 	.input_gpios = mapphone_row_gpios,
+#ifndef CONFIG_ARM_OF
+	.sw_fixup = fixup,
+#endif
 	.noutputs = ARRAY_SIZE(mapphone_col_gpios),
 	.ninputs = ARRAY_SIZE(mapphone_row_gpios),
 	.settle_time.tv.nsec = 40 * NSEC_PER_USEC,
@@ -208,6 +231,12 @@ static int __init mapphone_dt_kp_init(void)
 			mapphone_keypad_matrix_info.keymap = \
 				(unsigned short *)kp_prop;
 
+		kp_prop = of_get_property(kp_node, \
+				DT_PROP_KEYPAD_CLOSED_MAPS, NULL);
+		if (kp_prop) {
+			mapphone_keymap_closed = (unsigned short *)kp_prop;
+			mapphone_keypad_matrix_info.sw_fixup = fixup;
+		}
 		of_node_put(kp_node);
 	}
 
