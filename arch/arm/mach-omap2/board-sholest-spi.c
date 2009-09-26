@@ -30,6 +30,9 @@
 
 extern struct platform_device cpcap_disp_button_led;
 extern struct platform_device cpcap_rgb_led;
+#ifdef CONFIG_LEDS_AF_LED
+extern struct platform_device cpcap_af_led;
+#endif
 
 struct cpcap_spi_init_data sholest_cpcap_spi_init[CPCAP_REG_SIZE + 1] = {
 	{CPCAP_REG_ASSIGN1,   0x0101},
@@ -106,6 +109,9 @@ unsigned short cpcap_regulator_mode_values[CPCAP_NUM_REGULATORS] = {
 struct regulator_consumer_supply cpcap_sw5_consumers[] = {
 	REGULATOR_CONSUMER("sw5", &cpcap_disp_button_led.dev),
 	REGULATOR_CONSUMER("sw5", &cpcap_rgb_led.dev),
+#ifdef CONFIG_LEDS_AF_LED
+	REGULATOR_CONSUMER("sw5", &cpcap_af_led.dev),
+#endif
 };
 
 struct regulator_consumer_supply cpcap_vcam_consumers[] = {

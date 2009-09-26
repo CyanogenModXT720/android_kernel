@@ -298,6 +298,7 @@ static int read_buf_full;
 static int phone_mode_on = -1;
 static int primary_spkr_setting = CPCAP_AUDIO_OUT_NONE;
 static int secondary_spkr_setting = CPCAP_AUDIO_OUT_NONE;
+static int mic_setting = CPCAP_AUDIO_IN_NONE;
 static unsigned int capture_mode;
 static struct omap_mcbsp_wrapper *mcbsp_wrapper;
 
@@ -939,8 +940,7 @@ int omap2_mcbsp_receive_data(unsigned int id, void *cbdata,
 				    OMAP_DMA_SYNC_ELEMENT;
 				mcbsp_wrapper[id].rx_params.src_fi = 0;
 			}
-			err =
-			    omap_modify_dma_chain_params(mcbsp->dma_rx_lch,
+			err = omap_modify_dma_chain_params(mcbsp->dma_rx_lch,
 						mcbsp_wrapper[id].rx_params);
 			if (err < 0) {
 				printk(KERN_ERR "DMA reconfiguration failed\n");
@@ -1479,8 +1479,8 @@ static int audio_configure_ssi(struct inode *inode, struct file *file)
 		tx_params.word_length1 = OMAP_MCBSP_WORD_32;
 		ssi = STDAC_SSI;
 #ifdef AUDIO_I2S_MODE
-		tx_cfg_params.fs_polarity  = OMAP_MCBSP_FS_ACTIVE_LOW;
-		tx_cfg_params.phase = OMAP_MCBSP_FRAME_DUALPHASE;
+		//tx_cfg_params.fs_polarity  = OMAP_MCBSP_FS_ACTIVE_LOW;
+		//tx_cfg_params.phase = OMAP_MCBSP_FRAME_DUALPHASE;
 #endif
 		omap_ctrl_writel(omap_ctrl_readl(OMAP2_CONTROL_DEVCONF0) |
 					(1 << OMAP2_CONTROL_DEVCONF0_BIT6),
@@ -1583,7 +1583,6 @@ static int audio_stdac_open(struct inode *inode, struct file *file)
 		cpcap_audio_set_audio_state(&cpcap_audio_state);
 	}
 
-
 out:
 	mutex_unlock(&audio_lock);
 	return error;
@@ -1607,9 +1606,10 @@ static int audio_stdac_release(struct inode *inode, struct file *file)
 		cpcap_audio_state.stdac_primary_speaker = CPCAP_AUDIO_OUT_NONE;
 		cpcap_audio_state.stdac_secondary_speaker =
 							CPCAP_AUDIO_OUT_NONE;
-	}
 
 	cpcap_audio_set_audio_state(&cpcap_audio_state);
+	}
+
 	mutex_unlock(&audio_lock);
 
 	return 0;
@@ -1664,7 +1664,7 @@ static int audio_ioctl(struct inode *inode, struct file *file,
 				valid_sample_rates[count].cpcap_audio_rate;
 		}
 
-		cpcap_audio_set_audio_state(&cpcap_audio_state);
+				cpcap_audio_set_audio_state(&cpcap_audio_state);
 		break;
 	}
 

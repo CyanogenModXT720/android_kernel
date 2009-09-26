@@ -309,7 +309,7 @@ config WL127X_RFKILL
 
 config WL127X_TEST
 	tristate "TI wl127x Bluetooth GPIO test driver for board-sholes"
-	depends on MACH_SHOLES && WL127X_RFKILL && BT
+	depends on (MACH_SHOLES || MACH_SHOLEST) && WL127X_RFKILL && BT
 	default n
 	---help---
 	 Creates sysfs GPIO entries for testing TI wl127x BT on board-sholes.

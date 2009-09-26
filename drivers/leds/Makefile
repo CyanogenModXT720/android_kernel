@@ -28,6 +28,7 @@ obj-$(CONFIG_LEDS_DA903X)		+= leds-da903x.o
 obj-$(CONFIG_LEDS_WM8350)		+= leds-wm8350.o
 obj-$(CONFIG_LEDS_BD7885)		+= leds-bd7885.o
 obj-$(CONFIG_LEDS_BU9847)		+= leds-bu9847.o
+obj-$(CONFIG_LEDS_AF_LED)		+= leds-ld-cpcap-afled.o
 obj-$(CONFIG_LEDS_SHOLES)		+= leds-ld-cpcap-disp.o \
 					   leds-ld-cpcap-rgb.o \
 					   leds-ld-cpcap-kpad.o

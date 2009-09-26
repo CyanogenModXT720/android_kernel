@@ -27,6 +27,7 @@
 #include <linux/delay.h>
 #include <linux/poll.h>
 #include "cpcap_audio_driver.h"
+#include "omap34xx_audio_driver.h"
 #include <linux/spi/cpcap.h>
 #include <mach/resource.h>
 #include <linux/regulator/consumer.h>
@@ -34,6 +35,8 @@
 #define SLEEP_ACTIVATE_POWER 2
 
 #define CLOCK_TREE_RESET_TIME 1
+
+#define SLEEP_CODEC_STDAC_PGA_SWITCH 10
 
 #define SLEEP_OUTPUT_AMPS_ENABLE 1
 
@@ -108,7 +111,6 @@ static inline int is_stdac_changed(struct cpcap_audio_state *state,
 		return 1;
 	return 0;
 }
-
 
 static inline int is_output_bt_only(struct cpcap_audio_state *state)
 {
@@ -457,7 +459,7 @@ static bool cpcap_audio_set_bits_for_speaker(int speaker, int balance,
 we can't hear sound via headset. this bit field should be setted */
 		(*message) |= CPCAP_BIT_ST_HS_CP_EN;
 		break;
-/* */
+
 	case CPCAP_AUDIO_OUT_LOUDSPEAKER:
 		(*message) |= CPCAP_BIT_A2_LDSP_L_EN;
 		break;
@@ -938,6 +940,7 @@ static void cpcap_audio_configure_power(int power)
 			regulator_enable(audio_reg);
 			regulator_set_mode(audio_reg, REGULATOR_MODE_NORMAL);
 		} else {
+			printk(KERN_INFO "turning off regulator\n");
 			regulator_set_mode(audio_reg, REGULATOR_MODE_STANDBY);
 			regulator_disable(audio_reg);
 		}
