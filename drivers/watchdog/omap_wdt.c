@@ -514,7 +514,6 @@ static int omap_wdt_suspend(struct platform_device *pdev, pm_message_t state)
 		del_timer(&wdev->autopet_timer);
 		omap_wdt_disable(wdev);
 	}
-
 	return 0;
 }
 

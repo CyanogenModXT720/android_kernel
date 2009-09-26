@@ -726,6 +726,9 @@ static irqreturn_t ehci_irq (struct usb_hcd *hcd)
 			ehci->reset_done [i] = jiffies + msecs_to_jiffies (20);
 			ehci_dbg (ehci, "port %d remote wakeup\n", i + 1);
 			mod_timer(&hcd->rh_timer, ehci->reset_done[i]);
+#ifdef CONFIG_HAS_WAKELOCK
+			wake_lock_timeout(&ehci->wake_lock_ehci_rwu, HZ/2);
+#endif
 		}
 	}
 

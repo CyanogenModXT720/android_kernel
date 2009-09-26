@@ -110,6 +110,9 @@ static void report_key(struct gpio_kp *kp, int key_index, int out, int in)
 	unsigned short keycode = keyentry & MATRIX_KEY_MASK;
 	unsigned short dev = keyentry >> MATRIX_CODE_BITS;
 
+	if (mi->sw_fixup && !mi->sw_fixup(key_index))
+		return;
+
 	if (pressed != test_bit(keycode, kp->input_devs->dev[dev]->key)) {
 		if (keycode == KEY_RESERVED) {
 			if (mi->flags & GPIOKPF_PRINT_UNMAPPED_KEYS)
