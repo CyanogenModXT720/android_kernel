@@ -177,7 +177,7 @@ static const struct venc_config venc_config_pal_trm = {
 
 	.tvdetgp_int_start_stop_x		= 0x00140001,
 	.tvdetgp_int_start_stop_y		= 0x00010001,
-#ifdef CONFIG_TVDET_SHOLEST
+#ifdef CONFIG_TVOUT_SHOLEST
 	.gen_ctrl				= 0x00FF0001,
 #else
 	.gen_ctrl				= 0x00FF0000,
@@ -601,8 +601,6 @@ static void venc_power_on(struct omap_dss_device *dssdev)
 
 static void venc_power_off(struct omap_dss_device *dssdev)
 {
-	omap_pm_set_min_bus_tput(&dssdev->dev, OCP_INITIATOR_AGENT, 0);
-
 	venc_write_reg(VENC_OUTPUT_CONTROL, 0);
 	dss_set_dac_pwrdn_bgz(0);
 
@@ -614,6 +612,8 @@ static void venc_power_off(struct omap_dss_device *dssdev)
 	regulator_disable(venc.vdda_dac_reg);
 
 	venc_enable_clocks(0);
+
+	omap_pm_set_min_bus_tput(&dssdev->dev, OCP_INITIATOR_AGENT, 0);
 }
 
 static int venc_enable_display(struct omap_dss_device *dssdev)
