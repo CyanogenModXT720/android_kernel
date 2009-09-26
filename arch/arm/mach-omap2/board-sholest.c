@@ -340,23 +340,37 @@ static struct vkey sholest_touch_vkeys[] = {
 		.code		= KEY_SEARCH,
 	},
 };
-
 static ssize_t sholest_virtual_keys_show(struct kobject *kobj,
 					struct kobj_attribute *attr, char *buf)
 {
 	/* center: x: home: 55, menu: 185, back: 305, search 425, y: 835 */
 	/* keys are specified by setting the x,y of the center, the width,
 	 * and the height, as such keycode:center_x:center_y:width:height */
-	return sprintf(buf, __stringify(EV_KEY) ":"
-		       __stringify(KEY_MENU) ":32:906:63:57"
-		       ":" __stringify(EV_KEY) ":"
-		       __stringify(KEY_HOME) ":162:906:89:57"
-		       ":" __stringify(EV_KEY) ":"
-		       __stringify(KEY_BACK) ":292:906:89:57"
-		       ":" __stringify(EV_KEY) ":"
-		       __stringify(KEY_SEARCH) ":439:906:63:57"
-		       "\n");
+#ifdef QTOUCH_TS_ATMEGA64A1_SUPPORT
+	if (qtm_obp_touch_atmega64a1_enable) {
+		return sprintf(buf, __stringify(EV_KEY) ":"
+		__stringify(KEY_MENU) ":32:906:63:57"
+		":" __stringify(EV_KEY) ":"
+		__stringify(KEY_HOME) ":240:906:89:57"
+		":" __stringify(EV_KEY) ":"
+		__stringify(KEY_BACK) ":440:906:89:57"
+		":" __stringify(EV_KEY) ":"
+		__stringify(KEY_SEARCH) ":520:906:63:57"
+		"\n");
+	} else {
+		return sprintf(buf, __stringify(EV_KEY) ":"
+		__stringify(KEY_MENU) ":32:906:63:57"
+		":" __stringify(EV_KEY) ":"
+		__stringify(KEY_HOME) ":162:906:89:57"
+		":" __stringify(EV_KEY) ":"
+		__stringify(KEY_BACK) ":292:906:89:57"
+		":" __stringify(EV_KEY) ":"
+		__stringify(KEY_SEARCH) ":439:906:63:57"
+		"\n");
+	}
+#endif
 }
+
 static struct kobj_attribute sholest_virtual_keys_attr = {
 	.attr = {
 		.name = "virtualkeys.qtouch-touchscreen",
@@ -385,13 +399,26 @@ static void sholest_touch_init(void)
 	struct device_node *touch_node;
 	const void *touch_prop;
 	int len = 0;
-
+const uint32_t *touch_propt;
 	if ((touch_node = of_find_node_by_path(DT_PATH_TOUCH))) {
 		if ((touch_prop = of_get_property(touch_node, DT_PROP_TOUCH_KEYMAP, &len)) \
 			&& len && (0 == len % sizeof(struct vkey))) {
 			sholest_ts_platform_data.vkeys.count = len / sizeof(struct vkey);
 			sholest_ts_platform_data.vkeys.keys = (struct vkey *)touch_prop;
 		}
+		touch_propt = of_get_property(touch_node, \
+			DT_PROP_TOUCH_REVERSE_X, \
+			&len);
+#ifdef QTOUCH_TS_ATMEGA64A1_SUPPORT
+		if (touch_propt && len)	{
+			sholest_ts_platform_data.reverse_x = *touch_propt;
+			sholest_ts_platform_data_atmega64a1.reverse_x = \
+						*touch_propt;
+		}
+#else
+		if (touch_propt && len)
+			sholest_ts_platform_data.reverse_x = *touch_propt;
+#endif
 		of_node_put(touch_node);
 	}
 #endif

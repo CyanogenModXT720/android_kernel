@@ -83,7 +83,7 @@ module_param_named(tsdebug, qtouch_tsdebug, uint, 0664);
 
 #ifdef QTOUCH_TS_ATMEGA64A1_SUPPORT
 /*! @brief set atmega64a1_enable_flag */
-static unsigned char qtm_obp_touch_atmega64a1_enable;
+unsigned char qtm_obp_touch_atmega64a1_enable;
 #endif
 
 static irqreturn_t qtouch_ts_irq_handler(int irq, void *dev_id)
@@ -380,7 +380,27 @@ static int qtouch_hw_init(struct qtouch_ts_data *ts)
 			}
 		}
 	}
-
+#ifdef QTOUCH_TS_ATMEGA64A1_SUPPORT
+if (qtm_obp_touch_atmega64a1_enable) {
+	/* configure the key-array object. */
+	obj = find_obj(ts, QTM_OBJ_TOUCH_KEYARRAY);
+	if (obj && obj->entry.num_inst > 0) {
+		struct qtm_touch_keyarray_cfg cfg;
+		if (ts->pdata->flags & QTOUCH_USE_KEYARRAY) {
+			memcpy(&cfg, &ts->pdata->key_array.cfg, sizeof(cfg));
+			cfg.ctrl |= (1 << 1) | (1 << 0); /* reporten | enable */
+		} else
+			memset(&cfg, 0, sizeof(cfg));
+		ret = qtouch_write_addr(ts, obj->entry.addr, &cfg,
+					min(sizeof(cfg), obj->entry.size));
+		if (ret != 0) {
+			pr_err("%s: Can't write touch keyarray config\n",
+			       __func__);
+			return ret;
+		}
+	}
+}
+#endif
 	/* configure the signal filter */
 	obj = find_obj(ts, QTM_OBJ_PROCG_SIG_FILTER);
 	if (obj && obj->entry.num_inst > 0) {

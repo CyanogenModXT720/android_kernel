@@ -28,6 +28,7 @@
 
 #ifdef QTOUCH_TS_ATMEGA64A1_SUPPORT
 extern struct qtouch_ts_platform_data sholest_ts_platform_data_atmega64a1;
+extern unsigned char qtm_obp_touch_atmega64a1_enable;
 #endif
 
 #define QTM_OBP_ID_INFO_ADDR		0
