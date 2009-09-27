@@ -112,6 +112,15 @@ __acquires(ep->musb->lock)
 
 	req = to_musb_request(request);
 
+#ifdef CONFIG_USB_MOT_ANDROID
+	if (((&request->list)->prev == LIST_POISON2) ||
+		((&request->list)->next == LIST_POISON1)) {
+		printk(KERN_DEBUG "%s():skip the request on ep %d\n",
+		__func__, ep->current_epnum);
+		return;
+	}
+#endif
+
 	list_del(&request->list);
 	if (req->request.status == -EINPROGRESS)
 		req->request.status = status;
