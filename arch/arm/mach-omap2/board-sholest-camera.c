@@ -315,6 +315,7 @@ static int ov8810_sensor_power_set(struct device *dev, enum v4l2_power power)
 	case V4L2_POWER_OFF:
 		/* Release pm constraints */
 		omap_pm_set_min_bus_tput(dev, OCP_INITIATOR_AGENT, 0);
+#if 0
 		/* Turn off power */
 		if (regulator_vcam != NULL) {
 			regulator_disable(regulator_vcam);
@@ -336,11 +337,10 @@ static int ov8810_sensor_power_set(struct device *dev, enum v4l2_power power)
 					"initialized\n", __func__);
 			return -EIO;
 		}
-		gpio_set_value(GPIO_OV8810_RESET, 0);
-		gpio_set_value(GPIO_OV8810_STANDBY, 0);
-
-		gpio_free(GPIO_OV8810_RESET);
-		gpio_free(GPIO_OV8810_STANDBY);
+		/* Power Down Sequence */
+		gpio_set_value(GPIO_OV8810_STANDBY, 1);
+#endif
+		gpio_set_value(GPIO_OV8810_STANDBY, 1);
 	break;
 	case V4L2_POWER_ON:
 	        /* Set min throughput to:
@@ -452,7 +452,9 @@ static int ov8810_sensor_power_set(struct device *dev, enum v4l2_power power)
 			mdelay(10);
 
                      /*Set regulator turned on.*/
-			//regulator_poweron = 1;
+			regulator_poweron = 1;
+		} else {
+			gpio_set_value(GPIO_OV8810_STANDBY, 0);
 		}
 		break;
 	case V4L2_POWER_STANDBY:
