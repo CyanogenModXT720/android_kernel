@@ -2943,6 +2943,7 @@ static PVRSRV_ERROR ModifyCompleteSyncOpsCallBack(IMG_PVOID		pvParam,
 {
 	MODIFY_SYNC_OP_INFO		*psModSyncOpInfo;
 	PVRSRV_KERNEL_SYNC_INFO *psKernelSyncInfo;
+	int printCount = 0;
 
 	PVR_UNREFERENCED_PARAMETER(ui32Param);
 	
@@ -2962,7 +2963,13 @@ static PVRSRV_ERROR ModifyCompleteSyncOpsCallBack(IMG_PVOID		pvParam,
 		{
 			goto OpFlushedComplete;
 		}
-		PVR_DPF((PVR_DBG_ERROR, "ModifyCompleteSyncOpsCallBack: waiting for old Ops to flush"));
+		if (printCount > 0) {
+			PVR_DPF((PVR_DBG_WARNING,
+				 "ModifyCompleteSyncOpsCallBack: "
+				 "waiting for old Ops to flush %d",
+				 printCount));
+			printCount++;
+		}
 		OSWaitus(MAX_HW_TIME_US/WAIT_TRY_COUNT);
 	} END_LOOP_UNTIL_TIMEOUT();
 
