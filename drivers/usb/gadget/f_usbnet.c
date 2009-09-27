@@ -429,6 +429,8 @@ static void ether_out_complete(struct usb_ep *ep, struct usb_request *req)
 	struct sk_buff *skb = req->context;
 
 	if (req->status == 0) {
+		dmac_inv_range((void *)req->buf,
+		(void *)(req->buf + req->actual));
 		skb_put(skb, req->actual);
 		skb->protocol = eth_type_trans(skb, g_usbnet_context->dev);
 		g_usbnet_context->stats.rx_packets++;
