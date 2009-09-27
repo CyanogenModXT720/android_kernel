@@ -1848,9 +1848,9 @@ static int audio_ioctl(struct inode *inode, struct file *file,
 				cpcap_audio_state.codec_mute =
 						CPCAP_AUDIO_CODEC_UNMUTE;
 			/* TITA source refer*/
-			/*cpcap_audio_state.output_gain = gain;*/
+			cpcap_audio_state.output_gain = gain;
 		}
-		cpcap_audio_state.output_gain = gain;
+		/*cpcap_audio_state.output_gain = gain;*/
 
 		cpcap_audio_set_audio_state(&cpcap_audio_state);
 		AUDIO_LEVEL2_LOG("SOUND_MIXER_VOLUME, output_gain = %d\n",
