@@ -40,17 +40,18 @@
 #define PANEL_ON 0x3
 
 static struct omap_video_timings sholes_panel_timings = {
-	.x_res          = 480,
-	.y_res          = 854,
-	/*.pixel_clock  = 25000,*/
+	.x_res		= 480,
+	.y_res		= 854,
 	.dsi1_pll_fclk	= 100000,
-	.dsi2_pll_fclk  = 100000,
-	.hfp            = 0,
-	.hsw            = 2,
-	.hbp            = 2,
-	.vfp            = 0,
-	.vsw            = 1,
-	.vbp            = 1,
+	.dsi2_pll_fclk	= 100000,
+	.hfp		= 0,
+	.hsw		= 2,
+	.hbp		= 2,
+	.vfp		= 0,
+	.vsw		= 1,
+	.vbp		= 1,
+	.w		= 46,
+	.h 		= 82,
 };
 
 struct sholes_data {

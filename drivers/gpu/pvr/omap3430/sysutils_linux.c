@@ -38,11 +38,15 @@
 #include <mach/omap-pm.h>
 #else 
 #include <asm/semaphore.h>
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,22))	
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,22))
 #include <asm/arch/resource.h>
 #endif 
 #endif 
 
+#if	(LINUX_VERSION_CODE >  KERNEL_VERSION(2,6,22)) && \
+	(LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,27))
+#define CONSTRAINT_NOTIFICATIONS
+#endif 
 #include "sgxdefs.h"
 #include "services_headers.h"
 #include "sysinfo.h"
@@ -94,45 +98,6 @@ IMG_VOID SysPowerLockUnwrap(SYS_DATA *psSysData)
 	PowerLockUnwrap(psSysSpecData);
 }
 
-static IMG_BOOL NotifyLockedOnCPU(SYS_SPECIFIC_DATA *psSysSpecData)
-{
-	IMG_INT iCPU = get_cpu();
-	IMG_BOOL bLocked = (iCPU == atomic_read(&psSysSpecData->sNotifyLockCPU));
-
-	put_cpu();
-
-	return bLocked;
-}
-
-static IMG_VOID NotifyLock(SYS_SPECIFIC_DATA *psSysSpecData)
-{
-	IMG_INT iCPU;
-
-	BUG_ON(in_atomic());
-
-	
-	iCPU = get_cpu();
-
-	
-	PVR_ASSERT(iCPU != -1);
-
-	PVR_ASSERT(!NotifyLockedOnCPU(psSysSpecData));
-
-	spin_lock(&psSysSpecData->sNotifyLock);
-
-	atomic_set(&psSysSpecData->sNotifyLockCPU, iCPU);
-}
-
-static IMG_VOID NotifyUnlock(SYS_SPECIFIC_DATA *psSysSpecData)
-{
-	PVR_ASSERT(NotifyLockedOnCPU(psSysSpecData));
-
-	atomic_set(&psSysSpecData->sNotifyLockCPU, -1);
-
-	spin_unlock(&psSysSpecData->sNotifyLock);
-
-	put_cpu();
-}
 #else	
 static IMG_BOOL PowerLockWrappedOnCPU(SYS_SPECIFIC_DATA unref__ *psSysSpecData)
 {
@@ -204,15 +169,19 @@ IMG_VOID SysGetSGXTimingInformation(SGX_TIMING_INFORMATION *psTimingInfo)
 	psTimingInfo->ui32CoreClockSpeed = rate;
 	psTimingInfo->ui32HWRecoveryFreq = scale_prop_to_SGX_clock(SYS_SGX_HWRECOVERY_TIMEOUT_FREQ, rate);
 	psTimingInfo->ui32uKernelFreq = scale_prop_to_SGX_clock(SYS_SGX_PDS_TIMER_FREQ, rate); 
+#if defined(SUPPORT_ACTIVE_POWER_MANAGEMENT)
+	psTimingInfo->bEnableActivePM = IMG_TRUE;
+#else	
+	psTimingInfo->bEnableActivePM = IMG_FALSE;
+#endif 
 	psTimingInfo->ui32ActivePowManLatencyms = SYS_SGX_ACTIVE_POWER_LATENCY_MS; 
 }
 
-#if 0 && (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,22))	
+#if defined(CONSTRAINT_NOTIFICATIONS)
 #if !defined(SGX_DYNAMIC_TIMING_INFO)
 #error "SGX_DYNAMIC_TIMING_INFO must be defined for this platform"
 #endif
 
-//FIXME: Comment this out until the support is there in the latest BSP with 2.6.29 kernel support
 static struct constraint_id cnstr_id_vdd2 = {
 	.type = RES_OPP_CO,
 	.data = (IMG_VOID *)"vdd2_opp"
@@ -223,6 +192,46 @@ static inline IMG_BOOL ConstraintNotificationsEnabled(SYS_SPECIFIC_DATA *psSysSp
 {
 	return (atomic_read(&psSysSpecData->sSGXClocksEnabled) != 0) && psSysSpecData->bSGXInitComplete && psSysSpecData->bConstraintNotificationsEnabled;
 
+}
+
+static IMG_BOOL NotifyLockedOnCPU(SYS_SPECIFIC_DATA *psSysSpecData)
+{
+	IMG_INT iCPU = get_cpu();
+	IMG_BOOL bLocked = (iCPU == atomic_read(&psSysSpecData->sNotifyLockCPU));
+
+	put_cpu();
+
+	return bLocked;
+}
+
+static IMG_VOID NotifyLock(SYS_SPECIFIC_DATA *psSysSpecData)
+{
+	IMG_INT iCPU;
+
+	BUG_ON(in_interrupt());
+
+	
+	iCPU = get_cpu();
+
+	
+	PVR_ASSERT(iCPU != -1);
+
+	PVR_ASSERT(!NotifyLockedOnCPU(psSysSpecData));
+
+	spin_lock(&psSysSpecData->sNotifyLock);
+
+	atomic_set(&psSysSpecData->sNotifyLockCPU, iCPU);
+}
+
+static IMG_VOID NotifyUnlock(SYS_SPECIFIC_DATA *psSysSpecData)
+{
+	PVR_ASSERT(NotifyLockedOnCPU(psSysSpecData));
+
+	atomic_set(&psSysSpecData->sNotifyLockCPU, -1);
+
+	spin_unlock(&psSysSpecData->sNotifyLock);
+
+	put_cpu();
 }
 
 static IMG_INT VDD2PostFunc(struct notifier_block *n, IMG_UINT32 event, IMG_VOID *ptr)
@@ -381,12 +390,13 @@ PVRSRV_ERROR EnableSGXClocks(SYS_DATA *psSysData)
 
 	PVR_DPF((PVR_DBG_MESSAGE, "EnableSGXClocks: Enabling SGX Clocks"));
 
-//#if defined(DEBUG)
+#if defined(DEBUG)
 	{
+		
 		IMG_UINT32 rate = clk_get_rate(psSysSpecData->psMPU_CK);
 		PVR_DPF((PVR_DBG_MESSAGE, "EnableSGXClocks: CPU Clock is %dMhz", HZ_TO_MHZ(rate)));
 	}
-//#endif
+#endif
 
 	res = clk_enable(psSysSpecData->psSGX_FCK);
 	if (res < 0)
@@ -405,7 +415,6 @@ PVRSRV_ERROR EnableSGXClocks(SYS_DATA *psSysData)
 	}
 
 	lNewRate = clk_round_rate(psSysSpecData->psSGX_FCK, SYS_SGX_CLOCK_SPEED + ONE_MHZ);
-
 	if (lNewRate <= 0)
 	{
 		PVR_DPF((PVR_DBG_ERROR, "EnableSGXClocks: Couldn't round SGX functional clock rate"));
@@ -413,13 +422,11 @@ PVRSRV_ERROR EnableSGXClocks(SYS_DATA *psSysData)
 	}
 
 	res = clk_set_rate(psSysSpecData->psSGX_FCK, lNewRate);
-#if 0
 	if (res < 0)
 	{
 		PVR_DPF((PVR_DBG_ERROR, "EnableSGXClocks: Couldn't set SGX function clock rate (%d)", res));
 		return PVRSRV_ERROR_GENERIC;
 	}
-#endif 
 
 #if defined(DEBUG)
 	{
@@ -551,8 +558,8 @@ PVRSRV_ERROR EnableSystemClocks(SYS_DATA *psSysData)
 		bPowerLock = IMG_TRUE;
 		PowerLockUnwrap(psSysSpecData);
 	}
-//FIXME: Comment this out until the support is there in the latest BSP with 2.6.29 kernel support
-#if 0 && (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,22))
+
+#if defined(CONSTRAINT_NOTIFICATIONS)
 	psSysSpecData->pVdd2Handle = constraint_get("pvrsrvkm", &cnstr_id_vdd2);
 	if (IS_ERR(psSysSpecData->pVdd2Handle))
 	{
@@ -561,7 +568,6 @@ PVRSRV_ERROR EnableSystemClocks(SYS_DATA *psSysData)
 	}
 
 	RegisterConstraintNotifications();
-
 #endif
 
 #if defined(DEBUG) || defined(TIMING)
@@ -667,7 +673,7 @@ PVRSRV_ERROR EnableSystemClocks(SYS_DATA *psSysData)
 
 #endif 
 
-#if defined(PDUMP) && !defined(NO_HARDWARE) && (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,22))
+#if defined(PDUMP) && !defined(NO_HARDWARE) && defined(CONSTRAINT_NOTIFICATIONS)
 	PVR_TRACE(("EnableSystemClocks: Setting SGX OPP constraint"));
 
 	
@@ -681,7 +687,7 @@ PVRSRV_ERROR EnableSystemClocks(SYS_DATA *psSysData)
 	eError = PVRSRV_OK;
 	goto Exit;
 
-#if defined(PDUMP) && !defined(NO_HARDWARE) && (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,22))
+#if defined(PDUMP) && !defined(NO_HARDWARE) && defined(CONSTRAINT_NOTIFICATIONS)
 ExitConstraintSetFailed:
 #endif
 #if defined(DEBUG) || defined(TIMING)
@@ -691,8 +697,7 @@ ExitDisableGPT11FCK:
 	clk_disable(psSysSpecData->psGPT11_FCK);
 ExitUnRegisterConstraintNotifications:
 #endif	
-#if 0 && (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,22))	
-//FIXME: Comment this out until the support is there in the latest BSP with 2.6.29 kernel support
+#if defined(CONSTRAINT_NOTIFICATIONS)
 	UnRegisterConstraintNotifications();
 	constraint_put(psSysSpecData->pVdd2Handle);
 #endif	
@@ -730,7 +735,7 @@ IMG_VOID DisableSystemClocks(SYS_DATA *psSysData)
 
 	PowerLockUnwrap(psSysSpecData);
 
-#if defined(PDUMP) && !defined(NO_HARDWARE) && (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,22))
+#if defined(PDUMP) && !defined(NO_HARDWARE) && defined(CONSTRAINT_NOTIFICATIONS)
 	{
 		int res;
 
@@ -745,10 +750,8 @@ IMG_VOID DisableSystemClocks(SYS_DATA *psSysData)
 	}
 #endif
 
-#if 0 && (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,22))
-//FIXME: Comment this out until the support is there in the latest BSP with 2.6.29 kernel support
+#if defined(CONSTRAINT_NOTIFICATIONS)
 	UnRegisterConstraintNotifications();
-
 #endif
 
 #if defined(DEBUG) || defined(TIMING)
@@ -778,11 +781,8 @@ IMG_VOID DisableSystemClocks(SYS_DATA *psSysData)
 	clk_disable(psSysSpecData->psGPT11_FCK);
 
 #endif 
-#if 0 && (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,22))
-
-//FIXME: Comment this out until the support is there in the latest BSP with 2.6.29 kernel support
+#if defined(CONSTRAINT_NOTIFICATIONS)
 	constraint_put(psSysSpecData->pVdd2Handle);
-
 #endif	
 	PowerLockWrap(psSysSpecData);
 }

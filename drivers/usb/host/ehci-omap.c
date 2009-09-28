@@ -581,7 +581,6 @@ static int omap_ehci_bus_suspend(struct usb_hcd *hcd)
                   }
 #endif
 		clk_disable(ehci_clocks->usbtll_fck_clk);
-		clk_disable(ehci_clocks->usbhost_ick_clk);
 		spin_unlock_irqrestore(&usbtll_clock_lock, flags);
 	}
 #ifdef CONFIG_HAS_WAKELOCK
@@ -614,8 +613,8 @@ static int omap_ehci_bus_resume(struct usb_hcd *hcd)
 #if 0
 		/* ICLKs are Autoidled. No need for explicit control */
 		clk_enable(ehci_clocks->usbtll_ick_clk);
-#endif
 		clk_enable(ehci_clocks->usbhost_ick_clk);
+#endif
 /* If the host initiated this resume, then the TLL handler may not get called
  * so the clock will need to be turned on explicitly
  */
@@ -657,8 +656,8 @@ static void omap_ehci_shutdown(struct usb_hcd *hcd)
 #if 0
 		/* ICLKs are Autoidled. No need for explicit control */
 		clk_enable(ehci_clocks->usbtll_ick_clk);
-#endif
 		clk_enable(ehci_clocks->usbhost_ick_clk);
+#endif
 		if (!usbtll_fclk_enabled) {
 			clk_enable(ehci_clocks->usbtll_fck_clk);
 			usbtll_fclk_enabled = 1;
@@ -737,7 +736,6 @@ static irqreturn_t usbtll_irq(int irq, void *tll)
 #ifdef CONFIG_HAS_WAKELOCK
 		wake_lock_timeout(&ehci->wake_lock_ehci_rwu, HZ/2);
 #endif
-		clk_enable(ehci_clocks->usbhost_ick_clk);
 		clk_enable(ehci_clocks->usbtll_fck_clk);
 		usbtll_fclk_enabled = 1;
 		/* Disable usbtll irq to prevent race condition in suspend */
@@ -883,8 +881,8 @@ static int ehci_hcd_omap_drv_remove(struct platform_device *dev)
 #if 0
 		/* ICLKs are Autoidled. No need for explicit control */
 		clk_enable(ehci_clocks->usbtll_ick_clk);
-#endif
 		clk_enable(ehci_clocks->usbhost_ick_clk);
+#endif
 		/* Enable All F-clks now before accessing controller */
 		if (!usbtll_fclk_enabled) {
 			clk_enable(ehci_clocks->usbtll_fck_clk);

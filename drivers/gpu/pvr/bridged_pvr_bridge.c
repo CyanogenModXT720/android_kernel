@@ -561,8 +561,9 @@ PVRSRVFreeDeviceMemBW(IMG_UINT32 ui32BridgeID,
 	psKernelMemInfo = (PVRSRV_KERNEL_MEM_INFO*)pvKernelMemInfo;
 	if (psKernelMemInfo->ui32RefCount != 1)
 	{
-		PVR_DPF((PVR_DBG_ERROR, "PVRSRVFreeDeviceMemBW: mappings are open in other processes"));
-		psRetOUT->eError = PVRSRV_ERROR_GENERIC;
+		PVR_DPF((PVR_DBG_WARNING, "PVRSRVFreeDeviceMemBW: mappings are open in other processes, deferring free!"));
+		psKernelMemInfo->bPendingFree = IMG_TRUE;
+		psRetOUT->eError = PVRSRV_OK;
 		return 0;
 	}
 
@@ -1001,6 +1002,7 @@ PVRSRVWrapExtMemoryBW(IMG_UINT32 ui32BridgeID,
 							   ui32PageTableSize) != PVRSRV_OK)
 		{
 			OSFreeMem(PVRSRV_OS_PAGEABLE_HEAP, 	ui32PageTableSize, (IMG_VOID *)psSysPAddr, 0);
+			
 			return -EFAULT;
 		}
 	}
@@ -1020,6 +1022,7 @@ PVRSRVWrapExtMemoryBW(IMG_UINT32 ui32BridgeID,
 		OSFreeMem(PVRSRV_OS_PAGEABLE_HEAP,
 			  ui32PageTableSize,
 			  (IMG_VOID *)psSysPAddr, 0);
+		
 	}
 	if(psWrapExtMemOUT->eError != PVRSRV_OK)
 	{
@@ -1597,6 +1600,7 @@ PVRSRVGetMiscInfoBW(IMG_UINT32 ui32BridgeID,
 		OSFreeMem(PVRSRV_OS_PAGEABLE_HEAP,
 		          psGetMiscInfoOUT->sMiscInfo.ui32MemoryStrLen,
 		         (IMG_VOID *)psGetMiscInfoOUT->sMiscInfo.pszMemoryStr, 0);
+		psGetMiscInfoOUT->sMiscInfo.pszMemoryStr = IMG_NULL;
 	
 		
 		psGetMiscInfoOUT->sMiscInfo.pszMemoryStr = psGetMiscInfoIN->sMiscInfo.pszMemoryStr;	
@@ -2939,6 +2943,7 @@ static PVRSRV_ERROR ModifyCompleteSyncOpsCallBack(IMG_PVOID		pvParam,
 {
 	MODIFY_SYNC_OP_INFO		*psModSyncOpInfo;
 	PVRSRV_KERNEL_SYNC_INFO *psKernelSyncInfo;
+	int printCount = 0;
 
 	PVR_UNREFERENCED_PARAMETER(ui32Param);
 	
@@ -2958,7 +2963,13 @@ static PVRSRV_ERROR ModifyCompleteSyncOpsCallBack(IMG_PVOID		pvParam,
 		{
 			goto OpFlushedComplete;
 		}
-		PVR_DPF((PVR_DBG_ERROR, "ModifyCompleteSyncOpsCallBack: waiting for old Ops to flush"));
+		if (printCount > 0) {
+			PVR_DPF((PVR_DBG_WARNING,
+				 "ModifyCompleteSyncOpsCallBack: "
+				 "waiting for old Ops to flush %d",
+				 printCount));
+			printCount++;
+		}
 		OSWaitus(MAX_HW_TIME_US/WAIT_TRY_COUNT);
 	} END_LOOP_UNTIL_TIMEOUT();
 
@@ -2981,6 +2992,7 @@ OpFlushedComplete:
 	}
 	
 	OSFreeMem(PVRSRV_OS_PAGEABLE_HEAP, 	sizeof(MODIFY_SYNC_OP_INFO), (IMG_VOID *)psModSyncOpInfo, 0);
+	
 
 		
 	PVRSRVCommandCompleteCallbacks();
@@ -3012,6 +3024,13 @@ PVRSRVModifyPendingSyncOpsBW(IMG_UINT32									ui32BridgeID,
 	}
 
 	psKernelSyncInfo = (PVRSRV_KERNEL_SYNC_INFO *)hKernelSyncInfo;
+
+	if(psKernelSyncInfo->hResItem != IMG_NULL)
+	{
+		
+		psModifySyncOpsOUT->eError = PVRSRV_ERROR_RETRY;
+		return 0;
+	}
 
 	ASSIGN_AND_EXIT_ON_ERROR(psModifySyncOpsOUT->eError,
 			  OSAllocMem(PVRSRV_OS_PAGEABLE_HEAP,
@@ -3070,7 +3089,12 @@ PVRSRVModifyCompleteSyncOpsBW(IMG_UINT32							ui32BridgeID,
 		return 0;
 	}
 
-	PVR_ASSERT(psKernelSyncInfo->hResItem != IMG_NULL);
+	if(psKernelSyncInfo->hResItem == IMG_NULL)
+	{
+		
+		psModifySyncOpsOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+		return 0;
+	}
 
 	
 
@@ -3087,6 +3111,8 @@ PVRSRVModifyCompleteSyncOpsBW(IMG_UINT32							ui32BridgeID,
 		PVR_DPF((PVR_DBG_ERROR, "PVRSRVModifyCompleteSyncOpsBW: ResManFreeResByPtr failed"));
 		return 0;
 	}
+
+	psKernelSyncInfo->hResItem = IMG_NULL;
 
 	return 0;
 }
@@ -3322,10 +3348,7 @@ IMG_INT BridgedDispatchKM(PVRSRV_PER_PROCESS_DATA * psPerProc,
 		
 		SYS_DATA *psSysData;
 
-		if(SysAcquireData(&psSysData) != PVRSRV_OK)
-		{
-			goto return_fault;
-		}
+		SysAcquireData(&psSysData);
 
 		
 		psBridgeIn = ((ENV_DATA *)psSysData->pvEnvSpecificData)->pvBridgeData;

@@ -21,6 +21,7 @@
 #include <linux/hrtimer.h>
 #include <linux/tick.h>
 #include <linux/ktime.h>
+#include <linux/earlysuspend.h>
 #include <linux/platform_device.h>
 
 /*
@@ -96,12 +97,28 @@ static struct dbs_tuners {
 	unsigned int down_differential;
 	unsigned int ignore_nice;
 	unsigned int powersave_bias;
+#ifdef CONFIG_HAS_EARLYSUSPEND
+	unsigned int is_suspended;
+	unsigned int susp_rate;
+#endif
 } dbs_tuners_ins = {
 	.up_threshold = DEF_FREQUENCY_UP_THRESHOLD,
 	.down_differential = DEF_FREQUENCY_DOWN_DIFFERENTIAL,
 	.ignore_nice = 0,
 	.powersave_bias = 0,
+#ifdef CONFIG_HAS_EARLYSUSPEND
+	.is_suspended = 0,
+#endif
 };
+
+static inline unsigned int get_sampling_rate(void)
+{
+#ifdef CONFIG_HAS_EARLYSUSPEND
+	if (dbs_tuners_ins.is_suspended)
+		return dbs_tuners_ins.susp_rate;
+#endif
+	return dbs_tuners_ins.sampling_rate;
+}
 
 static inline cputime64_t get_cpu_idle_time_jiffy(unsigned int cpu,
 							cputime64_t *wall)
@@ -179,7 +196,7 @@ static unsigned int powersave_bias_target(struct cpufreq_policy *policy,
 		dbs_info->freq_lo_jiffies = 0;
 		return freq_lo;
 	}
-	jiffies_total = usecs_to_jiffies(dbs_tuners_ins.sampling_rate);
+	jiffies_total = usecs_to_jiffies(get_sampling_rate());
 	jiffies_hi = (freq_avg - freq_lo) * jiffies_total;
 	jiffies_hi += ((freq_hi - freq_lo) / 2);
 	jiffies_hi /= (freq_hi - freq_lo);
@@ -226,6 +243,7 @@ static ssize_t show_##file_name						\
 	return sprintf(buf, "%u\n", dbs_tuners_ins.object);		\
 }
 show_one(sampling_rate, sampling_rate);
+show_one(susp_rate, susp_rate);
 show_one(up_threshold, up_threshold);
 show_one(ignore_nice_load, ignore_nice);
 show_one(powersave_bias, powersave_bias);
@@ -249,6 +267,28 @@ static ssize_t store_sampling_rate(struct cpufreq_policy *unused,
 
 	return count;
 }
+
+#ifdef CONFIG_HAS_EARLYSUSPEND
+static ssize_t store_susp_rate(struct cpufreq_policy *unused,
+		const char *buf, size_t count)
+{
+	unsigned int input;
+	int ret;
+	ret = sscanf(buf, "%u", &input);
+
+	mutex_lock(&dbs_mutex);
+	if (ret != 1 || input > MAX_SAMPLING_RATE
+			|| input < MIN_SAMPLING_RATE) {
+		mutex_unlock(&dbs_mutex);
+		return -EINVAL;
+	}
+
+	dbs_tuners_ins.susp_rate = input;
+	mutex_unlock(&dbs_mutex);
+
+	return count;
+}
+#endif
 
 static ssize_t store_up_threshold(struct cpufreq_policy *unused,
 		const char *buf, size_t count)
@@ -333,6 +373,9 @@ static struct freq_attr _name = \
 __ATTR(_name, 0644, show_##_name, store_##_name)
 
 define_one_rw(sampling_rate);
+#ifdef CONFIG_HAS_EARLYSUSPEND
+define_one_rw(susp_rate);
+#endif
 define_one_rw(up_threshold);
 define_one_rw(ignore_nice_load);
 define_one_rw(powersave_bias);
@@ -344,6 +387,9 @@ static struct attribute * dbs_attributes[] = {
 	&up_threshold.attr,
 	&ignore_nice_load.attr,
 	&powersave_bias.attr,
+#ifdef CONFIG_HAS_EARLYSUSPEND
+	&susp_rate.attr,
+#endif
 	NULL
 };
 
@@ -488,7 +534,7 @@ static void do_dbs_timer(struct work_struct *work)
 	int sample_type = dbs_info->sample_type;
 
 	/* We want all CPUs to do sampling nearly on same jiffy */
-	int delay = usecs_to_jiffies(dbs_tuners_ins.sampling_rate);
+	int delay = usecs_to_jiffies(get_sampling_rate());
 
 	delay -= jiffies % delay;
 
@@ -648,6 +694,9 @@ static int cpufreq_governor_dbs(struct cpufreq_policy *policy,
 				def_sampling_rate = MIN_STAT_SAMPLING_RATE;
 
 			dbs_tuners_ins.sampling_rate = def_sampling_rate;
+#ifdef CONFIG_HAS_EARLYSUSPEND
+			dbs_tuners_ins.susp_rate = 3*def_sampling_rate;
+#endif
 			pd = platform_device_register_simple("ondemand", -1,
 					NULL, 0);
 		}
@@ -693,6 +742,26 @@ struct cpufreq_governor cpufreq_gov_ondemand = {
 	.owner			= THIS_MODULE,
 };
 
+#ifdef CONFIG_HAS_EARLYSUSPEND
+
+void dbs_suspend(struct early_suspend *h)
+{
+    dbs_tuners_ins.is_suspended = 1;
+}
+
+void dbs_resume(struct early_suspend *h)
+{
+    dbs_tuners_ins.is_suspended = 0;
+}
+
+struct early_suspend dbs_suspend_info = {
+    .suspend = dbs_suspend,
+    .resume = dbs_resume,
+    .level = EARLY_SUSPEND_LEVEL_STOP_DRAWING,
+};
+#endif
+
+
 static int __init cpufreq_gov_dbs_init(void)
 {
 	int err;
@@ -729,6 +798,10 @@ static int __init cpufreq_gov_dbs_init(void)
 
  err2:
     destroy_workqueue(kondemand_wq);
+
+#ifdef CONFIG_HAS_EARLYSUSPEND
+    register_early_suspend(&dbs_suspend_info);
+#endif
 
 	return err;
 }
