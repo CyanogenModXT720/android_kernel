@@ -70,6 +70,8 @@ struct omap_wdt_dev {
 	struct miscdevice omap_wdt_miscdev;
 #ifdef CONFIG_OMAP_WATCHDOG_AUTOPET
 	struct timer_list autopet_timer;
+	unsigned long  jiffies_start;
+	unsigned long  jiffies_exp;
 #endif
 };
 
@@ -89,6 +91,23 @@ static void omap_wdt_ping(struct omap_wdt_dev *wdev)
 		cpu_relax();
 	/* reloaded WCRR from WLDR */
 }
+
+static int omap_wdt_panic(struct notifier_block *this, unsigned long event,
+				void *ptr)
+{
+	struct omap_wdt_dev *wdev = platform_get_drvdata(omap_wdt_dev);
+	unsigned long flags;
+
+	spin_lock_irqsave(&wdt_lock, flags);
+
+	if (wdev && wdev->omap_wdt_users > 0)
+		omap_wdt_ping(wdev);
+
+	spin_unlock_irqrestore(&wdt_lock, flags);
+
+	return NOTIFY_DONE;
+}
+
 
 static void omap_wdt_enable(struct omap_wdt_dev *wdev)
 {
@@ -289,7 +308,9 @@ static void autopet_handler(unsigned long data)
 	spin_lock(&wdt_lock);
 	omap_wdt_ping(wdev);
 	spin_unlock(&wdt_lock);
-	mod_timer(&wdev->autopet_timer, jiffies + (HZ * TIMER_AUTOPET_FREQ));
+	wdev->jiffies_start = jiffies;
+	wdev->jiffies_exp = (HZ * TIMER_AUTOPET_FREQ);
+	mod_timer(&wdev->autopet_timer, jiffies + wdev->jiffies_exp);
 }
 #endif
 
@@ -400,7 +421,9 @@ static int __init omap_wdt_probe(struct platform_device *pdev)
 	test_and_set_bit(1, (unsigned long *)&(wdev->omap_wdt_users));
 	omap_wdt_startclocks(wdev);
 	omap_wdt_set_timeout(wdev);
-	mod_timer(&wdev->autopet_timer, jiffies + (HZ * TIMER_AUTOPET_FREQ));
+	wdev->jiffies_start = jiffies;
+	wdev->jiffies_exp = (HZ * TIMER_AUTOPET_FREQ);
+	mod_timer(&wdev->autopet_timer, jiffies + wdev->jiffies_exp);
 	omap_wdt_enable(wdev);
 	pr_info("Watchdog auto-pet enabled at %d sec intervals\n",
 		TIMER_AUTOPET_FREQ);
@@ -486,8 +509,11 @@ static int omap_wdt_suspend(struct platform_device *pdev, pm_message_t state)
 {
 	struct omap_wdt_dev *wdev = platform_get_drvdata(pdev);
 
-	if (wdev->omap_wdt_users)
+	if (wdev->omap_wdt_users) {
+		wdev->jiffies_exp -= jiffies - wdev->jiffies_start;
+		del_timer(&wdev->autopet_timer);
 		omap_wdt_disable(wdev);
+	}
 
 	return 0;
 }
@@ -497,6 +523,7 @@ static int omap_wdt_resume(struct platform_device *pdev)
 	struct omap_wdt_dev *wdev = platform_get_drvdata(pdev);
 
 	if (wdev->omap_wdt_users) {
+		mod_timer(&wdev->autopet_timer, jiffies + wdev->jiffies_exp);
 		omap_wdt_enable(wdev);
 	}
 
@@ -520,6 +547,10 @@ static struct platform_driver omap_wdt_driver = {
 	},
 };
 
+static struct notifier_block panic_blk = {
+	.notifier_call  = omap_wdt_panic,
+};
+
 static int __init omap_wdt_init(void)
 {
 	spin_lock_init(&wdt_lock);
@@ -533,6 +564,14 @@ static void __exit omap_wdt_exit(void)
 
 module_init(omap_wdt_init);
 module_exit(omap_wdt_exit);
+
+static int __init omap_wdt_panic_init(void)
+{
+	atomic_notifier_chain_register(&panic_notifier_list, &panic_blk);
+	return 0;
+}
+
+arch_initcall(omap_wdt_panic_init);
 
 MODULE_AUTHOR("George G. Davis");
 MODULE_LICENSE("GPL");
