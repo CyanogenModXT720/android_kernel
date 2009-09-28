@@ -28,6 +28,7 @@
 #include <linux/inetdevice.h>
 #include <linux/uaccess.h>
 #include <linux/workqueue.h>
+#include <asm/cacheflush.h>
 
 #include <linux/usb/ch9.h>
 #include <linux/usb/gadget.h>
@@ -429,6 +430,8 @@ static void ether_out_complete(struct usb_ep *ep, struct usb_request *req)
 	struct sk_buff *skb = req->context;
 
 	if (req->status == 0) {
+		dmac_inv_range((void *)req->buf,
+		(void *)(req->buf + req->actual));
 		skb_put(skb, req->actual);
 		skb->protocol = eth_type_trans(skb, g_usbnet_context->dev);
 		g_usbnet_context->stats.rx_packets++;
