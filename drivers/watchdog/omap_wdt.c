@@ -568,6 +568,7 @@ module_exit(omap_wdt_exit);
 static int __init omap_wdt_panic_init(void)
 {
 	atomic_notifier_chain_register(&panic_notifier_list, &panic_blk);
+
 	return 0;
 }
 
