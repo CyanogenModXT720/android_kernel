@@ -115,8 +115,9 @@ __acquires(ep->musb->lock)
 #ifdef CONFIG_USB_MOT_ANDROID
 	if (((&request->list)->prev == LIST_POISON2) ||
 		((&request->list)->next == LIST_POISON1)) {
-		printk(KERN_DEBUG "%s():skip the request on ep %d\n",
-		__func__, ep->current_epnum);
+		dump_stack();
+		panic("%s():skip the request on ep %d\n",
+		 __func__, ep->current_epnum);
 		return;
 	}
 #endif
