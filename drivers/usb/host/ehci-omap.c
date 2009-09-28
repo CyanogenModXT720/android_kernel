@@ -181,7 +181,7 @@ static void omap_usb_utmi_init(struct usb_hcd *hcd, u8 tll_channel_mask)
 
 #if defined(CONFIG_USB_OHCI_HCD) || defined(CONFIG_USB_OHCI_HCD_MODULE)
 		if ((is_cdma_phone()) && (i == 2)) {
-			/* 0x1: UTMI-to-serial (FS/LS) mode: 
+			/* 0x1: UTMI-to-serial (FS/LS) mode:
 			 * To serial controller (TLL) or serial PHY */
 			omap_writel(omap_readl(OMAP_TLL_CHANNEL_CONF(i)) |
 				(1<<OMAP_TLL_CHANNEL_CONF_CHANMODE_SHIFT),
@@ -516,17 +516,21 @@ static int omap_ehci_bus_suspend(struct usb_hcd *hcd)
 	struct ehci_omap_clock_defs *ehci_clocks;
 	int ret = 0;
 	unsigned long flags;
+	u32 status;
 	struct ehci_hcd *ehci = hcd_to_ehci(hcd);
 
 #if defined(CONFIG_ARCH_OMAP34XX)
 	int res = 0;
 	struct omap_usb_platform_data *config = hcd->self.controller->platform_data;
 #endif
+	/* mask interrupt 77 to avoid race condition with ehci_irq */
+	omap_writel(0x2000, 0x482000cc);
+
 	ehci_clocks = (struct ehci_omap_clock_defs *)
 			(((char *)hcd_to_ehci(hcd)) + sizeof(struct ehci_hcd));
 	ret = ehci_bus_suspend(hcd);
 	if (ret < 0)
-		return ret;
+		goto end;
 
 #if defined(CONFIG_USB_OHCI_HCD) || defined(CONFIG_USB_OHCI_HCD_MODULE)
 	if (!is_cdma_phone() && !ehci_clocks->suspended) {
@@ -546,7 +550,8 @@ static int omap_ehci_bus_suspend(struct usb_hcd *hcd)
 		if (res == 0) {
 			printk(KERN_ERR "ehci: suspend failed!\n");
 			ehci_bus_resume(hcd);
-			return -EBUSY ;
+			ret = -EBUSY;
+			goto end;
 		}
 #endif
 
@@ -556,14 +561,15 @@ static int omap_ehci_bus_suspend(struct usb_hcd *hcd)
 		clk_disable(ehci_clocks->usbhost_ick_clk);
 		clk_disable(ehci_clocks->usbtll_ick_clk);
 #endif
-
-		clk_disable(ehci_clocks->usbhost1_48m_fck_clk);
-		clk_disable(ehci_clocks->usbhost2_120m_fck_clk);
 		spin_lock_irqsave(&usbtll_clock_lock, flags);
+		status = ehci_readl(ehci, &ehci->regs->status);
+		if (status & INTR_MASK) {
+			/* pending irq, resume */
+			ret = -EBUSY;
+			goto resume;
+		}
 		omap_writel(omap_readl(OMAP_TLL_SHARED_CONF) & ~(1),
 				OMAP_TLL_SHARED_CONF);
-		ehci_clocks->suspended = 1;
-		usbtll_fclk_enabled = 0;
 /* Enable the interrupt so that the remote-wakeup can be detected */
 #ifdef CONFIG_MOT_FEAT_IPC_CORERETENTION
                 if (disable_irq_value)
@@ -580,12 +586,26 @@ static int omap_ehci_bus_suspend(struct usb_hcd *hcd)
 #ifdef CONFIG_MOT_FEAT_IPC_CORERETENTION
                   }
 #endif
+		ehci_clocks->suspended = 1;
+		usbtll_fclk_enabled = 0;
+		clk_disable(ehci_clocks->usbhost1_48m_fck_clk);
+		clk_disable(ehci_clocks->usbhost2_120m_fck_clk);
 		clk_disable(ehci_clocks->usbtll_fck_clk);
 		spin_unlock_irqrestore(&usbtll_clock_lock, flags);
 	}
 #ifdef CONFIG_HAS_WAKELOCK
 	wake_unlock(&ehci->wake_lock_ehci_pm);
 #endif
+	goto end;
+
+resume:
+	omap_writel(OHCI_HC_CTRL_RESUME, OHCI_HC_CONTROL);
+	spin_unlock_irqrestore(&usbtll_clock_lock, flags);
+	ehci_bus_resume(hcd);
+
+end:
+	/* unmask irq 77 */
+	omap_writel(0x2000, 0x482000c8);
 	return ret;
 }
 
