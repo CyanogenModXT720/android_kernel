@@ -23,7 +23,7 @@
 #include <linux/soundcard.h>
 #include <linux/spi/cpcap-regbits.h>
 
-#define AUDIO_I2S_MODE
+/*#define AUDIO_I2S_MODE*/
 
 enum {
 	CPCAP_AUDIO_MODE_NORMAL,	/* mode of normal audio operation */
