@@ -67,7 +67,7 @@
 #define DPRINTK(fmt, args...) do {} while (0)
 #endif
 
-#define WAKEUP_LATENCY 200
+#define WAKEUP_LATENCY 50
 
 /*
  * Wakeup timer state definition:
