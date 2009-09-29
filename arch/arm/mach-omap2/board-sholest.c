@@ -443,16 +443,7 @@ static void sholest_als_init(void)
 static void sholest_misc_init(void)
 {
     printk(KERN_INFO "%s:Initializing\n", __func__);
-    if (gpio_request(SHOLEST_HDMI_MUX_SELECT_GPIO, "HDMI-mux-select") >= 0)
-    {
-        gpio_direction_output(SHOLEST_HDMI_MUX_SELECT_GPIO, 0);
-        gpio_set_value(SHOLEST_HDMI_MUX_SELECT_GPIO, 0);
-    }
-    if (gpio_request(SHOLEST_HDMI_MUX_EN_N_GPIO, "HDMI-mux-enable-n") >= 0)
-    {
-        gpio_direction_output(SHOLEST_HDMI_MUX_EN_N_GPIO, 0);
-        gpio_set_value(SHOLEST_HDMI_MUX_EN_N_GPIO, 0);
-    }
+
     if (gpio_request(SHOLEST_LM_3530_EN_GPIO, "led-enable") >= 0)
     {
         gpio_direction_output(SHOLEST_LM_3530_EN_GPIO, 0);
