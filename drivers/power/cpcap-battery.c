@@ -199,7 +199,7 @@ int cpcap_batt_set_charge_current(struct cpcap_device *cpcap,
   int ret;
   unsigned short mask;
   int shift;
-  CPCAP_CHARGE_CURRENT_T i;
+  enum CPCAP_CHARGE_CURRENT_T i;
   static unsigned short charge_current_tbl[CPCAP_CHARGE_CURRENT__END + 1] =
   {
     /* CPCAP_CHARGE_CURRENT_0MA    */ 0,
@@ -271,7 +271,7 @@ int cpcap_batt_set_charge_voltage(struct cpcap_device *cpcap,
   int ret;
   unsigned short mask;
   int shift;
-  CPCAP_CHARGE_VOLTAGE_T i;
+  enum CPCAP_CHARGE_VOLTAGE_T i;
   static unsigned short charge_voltage_tbl[CPCAP_CHARGE_VOLTAGE__END + 1] =
   {
     /* CPCAP_CHARGE_VOLTAGE_3_8   */ 3800,
