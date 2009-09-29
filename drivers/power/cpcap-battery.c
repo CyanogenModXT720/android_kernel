@@ -54,7 +54,7 @@ static ssize_t cpcap_batt_read(struct file *file, char *buf, size_t count,
 static int cpcap_batt_probe(struct platform_device *pdev);
 static int cpcap_batt_remove(struct platform_device *pdev);
 
-enum CPCAP_CHARGE_CURRENT_T {
+enum CPCAP_CHARGE_CURRENT_T{
   CPCAP_CHARGE_CURRENT_0MA,
 
   CPCAP_CHARGE_CURRENT_30MA,
@@ -80,7 +80,7 @@ enum CPCAP_CHARGE_CURRENT_T {
   CPCAP_CHARGE_CURRENT__END = CPCAP_CHARGE_CURRENT_1800MA
 };
 
-enum  CPCAP_CHARGE_VOLTAGE_T {
+enum CPCAP_CHARGE_VOLTAGE_T{
   CPCAP_CHARGE_VOLTAGE_3_8,
   CPCAP_CHARGE_VOLTAGE_4_1,
   CPCAP_CHARGE_VOLTAGE_4_125,
