@@ -8,7 +8,7 @@
 #include <mach/dma.h>
 #include <mach/omap-pm.h>
 
-/* #define DEBUG */
+#define DEBUG
 
 #ifdef DEBUG
 #define DBG(format, ...) (\

@@ -348,12 +348,6 @@ struct omap_overlay_manager {
 	int (*wait_for_go)(struct omap_overlay_manager *mgr);
 };
 
-#ifdef CONFIG_PANEL_HDTV
-enum omap_leave_image {
-	OMAP_UNLEAVE_IMAGE	= 0,
-	OMAP_LEAVE_IMAGE	= 1,
-};
-#endif
 
 struct omap_dss_device {
 	struct device dev;
@@ -487,10 +481,6 @@ struct omap_dss_device {
 	void (*platform_disable)(struct omap_dss_device *dssdev);
 	int (*set_backlight)(struct omap_dss_device *dssdev, int level);
 	int (*get_backlight)(struct omap_dss_device *dssdev);
-
-#ifdef CONFIG_PANEL_HDTV
-	enum omap_leave_image leave_image;
-#endif
 };
 
 struct omap_dss_driver {

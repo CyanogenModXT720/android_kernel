@@ -1479,8 +1479,8 @@ static int audio_configure_ssi(struct inode *inode, struct file *file)
 		tx_params.word_length1 = OMAP_MCBSP_WORD_32;
 		ssi = STDAC_SSI;
 #ifdef AUDIO_I2S_MODE
-		//tx_cfg_params.fs_polarity  = OMAP_MCBSP_FS_ACTIVE_LOW;
-		//tx_cfg_params.phase = OMAP_MCBSP_FRAME_DUALPHASE;
+		tx_cfg_params.fs_polarity  = OMAP_MCBSP_FS_ACTIVE_LOW;
+		tx_cfg_params.phase = OMAP_MCBSP_FRAME_DUALPHASE;
 #endif
 		omap_ctrl_writel(omap_ctrl_readl(OMAP2_CONTROL_DEVCONF0) |
 					(1 << OMAP2_CONTROL_DEVCONF0_BIT6),
@@ -1606,10 +1606,9 @@ static int audio_stdac_release(struct inode *inode, struct file *file)
 		cpcap_audio_state.stdac_primary_speaker = CPCAP_AUDIO_OUT_NONE;
 		cpcap_audio_state.stdac_secondary_speaker =
 							CPCAP_AUDIO_OUT_NONE;
-
-	cpcap_audio_set_audio_state(&cpcap_audio_state);
 	}
 
+	cpcap_audio_set_audio_state(&cpcap_audio_state);
 	mutex_unlock(&audio_lock);
 
 	return 0;
@@ -1847,10 +1846,8 @@ static int audio_ioctl(struct inode *inode, struct file *file,
 					CPCAP_AUDIO_CODEC_ON)
 				cpcap_audio_state.codec_mute =
 						CPCAP_AUDIO_CODEC_UNMUTE;
-			/* TITA source refer*/
-			cpcap_audio_state.output_gain = gain;
 		}
-		/*cpcap_audio_state.output_gain = gain;*/
+		cpcap_audio_state.output_gain = gain;
 
 		cpcap_audio_set_audio_state(&cpcap_audio_state);
 		AUDIO_LEVEL2_LOG("SOUND_MIXER_VOLUME, output_gain = %d\n",

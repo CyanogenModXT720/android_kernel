@@ -36,6 +36,8 @@ static int sholest_panel_enable(struct omap_dss_device *dssdev)
 {
 	int ret;
 
+	printk(KERN_INFO "%s IN\n", __func__);
+
 	/* pin the memory bus bw to the highest value */
 	ret = resource_request("vdd2_opp", &dssdev->dev, 400000);
 	if (ret)
@@ -47,8 +49,6 @@ static int sholest_panel_enable(struct omap_dss_device *dssdev)
 			printk(KERN_ERR "failed to get regulator for display");
 			return PTR_ERR(display_regulator);
 		}
-		regulator_enable(display_regulator);
-		return 0;
 	}
 
 	regulator_enable(display_regulator);
@@ -61,12 +61,15 @@ static int sholest_panel_enable(struct omap_dss_device *dssdev)
 	gpio_set_value(SHOLEST_DISPLAY_RESET_GPIO, 1);
 	msleep(10);
 
+	printk(KERN_INFO "%s OUT\n", __func__);
 	return 0;
 }
 
 static void sholest_panel_disable(struct omap_dss_device *dssdev)
 {
 	int ret;
+
+	printk(KERN_INFO "%s IN\n", __func__);
 
 	/* unpin the memory bus */
 	ret = resource_release("vdd2_opp", &dssdev->dev);
@@ -77,6 +80,8 @@ static void sholest_panel_disable(struct omap_dss_device *dssdev)
 	gpio_set_value(SHOLEST_DISPLAY_RESET_GPIO, 0);
 	msleep(1);
 	regulator_disable(display_regulator);
+
+	printk(KERN_INFO "%s OUT\n", __func__);
 }
 
 static struct omapfb_platform_data mapphone_fb_data = {

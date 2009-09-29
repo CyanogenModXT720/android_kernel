@@ -23,7 +23,7 @@
 #include <media/v4l2-dev.h>
 #include <media/videobuf-core.h>
 
-/*#define DEBUG*/
+#define DEBUG
 #ifdef DEBUG
 #define DBG(format, ...) \
 	printk(KERN_DEBUG "OMAPVOUT: " format, ## __VA_ARGS__)
