@@ -44,6 +44,10 @@
 #define CAM_IOMUX_SAFE_MODE (OMAP343X_PADCONF_PULL_UP | \
 				OMAP343X_PADCONF_PUD_ENABLED | \
 				OMAP343X_PADCONF_MUXMODE7)
+#define CAM_IOMUX_SAFE_MODE_INPUT (OMAP343X_PADCONF_INPUT_ENABLED | \
+				OMAP343X_PADCONF_PULL_UP | \
+				OMAP343X_PADCONF_PUD_ENABLED | \
+				OMAP343X_PADCONF_MUXMODE7)
 #define CAM_IOMUX_FUNC_MODE (OMAP343X_PADCONF_INPUT_ENABLED | \
 				OMAP343X_PADCONF_MUXMODE0)
 
@@ -235,18 +239,30 @@ struct mt9p012_platform_data mapphone_mt9p012_platform_data = {
 
 void mapphone_camera_lines_safe_mode(void)
 {
+	omap_ctrl_writew(CAM_IOMUX_SAFE_MODE_INPUT, 0x011a);
+	omap_ctrl_writew(CAM_IOMUX_SAFE_MODE_INPUT, 0x011c);
+	omap_ctrl_writew(CAM_IOMUX_SAFE_MODE_INPUT, 0x011e);
+	omap_ctrl_writew(CAM_IOMUX_SAFE_MODE_INPUT, 0x0120);
 	omap_ctrl_writew(CAM_IOMUX_SAFE_MODE, 0x0122);
 	omap_ctrl_writew(CAM_IOMUX_SAFE_MODE, 0x0124);
 	omap_ctrl_writew(CAM_IOMUX_SAFE_MODE, 0x0126);
 	omap_ctrl_writew(CAM_IOMUX_SAFE_MODE, 0x0128);
+	omap_ctrl_writew(CAM_IOMUX_SAFE_MODE_INPUT, 0x012a);
+	omap_ctrl_writew(CAM_IOMUX_SAFE_MODE_INPUT, 0x012c);
 }
 
 void mapphone_camera_lines_func_mode(void)
 {
+	omap_ctrl_writew(CAM_IOMUX_FUNC_MODE, 0x011a);
+	omap_ctrl_writew(CAM_IOMUX_FUNC_MODE, 0x011c);
+	omap_ctrl_writew(CAM_IOMUX_FUNC_MODE, 0x011e);
+	omap_ctrl_writew(CAM_IOMUX_FUNC_MODE, 0x0120);
 	omap_ctrl_writew(CAM_IOMUX_FUNC_MODE, 0x0122);
 	omap_ctrl_writew(CAM_IOMUX_FUNC_MODE, 0x0124);
 	omap_ctrl_writew(CAM_IOMUX_FUNC_MODE, 0x0126);
 	omap_ctrl_writew(CAM_IOMUX_FUNC_MODE, 0x0128);
+	omap_ctrl_writew(CAM_IOMUX_FUNC_MODE, 0x012a);
+	omap_ctrl_writew(CAM_IOMUX_FUNC_MODE, 0x012c);
 }
 
 void __init mapphone_camera_init(void)
