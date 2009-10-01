@@ -329,7 +329,7 @@ void __show_regs(struct pt_regs *regs)
 	}
 #endif
 
-	show_extra_register_data(regs, 128);
+	/* show_extra_register_data(regs, 128); */
 }
 
 void show_regs(struct pt_regs * regs)
