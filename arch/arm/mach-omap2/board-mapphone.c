@@ -108,6 +108,8 @@
 #define FACTORY_PRODUCT_ID		0x41E3
 #define FACTORY_ADB_PRODUCT_ID		0x41E2
 
+#define MAPPHONE_MMCPROBE_ENABLED 0
+
 static char device_serial[MAX_USB_SERIAL_NUM];
 char *bp_model = "CDMA";
 
@@ -457,7 +459,7 @@ static struct qtouch_ts_platform_data mapphone_ts_platform_data = {
 		.tch_det_int	= 0x2,
 		.mov_hyst_init	= 5,
 		.mov_hyst_next	= 5,
-		.mov_filter	= 0,
+		.mov_filter	= 0x9,
 		.num_touch	= 4,
 		.merge_hyst	= 0,
 		.merge_thresh	= 3,
@@ -524,7 +526,7 @@ static struct lm3530_platform_data omap3430_als_light_data = {
 	.als_zone_info = 0x00,
 	.als_resistor_sel = 0xf4,
 	.brightness_control = 0x00,
-	.zone_boundary_0 = 0x0,
+	.zone_boundary_0 = 0x01,
 	.zone_boundary_1 = 0x06,
 	.zone_boundary_2 = 0x44,
 	.zone_boundary_3 = 0xff,
@@ -900,7 +902,7 @@ static int mapphone_bpwake_probe(struct platform_device *pdev)
 
 	rc = request_irq(gpio_to_irq(MAPPHONE_APWAKE_TRIGGER_GPIO),
 			 mapphone_bpwake_irqhandler,
-			 IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING,
+			 IRQF_TRIGGER_FALLING,
 			 "Remote Wakeup", NULL);
 	if (rc) {
 		wake_lock_destroy(&baseband_wakeup_wakelock);
@@ -1426,7 +1428,11 @@ static void __init mapphone_init(void)
 	config_wlan_gpio();
 	omap_hdq_init();
 	mapphone_bt_init();
+#if mapphone_MMCPROBE_ENABLED
+	mapphone_mmcprobe_init();
+#else
 	mapphone_hsmmc_init();
+#endif
 	mapphone_vout_init();
 	mapphone_sgx_init();
 	mapphone_power_off_init();

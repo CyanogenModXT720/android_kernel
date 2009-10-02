@@ -45,6 +45,7 @@ extern void __init mapphone_padconf_init(void);
 extern void __init mapphone_hsmmc_init(void);
 extern void __init mapphone_gpio_mapping_init(void);
 extern void __init mapphone_camera_init(void);
+extern void __init mapphone_mmcprobe_init(void);
 
 #if defined(CONFIG_VIDEO_MT9P012) || defined(CONFIG_VIDEO_MT9P012_MODULE)
 extern struct mt9p012_platform_data mapphone_mt9p012_platform_data;
