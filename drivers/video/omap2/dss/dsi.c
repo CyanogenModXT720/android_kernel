@@ -1293,8 +1293,6 @@ int dsi_pll_init(bool enable_hsclk, bool enable_hsdiv)
 	if (r)
 		goto err1;
 
-	enable_clocks(0);
-	dsi_enable_pll_clock(0);
 
 	DSSDBG("PLL init done\n");
 
@@ -1309,6 +1307,9 @@ err0:
 
 void dsi_pll_uninit(void)
 {
+	enable_clocks(0);
+	dsi_enable_pll_clock(0);
+	
 	dsi.pll_locked = 0;
 	dsi_pll_power(DSI_PLL_POWER_OFF);
 
@@ -1955,8 +1956,6 @@ static int dsi_vc_send_bta_sync(int channel)
 
 	INIT_COMPLETION(dsi.bta_completion);
 
-	enable_clocks(1);
-	dsi_enable_pll_clock(1);
 
 	dsi_vc_enable_bta_irq(channel);
 
@@ -1980,8 +1979,6 @@ static int dsi_vc_send_bta_sync(int channel)
 err:
 	dsi_vc_disable_bta_irq(channel);
 
-	enable_clocks(0);
-	dsi_enable_pll_clock(0);
 
 	return r;
 }
@@ -2034,8 +2031,6 @@ static int dsi_vc_send_long(int channel, u8 data_type, u8 *data, u16 len,
 		return -EINVAL;
 	}
 
-	enable_clocks(1);
-	dsi_enable_pll_clock(1);
 
 	dsi_vc_write_long_header(channel, data_type, len, ecc);
 
@@ -2080,8 +2075,6 @@ static int dsi_vc_send_long(int channel, u8 data_type, u8 *data, u16 len,
 		dsi_vc_write_long_payload(channel, b1, b2, b3, 0);
 	}
 
-	enable_clocks(0);
-	dsi_enable_pll_clock(0);
 
 	return r;
 }
@@ -2098,8 +2091,6 @@ static int dsi_vc_send_short(int channel, u8 data_type, u16 data, u8 ecc)
 				channel,
 				data_type, data & 0xff, (data >> 8) & 0xff);
 
-	enable_clocks(1);
-	dsi_enable_pll_clock(1);
 
 	if (FLD_GET(dsi_read_reg(DSI_VC_CTRL(channel)), 16, 16)) {
 		DSSERR("ERROR FIFO FULL, aborting transfer\n");
@@ -2112,8 +2103,6 @@ static int dsi_vc_send_short(int channel, u8 data_type, u16 data, u8 ecc)
 
 	dsi_write_reg(DSI_VC_SHORT_PACKET_HEADER(channel), r);
 
-	enable_clocks(0);
-	dsi_enable_pll_clock(0);
 
 	return 0;
 }
@@ -2906,8 +2895,6 @@ static int dsi_update_thread(void *data)
 			break;
 		}
 
-		enable_clocks(1);
-		dsi_enable_pll_clock(1);
 
 		dsi_perf_mark_setup();
 
@@ -2999,8 +2986,6 @@ static int dsi_update_thread(void *data)
 
 		complete_all(&dsi.update_completion);
 
-		enable_clocks(0);
-		dsi_enable_pll_clock(0);
 
 		dsi_bus_unlock();
 
@@ -3216,8 +3201,6 @@ static int dsi_display_enable(struct omap_dss_device *dssdev)
 	if (dsi.update_mode == OMAP_DSS_UPDATE_AUTO)
 		dsi_start_auto_update(dssdev);
 
-	enable_clocks(0);
-	dsi_enable_pll_clock(0);
 
 	dsi_bus_unlock();
 	mutex_unlock(&dsi.lock);
@@ -3252,8 +3235,6 @@ static void dsi_display_disable(struct omap_dss_device *dssdev)
 	dsi.update_mode = OMAP_DSS_UPDATE_DISABLED;
 	dssdev->state = OMAP_DSS_DISPLAY_DISABLED;
 
-	enable_clocks(1);
-	dsi_enable_pll_clock(1);
 
 	dsi_display_uninit_dispc(dssdev);
 
@@ -3282,8 +3263,6 @@ static int dsi_display_suspend(struct omap_dss_device *dssdev)
 	dsi.update_mode = OMAP_DSS_UPDATE_DISABLED;
 	dssdev->state = OMAP_DSS_DISPLAY_SUSPENDED;
 
-	enable_clocks(1);
-	dsi_enable_pll_clock(1);
 
 	dsi_display_uninit_dispc(dssdev);
 
@@ -3338,8 +3317,6 @@ static int dsi_display_resume(struct omap_dss_device *dssdev)
 	if (dsi.update_mode == OMAP_DSS_UPDATE_AUTO)
 		dsi_start_auto_update(dssdev);
 
-	enable_clocks(0);
-	dsi_enable_pll_clock(0);
 
 	dsi_bus_unlock();
 	mutex_unlock(&dsi.lock);
@@ -3485,8 +3462,6 @@ static int dsi_display_enable_te(struct omap_dss_device *dssdev, bool enable)
 
 	dsi_bus_lock();
 
-	enable_clocks(1);
-	dsi_enable_pll_clock(1);
 
 	dsi.te_enabled = enable;
 
@@ -3495,8 +3470,6 @@ static int dsi_display_enable_te(struct omap_dss_device *dssdev, bool enable)
 
 	dsi_set_te(dssdev, enable);
 end:
-	enable_clocks(0);
-	dsi_enable_pll_clock(0);
 
 	dsi_bus_unlock();
 
