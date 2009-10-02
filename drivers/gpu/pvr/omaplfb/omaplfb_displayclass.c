@@ -603,6 +603,7 @@ static PVRSRV_ERROR CreateDCSwapChain(IMG_HANDLE hDevice,
 	
 	for(i=0; i<ui32BufferCount; i++)
 	{
+		INIT_LIST_HEAD(&psBuffer[i].list);
 		psVSyncFlips[i].bValid = OMAP_FALSE;
 		psVSyncFlips[i].bFlipped = OMAP_FALSE;
 		psVSyncFlips[i].bCmdCompleted = OMAP_FALSE;
@@ -703,6 +704,7 @@ static PVRSRV_ERROR DestroyDCSwapChain(IMG_HANDLE hDevice,
 		printk(KERN_WARNING DRIVER_PREFIX ": Couldn't disable framebuffer event notification\n");
 	}
 
+	OMAPLFBFlip(psSwapChain, (unsigned long)psDevInfo->sFBInfo.sSysAddr.uiAddr);
 	cancel_work_sync(&psDevInfo->active_work);
 	INIT_LIST_HEAD(&psDevInfo->active_list);
 
@@ -713,10 +715,6 @@ static PVRSRV_ERROR DestroyDCSwapChain(IMG_HANDLE hDevice,
 	
 	FlushInternalVSyncQueue(psSwapChain);
 
-	
-	OMAPLFBFlip(psSwapChain, (unsigned long)psDevInfo->sFBInfo.sSysAddr.uiAddr);
-
-	
 	psDevInfo->psSwapChain = NULL;
 
 	spin_unlock_irqrestore(&psDevInfo->sSwapChainLock, ulLockFlags);
@@ -1018,15 +1016,22 @@ static IMG_BOOL ProcessFlip(IMG_HANDLE  hCmdCookie,
 #endif
 
 		mutex_lock(&psDevInfo->active_list_lock);
-		if (list_empty(&psDevInfo->active_list)) {
-			OMAPLFBFlip(psSwapChain,
-				    (unsigned long)psBuffer->sSysAddr.uiAddr);
-			psSwapChain->psPVRJTable->
-				pfnPVRSRVCmdComplete(hCmdCookie, IMG_TRUE);
+		if (!list_empty(&psBuffer->list)) {
+			pr_warning("omaplfb: this buffer's already on the list\n");
+			psSwapChain->psPVRJTable->pfnPVRSRVCmdComplete(hCmdCookie,
+									IMG_TRUE);
+		} else {
+			if (list_empty(&psDevInfo->active_list)) {
+				OMAPLFBFlip(psSwapChain,
+					    (unsigned long)psBuffer->sSysAddr.uiAddr);
+				psSwapChain->psPVRJTable->
+					pfnPVRSRVCmdComplete(hCmdCookie, IMG_TRUE);
+			}
+			psBuffer->hCmdCookie = hCmdCookie;
+
+			list_add_tail(&psBuffer->list, &psDevInfo->active_list);
+			queue_work(psDevInfo->workq, &psDevInfo->active_work);
 		}
-		psBuffer->hCmdCookie = hCmdCookie;
-		list_add_tail(&psBuffer->list, &psDevInfo->active_list);
-		queue_work(psDevInfo->workq, &psDevInfo->active_work);
 		mutex_unlock(&psDevInfo->active_list_lock);
 
 
@@ -1090,7 +1095,6 @@ static void active_worker(struct work_struct *work)
 		container_of(work, OMAPLFB_DEVINFO, active_work);
 	OMAPLFB_SWAPCHAIN *psSwapChain = psDevInfo->psSwapChain;
 	OMAPLFB_BUFFER *psBuffer;
-	unsigned long flags;
 
 	OMAPLFBSync();
 
@@ -1103,8 +1107,8 @@ static void active_worker(struct work_struct *work)
 
 	psBuffer = list_first_entry(&psDevInfo->active_list,
 				    OMAPLFB_BUFFER, list);
-	list_del(&psBuffer->list);
 
+	list_del_init(&psBuffer->list);
 
 	if (!list_empty(&psDevInfo->active_list)) {
 		psBuffer = list_first_entry(&psDevInfo->active_list,
@@ -1357,7 +1361,6 @@ OMAP_ERROR OMAPLFBInit(void)
 			": Maximum number of swap chain buffers: %lu\n",
 			psDevInfo->sDisplayInfo.ui32MaxSwapChainBuffers));
 
-		
 		psDevInfo->sSystemBuffer.sSysAddr = psDevInfo->sFBInfo.sSysAddr;
 		psDevInfo->sSystemBuffer.sCPUVAddr = psDevInfo->sFBInfo.sCPUVAddr;
 		psDevInfo->sSystemBuffer.ulBufferSize = psDevInfo->sFBInfo.ulRoundedBufferSize;
