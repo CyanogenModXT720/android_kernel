@@ -1849,14 +1849,10 @@ static int hub_port_reset(struct usb_hub *hub, int port1,
 		else {
 			 /* port debounce */
 			status = hub_port_debounce(hub, port1);
-			if (status < 0) {
-				dev_err(hub->intfdev,
-					"extra debounce failed %d\n", status);
-			}
 
 			status = hub_port_wait_reset(hub, port1, udev, delay);
-			if (status)
-				dev_err(hub->intfdev,
+			if (status && status != -ENOTCONN)
+				dev_dbg(hub->intfdev,
 						"port_wait_reset: err = %d\n",
 						status);
 		}
@@ -1924,13 +1920,11 @@ static int check_port_resume_type(struct usb_device *udev,
 	}
 
 	if (status) {
-		dev_err(hub->intfdev,
+		dev_dbg(hub->intfdev,
 				"port %d status %04x.%04x after resume, %d\n",
 				port1, portchange, portstatus, status);
 	} else if (udev->reset_resume) {
-		dev_err(hub->intfdev,
-				"port %d status %04x.%04x reset resume, %d\n",
-				port1, portchange, portstatus, status);
+
 		/* Late port handoff can set status-change bits */
 		if (portchange & USB_PORT_STAT_C_CONNECTION)
 			clear_port_feature(hub->hdev, port1,
@@ -2087,7 +2081,7 @@ static int finish_port_resume(struct usb_device *udev)
 
 		/* If a normal resume failed, try doing a reset-resume */
 		if (status && !udev->reset_resume && udev->persist_enabled) {
-			dev_err(&udev->dev, "retry with reset-resume\n");
+			dev_dbg(&udev->dev, "retry with reset-resume\n");
 			udev->reset_resume = 1;
 			goto retry_reset_resume;
 		}
@@ -2170,7 +2164,7 @@ int usb_port_resume(struct usb_device *udev, pm_message_t msg)
 	status = clear_port_feature(hub->hdev,
 			port1, USB_PORT_FEAT_SUSPEND);
 	if (status) {
-		dev_err(hub->intfdev, "can't resume port %d, status %d\n",
+		dev_dbg(hub->intfdev, "can't resume port %d, status %d\n",
 				port1, status);
 	} else {
 		/* drive resume for at least 20 msec */
@@ -2202,7 +2196,7 @@ int usb_port_resume(struct usb_device *udev, pm_message_t msg)
 	if (status == 0)
 		status = finish_port_resume(udev);
 	if (status < 0) {
-		dev_err(&udev->dev, "can't resume, status %d\n", status);
+		dev_dbg(&udev->dev, "can't resume, status %d\n", status);
 		hub_port_logical_disconnect(hub, port1);
 	}
 	return status;
@@ -2386,13 +2380,8 @@ static int hub_port_debounce(struct usb_hub *hub, int port1)
 		"debounce: port %d: total %dms stable %dms status 0x%x\n",
 		port1, total_time, stable_time, portstatus);
 
-	if (stable_time < HUB_DEBOUNCE_STABLE) {
-		dev_err(hub->intfdev,
-			"debounce timed out: \
-			 port %d: total %dms stable %dms status 0x%x\n",
-			port1, total_time, stable_time, portstatus);
+	if (stable_time < HUB_DEBOUNCE_STABLE)
 		return -ETIMEDOUT;
-	}
 	return portstatus;
 }
 
@@ -2475,7 +2464,7 @@ hub_port_init (struct usb_hub *hub, struct usb_device *udev, int port1,
 	retval = -ENODEV;
 
 	if (oldspeed != USB_SPEED_UNKNOWN && oldspeed != udev->speed) {
-		dev_err(&udev->dev, "device reset changed speed!\n");
+		dev_dbg(&udev->dev, "device reset changed speed!\n");
 		goto fail;
 	}
 	oldspeed = udev->speed;
@@ -2591,7 +2580,7 @@ hub_port_init (struct usb_hub *hub, struct usb_device *udev, int port1,
 			if (retval < 0)		/* error or disconnect */
 				goto fail;
 			if (oldspeed != udev->speed) {
-				dev_err(&udev->dev,
+				dev_dbg(&udev->dev,
 					"device reset changed speed!\n");
 				retval = -ENODEV;
 				goto fail;
@@ -2892,7 +2881,7 @@ static void hub_port_connect_change(struct usb_hub *hub, int port1,
 			status = usb_get_status(udev, USB_RECIP_DEVICE, 0,
 					&devstat);
 			if (status < 2) {
-				dev_err(&udev->dev, "get status %d ?\n",
+				dev_dbg(&udev->dev, "get status %d ?\n",
 					status);
 				goto loop_disable;
 			}
@@ -2949,7 +2938,7 @@ static void hub_port_connect_change(struct usb_hub *hub, int port1,
 
 		status = hub_power_remaining(hub);
 		if (status)
-			dev_err(hub_dev, "%dmA power budget left\n", status);
+			dev_dbg(hub_dev, "%dmA power budget left\n", status);
 
 		return;
 
@@ -2959,11 +2948,8 @@ loop:
 		usb_ep0_reinit(udev);
 		release_address(udev);
 		usb_put_dev(udev);
-		if ((status == -ENOTCONN) || (status == -ENOTSUPP)) {
-			dev_err(hub_dev, "%s: SET_CONFIG loop status = %d\n",
-				__func__, status);
+		if ((status == -ENOTCONN) || (status == -ENOTSUPP))
 			break;
-		}
 	}
 	if (hub->hdev->parent ||
 			!hcd->driver->port_handed_over ||
@@ -3161,7 +3147,7 @@ static void hub_events(void)
 			dev_err (hub_dev, "get_hub_status failed\n");
 		else {
 			if (hubchange & HUB_CHANGE_LOCAL_POWER) {
-				dev_info(hub_dev, "power change\n");
+				dev_dbg(hub_dev, "power change\n");
 				clear_hub_feature(hdev, C_HUB_LOCAL_POWER);
 				if (hubstatus & HUB_STATUS_LOCAL_POWER)
 					/* FIXME: Is this always true? */
@@ -3170,7 +3156,7 @@ static void hub_events(void)
 					hub->limited_power = 0;
 			}
 			if (hubchange & HUB_CHANGE_OVERCURRENT) {
-				dev_info(hub_dev, "overcurrent change\n");
+				dev_dbg(hub_dev, "overcurrent change\n");
 				msleep(500);	/* Cool down */
 				clear_hub_feature(hdev, C_HUB_OVER_CURRENT);
                         	hub_power_on(hub, true);
@@ -3379,14 +3365,14 @@ static int usb_reset_and_verify_device(struct usb_device *udev)
 
 	if (udev->state == USB_STATE_NOTATTACHED ||
 			udev->state == USB_STATE_SUSPENDED) {
-		dev_err(&udev->dev, "device reset not allowed in state %d\n",
+		dev_dbg(&udev->dev, "device reset not allowed in state %d\n",
 				udev->state);
 		return -EINVAL;
 	}
 
 	if (!parent_hdev) {
 		/* this requires hcd-specific logic; see OHCI hc_restart() */
-		dev_err(&udev->dev, "%s for root hub!\n", __func__);
+		dev_dbg(&udev->dev, "%s for root hub!\n", __func__);
 		return -EISDIR;
 	}
 	parent_hub = hdev_to_hub(parent_hdev);
@@ -3398,19 +3384,13 @@ static int usb_reset_and_verify_device(struct usb_device *udev)
 		 * Other endpoints will be handled by re-enumeration. */
 		usb_ep0_reinit(udev);
 		ret = hub_port_init(parent_hub, udev, port1, i);
-		if (ret >= 0 || ret == -ENOTCONN || ret == -ENODEV) {
-			dev_err(&udev->dev, "%s: port_init failed %d\n",
-				__func__, ret);
+		if (ret >= 0 || ret == -ENOTCONN || ret == -ENODEV)
 			break;
-		}
 	}
 	clear_bit(port1, parent_hub->busy_bits);
 
-	if (ret < 0) {
-		dev_err(&udev->dev, "%s: need to re-enumerate as ret = %d\n",
-			__func__, ret);
+	if (ret < 0)
 		goto re_enumerate;
-	}
  
 	/* Device might have changed firmware (DFU or similar) */
 	if (descriptors_changed(udev, &descriptor)) {
