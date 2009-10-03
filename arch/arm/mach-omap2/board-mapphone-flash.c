@@ -23,6 +23,7 @@
 #include <linux/mtd/onenand_regs.h>
 #include <linux/types.h>
 #include <linux/io.h>
+#include <linux/delay.h>
 
 #include <asm/mach/flash.h>
 #include <mach/onenand.h>
@@ -101,6 +102,13 @@ static int omap_nand_dev_ready(struct omap_nand_platform_data *data)
 	return 0;
 }
 
+static int mapphone_dev_ready(struct mtd_info *mtd)
+{
+	ndelay(100);
+
+	return 0;
+}
+
 /**
  * mapphone_flash_init - Identify devices connected to GPMC and register.
  *
@@ -109,7 +117,7 @@ static int omap_nand_dev_ready(struct omap_nand_platform_data *data)
 void __init mapphone_flash_init(void)
 {
 	/* We know the RDY/BSY line is connected now */
-	sdp_nand_data.dev_ready = omap_nand_dev_ready;
+	sdp_nand_data.dev_ready = mapphone_dev_ready;
 
 	if (platform_device_register(&sdp_nand_device) < 0)
 		printk(KERN_ERR "Unable to register NAND device\n");

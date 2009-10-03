@@ -902,7 +902,7 @@ static int mapphone_bpwake_probe(struct platform_device *pdev)
 
 	rc = request_irq(gpio_to_irq(MAPPHONE_APWAKE_TRIGGER_GPIO),
 			 mapphone_bpwake_irqhandler,
-			 IRQF_TRIGGER_FALLING,
+			 IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING,
 			 "Remote Wakeup", NULL);
 	if (rc) {
 		wake_lock_destroy(&baseband_wakeup_wakelock);
