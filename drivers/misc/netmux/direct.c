@@ -43,6 +43,7 @@
  *   2008/07/09  Motorola    port to kernel 2.6.24 for TI 23.5                *
  *   2008/10/25  Motorola    update  kernel to TI 25.1                        *
  *   2009/08/13  Motorola    Remove wait in DirectClose()                     *
+ *   2009/10/02  Motorola    Replace LOGCOMMBUFF with DEBUG                   *
  ******************************************************************************/
 
 /* direct.c defines an interface between a NetMUX and the Linux raw character */
@@ -696,7 +697,7 @@ ssize_t DirectWrite (struct file* filp, const char* buf, size_t count, loff_t* f
     int32               minor;
     int32               result;
 
-    DEBUG("DirectWrite(0x%p, 0x%p, %d, 0x%p)\n", filp, buf, count, f_pos);
+    DEBUG("DirectWrite begin(0x%p, 0x%p, %d, 0x%p)\n", filp, buf, count, f_pos);
 
     direct = filp->private_data;
     minor  = MINOR(filp->f_dentry->d_inode->i_rdev);
@@ -726,7 +727,7 @@ ssize_t DirectWrite (struct file* filp, const char* buf, size_t count, loff_t* f
         return 0;
     }
 
-    LOGCOMMBUFF_CH(minor, "DirectWrite()-->", commbuff, commbuff_length(commbuff));
+    DEBUG("DirectWrite end(0x%p, 0x%p, %d, 0x%p)\n", filp, buf, count, f_pos);
 
     return count;
 }

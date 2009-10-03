@@ -1,7 +1,7 @@
 /******************************************************************************
  * NetMUX utility_host.h                                                      *
  *                                                                            *
- * Copyright (C) 2006-2007 Motorola, Inc.                                     *
+ * Copyright (C) 2006-2010 Motorola, Inc.                                     *
  *                                                                            *
  * Redistribution and use in source and binary forms, with or without         *
  * modification, are permitted provided that the following conditions are     *
@@ -35,8 +35,9 @@
  *   2007/04/11  Motorola    Modified commbuff_add_* to take header pointer   *
  *   2007/11/02  Motorola    Safely disable and enable interrupts             *
  *   2007/12/05  Motorola    Change initialize_task as INIT_WOKR changes in   *
- *                           kernel
+ *                           kernel                                           *
  *   2008/10/25  Motorola    update  kernel to TI 25.1                        *
+ *   2009/10/02  Motorola    replace down_interruptible() with down()         *
  ******************************************************************************/
 
 
@@ -222,11 +223,21 @@ typedef struct semaphore CRITICALSECTION;
  */
 #define initialize_criticalsection_lock(lock) init_MUTEX(lock)
 #define destroy_criticalsection_lock(lock)    {}
-#define enter_read_criticalsection(lock)      if(down_interruptible(lock)){\
-					          panic("kernel error in netmux:down_interruptible\n");}
+
+#define enter_read_criticalsection(lock)      down(lock)
+
+// Keep this implementation for further investigation;
+//#define enter_read_criticalsection(lock)     if(down_interruptible(lock)){ \
+//					          panic("kernel error in netmux:down_interruptible\n");}
+
 #define exit_read_criticalsection(lock)       up(lock)
-#define enter_write_criticalsection(lock)     if(down_interruptible(lock)){\
-					          panic("kernel erro in netmux: down_interruptible\n");}
+
+#define enter_write_criticalsection(lock)     down(lock)
+
+// Keep this implementation for further investigation;
+//#define enter_write_criticalsection(lock)     if(down_interruptible(lock)){ \
+//					          panic("kernel erro in netmux: down_interruptible\n");}
+
 #define exit_write_criticalsection(lock)      up(lock)
 
 typedef unsigned long INTERRUPT_STATE;
