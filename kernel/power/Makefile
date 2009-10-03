@@ -1,5 +1,5 @@
 
-ifeq ($(CONFIG_PM_DEBUG),y)
+ifeq ($(CONFIG_PM_VERBOSE),y)
 EXTRA_CFLAGS	+=	-DDEBUG
 endif
 
