@@ -44,6 +44,7 @@
 #include <linux/dma-mapping.h>
 
 #include "musb_core.h"
+#include "omap2430.h"
 
 
 /* MUSB PERIPHERAL status 3-mar-2006:
@@ -1479,12 +1480,24 @@ musb_gadget_set_self_powered(struct usb_gadget *gadget, int is_selfpowered)
 static void musb_pullup(struct musb *musb, int is_on)
 {
 	u8 power;
+	u32 reg;
+
+	reg = omap_readl(OTG_SYSCONFIG);
 
 	power = musb_readb(musb->mregs, MUSB_POWER);
-	if (is_on)
+	if (is_on) {
+		reg &= ~SMARTSTDBY;    /* remove possible smartstdby */
+		reg |= NOSTDBY;        /* enable no standby */
+		reg |= NOIDLE;         /* enable no idle */
 		power |= MUSB_POWER_SOFTCONN;
-	else
+	} else {
+		reg |= SMARTSTDBY;        /* enable smart standby */
+		reg &= ~NOSTDBY;          /* remove possible nostdby */
+		reg &= ~NOIDLE;           /* remove possible noidle */
 		power &= ~MUSB_POWER_SOFTCONN;
+	}
+
+	omap_writel(reg, OTG_SYSCONFIG);
 
 	/* FIXME if on, HdrcStart; if off, HdrcStop */
 
