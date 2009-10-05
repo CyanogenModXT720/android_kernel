@@ -30,6 +30,7 @@
 #include <mach/control.h>
 #include <mach/serial.h>
 #include <mach/irqs.h>
+#include <linux/pm_qos_params.h>
 
 #include "pm.h"
 
@@ -58,6 +59,24 @@ struct omap3_processor_cx {
 struct omap3_processor_cx omap3_power_states[OMAP3_MAX_STATES];
 struct omap3_processor_cx current_cx_state;
 struct powerdomain *mpu_pd, *core_pd, *per_pd;
+
+/* Gate long latency C states for 60 seconds to reduce boot time */
+static unsigned int __initdata boot_noidle_time = 60;
+
+/* Command line override to allow matching with application start time */
+static int __init boot_noidle_time_setup(char *str)
+{
+	get_option(&str, &boot_noidle_time);
+	return 1;
+}
+__setup("boot_noidle_time=", boot_noidle_time_setup);
+
+
+struct timer_list boot_timer;
+static void omap_boot_timer(unsigned long arg)
+{
+	pm_qos_remove_requirement(PM_QOS_CPU_DMA_LATENCY, "idle_delay");
+}
 
 static int omap3_idle_bm_check(void)
 {
@@ -270,6 +289,21 @@ int omap3_idle_init(void)
 	struct omap3_processor_cx *cx;
 	struct cpuidle_state *state;
 	struct cpuidle_device *dev;
+
+   /* To speed up boot process, restrict C-State to C0.
+      Below, we set the CPU_DMA_LATENCY to 10, which is
+	   less than the C1 state exit latency. This will ensure
+	   that the cpuidle governor does not transition to C1 or
+	   higher states till the CPU_DMA_LATENCY is relaxed.
+      The CPU_DMA_LATENCY requirement is removed when the
+      boot timer (which is set to 60 secs right now) expires.
+	*/
+	init_timer(&boot_timer);
+	boot_timer.function = omap_boot_timer;
+	boot_timer.data = (unsigned long)NULL;
+	boot_timer.expires = boot_noidle_time * HZ + jiffies;
+	add_timer(&boot_timer);
+	pm_qos_add_requirement(PM_QOS_CPU_DMA_LATENCY, "idle_delay", 10);
 
 	mpu_pd = pwrdm_lookup("mpu_pwrdm");
 	core_pd = pwrdm_lookup("core_pwrdm");
