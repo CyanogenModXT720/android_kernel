@@ -302,9 +302,6 @@ static int hplens_ioctl_s_ctrl(struct v4l2_int_device *s,
 	u8 fdb = 0;
 	int idx;
 
-	u8 tmp;
-
-
 	if (find_vctrl(vc->id) < 0)
 		return -EINVAL;
 
@@ -337,13 +334,6 @@ static int hplens_ioctl_s_ctrl(struct v4l2_int_device *s,
 
 			for (idx = fdb; idx <= reg.len_data; idx++) {
 				write_buffer[idx] = reg.data[idx-fdb];
-			}
-
-			/* swap DAC bytes */
-			if ((write_buffer[0] == 0x00) && (reg.len_data == 2)) {
-				tmp = write_buffer[1];
-				write_buffer[1] = write_buffer[2]<<1;
-				write_buffer[2] = tmp;
 			}
 
 			ret = hplens_reg_write(reg.dev_addr, write_buffer, reg.len_data + fdb);

@@ -548,10 +548,10 @@ EXPORT_SYMBOL(ispccdc_set_crop_offset);
  **/
 void ispccdc_config_crop(u32 left, u32 top, u32 height, u32 width)
 {
-	ispccdc_obj.ccdcin_woffset =\
-		left + ((left + ispccdc_obj.ccdcin_wstart) % 2);
-	ispccdc_obj.ccdcin_hoffset =\
-		top + ((top + ispccdc_obj.ccdcin_hstart) % 2);
+	ispccdc_obj.ccdcin_woffset = left +
+		((left + ispccdc_obj.ccdcin_wstart) % 2);
+	ispccdc_obj.ccdcin_hoffset = top +
+		((top + ispccdc_obj.ccdcin_hstart) % 2);
 
 	ispccdc_obj.crop_w = width - (width % 16);
 	ispccdc_obj.crop_h = height + (height % 2);
@@ -1393,16 +1393,18 @@ int ispccdc_config_size(u32 input_w, u32 input_h, u32 output_w, u32 output_h)
 					((50 & ISPCCDC_VDINT_1_MASK) <<
 					ISPCCDC_VDINT_1_SHIFT), ISPCCDC_VDINT);
 	} else if (ispccdc_obj.ccdc_outfmt == CCDC_OTHERS_VP_MEM) {
-		omap_writel((1 << ISPCCDC_FMT_HORZ_FMTSPH_SHIFT) |
+		omap_writel((ispccdc_obj.ccdcin_woffset <<
+					ISPCCDC_FMT_HORZ_FMTSPH_SHIFT) |
 					(ispccdc_obj.ccdcin_w <<
 					ISPCCDC_FMT_HORZ_FMTLNH_SHIFT),
 					ISPCCDC_FMT_HORZ);
-		omap_writel((0 << ISPCCDC_FMT_VERT_FMTSLV_SHIFT) |
+		omap_writel((ispccdc_obj.ccdcin_hoffset <<
+					ISPCCDC_FMT_VERT_FMTSLV_SHIFT) |
 					((ispccdc_obj.ccdcin_h) <<
 					ISPCCDC_FMT_VERT_FMTLNV_SHIFT),
 					ISPCCDC_FMT_VERT);
-		omap_writel((ispccdc_obj.ccdcout_w
-					<< ISPCCDC_VP_OUT_HORZ_NUM_SHIFT) |
+		omap_writel((ispccdc_obj.ccdcout_w <<
+					ISPCCDC_VP_OUT_HORZ_NUM_SHIFT) |
 					(ispccdc_obj.ccdcout_h <<
 					ISPCCDC_VP_OUT_VERT_NUM_SHIFT),
 					ISPCCDC_VP_OUT);
@@ -1413,11 +1415,13 @@ int ispccdc_config_size(u32 input_w, u32 input_h, u32 output_w, u32 output_h)
 					ISPCCDC_HORZ_INFO_NPH_SHIFT),
 					ISPCCDC_HORZ_INFO);
 */
-		omap_writel(1 << ISPCCDC_HORZ_INFO_SPH_SHIFT |
+		omap_writel(ispccdc_obj.ccdcin_woffset <<
+					ISPCCDC_HORZ_INFO_SPH_SHIFT |
 					((ispccdc_obj.ccdcout_w - 1) <<
 					ISPCCDC_HORZ_INFO_NPH_SHIFT),
 					ISPCCDC_HORZ_INFO);
-		omap_writel(0 << ISPCCDC_VERT_START_SLV0_SHIFT,
+		omap_writel(ispccdc_obj.ccdcin_hoffset <<
+					ISPCCDC_VERT_START_SLV0_SHIFT,
 					ISPCCDC_VERT_START);
 		omap_writel((ispccdc_obj.ccdcout_h - 1) <<
 					ISPCCDC_VERT_LINES_NLV_SHIFT,
@@ -1431,12 +1435,14 @@ int ispccdc_config_size(u32 input_w, u32 input_h, u32 output_w, u32 output_h)
 	} else if (ispccdc_obj.ccdc_outfmt == CCDC_OTHERS_LSC_MEM) {
 		/* Added by MMS */
 		/* Start with 1 pixel apart */
-		omap_writel((1 << ISPCCDC_FMT_HORZ_FMTSPH_SHIFT)
+		omap_writel((ispccdc_obj.ccdcin_woffset <<
+				ISPCCDC_FMT_HORZ_FMTSPH_SHIFT)
 				| (ispccdc_obj.ccdcin_w
 				<< ISPCCDC_FMT_HORZ_FMTLNH_SHIFT),
 				ISPCCDC_FMT_HORZ);
 
-		omap_writel((0 << ISPCCDC_FMT_VERT_FMTSLV_SHIFT)
+		omap_writel((ispccdc_obj.ccdcin_hoffset <<
+				ISPCCDC_FMT_VERT_FMTSLV_SHIFT)
 				| ((ispccdc_obj.ccdcin_h)
 				<< ISPCCDC_FMT_VERT_FMTLNV_SHIFT),
 				ISPCCDC_FMT_VERT);
