@@ -33,6 +33,7 @@
 #include <linux/usb/ch9.h>
 #include <linux/usb/gadget.h>
 #include <linux/usb/composite.h>
+#include <asm/cacheflush.h>
 #include "f_usbnet.h"
 
 #include "f_mot_android.h"
@@ -195,6 +196,14 @@ static struct usb_descriptor_header *hs_function[] = {
 	(struct usb_descriptor_header *) &hs_intr_out_desc,
 	NULL,
 };
+
+#define DO_NOT_STOP_QUEUE 0
+#define STOP_QUEUE 1
+
+#define USBNETDBG(context, fmt, args...)				\
+	if (context && context->gadget)					\
+		dev_dbg(&(context->gadget->dev) , fmt , ## args)
+
 
 static inline struct usbnet_device *func_to_dev(struct usb_function *f)
 {
@@ -430,8 +439,8 @@ static void ether_out_complete(struct usb_ep *ep, struct usb_request *req)
 	struct sk_buff *skb = req->context;
 
 	if (req->status == 0) {
-		dmac_inv_range((void *)req->buf,
-		(void *)(req->buf + req->actual));
+		dmac_inv_range((void *)req->buf, (void *)(req->buf +
+					req->actual));
 		skb_put(skb, req->actual);
 		skb->protocol = eth_type_trans(skb, g_usbnet_context->dev);
 		g_usbnet_context->stats.rx_packets++;

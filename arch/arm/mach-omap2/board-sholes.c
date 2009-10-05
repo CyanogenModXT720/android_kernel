@@ -102,6 +102,8 @@
 #define FACTORY_PRODUCT_ID		0x41D4
 #define FACTORY_ADB_PRODUCT_ID		0x41D4
 
+#define SHOLES_MMCPROBE_ENABLED 0
+
 static char device_serial[MAX_USB_SERIAL_NUM];
 
 static struct omap_opp sholes_mpu_rate_table[] = {
@@ -429,7 +431,7 @@ static struct qtouch_ts_platform_data sholes_ts_platform_data = {
 		.tch_det_int	= 0x2,
 		.mov_hyst_init	= 5,
 		.mov_hyst_next	= 5,
-		.mov_filter	= 0,
+		.mov_filter	= 0x9,
 		.num_touch	= 4,
 		.merge_hyst	= 0,
 		.merge_thresh	= 3,
@@ -496,7 +498,7 @@ static struct lm3530_platform_data omap3430_als_light_data = {
 	.als_zone_info = 0x00,
 	.als_resistor_sel = 0xf4,
 	.brightness_control = 0x00,
-	.zone_boundary_0 = 0x0,
+	.zone_boundary_0 = 0x01,
 	.zone_boundary_1 = 0x06,
 	.zone_boundary_2 = 0x44,
 	.zone_boundary_3 = 0xff,
@@ -505,7 +507,7 @@ static struct lm3530_platform_data omap3430_als_light_data = {
 	.zone_target_2 = 0x6e,
 	.zone_target_3 = 0x79,
 	.zone_target_4 = 0x7e,
-	.manual_current = 0x13,
+	.manual_current = 0x33,
 	.upper_curr_sel = 6,
 	.lower_curr_sel = 3,
 	.lens_loss_coeff = 6,
@@ -845,7 +847,7 @@ extern void omap_uart_block_sleep(int num);
 static struct wake_lock baseband_wakeup_wakelock;
 static int sholes_bpwake_irqhandler(int irq, void *unused)
 {
-	omap_uart_block_sleep(1);
+	omap_uart_block_sleep(0);
 	/*
 	 * uart_block_sleep keeps uart clock active for 500 ms,
 	 * prevent suspend for 1 sec to be safe
@@ -1275,7 +1277,11 @@ static void __init sholes_init(void)
 	config_wlan_gpio();
 	omap_hdq_init();
 	sholes_bt_init();
+#if SHOLES_MMCPROBE_ENABLED
+	sholes_mmcprobe_init();
+#else
 	sholes_hsmmc_init();
+#endif
 	sholes_vout_init();
 	sholes_sgx_init();
 	sholes_power_off_init();
