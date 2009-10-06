@@ -28,8 +28,6 @@ struct regulator *display_regulator;
 
 static int mapphone_panel_enable(struct omap_dss_device *dssdev)
 {
-	int ret;
-
 	if (!display_regulator) {
 		display_regulator = regulator_get(NULL, "vhvio");
 		if (IS_ERR(display_regulator)) {
@@ -55,8 +53,6 @@ static int mapphone_panel_enable(struct omap_dss_device *dssdev)
 
 static void mapphone_panel_disable(struct omap_dss_device *dssdev)
 {
-	int ret;
-
 	gpio_direction_output(MAPPHONE_DISPLAY_RESET_GPIO, 1);
 	gpio_set_value(MAPPHONE_DISPLAY_RESET_GPIO, 0);
 	msleep(1);
