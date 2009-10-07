@@ -536,7 +536,8 @@ static void do_dbs_timer(struct work_struct *work)
 	/* We want all CPUs to do sampling nearly on same jiffy */
 	int delay = usecs_to_jiffies(get_sampling_rate());
 
-	delay -= jiffies % delay;
+	if (num_online_cpus() > 1)
+		delay -= jiffies % delay;
 
 	if (lock_policy_rwsem_write(cpu) < 0)
 		return;
