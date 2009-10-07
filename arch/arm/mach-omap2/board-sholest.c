@@ -325,50 +325,34 @@ static int sholest_touch_reset(void)
 	return 0;
 }
 
-/* These are for test event-injection purposes only */
-static struct vkey sholest_touch_vkeys[] = {
-	{
-		.code		= KEY_MENU,
-	},
-	{
-		.code		= KEY_HOME,
-	},
-	{
-		.code		= KEY_BACK,
-	},
-	{
-		.code		= KEY_SEARCH,
-	},
-};
+static struct qtouch_ts_platform_data sholest_ts_platform_data;
+
 static ssize_t sholest_virtual_keys_show(struct kobject *kobj,
 					struct kobj_attribute *attr, char *buf)
 {
-	/* center: x: home: 55, menu: 185, back: 305, search 425, y: 835 */
-	/* keys are specified by setting the x,y of the center, the width,
-	 * and the height, as such keycode:center_x:center_y:width:height */
-#ifdef QTOUCH_TS_ATMEGA64A1_SUPPORT
-	if (qtm_obp_touch_atmega64a1_enable) {
-		return sprintf(buf, __stringify(EV_KEY) ":"
-		__stringify(KEY_MENU) ":32:906:63:57"
-		":" __stringify(EV_KEY) ":"
-		__stringify(KEY_HOME) ":240:906:89:57"
-		":" __stringify(EV_KEY) ":"
-		__stringify(KEY_BACK) ":440:906:89:57"
-		":" __stringify(EV_KEY) ":"
-		__stringify(KEY_SEARCH) ":520:906:63:57"
-		"\n");
-	} else {
-		return sprintf(buf, __stringify(EV_KEY) ":"
-		__stringify(KEY_MENU) ":32:906:63:57"
-		":" __stringify(EV_KEY) ":"
-		__stringify(KEY_HOME) ":162:906:89:57"
-		":" __stringify(EV_KEY) ":"
-		__stringify(KEY_BACK) ":292:906:89:57"
-		":" __stringify(EV_KEY) ":"
-		__stringify(KEY_SEARCH) ":439:906:63:57"
-		"\n");
+	int key_num;
+	int string_loc = 0;
+	int num_chars;
+
+	for (key_num = 0; key_num < sholest_ts_platform_data.vkeys.count; key_num++) {
+		if (key_num != 0) {
+			num_chars = sprintf((buf + string_loc), ":");
+			string_loc += num_chars;
+		}
+
+		num_chars = sprintf((buf + string_loc),
+			__stringify(EV_KEY) ":%d:%d:%d:%d:%d",
+			sholest_ts_platform_data.vkeys.keys[key_num].code,
+			sholest_ts_platform_data.vkeys.keys[key_num].center_x,
+			sholest_ts_platform_data.vkeys.keys[key_num].center_y,
+			sholest_ts_platform_data.vkeys.keys[key_num].width,
+			sholest_ts_platform_data.vkeys.keys[key_num].height);
+		string_loc += num_chars;
 	}
-#endif
+
+	sprintf((buf + string_loc), "\n");
+
+	return string_loc;
 }
 
 static struct kobj_attribute sholest_virtual_keys_attr = {
@@ -388,10 +372,7 @@ static struct attribute_group sholest_properties_attr_group = {
 	.attrs = sholest_properties_attrs,
 };
 
-static struct qtouch_ts_platform_data sholest_ts_platform_data;
-#ifdef QTOUCH_TS_ATMEGA64A1_SUPPORT
-struct qtouch_ts_platform_data sholest_ts_platform_data_atmega64a1;
-#endif
+static struct i2c_board_info __initdata sholest_i2c_bus1_board_info[];
 
 static void sholest_touch_init(void)
 {
@@ -399,26 +380,134 @@ static void sholest_touch_init(void)
 	struct device_node *touch_node;
 	const void *touch_prop;
 	int len = 0;
-const uint32_t *touch_propt;
+	const uint32_t *touch_val;
+
 	if ((touch_node = of_find_node_by_path(DT_PATH_TOUCH))) {
 		if ((touch_prop = of_get_property(touch_node, DT_PROP_TOUCH_KEYMAP, &len)) \
 			&& len && (0 == len % sizeof(struct vkey))) {
 			sholest_ts_platform_data.vkeys.count = len / sizeof(struct vkey);
 			sholest_ts_platform_data.vkeys.keys = (struct vkey *)touch_prop;
 		}
-		touch_propt = of_get_property(touch_node, \
-			DT_PROP_TOUCH_REVERSE_X, \
-			&len);
-#ifdef QTOUCH_TS_ATMEGA64A1_SUPPORT
-		if (touch_propt && len)	{
-			sholest_ts_platform_data.reverse_x = *touch_propt;
-			sholest_ts_platform_data_atmega64a1.reverse_x = \
-						*touch_propt;
+
+		if ((touch_prop = of_get_property(touch_node, DT_PROP_TOUCH_I2C_ADDRESS, &len))) {
+			sholest_i2c_bus1_board_info[0].addr = *((int *)touch_prop);
 		}
-#else
-		if (touch_propt && len)
-			sholest_ts_platform_data.reverse_x = *touch_propt;
-#endif
+
+		touch_val = of_get_property(touch_node, DT_PROP_TOUCH_FLAGS, &len);
+		if (touch_val && len)
+			sholest_ts_platform_data.flags = *touch_val;
+
+		touch_val = of_get_property(touch_node, DT_PROP_TOUCH_ABS_MIN_X, &len);
+		if (touch_val && len)
+			sholest_ts_platform_data.abs_min_x = *touch_val;
+
+		touch_val = of_get_property(touch_node, DT_PROP_TOUCH_ABS_MAX_X, &len);
+		if (touch_val && len)
+			sholest_ts_platform_data.abs_max_x = *touch_val;
+
+		touch_val = of_get_property(touch_node, DT_PROP_TOUCH_ABS_MIN_Y, &len);
+		if (touch_val && len)
+			sholest_ts_platform_data.abs_min_y = *touch_val;
+
+		touch_val = of_get_property(touch_node, DT_PROP_TOUCH_ABS_MAX_Y, &len);
+		if (touch_val && len)
+			sholest_ts_platform_data.abs_max_y = *touch_val;
+
+		touch_val = of_get_property(touch_node, DT_PROP_TOUCH_ABS_MIN_P, &len);
+		if (touch_val && len)
+			sholest_ts_platform_data.abs_min_p = *touch_val;
+
+		touch_val = of_get_property(touch_node, DT_PROP_TOUCH_ABS_MAX_P, &len);
+		if (touch_val && len)
+			sholest_ts_platform_data.abs_max_p = *touch_val;
+
+		touch_val = of_get_property(touch_node, DT_PROP_TOUCH_ABS_MIN_W, &len);
+		if (touch_val && len)
+			sholest_ts_platform_data.abs_min_w = *touch_val;
+
+		touch_val = of_get_property(touch_node, DT_PROP_TOUCH_ABS_MAX_W, &len);
+		if (touch_val && len)
+			sholest_ts_platform_data.abs_max_w = *touch_val;
+
+		touch_val = of_get_property(touch_node, DT_PROP_TOUCH_FUZZ_X, &len);
+		if (touch_val && len)
+			sholest_ts_platform_data.fuzz_x = *touch_val;
+
+		touch_val = of_get_property(touch_node, DT_PROP_TOUCH_FUZZ_Y, &len);
+		if (touch_val && len)
+			sholest_ts_platform_data.fuzz_y = *touch_val;
+
+		touch_val = of_get_property(touch_node, DT_PROP_TOUCH_FUZZ_P, &len);
+		if (touch_val && len)
+			sholest_ts_platform_data.fuzz_p = *touch_val;
+
+		touch_val = of_get_property(touch_node, DT_PROP_TOUCH_FUZZ_W, &len);
+		if (touch_val && len)
+			sholest_ts_platform_data.fuzz_w = *touch_val;
+
+		if ((touch_prop = of_get_property(touch_node, DT_PROP_TOUCH_T15, &len))) {
+			sholest_ts_platform_data.key_array.cfg = (struct qtm_touch_keyarray_cfg *)touch_prop;
+		}
+
+		if ((touch_prop = of_get_property(touch_node, DT_PROP_TOUCH_KEY_ARRAY_MAP, &len))) {
+			sholest_ts_platform_data.key_array.keys = (struct qtouch_key *)touch_prop;
+		}
+
+		touch_val = of_get_property(touch_node, DT_PROP_TOUCH_KEY_ARRAY_COUNT, &len);
+		if (touch_val && len)
+			sholest_ts_platform_data.key_array.num_keys = *touch_val;
+
+		if ((touch_prop = of_get_property(touch_node, DT_PROP_TOUCH_T7, &len))) {
+			sholest_ts_platform_data.power_cfg = *(struct qtm_gen_power_cfg *)touch_prop;
+		}
+
+		if ((touch_prop = of_get_property(touch_node, DT_PROP_TOUCH_T8, &len))) {
+			sholest_ts_platform_data.acquire_cfg = *(struct qtm_gen_acquire_cfg *)touch_prop;
+		}
+
+		if ((touch_prop = of_get_property(touch_node, DT_PROP_TOUCH_T9, &len))) {
+			sholest_ts_platform_data.multi_touch_cfg = *(struct qtm_touch_multi_cfg *)touch_prop;
+		}
+
+ 		if ((touch_prop = of_get_property(touch_node, DT_PROP_TOUCH_T17, &len))) {
+			sholest_ts_platform_data.linear_tbl_cfg
+				= *(struct  qtm_proci_linear_tbl_cfg*)touch_prop;
+		}
+
+		if ((touch_prop = of_get_property(touch_node, DT_PROP_TOUCH_T19, &len))) {
+			sholest_ts_platform_data.gpio_pwm_cfg
+				= *(struct  qtm_spt_gpio_pwm_cfg*)touch_prop;
+		}
+
+		if ((touch_prop = of_get_property(touch_node, DT_PROP_TOUCH_T20, &len))) {
+			sholest_ts_platform_data.grip_suppression_cfg
+				= *(struct  qtm_proci_grip_suppression_cfg*)touch_prop;
+		}
+
+		if ((touch_prop = of_get_property(touch_node, DT_PROP_TOUCH_T22, &len))) {
+			sholest_ts_platform_data.noise_suppression_cfg
+				= *(struct  qtm_procg_noise_suppression_cfg*)touch_prop;
+		}
+
+		if ((touch_prop = of_get_property(touch_node, DT_PROP_TOUCH_T24, &len))) {
+			sholest_ts_platform_data.one_touch_gesture_proc_cfg
+				= *(struct  qtm_proci_one_touch_gesture_proc_cfg*)touch_prop;
+		}
+
+		if ((touch_prop = of_get_property(touch_node, DT_PROP_TOUCH_T25, &len))) {
+			sholest_ts_platform_data.self_test_cfg
+				= *(struct  qtm_spt_self_test_cfg*)touch_prop;
+		}
+
+		if ((touch_prop = of_get_property(touch_node, DT_PROP_TOUCH_T27, &len))) {
+			sholest_ts_platform_data.two_touch_gesture_proc_cfg
+				= *(struct  qtm_proci_two_touch_gesture_proc_cfg*)touch_prop;
+		}
+
+		if ((touch_prop = of_get_property(touch_node, DT_PROP_TOUCH_T28, &len))) {
+			sholest_ts_platform_data.cte_config_cfg = *(struct  qtm_spt_cte_config_cfg*)touch_prop;
+		}
+
 		of_node_put(touch_node);
 	}
 #endif
@@ -451,209 +540,71 @@ static void sholest_misc_init(void)
     }
 }
 
+static struct vkey sholest_touch_vkeys[] = {
+	{
+		.code		= KEY_MENU,
+		.center_x	= 32,
+		.center_y	= 906,
+		.width		= 63,
+		.height		= 57,
+	},
+	{
+		.code		= KEY_HOME,
+		.center_x	= 162,
+		.center_y	= 906,
+		.width		= 89,
+		.height		= 57,
+	},
+	{
+		.code		= KEY_BACK,
+		.center_x	= 292,
+		.center_y	= 906,
+		.width		= 89,
+		.height		= 57,
+	},
+	{
+		.code		= KEY_SEARCH,
+		.center_x	= 439,
+		.center_y	= 906,
+		.width		= 63,
+		.height		= 57,
+	},
+};
+
 static struct qtm_touch_keyarray_cfg sholest_key_array_data[] = {
 	{
-		.ctrl = 0,
-		.x_origin = 0,
-		.y_origin = 0,
-		.x_size = 0,
-		.y_size = 0,
-		.aks_cfg = 0,
-		.burst_len = 0,
-		.tch_det_thr = 0,
-		.tch_det_int = 0,
-		.rsvd1 = 0,
-		.rsvd2 = 0,
-	},
-	{
-		.ctrl = 0,
-		.x_origin = 0,
-		.y_origin = 0,
-		.x_size = 0,
-		.y_size = 0,
-		.aks_cfg = 0,
-		.burst_len = 0,
-		.tch_det_thr = 0,
-		.tch_det_int = 0,
-		.rsvd1 = 0,
-		.rsvd2 = 0,
-	},
-};
-
-#ifdef QTOUCH_TS_ATMEGA64A1_SUPPORT
-struct qtouch_ts_platform_data sholest_ts_platform_data_atmega64a1 = {
-	.irqflags	= (IRQF_TRIGGER_FALLING | IRQF_TRIGGER_LOW),
-	.flags		= (QTOUCH_SWAP_XY |
-			   QTOUCH_USE_MULTITOUCH |
-			   QTOUCH_CFG_BACKUPNV),
-	.reverse_x  = 0,
-	.abs_min_x	= 0,
-	.abs_max_x	= 1024,
-	.abs_min_y	= 0,
-	.abs_max_y	= 960,
-	.abs_min_p	= 0,
-	.abs_max_p	= 255,
-	.abs_min_w	= 0,
-	.abs_max_w	= 15,
-	.nv_checksum	= 0xb834,
-	.fuzz_x		= 0,
-	.fuzz_y		= 0,
-	.fuzz_p		= 2,
-	.fuzz_w		= 2,
-	.hw_reset	= sholest_touch_reset,
-	.power_cfg	= {
-		.idle_acq_int	= 1,
-		.active_acq_int	= 16,
-		.active_idle_to	= 25,
-	},
-	.acquire_cfg	= {
-		.charge_time	= 10,
-		.atouch_drift	= 5,
-		.touch_drift	= 20,
-		.drift_susp	= 20,
-		.touch_autocal	= 0,
-		.sync		= 0,
-	},
-	.multi_touch_cfg	= {
-		.ctrl		= 0x03,
+		.ctrl		= 0,
 		.x_origin	= 0,
 		.y_origin	= 0,
-		.x_size		= 18,
-		.y_size		= 10,
+		.x_size		= 0,
+		.y_size		= 0,
 		.aks_cfg	= 0,
-		.burst_len	= 0x40,
-		.tch_det_thr	= 0x23,
-		.tch_det_int	= 0x4,
-		.mov_hyst_init	= 5,
-		.mov_hyst_next	= 5,
-		.mov_filter	= 0,
-		.num_touch	= 4,
-		.merge_hyst	= 5,
-		.merge_thresh	= 5,
-		.amphyst	= 0, /* No use */
-		.x_res_lsb	= 0, /* No use */
-		.x_res_msb	= 0, /* No use */
-		.y_res_lsb	= 0, /* No use */
-		.y_res_msb	= 0, /* No use */
-		.x_low_clip	= 0, /* No use */
-		.x_high_clip	= 0, /* No use */
-		.y_low_clip	= 0, /* No use */
-		.y_high_clip	= 0, /* No use */
+		.burst_len	= 0,
+		.tch_det_thr	= 0,
+		.tch_det_int	= 0,
+		.rsvd1		= 0,
+		.rsvd2		= 0,
 	},
-	.sig_filter_cfg = {
-		.slew	= 0x00, /* No use */
-		.median = 0x00, /* No use */
-		.iir = 0x00, /* No use */
-	},
-	.linear_tbl_cfg = {
-		.ctrl = 0x00,
-		.x_offset = 0x0000,
-		.x_segment = {
-			0x00, 0x00, 0x00 , 0x00,
-			0x00, 0x00, 0x00, 0x00,
-			0x00, 0x00, 0x00, 0x00,
-			0x00, 0x00, 0x00, 0x00
-		},
-		.y_offset = 0x0000,
-		.y_segment = {
-			0x00, 0x00, 0x00, 0x00,
-			0x00, 0x00, 0x00, 0x00,
-			0x00, 0x00, 0x00, 0x00,
-			0x00, 0x00, 0x00, 0x00
-		},
-	},
-	.grip_suppression_cfg = {
-		.ctrl		= 0x00,
-		.xlogrip	= 0x00,
-		.xhigrip	= 0x00,
-		.ylogrip	= 0x00,
-		.yhigrip	= 0x00,
-		.maxtchs	= 0x00,
-		.reserve0	= 0x00,
-		.szthr1		= 0x00,
-		.szthr2		= 0x00,
-		.shpthr1	= 0x00,
-		.shpthr2	= 0x00,
-	},
-	.spt_noisesuppression_cfg = {
-		.ctrl		= 0x00, /* No use */
-		.outflen		= 0x00, /* No use */
-		.reserved0		= 0x00, /* No use */
-		.gcaful_lsb		= 0x00, /* No use */
-		.gcaful_msb		= 0x00, /* No use */
-		.gcafll_lsb		= 0x00, /* No use */
-		.gcafll_msb		= 0x00, /* No use */
-		.gcaflcount		= 0x00, /* No use */
-		.noisethr		= 0x00, /* No use */
-		.reserved1		= 0x00, /* No use */
-		.freqhopscale		= 0x00, /* No use */
-		.freq0			= 0x00, /* No use */
-		.freq1			= 0x00, /* No use */
-		.freq2			= 0x00, /* No use */
-	},
-	.proci_onetouchgestureprocessor_cfg = {
-		.ctrl			= 0x00, /* No use */
-		.reserved		= 0x00, /* No use */
-		.gesten0		= 0x00, /* No use */
-		.gesten1		= 0x00, /* No use */
-		.pressproc		= 0x00, /* No use */
-		.tapto			= 0x00, /* No use */
-		.flickto		= 0x00, /* No use */
-		.dragto			= 0x00, /* No use */
-		.spressto		= 0x00, /* No use */
-		.lpressto		= 0x00, /* No use */
-		.reppressto		= 0x00, /* No use */
-		.flickthr_lsb		= 0x00, /* No use */
-		.flickthr_msb		= 0x00, /* No use */
-	},
-	.spt_selftest_cfg = {
-		.ctrl			= 0x00, /* No use */
-		.cmd			= 0x00, /* No use */
-		.siglim0_high		= 0x00, /* No use */
-		.siglim0_low		= 0x00, /* No use */
-		.siglim1_high		= 0x00, /* No use */
-		.siglim1_low		= 0x00, /* No use */
-	},
-	.proci_twotouchgestureprocessor_cfg = {
-		.ctrl			= 0x00, /* No use */
-		.reserve0		= 0x00, /* No use */
-		.reserve1		= 0x00, /* No use */
-		.gesten			= 0x00, /* No use */
-		.rotatethr		= 0x00, /* No use */
-		.zoomthr_lsb		= 0x00, /* No use */
-		.zoomthr_msb		= 0x00, /* No use */
-	},
-	.spt_cteconfig_cfg = {
-		.ctrl			= 0x00, /* No use */
-		.cmd			= 0x00, /* No use */
-		.mode			= 0x00, //* No use */
-		.idlegcafdepth		= 0x00, /* No use */
-		.actvgcafdepth		= 0x00, /* No use */
-	},
-	.noise1_suppression_cfg = {
-		.ctrl = 0x01,
-		.reserved = 0x01,
-		.atchthr = 0x64,
-		.duty_cycle = 0x08,
-	},
-	.key_array      = {
-		.cfg		= sholest_key_array_data,
-		.num_keys   = ARRAY_SIZE(sholest_key_array_data),
-	},
-	.vkeys			= {
-		.keys		= sholest_touch_vkeys,
-		.count		= ARRAY_SIZE(sholest_touch_vkeys),
-		.start		= 961,
+	{
+		.ctrl		= 0,
+		.x_origin	= 0,
+		.y_origin	= 0,
+		.x_size		= 0,
+		.y_size		= 0,
+		.aks_cfg	= 0,
+		.burst_len	= 0,
+		.tch_det_thr	= 0,
+		.tch_det_int	= 0,
+		.rsvd1		= 0,
+		.rsvd2		= 0,
 	},
 };
-#endif
 
 static struct qtouch_ts_platform_data sholest_ts_platform_data = {
-	.irqflags	= (IRQF_TRIGGER_FALLING | IRQF_TRIGGER_LOW),
 	.flags		= (QTOUCH_SWAP_XY |
 			   QTOUCH_USE_MULTITOUCH |
 			   QTOUCH_CFG_BACKUPNV),
-	.reverse_x  = 0,
+	.irqflags	= (IRQF_TRIGGER_FALLING | IRQF_TRIGGER_LOW),
 	.abs_min_x	= 0,
 	.abs_max_x	= 1024,
 	.abs_min_y	= 0,
@@ -668,6 +619,11 @@ static struct qtouch_ts_platform_data sholest_ts_platform_data = {
 	.fuzz_p		= 2,
 	.fuzz_w		= 2,
 	.hw_reset	= sholest_touch_reset,
+	.key_array = {
+		.cfg		= sholest_key_array_data,
+		.keys		= NULL,
+		.num_keys	= 0,
+	},
 	.power_cfg	= {
 		.idle_acq_int	= 0x08,
 		.active_acq_int	= 0x10,
@@ -692,27 +648,20 @@ static struct qtouch_ts_platform_data sholest_ts_platform_data = {
 		.tch_det_thr	= 0x20,
 		.tch_det_int	= 0x02,
 		.orient		= 0,
-		.mrgtimeout	= 0x19,
+		.mrg_to		= 0x19,
 		.mov_hyst_init	= 0x05,
 		.mov_hyst_next	= 0x05,
 		.mov_filter	= 0,
 		.num_touch	= 0x02,
 		.merge_hyst	= 0x05,
 		.merge_thresh	= 0x05,
-		.amphyst	= 0,
-		.x_res_lsb	= 0,
-		.x_res_msb	= 0,
-		.y_res_lsb	= 0,
-		.y_res_msb	= 0,
-		.x_low_clip	= 0,
-		.x_high_clip	= 0,
-		.y_low_clip	= 0,
-		.y_high_clip	= 0,
-	},
-	.sig_filter_cfg = {
-		.slew	= 0x00,
-		.median = 0x00,
-		.iir = 0x00,
+		.amp_hyst	= 0,
+		.x_res		= 0x0000,
+		.y_res		= 0x0000,
+		.x_low_clip	= 0x00,
+		.x_high_clip	= 0x00,
+		.y_low_clip	= 0x00,
+		.y_high_clip	= 0x00,
 	},
 	.linear_tbl_cfg = {
 		.ctrl = 0x00,
@@ -731,6 +680,20 @@ static struct qtouch_ts_platform_data sholest_ts_platform_data = {
 			0x00, 0x00, 0x00, 0x00
 		},
 	},
+	.gpio_pwm_cfg = {
+		.ctrl			= 0,
+		.report_mask		= 0,
+		.pin_direction		= 0,
+		.internal_pullup	= 0,
+		.output_value		= 0,
+		.wake_on_change		= 0,
+		.pwm_enable		= 0,
+		.pwm_period		= 0,
+		.duty_cycle_0		= 0,
+		.duty_cycle_1		= 0,
+		.duty_cycle_2		= 0,
+		.duty_cycle_3		= 0,
+	},
 	.grip_suppression_cfg = {
 		.ctrl		= 0x00,
 		.xlogrip	= 0x00,
@@ -744,75 +707,65 @@ static struct qtouch_ts_platform_data sholest_ts_platform_data = {
 		.shpthr1	= 0x00,
 		.shpthr2	= 0x00,
 	},
-	.spt_noisesuppression_cfg = {
-		.ctrl		= 0x00,
-		.outflen		= 0x00,
-		.reserved0		= 0x00,
-		.gcaful_lsb		= 0x00,
-		.gcaful_msb		= 0x00,
-		.gcafll_lsb		= 0x00,
-		.gcafll_msb		= 0x00,
-		.gcaflcount		= 0x00,
-		.noisethr		= 0x00,
-		.reserved1		= 0x00,
-		.freqhopscale		= 0x00,
-		.freq0		= 0x00,
-		.freq1		= 0x00,
-		.freq2		= 0x00,
+	.noise_suppression_cfg = {
+		.ctrl			= 0,
+		.outlier_filter_len	= 0,
+		.reserve0		= 0,
+		.gcaf_upper_limit	= 0,
+		.gcaf_lower_limit	= 0,
+		.gcaf_low_count		= 0,
+		.noise_threshold	= 0,
+		.reserve1		= 0,
+		.freq_hop_scale		= 0,
 	},
-	.proci_onetouchgestureprocessor_cfg = {
-		.ctrl		= 0x00,
-		.reserved		= 0x00,
-		.gesten0		= 0x00,
-		.gesten1		= 0x00,
-		.pressproc		= 0x00,
-		.tapto		= 0x00,
-		.flickto		= 0x00,
-		.dragto		= 0x00,
-		.spressto		= 0x00,
-		.lpressto		= 0x00,
-		.reppressto		= 0x00,
-		.flickthr_lsb		= 0x00,
-		.flickthr_msb		= 0x00,
+	.one_touch_gesture_proc_cfg = {
+		.ctrl			= 0,
+		.reserve0		= 0,
+		.gesture_enable		= 0,
+		.pres_proc		= 0,
+		.tap_time_out		= 0,
+		.flick_time_out		= 0,
+		.drag_time_out		= 0,
+		.short_press_time_out	= 0,
+		.long_press_time_out	= 0,
+		.repeat_press_time_out	= 0,
+		.flick_threshold	= 0,
+		.drag_threshold		= 0,
+		.tap_threshold		= 0,
+		.throw_threshold	= 0,
 	},
-	.spt_selftest_cfg = {
-		.ctrl		= 0x00,
-		.cmd		= 0x00,
-		.siglim0_high		= 0x00,
-		.siglim0_low		= 0x00,
-		.siglim1_high		= 0x00,
-		.siglim1_low		= 0x00,
+	.self_test_cfg = {
+		.ctrl			= 0,
+		.command		= 0,
+		.high_signal_limit_0	= 0,
+		.low_signal_limit_0	= 0,
+		.high_signal_limit_1	= 0,
+		.low_signal_limit_1	= 0,
 	},
-	.proci_twotouchgestureprocessor_cfg = {
-		.ctrl		= 0x00,
-		.reserve0		= 0x00,
-		.reserve1		= 0x00,
-		.gesten		= 0x00,
-		.rotatethr		= 0x00,
-		.zoomthr_lsb		= 0x00,
-		.zoomthr_msb		= 0x00,
+	.two_touch_gesture_proc_cfg = {
+		.ctrl			= 0,
+		.reserved0		= 0,
+		.reserved1		= 0,
+		.gesture_enable		= 0,
+		.rotate_threshold	= 0,
+		.zoom_threshold		= 0,
 	},
-	.spt_cteconfig_cfg = {
-		.ctrl		= 0x01,
-		.cmd		= 0x00,
-		.mode		= 0x03,
-		.idlegcafdepth		= 0x04,
-		.actvgcafdepth		= 0x08,
+	.cte_config_cfg = {
+		.ctrl			= 1,
+		.command		= 0,
+		.mode			= 3,
+		.idle_gcaf_depth	= 4,
+		.active_gcaf_depth	= 8,
 	},
 	.noise1_suppression_cfg = {
-		.ctrl = 0x01,
-		.reserved = 0x01,
-		.atchthr = 0x64,
-		.duty_cycle = 0x08,
-	},
-	.key_array      = {
-		.cfg		= sholest_key_array_data,
-		.num_keys   = ARRAY_SIZE(sholest_key_array_data),
+		.ctrl		= 0x01,
+		.reserved	= 0x01,
+		.atchthr	= 0x64,
+		.duty_cycle	= 0x08,
 	},
 	.vkeys			= {
-		.keys		= sholest_touch_vkeys,
 		.count		= ARRAY_SIZE(sholest_touch_vkeys),
-		.start		= 961,
+		.keys		= sholest_touch_vkeys,
 	},
 };
 
