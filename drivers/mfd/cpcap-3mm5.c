@@ -241,12 +241,6 @@ void configure_cpcap_irq(int device, void *data)
 {
 	struct cpcap_3mm5_data *data_3mm5 = data;
 
-	int read_hs = 0;
-
-	read_hs = cpcap_irq_sense(data_3mm5->cpcap, CPCAP_IRQ_HS, 0);
-	printk(KERN_INFO "configure_cpcap_irq -"
-			" before configure: read_hs = %d\n", read_hs);
-
 	switch (device) {
 	case HEADSET_WITH_MIC:
 	case HEADSET_WITHOUT_MIC:
@@ -272,7 +266,6 @@ void configure_cpcap_irq(int device, void *data)
 		cpcap_irq_clear(data_3mm5->cpcap,
 			CPCAP_IRQ_UC_PRIMACRO_5);
 		cpcap_irq_mask(data_3mm5->cpcap, CPCAP_IRQ_HS);
-		printk(KERN_INFO "configure_cpcap_irq - masked HS\n");
 		break;
 
 	case NO_DEVICE:
@@ -290,10 +283,6 @@ void configure_cpcap_irq(int device, void *data)
 		break;
 	}
 
-	read_hs = cpcap_irq_sense(data_3mm5->cpcap, CPCAP_IRQ_HS, 0);
-	printk(KERN_INFO "configure_cpcap_irq -"
-			" After configure: read_hs = %d\n", read_hs);
-
 	printk(KERN_INFO "configure_cpcap_irq : "
 				"h2w_switch_state = %d\n", device);
 }
@@ -309,7 +298,6 @@ static void hs_work(struct work_struct *work)
 	int control_val = 0;
 	int present = 0;
 	int adc9_count = 0;
-	int read_hs = 0;
 
 	data_3mm5 = container_of(work, struct cpcap_3mm5_data, work_queue);
 	platform_data = data_3mm5->cpcap->spi->controller_data;
@@ -317,11 +305,9 @@ static void hs_work(struct work_struct *work)
 
 	/* Redetect */
 	switch_set_state(&data_3mm5->sdev, NO_DEVICE);
-	read_hs = cpcap_irq_sense(data_3mm5->cpcap, CPCAP_IRQ_HS, 0);
-	printk(KERN_INFO "hs_work - initial value : read_hs = %d\n", read_hs);
 
 	dev_info(&data_3mm5->cpcap->spi->dev,
-			"hs_work: redetect:"
+			" Redetect:"
 			" Headset detached: Connected=%d\n", NO_DEVICE);
 
 	/*Enable HSMIC NO0 path*/
@@ -343,13 +329,7 @@ static void hs_work(struct work_struct *work)
 		/* Give PTTS time to settle */
 		mdelay(2);
 
-	read_hs = cpcap_irq_sense(data_3mm5->cpcap, CPCAP_IRQ_HS, 0);
-	printk(KERN_INFO "hs_work - after mdelay->PTT :"
-			" read_hs = %d\n", read_hs);
-
-
 	read_ptt = cpcap_irq_sense(data_3mm5->cpcap, CPCAP_IRQ_PTT, 1);
-	printk(KERN_INFO "hs_work : read_ptt = %d\n", read_ptt);
 	if (read_ptt <= 0) {
 		/* 1. Headset without mic is detected.
 		2. Parallel headset with the MFB pressed.
@@ -375,7 +355,6 @@ static void hs_work(struct work_struct *work)
 
 		if (adc9_count > TVOUT_ADC_THRESHOLD) {
 			present = venc_tv_connect();
-			printk(KERN_INFO "hs_work : present = %d\n", present);
 
 			if (present) {
 				/*Enable TV NO2 path*/
@@ -393,14 +372,7 @@ static void hs_work(struct work_struct *work)
 				if (data_3mm5->is_tv_enabled == 0) {
 					enable_irq(tvint->tvint_irq);
 					data_3mm5->is_tv_enabled = 1;
-					printk(KERN_INFO "hs_work : Enabled TV INT IRQ -\n");
 				}
-
-
-				read_hs = cpcap_irq_sense(data_3mm5->cpcap,
-							CPCAP_IRQ_HS, 0);
-				printk(KERN_INFO "hs_work - before going in"
-					" CPCAPIRQ : read_hs = %d\n", read_hs);
 
 				configure_cpcap_irq(TVOUT_DET, data_3mm5);
 				new_state = TVOUT_DET;
@@ -442,19 +414,8 @@ static void hs_work(struct work_struct *work)
 			new_state = HEADSET_WITHOUT_MIC;
 		}
 	} else {/* if PTT > 0*/
-
-		read_hs = cpcap_irq_sense(data_3mm5->cpcap, CPCAP_IRQ_HS, 0);
-		printk(KERN_INFO "hs_work - before going"
-				" in CPCAPIRQSNS via MB2SNS: read_hs = %d\n",
-				read_hs);
-
 		read_mb2sns = cpcap_irq_sense(data_3mm5->cpcap,
 						CPCAP_IRQ_MB2, 0);
-		printk(KERN_INFO "hs_work : read_mb2sns = %d\n", read_mb2sns);
-
-		read_hs = cpcap_irq_sense(data_3mm5->cpcap, CPCAP_IRQ_HS, 0);
-		printk(KERN_INFO "hs_work - after goin in CPCAPIRQ"
-				" SNS via MB2SNS: read_hs = %d\n", read_hs);
 
 		if (read_mb2sns == 0) {
 			configure_cpcap_irq(HEADSET_WITHOUT_MIC, data_3mm5);
@@ -468,9 +429,6 @@ static void hs_work(struct work_struct *work)
 		}
 	}
 
-	read_hs = cpcap_irq_sense(data_3mm5->cpcap, CPCAP_IRQ_HS, 0);
-	printk(KERN_INFO "hs_work - Exit value : read_hs = %d\n", read_hs);
-
 	switch_set_state(&data_3mm5->sdev, new_state);
 	dev_info(&data_3mm5->cpcap->spi->dev, "New Accessory state: %d\n",
 		 new_state);
@@ -483,7 +441,6 @@ static void hs_handler_tv_out(enum cpcap_irqs irq, void *data)
 	struct cpcap_platform_data *platform_data = NULL;
 	struct cpcap_3mm5_tvint *tvint = NULL;
 	int read_hs = 0;
-	int loop_count = 0;
 
 	platform_data = data_3mm5->cpcap->spi->controller_data;
 	tvint = platform_data->tvint;
@@ -493,10 +450,7 @@ static void hs_handler_tv_out(enum cpcap_irqs irq, void *data)
 				"Invalid headset IRQ : \n", __func__);
 		return;
 	}
-
-	read_hs = cpcap_irq_sense(data_3mm5->cpcap, CPCAP_IRQ_HS, 0);
-	printk(KERN_INFO "hs_handler_tv_out :"
-			" Entry Level read_hs = %d\n", read_hs);
+	read_hs = cpcap_irq_sense(data_3mm5->cpcap, CPCAP_IRQ_HS, 1);
 
 	/* HS sense of 1 means no headset present, 0 means headset attached. */
 	if (read_hs == 1) {
@@ -514,17 +468,11 @@ static void hs_handler_tv_out(enum cpcap_irqs irq, void *data)
 		if (data_3mm5->is_tv_enabled == 1) {
 			disable_irq(tvint->tvint_irq);
 			data_3mm5->is_tv_enabled = 0;
-			printk(KERN_INFO "hs_handler_tv_out : "
-				"Disabled TV INT IRQ \n");
 		}
-
-		read_hs = cpcap_irq_sense(data_3mm5->cpcap, CPCAP_IRQ_HS, 0);
-		printk(KERN_INFO "hs_handler_tv_out : "
-					"Exit Level read_hs = %d\n", read_hs);
-
-		printk(KERN_INFO "hs_handler_tv_out: New Accesory State = 0 \n");
-
 		switch_set_state(&data_3mm5->sdev, NO_DEVICE);
+		dev_info(&data_3mm5->cpcap->spi->dev,
+			"New Accessory state: %d\n",
+			NO_DEVICE);
 
 	} else {
 		schedule_work(&(data_3mm5->work_queue));
@@ -647,14 +595,12 @@ static irqreturn_t tvint_irq(int irq, void *data)
 	platform_data = data_3mm5->cpcap->spi->controller_data;
 	tvint = platform_data->tvint;
 
-	printk(KERN_INFO "tvint_irq came !!\n");
 	present = gpio_get_value(irq_to_gpio(tvint->tvint_irq));
 
 	if (present == 0) {
 		disable_irq(tvint->tvint_irq);
 		data_3mm5->is_tv_enabled = 0;
 		schedule_work(&data_3mm5->tvint_work_queue);
-		printk(KERN_INFO "tvint_irq: Disabled TV INT IRQ -  \n");
 	}
 	return IRQ_HANDLED;
 }
@@ -663,18 +609,11 @@ static void tvint_work(struct work_struct *work)
 {
 	struct cpcap_3mm5_data *data_3mm5;
 	int read_hs = 0;
-	int loop_count = 0;
 
 	data_3mm5 = container_of(work, struct cpcap_3mm5_data,
 					tvint_work_queue);
-	read_hs = cpcap_irq_sense(data_3mm5->cpcap, CPCAP_IRQ_HS, 0);
-	printk(KERN_INFO "tvint_work: read_hs = %d\n", read_hs);
-	for (loop_count = 0; loop_count <= 12; loop_count++) {
-		read_hs = cpcap_irq_sense(data_3mm5->cpcap,
-						CPCAP_IRQ_HS, 0);
-		printk(KERN_INFO "tvint_work - initial value : read_hs = %d"
-			"count: %d\n", read_hs, loop_count);
-	}
+	/*Give time for HS to settle */
+	mdelay(100);
 
 	hs_handler_tv_out(CPCAP_IRQ_HS, data_3mm5);
 }

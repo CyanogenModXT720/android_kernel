@@ -27,6 +27,7 @@
 
 #define LD_MSG_IND_ON               0x1
 #define LD_MSG_IND_CURRENT          0x2
+#define LD_MSG_IND_LO_CURRENT       0x0
 
 #define LD_MSG_IND_CPCAP_MASK       0x3FF
 
@@ -53,5 +54,7 @@
 
 #define LD_BLED_CPCAP_MASK          0x3FF
 #define LD_BLED_CPCAP_CURRENT       0xE
+
+#define LD_ALT_ADBL_CURRENT         0x4
 
 #endif  /* __LED_LD_CPCAP_H__ */

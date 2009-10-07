@@ -64,10 +64,13 @@ void dispsw_rotate_free(unsigned long paddr, void *vaddr, u32 size)
 
 static int dispsw_rotate_format_bytespp(enum omap_color_mode fmt)
 {
-	int bpp = 2;
+	int bpp = 4;
 
 	switch (fmt) {
 	case OMAP_DSS_COLOR_RGB24U:
+	case OMAP_DSS_COLOR_ARGB32:
+	case OMAP_DSS_COLOR_RGBA32:
+	case OMAP_DSS_COLOR_RGBX32:
 		bpp = 4;
 		break;
 	case OMAP_DSS_COLOR_RGB16:
@@ -236,7 +239,7 @@ static unsigned long dispsw_rotate_perform_vrfb_dma(
 		omap_vrfb_setup(&vrfb->ctx[1], vrfb->paddr[1],
 						w, h, fmt, rot->dss_rot);
 
-		dispsw_rotate_calc_offset(rot, vrfb->ctx[0].bytespp, 
+		dispsw_rotate_calc_offset(rot, vrfb->ctx[0].bytespp,
 				vrfb->ctx[0].xoffset, vrfb->ctx[0].yoffset);
 
 		bytespp = dispsw_rotate_format_bytespp(fmt);

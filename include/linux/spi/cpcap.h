@@ -303,6 +303,10 @@ enum {
 	CPCAP_IOCTL_NUM_UC__START,
 	CPCAP_IOCTL_NUM_UC_MACRO_START,
 	CPCAP_IOCTL_NUM_UC__END,
+
+	CPCAP_IOCTL_NUM_TTA__START,
+	CPCAP_IOCTL_NUM_TTA_STATUS_GET,
+	CPCAP_IOCTL_NUM_TTA__END,
 };
 
 enum cpcap_irqs {
@@ -471,6 +475,11 @@ enum cpcap_batt_usb_model {
 	CPCAP_BATT_USB_MODEL_FACTORY,
 };
 
+enum cpcap_tta_state {
+	TTA_DETECTED,
+	TTA_NOT_DETECTED,
+};
+
 struct cpcap_spi_init_data {
 	enum cpcap_reg reg;
 	unsigned short data;
@@ -617,6 +626,10 @@ struct cpcap_regacc {
 
 #define CPCAP_IOCTL_UC_MACRO_START \
 	_IOWR(0, CPCAP_IOCTL_NUM_UC_MACRO_START, enum cpcap_macro)
+
+#define CPCAP_IOCTL_TTA_READ_STATUS \
+     _IOWR(0, CPCAP_IOCTL_NUM_TTA_STATUS_GET, enum cpcap_tta_state*)
+
 
 #ifdef __KERNEL__
 struct cpcap_device {
