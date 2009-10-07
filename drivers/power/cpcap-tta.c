@@ -17,6 +17,8 @@
  */
 
 
+#include <linux/fs.h>
+#include <linux/miscdevice.h>
 #include <linux/errno.h>
 #include <linux/err.h>
 #include <linux/device.h>
@@ -30,12 +32,10 @@
 
 #include <linux/spi/cpcap.h>
 #include <linux/spi/cpcap-regbits.h>
-
+#include <linux/uaccess.h>
 
 #define SHOLEST_TTA_CHRG_DET_N_GPIO  34
-
 #define TIME_FOR_GPIO_HIGH          100
-
 #define TTA_IRQ_NAME "tta IRQ"
 
 enum cpcap_tta_det_state {
@@ -62,8 +62,77 @@ struct cpcap_tta_det_data {
   unsigned char gpio_val;
 };
 
+static struct cpcap_device *misc_cpcap;
+
+static int cpcap_tta_ioctl(struct inode *inode,
+		struct file *file,
+		unsigned int cmd,
+		unsigned long arg);
+static int cpcap_tta_open(struct inode *inode, struct file *file);
 static int cpcap_tta_chgr_probe(struct platform_device *pdev);
 static int cpcap_tta_chgr_remove(struct platform_device *pdev);
+
+static const struct file_operations tta_fops = {
+  .owner = THIS_MODULE,
+  .open = cpcap_tta_open,
+  .ioctl = cpcap_tta_ioctl,
+};
+
+static struct miscdevice tta_dev = {
+  .minor  = MISC_DYNAMIC_MINOR,
+  .name = "cpcap_tta",
+  .fops = &tta_fops,
+};
+
+static int cpcap_tta_open(struct inode *inode, struct file *file)
+{
+  return 0;
+}
+
+static int cpcap_tta_ioctl(struct inode *inode,
+     struct file *file, unsigned int cmd, unsigned long arg)
+{
+  int retval = 0;
+
+  switch (cmd) {
+  case CPCAP_IOCTL_TTA_READ_STATUS:
+    {
+      unsigned char gpio_val;
+      unsigned short vbus;
+      enum cpcap_tta_state state;
+
+      disable_tta();
+      enable_tta();
+      mdelay(10);
+      gpio_val = gpio_get_value(SHOLEST_TTA_CHRG_DET_N_GPIO);
+      retval = cpcap_regacc_read(misc_cpcap, CPCAP_REG_INTS2, &vbus);
+      if (retval)
+	return retval;
+
+      vbus  = ((vbus & CPCAP_BIT_VBUSVLD_S) ? 1 : 0);
+
+      if (!gpio_val) {
+		if (!vbus)
+			state = TTA_DETECTED;
+		else
+			state = TTA_NOT_DETECTED;
+      } else {
+      state = TTA_NOT_DETECTED;
+      }
+
+      if (copy_to_user((void *)arg,
+		(void *)&state, sizeof(state)))
+	retval = -EFAULT;
+
+    }
+    break;
+
+  default:
+    return -EINVAL;
+    break;
+  }
+  return retval;
+}
 
 static void set_transceiver(struct cpcap_tta_det_data *data)
 {
@@ -261,6 +330,11 @@ static int cpcap_tta_chgr_probe(struct platform_device *pdev)
   platform_set_drvdata(pdev, data);
   INIT_DELAYED_WORK(&data->work, tta_detection_work);
 
+  misc_cpcap = data->cpcap;  /* kept for misc device */
+  retval = misc_register(&tta_dev);
+  if (retval)
+	return -EFAULT;
+
   if (gpio_request(SHOLEST_TTA_CHRG_DET_N_GPIO, "tta_chrg_cntr") < 0)
 	return -EBUSY;
 
@@ -293,6 +367,7 @@ free_mem:
 
 static int cpcap_tta_chgr_remove(struct platform_device *pdev)
 {
+  misc_deregister(&tta_dev);
   free_irq(OMAP_GPIO_IRQ(SHOLEST_TTA_CHRG_DET_N_GPIO), 0);
   gpio_free(SHOLEST_TTA_CHRG_DET_N_GPIO);
 
