@@ -27,6 +27,7 @@
 #include <linux/uaccess.h>
 #include <linux/reboot.h>
 #include <linux/notifier.h>
+#include <linux/delay.h>
 #include <asm/bootinfo.h>
 
 
@@ -187,7 +188,6 @@ static int cpcap_reboot(struct notifier_block *this, unsigned long code,
 	}
 
 	if (code == SYS_RESTART) {
-
 		if (mode != NULL && !strncmp("outofcharge", mode, 12)) {
 			/* Set the outofcharge bit in the cpcap */
 			ret = cpcap_regacc_write(misc_cpcap, CPCAP_REG_VAL1,
@@ -242,6 +242,15 @@ static int cpcap_reboot(struct notifier_block *this, unsigned long code,
 		}
 		cpcap_regacc_write(misc_cpcap, CPCAP_REG_MI2, 0, 0xFFFF);
 	} else {
+		ret = cpcap_regacc_write(misc_cpcap, CPCAP_REG_VAL1,
+					 0,
+					 CPCAP_BIT_OUT_CHARGE_ONLY);
+		if (ret) {
+			dev_err(&(misc_cpcap->spi->dev),
+				"outofcharge cpcap set failure.\n");
+			result = NOTIFY_BAD;
+		}
+
 		/* Clear the soft reset bit in the cpcap */
 		ret = cpcap_regacc_write(misc_cpcap, CPCAP_REG_VAL1, 0,
 					CPCAP_BIT_SOFT_RESET);
@@ -277,6 +286,14 @@ static int cpcap_reboot(struct notifier_block *this, unsigned long code,
 			"Clear Power Cut bit failure.\n");
 		result = NOTIFY_BAD;
 	}
+
+	/* Clear the charger and charge path settings to avoid a false turn on
+	 * event in caused by CPCAP. After clearing these settings, 100ms is
+	 * needed to before SYSRSTRTB is pulled low to avoid the false turn on
+	 * event.
+	 */
+	cpcap_regacc_write(misc_cpcap, CPCAP_REG_CRM, 0, 0x3FFF);
+	mdelay(100);
 
 	return result;
 }

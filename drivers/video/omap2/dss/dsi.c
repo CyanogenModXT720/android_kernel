@@ -926,10 +926,15 @@ static int dsi_pll_calc_ddrfreq_fr_sysclk(struct omap_dss_device *dssdev,
 
 	dss_clk_fck2 = dss_clk_get_rate(DSS_CLK_FCK2);
 
-   if (dssdev->phy.dsi.ddr_clk_hz == dsi.cache_clk_freq &&
+	if (dssdev->phy.dsi.ddr_clk_hz == dsi.cache_clk_freq &&
 			dsi.cache_cinfo.clkin == dss_clk_fck2) {
 		DSSDBG("DSI clock info found from cache\n");
 		*cinfo = dsi.cache_cinfo;
+#if CONFIG_OMAP2_DSS_USE_DSI_PLL
+		dispc_set_lcd_divisor(dsi.cache_cinfo.lck_div,
+					dsi.cache_cinfo.pck_div);
+#endif
+
 		return 0;
 	}
 
@@ -1034,10 +1039,6 @@ static int dsi_pll_calc_ddrfreq(struct omap_dss_device *dssdev,
 			dsi.cache_cinfo.clkin == dss_clk_fck2) {
 		DSSDBG("DSI clock info found from cache\n");
 		*cinfo = dsi.cache_cinfo;
-#if CONFIG_OMAP2_DSS_USE_DSI_PLL
-		dispc_set_lcd_divisor(dsi.cache_cinfo.lck_div,
-				      dsi.cache_cinfo.pck_div);
-#endif
 		return 0;
 	}
 

@@ -83,6 +83,7 @@ struct cpcap_usb_det_data {
 	enum cpcap_accy usb_accy;
 	struct platform_device *usb_dev;
 	struct platform_device *usb_connected_dev;
+	struct platform_device *charger_connected_dev;
 	struct regulator *regulator;
 	struct wake_lock wake_lock;
 	unsigned char is_vusb_enabled;
@@ -238,12 +239,14 @@ static void notify_accy(struct cpcap_usb_det_data *data, enum cpcap_accy accy)
 
 	if (accy != CPCAP_ACCY_NONE) {
 		data->usb_dev = platform_device_alloc(accy_devices[accy], -1);
-		data->usb_dev->dev.platform_data = data->cpcap;
-		platform_device_add(data->usb_dev);
+		if (data->usb_dev) {
+			data->usb_dev->dev.platform_data = data->cpcap;
+			platform_device_add(data->usb_dev);
+		}
 	} else
 		vusb_disable(data);
 
-	if (accy == CPCAP_ACCY_USB) {
+	if ((accy == CPCAP_ACCY_USB) || (accy == CPCAP_ACCY_FACTORY)) {
 		if (!data->usb_connected_dev) {
 			data->usb_connected_dev =
 			    platform_device_alloc("cpcap_usb_connected", -1);
@@ -252,6 +255,18 @@ static void notify_accy(struct cpcap_usb_det_data *data, enum cpcap_accy accy)
 	} else if (data->usb_connected_dev) {
 		platform_device_del(data->usb_connected_dev);
 		data->usb_connected_dev = NULL;
+	}
+
+	if (accy == CPCAP_ACCY_CHARGER) {
+		if (!data->charger_connected_dev) {
+			data->charger_connected_dev =
+			    platform_device_alloc("cpcap_charger_connected",
+						  -1);
+			platform_device_add(data->charger_connected_dev);
+		}
+	} else if (data->charger_connected_dev) {
+		platform_device_del(data->charger_connected_dev);
+		data->charger_connected_dev = NULL;
 	}
 }
 

@@ -22,6 +22,10 @@
  * published by the Free Software Foundation.
  */
 
+#ifdef CONFIG_PM_VERBOSE
+#define DEBUG
+#endif
+
 #include <linux/pm.h>
 #include <linux/suspend.h>
 #include <linux/interrupt.h>
@@ -318,13 +322,13 @@ static void dump_wkst_regs(s16 module, u16 wkst_off, u32 wkst)
 		return;
 
 	if ((WKUP_MOD == module) && (PM_WKST == wkst_off))
-		printk(KERN_INFO "Waked up by WKUP. WKST 0x%x\n", wkst);
+		pr_debug("Waked up by WKUP. WKST 0x%x\n", wkst);
 	else if ((CORE_MOD == module) && (PM_WKST1 == wkst_off))
-		printk(KERN_INFO "Waked up by CORE. WKST1 0x%x\n", wkst);
+		pr_debug("Waked up by CORE. WKST1 0x%x\n", wkst);
 	else if ((CORE_MOD == module) && (OMAP3430ES2_PM_WKST3 == wkst_off))
-		printk(KERN_INFO "Waked up by CORE. WKST3 0x%x)\n", wkst);
+		pr_debug("Waked up by CORE. WKST3 0x%x)\n", wkst);
 	else if ((OMAP3430_PER_MOD == module) && (PM_WKST == wkst_off))
-		printk(KERN_INFO "Waked up by PER. WKST 0x%x)\n", wkst);
+		pr_debug("Waked up by PER. WKST 0x%x)\n", wkst);
 }
 #endif /* CONFIG_SUSPEND */
 
@@ -709,7 +713,7 @@ static void omap2_pm_wakeup_on_timer(u32 seconds, u32 nseconds)
 	omap_dm_timer_stop(gptimer_wakeup);
 	omap_dm_timer_set_load_start(gptimer_wakeup, 0, 0xffffffff - cycles);
 
-	pr_info("PM: Resume timer in %d secs (%d ticks at %d ticks/sec.)\n",
+	pr_debug("PM: Resume timer in %d secs (%d ticks at %d ticks/sec.)\n",
 		seconds, cycles, tick_rate);
 }
 
@@ -761,7 +765,7 @@ restore:
 	if (ret)
 		printk(KERN_ERR "Could not enter target state in pm_suspend\n");
 	else
-		printk(KERN_INFO "Successfully put all powerdomains "
+		pr_debug(KERN_INFO "Successfully put all powerdomains "
 		       "to target state\n");
 
 	return ret;

@@ -51,6 +51,7 @@
 #include <linux/delay.h>
 #include <mach/control.h>
 #include <mach/hdq.h>
+#include <mach/system.h>
 #include <linux/usb/android.h>
 #include <linux/wakelock.h>
 
@@ -68,6 +69,7 @@
 #include "sdram-toshiba-hynix-numonyx.h"
 #include "prcm-common.h"
 #include "cm.h"
+#include "clock.h"
 
 #ifdef CONFIG_VIDEO_OLDOMAP3
 #include <media/v4l2-int-device.h>
@@ -1055,7 +1057,6 @@ ssize_t reset_proc_write(struct file *filp, const char __user *buff, \
 {
 #define MAX_UL_LEN 8
 	char k_buf[MAX_UL_LEN] ;
-	unsigned long result ;
 	int count = min((unsigned long)MAX_UL_LEN, len) ;
 	int ret ;
 
@@ -1379,6 +1380,32 @@ static void mapphone_pm_power_off(void)
 	local_irq_enable();
 }
 
+static void mapphone_pm_reset(void)
+{
+	arch_reset('h');
+}
+
+static int cpcap_charger_connected_probe(struct platform_device *pdev)
+{
+	pm_power_off = mapphone_pm_reset;
+	return 0;
+}
+
+static int cpcap_charger_connected_remove(struct platform_device *pdev)
+{
+	pm_power_off = mapphone_pm_power_off;
+	return 0;
+}
+
+static struct platform_driver cpcap_charger_connected_driver = {
+	.probe		= cpcap_charger_connected_probe,
+	.remove		= cpcap_charger_connected_remove,
+	.driver		= {
+		.name	= "cpcap_charger_connected",
+		.owner	= THIS_MODULE,
+	},
+};
+
 static void __init mapphone_power_off_init(void)
 {
 	gpio_request(MAPPHONE_POWER_OFF_GPIO, "mapphone power off");
@@ -1389,6 +1416,8 @@ static void __init mapphone_power_off_init(void)
 	 * glitch at reboot */
 	omap_writew(0x1F, 0x480021D2);
 	pm_power_off = mapphone_pm_power_off;
+
+	platform_driver_register(&cpcap_charger_connected_driver);
 }
 
 static void __init mapphone_init(void)
