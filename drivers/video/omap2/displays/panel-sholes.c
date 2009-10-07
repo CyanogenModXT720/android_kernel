@@ -107,7 +107,11 @@ static int sholes_panel_probe(struct omap_dss_device *dssdev)
 		return -ENOMEM;
 	INIT_WORK(&data->work, sholes_panel_display_on);
 	init_waitqueue_head(&data->wait);
+#ifdef CONFIG_FB_OMAP2_MTD_LOGO
+	atomic_set(&data->state, PANEL_OFF);
+#else
 	atomic_set(&data->state, PANEL_ON);
+#endif
 	data->dssdev = dssdev;
 	dssdev->data = data;
 	return 0;
