@@ -86,8 +86,8 @@ static void omapvout_dss_calc_offset(struct omapvout_device *vout,
 		cw = vout->crop.height;
 		ch = vout->crop.width;
 	} else {
-	iw = vout->pix.width;
-	ih = vout->pix.height;
+		iw = vout->pix.width;
+		ih = vout->pix.height;
 		cw = vout->crop.width;
 		ch = vout->crop.height;
 	}
@@ -472,7 +472,7 @@ static int omapvout_dss_perform_vrfb_dma(struct omapvout_device *vout,
 		omap_vrfb_setup(&vrfb->ctx[1], vrfb->phy_addr[1],
 				w, h, dss_fmt, rot);
 
-		omapvout_dss_calc_offset(vout, vrfb->ctx[0].bytespp, 
+		omapvout_dss_calc_offset(vout, vrfb->ctx[0].bytespp,
 				vrfb->ctx[0].xoffset, vrfb->ctx[0].yoffset);
 
 		bytespp = omapvout_dss_format_bytespp(vout->pix.pixelformat);
@@ -527,6 +527,7 @@ static int omapvout_dss_update_overlay(struct omapvout_device *vout,
 
 	/* It is assumed that the caller has locked the vout mutex */
 
+
 	/* Populate the overlay info struct and set it */
 	ovly = vout->dss->overlay;
 	ovly->get_overlay_info(ovly, &o_info);
@@ -551,7 +552,7 @@ static int omapvout_dss_update_overlay(struct omapvout_device *vout,
 	o_info.out_height = vout->win.w.height;
 	o_info.color_mode = omapvout_dss_color_mode(vout->pix.pixelformat);
 	o_info.rotation_type = OMAP_DSS_ROT_VRFB;
-	o_info.rotation = vout->rotation;
+	o_info.rotation = vout->rotation; /* Rotation value, not buffer index */
 	o_info.mirror = false;
 
 	rc = ovly->set_overlay_info(ovly, &o_info);
@@ -622,7 +623,7 @@ static void omapvout_dss_perform_update(struct work_struct *work)
 				DBG("Alpha config failed %d\n", rc);
 				goto failed_need_done;
 			}
-			
+
 			switch (vout->rotation) {
 			case 1:
 				dss->rotation = 3;

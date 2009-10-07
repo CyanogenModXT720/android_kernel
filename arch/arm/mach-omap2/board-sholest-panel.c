@@ -38,10 +38,6 @@ static int sholest_panel_enable(struct omap_dss_device *dssdev)
 
 	printk(KERN_INFO "%s IN\n", __func__);
 
-	/* pin the memory bus bw to the highest value */
-	ret = resource_request("vdd2_opp", &dssdev->dev, 400000);
-	if (ret)
-		printk("%s: resource request failed\n", __func__);
 
 	if (!display_regulator) {
 		display_regulator = regulator_get(NULL, "vhvio");
@@ -71,10 +67,6 @@ static void sholest_panel_disable(struct omap_dss_device *dssdev)
 
 	printk(KERN_INFO "%s IN\n", __func__);
 
-	/* unpin the memory bus */
-	ret = resource_release("vdd2_opp", &dssdev->dev);
-	if (ret)
-		printk("%s: resource request failed\n", __func__);
 
 	gpio_direction_output(SHOLEST_DISPLAY_RESET_GPIO, 1);
 	gpio_set_value(SHOLEST_DISPLAY_RESET_GPIO, 0);
