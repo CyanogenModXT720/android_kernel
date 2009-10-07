@@ -301,6 +301,8 @@ static int hplens_ioctl_s_ctrl(struct v4l2_int_device *s,
 	u8 write_buffer[16];
 	u8 fdb = 0;
 	int idx;
+	int i;
+	u8 buf1[10], buf_str[200];
 
 	if (find_vctrl(vc->id) < 0)
 		return -EINVAL;
@@ -334,6 +336,21 @@ static int hplens_ioctl_s_ctrl(struct v4l2_int_device *s,
 
 			for (idx = fdb; idx <= reg.len_data; idx++) {
 				write_buffer[idx] = reg.data[idx-fdb];
+			}
+
+			printk(KERN_ERR \
+			"HPLENS_CMD_WRITE : header_len=%d data_len=%d\n",\
+			fdb, reg.len_data);
+
+			buf_str[0] = '\0';
+			for (i = 0; i < reg.len_data + fdb; i++) {
+				sprintf(buf1, "%02x ", write_buffer[i]);
+				strcat(buf_str, buf1);
+				if (i % 8 == 7 || i == reg.len_data + fdb - 1) {
+					printk(KERN_ERR \
+						"    %d : %s\n", i/8, buf_str);
+					buf_str[0] = '\0';
+				}
 			}
 
 			ret = hplens_reg_write(reg.dev_addr, write_buffer, reg.len_data + fdb);
