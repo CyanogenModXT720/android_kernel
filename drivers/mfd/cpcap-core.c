@@ -30,7 +30,6 @@
 #include <linux/delay.h>
 #include <asm/bootinfo.h>
 
-
 static int ioctl(struct inode *inode,
 		 struct file *file, unsigned int cmd, unsigned long arg);
 static int __devinit cpcap_probe(struct spi_device *spi);
