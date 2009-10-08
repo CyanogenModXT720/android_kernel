@@ -2107,13 +2107,6 @@ static int omapfb_probe(struct platform_device *pdev)
 			def_display->set_update_mode(def_display,
 					OMAP_DSS_UPDATE_AUTO);
 #else
-		if (def_display->enable_te) {
-			if ((def_display->te_support) &&
-				(def_display->te_support(def_display) == true))
-				def_display->enable_te(def_display, 1);
-			else
-				def_display->enable_te(def_display, 0);
-		}
 		if (def_display->set_update_mode)
 			def_display->set_update_mode(def_display,
 					OMAP_DSS_UPDATE_MANUAL);
