@@ -1479,8 +1479,8 @@ static int audio_configure_ssi(struct inode *inode, struct file *file)
 		tx_params.word_length1 = OMAP_MCBSP_WORD_32;
 		ssi = STDAC_SSI;
 #ifdef AUDIO_I2S_MODE
-		tx_cfg_params.fs_polarity  = OMAP_MCBSP_FS_ACTIVE_LOW;
-		tx_cfg_params.phase = OMAP_MCBSP_FRAME_DUALPHASE;
+		/*tx_cfg_params.fs_polarity  = OMAP_MCBSP_FS_ACTIVE_LOW;*/
+		/*tx_cfg_params.phase = OMAP_MCBSP_FRAME_DUALPHASE;*/
 #endif
 		omap_ctrl_writel(omap_ctrl_readl(OMAP2_CONTROL_DEVCONF0) |
 					(1 << OMAP2_CONTROL_DEVCONF0_BIT6),

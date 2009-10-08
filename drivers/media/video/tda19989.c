@@ -50,6 +50,9 @@ struct tda19989_data {
 
 	bool pwr_enabled;
 
+	spinlock_t int_lock; /* Spin lock for missing interrupt*/
+	bool missed_int;
+
 	bool exiting;
 
 #ifdef TDA19989_CEC_AVAILABLE
@@ -63,11 +66,19 @@ static struct tda19989_data *gDev;
 
 static irqreturn_t hdmi_int_irq(int irq, void *dev_inst)
 {
+	unsigned long lock_flags;
+
 	printk(KERN_DEBUG "hdmi_int_irq\n");
 
 	if (gDev) {
-		if (gDev->waiter && !gDev->exiting)
+		/* Do not lock the mutex since this is an ISR */
+		if (gDev->waiter && !gDev->exiting) {
 			wake_up_interruptible(&gDev->int_wait);
+		} else {
+			spin_lock_irqsave(&gDev->int_lock, lock_flags);
+			gDev->missed_int = true;
+			spin_unlock_irqrestore(&gDev->int_lock, lock_flags);
+		}
 	}
 
 	return IRQ_HANDLED;
@@ -189,6 +200,8 @@ static int tda19989_open(struct inode *inode, struct file *filp)
 	}
 #endif
 
+	gDev->missed_int = false;
+
 	mutex_unlock(&gDev->mtx);
 
 	return 0;
@@ -237,7 +250,8 @@ static int tda19989_release(struct inode *inode, struct file *filp)
 static ssize_t tda19989_read(struct file *fp, char __user *buf,
 						size_t count, loff_t *ppos)
 {
-	int rc;
+	int rc = 0;
+	unsigned long lock_flags;
 
 	printk(KERN_DEBUG "tda19989_read\n");
 
@@ -253,20 +267,36 @@ static ssize_t tda19989_read(struct file *fp, char __user *buf,
 		goto exit;
 	}
 
+	if (!gDev->int_enabled) {
+		rc = -EAGAIN;
+		goto exit;
+	}
+
+	spin_lock_irqsave(&gDev->int_lock, lock_flags);
+	if (gDev->missed_int) {
+		printk(KERN_DEBUG "return missed\n");
+		gDev->missed_int = false;
+		spin_unlock_irqrestore(&gDev->int_lock, lock_flags);
+		goto exit;
+	}
+	spin_unlock_irqrestore(&gDev->int_lock, lock_flags);
+
 	printk(KERN_DEBUG "waiting ...\n");
 	gDev->waiter = true;
+
 	mutex_unlock(&gDev->mtx);
 
 	interruptible_sleep_on(&gDev->int_wait);
 
 	mutex_lock(&gDev->mtx);
-	printk(KERN_DEBUG "exit waiting\n");
+
 	gDev->waiter = false;
+	printk(KERN_DEBUG "exit waiting\n");
 
 exit:
 	mutex_unlock(&gDev->mtx);
 
-	return 0;
+	return rc;
 }
 
 static ssize_t tda19989_write(struct file *file, const char __user *buf,
@@ -342,6 +372,8 @@ static int tda19989_ioctl(struct inode *inode, struct file *filp,
 		} else if (!en && gDev->int_enabled) {
 			disable_irq(OMAP_GPIO_IRQ(HDMI_INT_PIN_GPIO_NUM));
 			gDev->int_enabled = false;
+			if (gDev->waiter)
+				wake_up_interruptible(&gDev->int_wait);
 		}
 		break;
 #ifdef TDA19989_CEC_AVAILABLE
@@ -438,6 +470,7 @@ static int tda19989_probe(struct platform_device *pdev)
 	memset(gDev, 0, sizeof(gDev));
 
 	mutex_init(&gDev->mtx);
+	spin_lock_init(&gDev->int_lock);
 
 	gDev->client = NULL;
 	rc = i2c_add_driver(&i2c_driver_tda19989);
