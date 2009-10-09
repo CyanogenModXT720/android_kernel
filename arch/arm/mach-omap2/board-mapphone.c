@@ -430,7 +430,7 @@ static struct qtouch_ts_platform_data mapphone_ts_platform_data = {
 	.abs_max_p	= 255,
 	.abs_min_w	= 0,
 	.abs_max_w	= 15,
-	.nv_checksum	= 0x6da8,
+	.nv_checksum	= 0xfdfc,
 	.fuzz_x		= 0,
 	.fuzz_y		= 0,
 	.fuzz_p		= 2,
@@ -457,12 +457,12 @@ static struct qtouch_ts_platform_data mapphone_ts_platform_data = {
 		.y_size		= 7,
 		.aks_cfg	= 0,
 		.burst_len	= 0x40,
-		.tch_det_thr	= 0x14,
+		.tch_det_thr	= 0x12,
 		.tch_det_int	= 0x2,
-		.mov_hyst_init	= 5,
-		.mov_hyst_next	= 5,
-		.mov_filter	= 0x9,
-		.num_touch	= 4,
+		.mov_hyst_init	= 0xe,
+		.mov_hyst_next	= 0xe,
+		.mov_filter	= 0x10,
+		.num_touch	= 2,
 		.merge_hyst	= 0,
 		.merge_thresh	= 3,
 		.amp_hyst = 2,
@@ -477,17 +477,17 @@ static struct qtouch_ts_platform_data mapphone_ts_platform_data = {
 		.ctrl = 0x01,
 		.x_offset = 0x0000,
 		.x_segment = {
-			0x4B, 0x3f, 0x3c , 0x3E,
-			0x3f, 0x3b, 0x3a, 0x3c,
+			0x48, 0x3f, 0x3c, 0x3E,
+			0x3f, 0x3e, 0x3e, 0x3e,
 			0x3f, 0x42, 0x41, 0x3f,
-			0x41, 0x40, 0x40, 0x46
+			0x41, 0x40, 0x41, 0x46
 		},
 		.y_offset = 0x0000,
 		.y_segment = {
 			0x44, 0x38, 0x37, 0x3e,
-			0x3c, 0x44, 0x3e, 0x3d,
+			0x3e, 0x41, 0x41, 0x3f,
 			0x42, 0x41, 0x42, 0x42,
-			0x43, 0x43, 0x41, 0x45
+			0x41, 0x3f, 0x41, 0x45
 		},
 	},
 	.grip_suppression_cfg = {
@@ -549,7 +549,7 @@ static struct lm3554_platform_data mapphone_camera_flash = {
 	.flash_duration_def = 0x28,
 	.config_reg_1_def = 0xe0,
 	.config_reg_2_def = 0xf0,
-	.vin_monitor_def = 0x03,
+	.vin_monitor_def = 0x01,
 	.gpio_reg_def = 0x0,
 };
 
@@ -1275,7 +1275,7 @@ static struct omap_vout_config mapphone_vout_platform_data = {
 	.max_width = 864,
 	.max_height = 648,
 	.max_buffer_size = 0x112000,
-	.num_buffers = 6,
+	.num_buffers = 8,
 	.num_devices = 2,
 	.device_ids = {1, 2},
 };
