@@ -42,12 +42,10 @@
 static struct omap_video_timings sholes_panel_timings = {
 	.x_res		= 480,
 	.y_res		= 854,
-	.dsi1_pll_fclk	= 100000,
-	.dsi2_pll_fclk	= 100000,
-	.hfp		= 0,
+	.hfp		= 44,
 	.hsw		= 2,
-	.hbp		= 2,
-	.vfp		= 0,
+	.hbp		= 38,
+	.vfp		= 2,
 	.vsw		= 1,
 	.vbp		= 1,
 	.w		= 46,
@@ -107,7 +105,11 @@ static int sholes_panel_probe(struct omap_dss_device *dssdev)
 		return -ENOMEM;
 	INIT_WORK(&data->work, sholes_panel_display_on);
 	init_waitqueue_head(&data->wait);
+#ifdef CONFIG_FB_OMAP2_MTD_LOGO
+	atomic_set(&data->state, PANEL_OFF);
+#else
 	atomic_set(&data->state, PANEL_ON);
+#endif
 	data->dssdev = dssdev;
 	dssdev->data = data;
 	return 0;
@@ -311,11 +313,6 @@ static int sholes_panel_resume(struct omap_dss_device *dssdev)
 	return sholes_panel_enable(dssdev);
 }
 
-static bool sholes_panel_te_support(struct omap_dss_device *dssdev)
-{
-	return true;
-}
-
 static struct omap_dss_driver sholes_panel_driver = {
 	.probe = sholes_panel_probe,
 	.remove = sholes_panel_remove,
@@ -326,7 +323,6 @@ static struct omap_dss_driver sholes_panel_driver = {
 	.resume = sholes_panel_resume,
 	.setup_update = sholes_panel_setup_update,
 	.enable_te = sholes_panel_enable_te,
-	.te_support = sholes_panel_te_support,
 	.set_rotate = sholes_panel_rotate,
 	.set_mirror = sholes_panel_mirror,
 	.run_test = sholes_panel_run_test,

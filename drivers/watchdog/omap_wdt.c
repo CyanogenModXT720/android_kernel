@@ -534,7 +534,6 @@ static int omap_wdt_suspend(struct platform_device *pdev, pm_message_t state)
 #endif
 		omap_wdt_disable(wdev);
 	}
-
 	return 0;
 }
 
