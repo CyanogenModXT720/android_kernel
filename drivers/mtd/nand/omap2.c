@@ -651,8 +651,9 @@ static int omap_wait(struct mtd_info *mtd, struct nand_chip *chip)
 static int omap_dev_ready(struct mtd_info *mtd)
 {
 	struct omap_nand_info *info;
-	unsigned long now, timeout = jiffies + (HZ * 400) / 1000 + 1;
-	int ret = 1;
+	unsigned long now, timeout = jiffies;
+	int ret;
+	timeout += (HZ * 400) / 1000 + 1;
 
 	info = container_of(mtd, struct omap_nand_info, mtd);
 
@@ -671,7 +672,7 @@ static int omap_dev_ready(struct mtd_info *mtd)
 	} else
 		printk(KERN_ERR "%s: timeout in dev ready cmd\n", DRIVER_NAME);
 
-	return ret;
+	return !!ret;
 }
 
 static int __devinit omap_nand_probe(struct platform_device *pdev)

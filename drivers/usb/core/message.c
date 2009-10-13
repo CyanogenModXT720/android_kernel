@@ -152,6 +152,8 @@ int usb_control_msg(struct usb_device *dev, unsigned int pipe, __u8 request,
 
 	kfree(dr);
 
+	if (ret > 0)
+		dmac_inv_range(data, data + size);
 	return ret;
 }
 EXPORT_SYMBOL_GPL(usb_control_msg);
@@ -659,7 +661,6 @@ int usb_get_descriptor(struct usb_device *dev, unsigned char type,
 		}
 		break;
 	}
-	dmac_inv_range(buf, buf + size);
 	return result;
 }
 EXPORT_SYMBOL_GPL(usb_get_descriptor);
@@ -948,7 +949,6 @@ int usb_get_status(struct usb_device *dev, int type, int target, void *data)
 		USB_REQ_GET_STATUS, USB_DIR_IN | type, 0, target, status,
 		sizeof(*status), USB_CTRL_GET_TIMEOUT);
 
-	dmac_inv_range(status, status + sizeof(*status));
 	*(u16 *)data = *status;
 	kfree(status);
 	return ret;

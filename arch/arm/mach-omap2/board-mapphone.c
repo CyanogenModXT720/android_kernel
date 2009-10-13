@@ -216,12 +216,16 @@ static struct platform_device usb_mass_storage_device = {
 
 static int cpcap_usb_connected_probe(struct platform_device *pdev)
 {
+	/* Wake up MUSB from lowpower state */
+	musb_disable_idle(1);
 	android_usb_set_connected(1);
 	return 0;
 }
 
 static int cpcap_usb_connected_remove(struct platform_device *pdev)
 {
+	/* Enable low power state for MUSB */
+	musb_disable_idle(0);
 	android_usb_set_connected(0);
 	return 0;
 }
@@ -461,7 +465,7 @@ static struct qtouch_ts_platform_data mapphone_ts_platform_data = {
 		.tch_det_int	= 0x2,
 		.mov_hyst_init	= 0xe,
 		.mov_hyst_next	= 0xe,
-		.mov_filter	= 0x10,
+		.mov_filter	= 0x9,
 		.num_touch	= 2,
 		.merge_hyst	= 0,
 		.merge_thresh	= 3,
