@@ -59,6 +59,39 @@
 /* Touch Node */
 #define DT_PATH_TOUCH		"/System@0/I2C@0/TouchOBP@0"
 #define DT_PROP_TOUCH_KEYMAP	"touch_key_map"
+#define DT_PROP_TOUCH_I2C_ADDRESS       "i2c,address"
+#define DT_PROP_TOUCH_KEYMAP		"touch_key_map"
+#define DT_PROP_TOUCH_NUM_TOUCH_KEYS	"number_of_touch_keys"
+#define DT_PROP_TOUCH_FLAGS		"touchobp-flags"
+#define DT_PROP_TOUCH_ABS_MIN_X		"abs_min_x"
+#define DT_PROP_TOUCH_ABS_MAX_X		"abs_max_x"
+#define DT_PROP_TOUCH_ABS_MIN_Y		"abs_min_y"
+#define DT_PROP_TOUCH_ABS_MAX_Y		"abs_max_y"
+#define DT_PROP_TOUCH_ABS_MIN_P		"abs_min_p"
+#define DT_PROP_TOUCH_ABS_MAX_P		"abs_max_p"
+#define DT_PROP_TOUCH_ABS_MIN_W		"abs_min_w"
+#define DT_PROP_TOUCH_ABS_MAX_W		"abs_max_w"
+#define DT_PROP_TOUCH_FUZZ_X		"fuzz_x"
+#define DT_PROP_TOUCH_FUZZ_Y		"fuzz_y"
+#define DT_PROP_TOUCH_FUZZ_P		"fuzz_p"
+#define DT_PROP_TOUCH_FUZZ_W		"fuzz_w"
+#define DT_PROP_TOUCH_KEY_ARRAY_MAP	"key_array_map"
+#define DT_PROP_TOUCH_KEY_ARRAY_COUNT	"key_array_count"
+#define DT_PROP_TOUCH_T7		"obj_t7"	/* power_cfg */
+#define DT_PROP_TOUCH_T8		"obj_t8"	/* acquire_cfg */
+#define DT_PROP_TOUCH_T9		"obj_t9"	/* multi_touch_cfg */
+#define DT_PROP_TOUCH_T15		"obj_t15"	/* key_array */
+#define DT_PROP_TOUCH_T17		"obj_t17"	/* linear_tbl_cfg */
+#define DT_PROP_TOUCH_T19		"obj_t19"	/* gpio_pwm_cfg */
+#define DT_PROP_TOUCH_T20		"obj_t20"	/* grip_suppression_cfg */
+#define DT_PROP_TOUCH_T22		"obj_t22"	/* noise_suppression_cfg */
+#define DT_PROP_TOUCH_T24		"obj_t24"	/* one_touch_gesture_proc_cfg */
+#define DT_PROP_TOUCH_T25		"obj_t25"	/* self_test_cfg */
+#define DT_PROP_TOUCH_T27		"obj_t27"	/* two_touch_gesture_proc_cfg */
+#define DT_PROP_TOUCH_T28		"obj_t28"	/* cte_config_cfg */
+
+/* Accelerometer Node */
+#define DT_PATH_LIS331DLH	"/System@0/I2C@0/Accelerometer@0"
 
 /* GPIO Node */
 #define DT_PATH_GPIO        "/System@0/GPIO@0"

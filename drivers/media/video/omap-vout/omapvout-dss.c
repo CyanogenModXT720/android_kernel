@@ -567,16 +567,23 @@ static int omapvout_dss_update_overlay(struct omapvout_device *vout,
 		return rc;
 	}
 
-	rc = ovly->manager->device->update(ovly->manager->device, 0, 0,
-					vout->disp_width, vout->disp_height);
+	if (ovly->manager->device->update) {
+	rc = ovly->manager->device->update(ovly->manager->device,
+					o_info.pos_x, o_info.pos_y,
+					o_info.out_width, o_info.out_height);
 	if (rc)
 		DBG("Overlay update failed %d\n", rc);
+	}
 
 	return rc;
 }
 
 static void omapvout_dss_mark_buf_done(struct omapvout_device *vout, int idx)
 {
+	/* FIXME: Should set the state to VIDEOBUF_DONE here, but since we
+	 * don't properly DQ yet, this has been hacked to allow no DQ.
+	 */
+	/*vout->queue.bufs[idx]->state = VIDEOBUF_IDLE;*/
 	vout->queue.bufs[idx]->state = VIDEOBUF_DONE;
 	wake_up_interruptible(&vout->queue.bufs[idx]->done);
 }
@@ -653,7 +660,7 @@ static void omapvout_dss_perform_update(struct work_struct *work)
 		 * is unlocked since the sync may take some time.
 		 */
 		dev = dss->overlay->manager->device;
-		if (dev->sync)
+		if (dev && dev->sync)
 			dev->sync(dev);
 
 		/* Since the mutex was unlocked, it is possible that the DSS
@@ -856,10 +863,12 @@ void omapvout_dss_disable(struct omapvout_device *vout)
 	if (rc)
 		DBG("Overlay manager apply failed %d\n", rc);
 
+	if (ovly->manager->device->update) {
 	rc = ovly->manager->device->update(ovly->manager->device,
 				0, 0, vout->disp_width, vout->disp_height);
 	if (rc)
 		DBG("Display update failed %d\n", rc);
+	}
 }
 
 int omapvout_dss_update(struct omapvout_device *vout)

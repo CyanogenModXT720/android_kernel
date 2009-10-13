@@ -1039,6 +1039,10 @@ static int vidioc_s_parm(struct file *file, void *fh, struct v4l2_streamparm *a)
 		return -EINVAL;
 
 	mutex_lock(&vdev->mutex);
+	if (vdev->streaming) {
+		rval = -EBUSY;
+		goto out;
+	}
 
 	vdev->want_timeperframe = a->parm.capture.timeperframe;
 
@@ -1047,6 +1051,7 @@ static int vidioc_s_parm(struct file *file, void *fh, struct v4l2_streamparm *a)
 	rval = s_pix_parm(vdev, &pix_tmp_sensor, &pix_tmp,
 			  &a->parm.capture.timeperframe);
 
+out:
 	mutex_unlock(&vdev->mutex);
 
 	return rval;
@@ -1196,7 +1201,7 @@ static int vidioc_enum_frameintervals(struct file *file, void *fh,
  * feedback. The request is then passed on to the ISP private IOCTL handler,
  * isp_handle_private()
  */
-static int vidioc_default(struct file *file, void *fh, int cmd, void *arg)
+static long vidioc_default(struct file *file, void *fh, int cmd, void *arg)
 {
 	struct omap34xxcam_fh *ofh = file->private_data;
 	struct omap34xxcam_videodev *vdev = ofh->vdev;

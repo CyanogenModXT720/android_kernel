@@ -29,7 +29,7 @@ obj-$(CONFIG_SENSORS_LIS331DLH)	+= lis331dlh.o
 
 obj-y				+= eeprom/
 obj-y				+= ts27010mux/
-obj-$(CONFIG_VIB_OMAP_PWM)	+= vib-omap-pwm.o
+obj-$(CONFIG_VIB_PWM)		+= vib-pwm.o
 obj-$(CONFIG_NETMUX_DRIVER)	+= netmux/
 obj-$(CONFIG_NETMUX_LINKDRIVER)	+= netmux_linkdriver/
 obj-$(CONFIG_UMTS_SYSPANIC)     += syspanic.o

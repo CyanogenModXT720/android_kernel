@@ -41,20 +41,30 @@ static void disp_button_set(struct led_classdev *led_cdev,
 			 disp_button_class_dev);
 
 	if (value > 0) {
+#ifdef CONFIG_LEDS_SHOLEST
+		brightness = (LD_BLED_CPCAP_DUTY_CYCLE |
+			LD_BLED_CPCAP_CURRENT | LD_DISP_BUTTON_ON);
+#else
 		brightness = (LD_DISP_BUTTON_DUTY_CYCLE |
 			LD_DISP_BUTTON_CURRENT | LD_DISP_BUTTON_ON);
-
+#endif
 		if ((disp_button_led_data->regulator) &&
 		    (disp_button_led_data->regulator_state == 0)) {
 			regulator_enable(disp_button_led_data->regulator);
 			disp_button_led_data->regulator_state = 1;
 		}
 
+#ifdef CONFIG_LEDS_SHOLEST
+		cpcap_status = cpcap_regacc_write(disp_button_led_data->cpcap,
+						  CPCAP_REG_BLEDC,
+						  brightness,
+						  LD_BLED_CPCAP_MASK);
+#else
 		cpcap_status = cpcap_regacc_write(disp_button_led_data->cpcap,
 						  CPCAP_REG_KLC,
 						  brightness,
 						  LD_DISP_BUTTON_CPCAP_MASK);
-
+#endif
 		if (cpcap_status < 0)
 			pr_err("%s: Writing to the register failed for %i\n",
 			       __func__, cpcap_status);
@@ -68,15 +78,25 @@ static void disp_button_set(struct led_classdev *led_cdev,
 		/* Due to a HW issue turn off the current then
 		turn off the duty cycle */
 		brightness = 0x01;
+#ifdef CONFIG_LEDS_SHOLEST
 		cpcap_status = cpcap_regacc_write(disp_button_led_data->cpcap,
-					  CPCAP_REG_KLC, brightness,
-					  LD_DISP_BUTTON_CPCAP_MASK);
-
-		brightness = 0x00;
+						  CPCAP_REG_BLEDC, brightness,
+						  LD_BLED_CPCAP_MASK);
+#else
 		cpcap_status = cpcap_regacc_write(disp_button_led_data->cpcap,
 						  CPCAP_REG_KLC, brightness,
 						  LD_DISP_BUTTON_CPCAP_MASK);
-
+#endif
+		brightness = 0x00;
+#ifdef CONFIG_LEDS_SHOLEST
+		cpcap_status = cpcap_regacc_write(disp_button_led_data->cpcap,
+						  CPCAP_REG_BLEDC, brightness,
+						  LD_BLED_CPCAP_MASK);
+#else
+		cpcap_status = cpcap_regacc_write(disp_button_led_data->cpcap,
+						  CPCAP_REG_KLC, brightness,
+						  LD_DISP_BUTTON_CPCAP_MASK);
+#endif
 		if (cpcap_status < 0)
 			pr_err("%s: Writing to the register failed for %i\n",
 			       __func__, cpcap_status);

@@ -436,6 +436,8 @@ int set_freq(struct shared_resource *resp, u32 target_level)
 	if (!mpu_opps || !dsp_opps)
 		return 0;
 
+    pr_info("set_freq %s switched to %d\n", resp->name, target_level);
+
 	if (strcmp(resp->name, "mpu_freq") == 0) {
 		vdd1_opp = get_opp(mpu_opps + MAX_VDD1_OPP, target_level);
 		resource_request("vdd1_opp", &dummy_mpu_dev, vdd1_opp);

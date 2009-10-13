@@ -148,6 +148,24 @@ static struct platform_device cpcap_rtc_device = {
 	.dev.platform_data = NULL,
 };
 
+#ifdef CONFIG_TTA_CHARGER
+static struct platform_device cpcap_tta_det_device = {
+  .name           = "cpcap_tta_charger",
+  .id             = -1,
+  .dev.platform_data = NULL,
+};
+#endif
+
+#ifdef CONFIG_LEDS_AF_LED
+struct platform_device cpcap_af_led = {
+	.name		= LD_AF_LED_DEV,
+	.id		= -1,
+	.dev		= {
+		.platform_data  = NULL,
+	},
+};
+#endif
+
 static struct platform_device *cpcap_devices[] = {
 	&cpcap_adc_device,
 	&cpcap_key_device,
@@ -166,6 +184,12 @@ static struct platform_device *cpcap_devices[] = {
 	&cpcap_3mm5_device,
 	&cpcap_rtc_device,
 	&cpcap_uc_device,
+#ifdef CONFIG_TTA_CHARGER
+	&cpcap_tta_det_device,
+#endif
+#ifdef CONFIG_LEDS_AF_LED
+	&cpcap_af_led,
+#endif
 };
 
 static struct cpcap_device *misc_cpcap;

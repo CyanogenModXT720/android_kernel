@@ -701,8 +701,6 @@ static int configure_overlay(enum omap_plane plane)
 	struct manager_cache_data *mc;
 	u16 outw, outh;
 	u16 x, y, w, h;
-	u32 dw = 0;
-	u32 dh = 0;
 	u32 paddr;
 	int r;
 

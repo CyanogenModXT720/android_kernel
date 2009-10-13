@@ -34,6 +34,12 @@
 #define CPCAP_IRQ_INT4_INDEX 48
 #define CPCAP_IRQ_INT5_INDEX 64
 
+enum {
+	BARREL_CAP_NONE = 0,
+	BARREL_CAP_DETECT_HEADSET,
+	BARREL_CAP_DETECT_TV_OUT,
+};
+
 enum cpcap_regulator_id {
 	CPCAP_SW5,
 	CPCAP_VCAM,
@@ -291,11 +297,17 @@ enum {
 	CPCAP_IOCTL_NUM_BATT_ATOD_ASYNC,
 	CPCAP_IOCTL_NUM_BATT_ATOD_SYNC,
 	CPCAP_IOCTL_NUM_BATT_ATOD_READ,
+	CPCAP_IOCTL_NUM_BATT_CHARGER_SET_CHARGE_CURRENT,
+	CPCAP_IOCTL_NUM_BATT_CHARGER_SET_CHARGE_VOLTAGE,
 	CPCAP_IOCTL_NUM_BATT__END,
 
 	CPCAP_IOCTL_NUM_UC__START,
 	CPCAP_IOCTL_NUM_UC_MACRO_START,
 	CPCAP_IOCTL_NUM_UC__END,
+
+	CPCAP_IOCTL_NUM_TTA__START,
+	CPCAP_IOCTL_NUM_TTA_STATUS_GET,
+	CPCAP_IOCTL_NUM_TTA__END,
 };
 
 enum cpcap_irqs {
@@ -464,6 +476,11 @@ enum cpcap_batt_usb_model {
 	CPCAP_BATT_USB_MODEL_FACTORY,
 };
 
+enum cpcap_tta_state {
+	TTA_DETECTED,
+	TTA_NOT_DETECTED,
+};
+
 struct cpcap_spi_init_data {
 	enum cpcap_reg reg;
 	unsigned short data;
@@ -478,6 +495,10 @@ struct cpcap_adc_ato {
 	unsigned short atox_out;
 	unsigned short adc_ps_factor_out;
 	unsigned short atox_ps_factor_out;
+};
+
+struct cpcap_3mm5_tvint {
+	int tvint_irq;
 };
 
 struct cpcap_batt_data {
@@ -508,6 +529,8 @@ struct cpcap_platform_data {
 	unsigned short *regulator_mode_values;
 	struct regulator_init_data *regulator_init;
 	struct cpcap_adc_ato *adc_ato;
+	int barrel_capability;
+	struct cpcap_3mm5_tvint *tvint;
 
 	void (*ac_changed)(struct power_supply *,
 			   struct cpcap_batt_ac_data *);
@@ -601,9 +624,20 @@ struct cpcap_regacc {
 #define CPCAP_IOCTL_BATT_ATOD_READ \
 	_IOWR(0, CPCAP_IOCTL_NUM_BATT_ATOD_READ, struct cpcap_adc_us_request*)
 
+#define CPCAP_IOCTL_BATT_CHARGER_SET_CHARGE_CURRENT \
+	_IOW(0, CPCAP_IOCTL_NUM_BATT_CHARGER_SET_CHARGE_CURRENT, \
+	unsigned short *)
+
+#define CPCAP_IOCTL_BATT_CHARGER_SET_CHARGE_VOLTAGE \
+	_IOW(0, CPCAP_IOCTL_NUM_BATT_CHARGER_SET_CHARGE_VOLTAGE, \
+	unsigned short *)
 
 #define CPCAP_IOCTL_UC_MACRO_START \
 	_IOWR(0, CPCAP_IOCTL_NUM_UC_MACRO_START, enum cpcap_macro)
+
+#define CPCAP_IOCTL_TTA_READ_STATUS \
+     _IOWR(0, CPCAP_IOCTL_NUM_TTA_STATUS_GET, enum cpcap_tta_state*)
+
 
 #ifdef __KERNEL__
 struct cpcap_device {
@@ -648,6 +682,9 @@ int cpcap_irq_register(struct cpcap_device *cpcap, enum cpcap_irqs irq,
 
 int cpcap_irq_free(struct cpcap_device *cpcap, enum cpcap_irqs irq);
 
+/* removes irq handler and calls kfree on associated data */
+int cpcap_irq_free_data(struct cpcap_device *cpcap, enum cpcap_irqs irq);
+
 int cpcap_irq_get_data(struct cpcap_device *cpcap, enum cpcap_irqs irq,
 		       void **data);
 
@@ -684,5 +721,15 @@ int cpcap_uc_stop(struct cpcap_device *cpcap, enum cpcap_macro macro);
 
 unsigned char cpcap_uc_status(struct cpcap_device *cpcap,
 			      enum cpcap_macro macro);
+
+#ifdef CONFIG_TTA_CHARGER
+void enable_tta(void);
+void disable_tta(void);
+#endif
+
+void venc_tv_disconnect(void);
+
+int venc_tv_connect(void);
+
 #endif /* __KERNEL__ */
 #endif /* _LINUX_SPI_CPCAP_H */

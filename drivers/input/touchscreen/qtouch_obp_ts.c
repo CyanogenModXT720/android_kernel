@@ -405,6 +405,21 @@ static int qtouch_hw_init(struct qtouch_ts_data *ts)
 			return ret;
 		}
 	}
+
+	/* configure the GPIO PWM support */
+	obj = find_obj(ts, QTM_OBJ_SPT_GPIO_PWM);
+	if (obj && obj->entry.num_inst > 0) {
+		ret = qtouch_write_addr(ts, obj->entry.addr,
+					&ts->pdata->gpio_pwm_cfg,
+					min(sizeof(ts->pdata->gpio_pwm_cfg),
+					    obj->entry.size));
+		if (ret != 0) {
+			pr_err("%s: Can't write the GPIO PWM config\n",
+			       __func__);
+			return ret;
+		}
+	}
+
 	/* configure the grip suppression table */
 	obj = find_obj(ts, QTM_OBJ_PROCI_GRIPFACESUPPRESSION);
 	if (obj && obj->entry.num_inst > 0) {
@@ -414,6 +429,76 @@ static int qtouch_hw_init(struct qtouch_ts_data *ts)
 					    obj->entry.size));
 		if (ret != 0) {
 			pr_err("%s: Can't write the grip suppression config\n",
+			       __func__);
+			return ret;
+		}
+	}
+
+	/* configure noise suppression */
+	obj = find_obj(ts, QTM_OBJ_PROCG_NOISE_SUPPRESSION);
+	if (obj && obj->entry.num_inst > 0) {
+		ret = qtouch_write_addr(ts, obj->entry.addr,
+					&ts->pdata->noise_suppression_cfg,
+					min(sizeof(ts->pdata->noise_suppression_cfg),
+					    obj->entry.size));
+		if (ret != 0) {
+			pr_err("%s: Can't write the noise suppression config\n",
+			       __func__);
+			return ret;
+		}
+	}
+
+	/* configure the one touch gesture processor */
+	obj = find_obj(ts, QTM_OBJ_PROCI_ONE_TOUCH_GESTURE_PROC);
+	if (obj && obj->entry.num_inst > 0) {
+		ret = qtouch_write_addr(ts, obj->entry.addr,
+					&ts->pdata->one_touch_gesture_proc_cfg,
+					min(sizeof(ts->pdata->one_touch_gesture_proc_cfg),
+					    obj->entry.size));
+		if (ret != 0) {
+			pr_err("%s: Can't write the one touch gesture processor config\n",
+			       __func__);
+			return ret;
+		}
+	}
+
+	/* configure self test */
+	obj = find_obj(ts, QTM_OBJ_SPT_SELF_TEST);
+	if (obj && obj->entry.num_inst > 0) {
+		ret = qtouch_write_addr(ts, obj->entry.addr,
+					&ts->pdata->self_test_cfg,
+					min(sizeof(ts->pdata->self_test_cfg),
+					    obj->entry.size));
+		if (ret != 0) {
+			pr_err("%s: Can't write the self test config\n",
+			       __func__);
+			return ret;
+		}
+	}
+
+	/* configure the two touch gesture processor */
+	obj = find_obj(ts, QTM_OBJ_PROCI_TWO_TOUCH_GESTURE_PROC);
+	if (obj && obj->entry.num_inst > 0) {
+		ret = qtouch_write_addr(ts, obj->entry.addr,
+					&ts->pdata->two_touch_gesture_proc_cfg,
+					min(sizeof(ts->pdata->two_touch_gesture_proc_cfg),
+					    obj->entry.size));
+		if (ret != 0) {
+			pr_err("%s: Can't write the two touch gesture processor config\n",
+			       __func__);
+			return ret;
+		}
+	}
+
+	/* configure the capacitive touch engine  */
+	obj = find_obj(ts, QTM_OBJ_SPT_CTE_CONFIG);
+	if (obj && obj->entry.num_inst > 0) {
+		ret = qtouch_write_addr(ts, obj->entry.addr,
+					&ts->pdata->cte_config_cfg,
+					min(sizeof(ts->pdata->cte_config_cfg),
+					    obj->entry.size));
+		if (ret != 0) {
+			pr_err("%s: Can't write the capacitive touch engine config\n",
 			       __func__);
 			return ret;
 		}
@@ -570,6 +655,9 @@ static int do_touch_multi_msg(struct qtouch_ts_data *ts, struct qtm_object *obj,
 	y = (msg->ypos_msb << 2) | ((msg->xypos_lsb >> 2) & 0x3);
 	width = msg->touch_area;
 	pressure = msg->touch_amp;
+
+	if (ts->pdata->flags & QTOUCH_FLIP_X)
+		x = (ts->pdata->abs_max_x-1)-x;
 
 	if (ts->pdata->flags & QTOUCH_SWAP_XY)
 		swap(x, y);
@@ -741,6 +829,17 @@ static int qtouch_process_info_block(struct qtouch_ts_data *ts)
 
 	addr = QTM_OBP_ID_INFO_ADDR + sizeof(qtm_info);
 	report_id = 1;
+
+	/* Clear the object table */
+	for (i = 0; i < QTM_OBP_MAX_OBJECT_NUM; ++i) {
+		ts->obj_tbl[i].entry.type = 0;
+		ts->obj_tbl[i].entry.addr = 0;
+		ts->obj_tbl[i].entry.size = 0;
+		ts->obj_tbl[i].entry.num_inst = 0;
+		ts->obj_tbl[i].entry.num_rids = 0;
+		ts->obj_tbl[i].report_id_min = 0;
+		ts->obj_tbl[i].report_id_max = 0;
+	}
 
 	/* read out the object entries table */
 	for (i = 0; i < qtm_info.num_objs; ++i) {

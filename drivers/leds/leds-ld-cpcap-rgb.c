@@ -36,12 +36,20 @@ struct msg_ind_led_data {
 void msg_ind_set_rgb_brightness(struct msg_ind_led_data *msg_ind_data,
 				int color, enum led_brightness value)
 {
+#ifdef CONFIG_LEDS_SHOLEST
+	unsigned short brightness = LD_MSG_IND_LO_CURRENT | LD_MSG_IND_ON;
+#else
 	unsigned short brightness = LD_MSG_IND_CURRENT | LD_MSG_IND_ON;
+#endif
 	int cpcap_status = 0;
 	int cpcap_register = 0;
 
 	if (color & LD_LED_RED)
+#ifdef CONFIG_LEDS_SHOLEST
+        cpcap_register = CPCAP_REG_ADLC;
+#else
 		cpcap_register = CPCAP_REG_REDC;
+#endif
 	else if (color & LD_LED_GREEN)
 		cpcap_register = CPCAP_REG_GREENC;
 	else if (color & LD_LED_BLUE)
@@ -56,7 +64,25 @@ void msg_ind_set_rgb_brightness(struct msg_ind_led_data *msg_ind_data,
 					  LD_MSG_IND_CPCAP_MASK);
 
 		brightness = 0x00;
-	} else if (value <= 51)
+	}
+#ifdef CONFIG_LEDS_SHOLEST
+	else if (value <= 51)
+		brightness |= (LD_MSG_IND_LOW << \
+				((cpcap_register == CPCAP_REG_ADLC) << 1));
+	else if (value <= 104)
+		brightness |= (LD_MSG_IND_LOW_MED << \
+				((cpcap_register == CPCAP_REG_ADLC) << 1));
+	else if (value <= 155)
+		brightness |= (LD_MSG_IND_MEDIUM << \
+				((cpcap_register == CPCAP_REG_ADLC) << 1));
+	else if (value <= 201)
+		brightness |= (LD_MSG_IND_MED_HIGH << \
+				((cpcap_register == CPCAP_REG_ADLC) << 1));
+	else
+		brightness |= (LD_MSG_IND_HIGH << \
+				((cpcap_register == CPCAP_REG_ADLC) << 1));
+#else
+    else if (value <= 51)
 		brightness |= LD_MSG_IND_LOW;
 	else if (value <= 104)
 		brightness |= LD_MSG_IND_LOW_MED;
@@ -66,6 +92,7 @@ void msg_ind_set_rgb_brightness(struct msg_ind_led_data *msg_ind_data,
 		brightness |= LD_MSG_IND_MED_HIGH;
 	else
 		brightness |= LD_MSG_IND_HIGH;
+#endif
 
 	cpcap_status = cpcap_regacc_write(msg_ind_data->cpcap,
 					  cpcap_register, brightness,

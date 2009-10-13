@@ -192,12 +192,14 @@ int hplens_reg_write(u8 dev_addr, u8 *write_buf, u16 len)
 	struct i2c_client *client = lens->i2c_client;
 	int err;
 	struct i2c_msg msg[1];
+	int retry = 0;
 
 	if (!client->adapter)
 		return -ENODEV;
 
 	client->addr = dev_addr;  /* set slave address */
 
+again:
 	msg->addr = client->addr;
 	msg->flags = 0;
 	msg->len = len;
@@ -208,6 +210,13 @@ int hplens_reg_write(u8 dev_addr, u8 *write_buf, u16 len)
 	if (err >= 0)
 		return 0;
 
+	if (retry <= HPLENS_I2C_RETRY_COUNT) {
+		dev_dbg(&client->dev, "retry ... %d", retry);
+		retry++;
+		set_current_state(TASK_UNINTERRUPTIBLE);
+		schedule_timeout(msecs_to_jiffies(20));
+		goto again;
+	}
 	return err;
 }
 EXPORT_SYMBOL(hplens_reg_write);
@@ -292,6 +301,8 @@ static int hplens_ioctl_s_ctrl(struct v4l2_int_device *s,
 	u8 write_buffer[16];
 	u8 fdb = 0;
 	int idx;
+	int i;
+	u8 buf1[10], buf_str[200];
 
 	if (find_vctrl(vc->id) < 0)
 		return -EINVAL;
@@ -325,6 +336,21 @@ static int hplens_ioctl_s_ctrl(struct v4l2_int_device *s,
 
 			for (idx = fdb; idx <= reg.len_data; idx++) {
 				write_buffer[idx] = reg.data[idx-fdb];
+			}
+
+			printk(KERN_ERR \
+			"HPLENS_CMD_WRITE : header_len=%d data_len=%d\n",\
+			fdb, reg.len_data);
+
+			buf_str[0] = '\0';
+			for (i = 0; i < reg.len_data + fdb; i++) {
+				sprintf(buf1, "%02x ", write_buffer[i]);
+				strcat(buf_str, buf1);
+				if (i % 8 == 7 || i == reg.len_data + fdb - 1) {
+					printk(KERN_ERR \
+						"    %d : %s\n", i/8, buf_str);
+					buf_str[0] = '\0';
+				}
 			}
 
 			ret = hplens_reg_write(reg.dev_addr, write_buffer, reg.len_data + fdb);

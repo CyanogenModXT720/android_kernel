@@ -112,6 +112,7 @@ obj-$(CONFIG_VIDEO_OMAP3) += omap34xxcam.o
 
 obj-$(CONFIG_VIDEO_TCM825X) += tcm825x.o
 obj-$(CONFIG_VIDEO_MT9P012)     += mt9p012.o
+obj-$(CONFIG_VIDEO_OV8810)     += ov8810.o
 obj-$(CONFIG_VIDEO_OMAP3_HP3A) += hp3a/
 obj-$(CONFIG_VIDEO_OMAP3_HPLENS) += hplens.o
 
@@ -162,6 +163,7 @@ obj-$(CONFIG_VIDEO_AU0828) += au0828/
 
 obj-$(CONFIG_USB_VIDEO_CLASS)	+= uvc/
 
+obj-$(CONFIG_HDMI_TDA19989) += tda19989.o
 EXTRA_CFLAGS += -Idrivers/media/dvb/dvb-core
 EXTRA_CFLAGS += -Idrivers/media/dvb/frontends
 EXTRA_CFLAGS += -Idrivers/media/common/tuners

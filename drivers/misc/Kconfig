@@ -261,8 +261,8 @@ config UID_STAT
 	bool "UID based statistics tracking exported to /proc/uid_stat"
 	default n
 
-config VIB_OMAP_PWM
-	bool "OMAP PWM Vibrator"
+config VIB_PWM
+	bool "PWM Vibrator"
 	default n
 
 config VIB_GPIO
@@ -309,7 +309,7 @@ config WL127X_RFKILL
 
 config WL127X_TEST
 	tristate "TI wl127x Bluetooth GPIO test driver for board-sholes"
-	depends on (MACH_SHOLES || MACH_MAPPHONE) && WL127X_RFKILL && BT
+	depends on (MACH_SHOLES || MACH_SHOLEST) && WL127X_RFKILL && BT
 	default n
 	---help---
 	 Creates sysfs GPIO entries for testing TI wl127x BT on board-sholes.

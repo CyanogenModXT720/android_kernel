@@ -1,6 +1,6 @@
 /* include/linux/vib-omap-pwm.h
  *
- * Copyright (C) 2008 Motorola, Inc.
+ * Copyright (C) 2009 Motorola, Inc.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -13,10 +13,18 @@
  *
  */
 
-#ifndef __VIB_OMAP_PWM_H
-#define __VIB_OMAP_PWM_H
+#ifndef __VIB_PWM_H
+#define __VIB_PWM_H
+#define VIB_PWM_NAME "vib-pwm"
 
-void __init vibrator_omap_pwm_init(int initial_vibrate);
-void vibrator_haptic_fire(int value);
+struct vib_pwm_platform_data {
+	int initial_vibrate;
+	int (*init) (void);
+	void (*exit) (void);
+	void (*power_on) (void);
+	void (*power_off) (void);
+};
+
+void pwm_vibrator_haptic_fire(int value);
 
 #endif
