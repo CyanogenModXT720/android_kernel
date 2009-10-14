@@ -338,8 +338,14 @@ void ipc_dma_buf2node_callback (int lch, u16 ch_status, void *data)
 	        if(ipc_memcpy_buf2node.ipc_ch->cfg.read_callback != NULL)  {
         	        ipc_status.nb_bytes = ipc_memcpy_buf2node.total_size;
                 	ipc_status.channel  = &ipc_memcpy_buf2node.ipc_ch->ch;
+			ipc_dbg_array[ipc_dbg_index++] = 0x16;
+			if (ipc_dbg_index >= IPC_DBG_ARRAY_SIZE)
+				ipc_dbg_index = 0;
 	                ipc_memcpy_buf2node.ipc_ch->cfg.read_callback(&ipc_status);
         	} else {
+			ipc_dbg_array[ipc_dbg_index++] = 0x1E;
+			if (ipc_dbg_index >= IPC_DBG_ARRAY_SIZE)
+				ipc_dbg_index = 0;
                 	//up(&ipc_memcpy_buf2node.ipc_ch->read_ptr.read_mutex);
                 	SEM_UNLOCK(&ipc_memcpy_buf2node.ipc_ch->read_ptr.read_mutex);
 	        }
@@ -356,6 +362,16 @@ void ipc_dma_buf2node_callback (int lch, u16 ch_status, void *data)
 	DEBUG("Continue DMA:buf_phy=%lx total_size=%d node_index=%d frame_index=%d\n", ipc_memcpy_buf2node.buf_phy, ipc_memcpy_buf2node.total_size, ipc_memcpy_buf2node.node_index, ipc_memcpy_buf2node.frame_index);
         /* set DMA parameters, then start DMA transfer */
         OMAP_DMA_MEM2MEM_START(ipc_memcpy_buf2node.dma_ch, ipc_memcpy_buf2node.buf_phy, NODE_BUF_PHYS_ADDR(ipc_ch->read_ptr.node_ptr[ipc_memcpy_buf2node.node_index].data_ptr), size);
+	dma_psrc = (unsigned int)ipc_memcpy_buf2node.buf_phy;
+	dma_vdest = (unsigned int)ipc_ch->read_ptr.node_ptr[\
+			ipc_memcpy_buf2node.node_index].data_ptr;
+	dma_pdest = (unsigned int)NODE_BUF_PHYS_ADDR(ipc_ch->read_ptr.node_ptr[\
+			ipc_memcpy_buf2node.node_index].data_ptr);
+	dma_size = size;
+	dma_ch = (unsigned int)ipc_memcpy_buf2node.dma_ch;
+	ipc_dbg_array[ipc_dbg_index++] = 0x15;
+	if (ipc_dbg_index >= IPC_DBG_ARRAY_SIZE)
+		ipc_dbg_index = 0;
 }
 
 /*
@@ -406,6 +422,9 @@ void ipc_dma_memcpy_buf2node(USB_IPC_API_PARAMS *ipc_ch)
 		/* clear flag to indicate API read function call is done */
 	        ipc_ch->read_flag = 0;
 		if(ipc_ch->cfg.read_callback != NULL)  {
+			ipc_dbg_array[ipc_dbg_index++] = 0x1F;
+			if (ipc_dbg_index >= IPC_DBG_ARRAY_SIZE)
+				ipc_dbg_index = 0;
 			 ipc_status.nb_bytes = ipc_ch->read_ptr.total_num;
                 	 ipc_status.channel  = &ipc_ch->ch;
 			 ipc_ch->cfg.read_callback(&ipc_status);
@@ -441,5 +460,15 @@ void ipc_dma_memcpy_buf2node(USB_IPC_API_PARAMS *ipc_ch)
 
         /* set DMA parameters, then start DMA transfer */
         OMAP_DMA_MEM2MEM_START(ipc_memcpy_buf2node.dma_ch, ipc_memcpy_buf2node.buf_phy, NODE_BUF_PHYS_ADDR(ipc_ch->read_ptr.node_ptr[ipc_memcpy_buf2node.node_index].data_ptr), size);
+	dma_psrc = (unsigned int)ipc_memcpy_buf2node.buf_phy;
+	dma_vdest = (unsigned int)ipc_ch->read_ptr.node_ptr[\
+			ipc_memcpy_buf2node.node_index].data_ptr;
+	dma_pdest = (unsigned int)NODE_BUF_PHYS_ADDR(ipc_ch->read_ptr.node_ptr[\
+			ipc_memcpy_buf2node.node_index].data_ptr);
+	dma_size = size;
+	dma_ch = ipc_memcpy_buf2node.dma_ch;
+	ipc_dbg_array[ipc_dbg_index++] = 0x14;
+	if (ipc_dbg_index >= IPC_DBG_ARRAY_SIZE)
+		ipc_dbg_index = 0;
 }
 #endif

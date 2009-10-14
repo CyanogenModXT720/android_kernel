@@ -75,6 +75,8 @@
 #define USB_IPC_SUSPEND_DELAY      500 // 500ms delay required by IPC
 #endif // CONFIG_PM
 
+#define IPC_DBG_ARRAY_SIZE 128
+
 /* define IPC channels which will map with each USB class driver */
 typedef enum {
 	IPC_DATA_CH_NUM = 0,
@@ -244,6 +246,15 @@ typedef struct {
 	int                  probe_flag; /* whether probed */
         int                  urb_flag;
 } USB_LOG_IFS_STRUCT;
+
+extern int ipc_dbg_index;
+extern char ipc_dbg_array[IPC_DBG_ARRAY_SIZE];
+extern unsigned int dma_vsrc;
+extern unsigned int dma_psrc;
+extern unsigned int dma_vdest;
+extern unsigned int dma_pdest;
+extern unsigned int dma_size;
+extern unsigned int dma_ch;
 
 extern void ipc_api_usb_probe(USB_IPC_CHANNEL_INDEX ch_index, USB_IPC_IFS_STRUCT *usb_ifs);
 extern void ipc_api_usb_disconnect(USB_IPC_CHANNEL_INDEX ch_index);
