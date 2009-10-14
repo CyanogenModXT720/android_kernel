@@ -1271,6 +1271,7 @@ void dsi_dump_clocks(struct seq_file *s)
 void dsi_dump_regs(struct seq_file *s)
 {
 #define DUMPREG(r) seq_printf(s, "%-35s %08x\n", #r, dsi_read_reg(r))
+
 	dss_clk_enable(DSS_CLK_ICK | DSS_CLK_FCK1);
 
 	DUMPREG(DSI_REVISION);
@@ -3029,7 +3030,6 @@ static void dsi_display_uninit_dsi(struct omap_dss_device *dssdev)
 		dssdev->driver->disable(dssdev);
 
 	dsi_complexio_uninit();
-
 	dsi_pll_uninit();
 }
 
@@ -3097,6 +3097,7 @@ static int dsi_display_enable(struct omap_dss_device *dssdev)
 		dsi_start_auto_update(dssdev);
 
 	dsi.error_recovery.enabled = true;
+
 	dsi_bus_unlock();
 	mutex_unlock(&dsi.lock);
 
@@ -3123,6 +3124,11 @@ static void dsi_display_disable(struct omap_dss_device *dssdev)
 	mutex_lock(&dsi.lock);
 	dsi_bus_lock();
 
+	dsi.error_recovery.enabled = false;
+	cancel_work_sync(&dsi.error_recovery.work);
+
+	complete_all(&dsi.update_completion);
+
 	if (dssdev->state == OMAP_DSS_DISPLAY_DISABLED ||
 			dssdev->state == OMAP_DSS_DISPLAY_SUSPENDED)
 		goto end;
@@ -3137,7 +3143,6 @@ static void dsi_display_disable(struct omap_dss_device *dssdev)
 
 	enable_clocks(0);
 	dsi_enable_pll_clock(0);
-	dsi.error_recovery.enabled = false;
 
 	omap_dss_stop_device(dssdev);
 end:
@@ -3153,6 +3158,9 @@ static int dsi_display_suspend(struct omap_dss_device *dssdev)
 	dsi_bus_lock();
 
 	dsi.error_recovery.enabled = false;
+	cancel_work_sync(&dsi.error_recovery.work);
+
+	complete_all(&dsi.update_completion);
 
 	if (dssdev->state == OMAP_DSS_DISPLAY_DISABLED ||
 			dssdev->state == OMAP_DSS_DISPLAY_SUSPENDED)
@@ -3216,6 +3224,7 @@ static int dsi_display_resume(struct omap_dss_device *dssdev)
 		dsi_start_auto_update(dssdev);
 
 	dsi.error_recovery.enabled = true;
+
 	dsi_bus_unlock();
 	mutex_unlock(&dsi.lock);
 
@@ -3554,6 +3563,7 @@ static void dsi_error_recovery_worker(struct work_struct *work)
 	dsi.error_recovery.recovering = true;
 
 	enable_clocks(1);
+	dsi_enable_pll_clock(1);
 	dsi_force_tx_stop_mode_io();
 
 	r = dsi_read_reg(DSI_TIMING1);
@@ -3575,6 +3585,7 @@ static void dsi_error_recovery_worker(struct work_struct *work)
 	if (dsi.update_mode == OMAP_DSS_UPDATE_AUTO)
 		dsi_start_auto_update(dsi.error_recovery.dssdev);
 	enable_clocks(0);
+	dsi_enable_pll_clock(0);
 
 	dsi_bus_unlock();
 
