@@ -212,8 +212,13 @@ int32 DirectInform (void* param1, void* param2)
 
         case INFORM_INTERFACE_DISABLECHANNEL:
         {
+	    printk("DisableChannel: ackType = %x, channel = %x, host = %x, client = %x\n", 
+		   ((DISABLECHANNEL_PACKET*)informdata->data)->acktype,
+		   ((DISABLECHANNEL_PACKET*)informdata->data)->channel,
+		   ((DISABLECHANNEL_PACKET*)informdata->data)->host_interface,
+		   ((DISABLECHANNEL_PACKET*)informdata->data)->client_interface);
             channel = ((DISABLECHANNEL_PACKET*)informdata->data)->channel;
-            chdat   = &direct->channel_data[channel-direct->channel_min];
+	    chdat   = &direct->channel_data[channel-direct->channel_min];
 
             chdat->refcount--;
             wake_up_interruptible(&chdat->close_wait);

@@ -19,6 +19,7 @@
 #include <linux/pm_qos_params.h>
 #include <linux/cpufreq.h>
 #include <linux/delay.h>
+#include <linux/spinlock.h>
 #include <mach/powerdomain.h>
 #include <mach/clockdomain.h>
 #include <mach/control.h>
@@ -28,6 +29,8 @@
 #include "pm.h"
 #include "cm.h"
 #include "cm-regbits-34xx.h"
+
+static DEFINE_SPINLOCK(dpll3_clock_lock);
 
 /**
  * init_latency - Initializes the mpu/core latency resource.
@@ -237,8 +240,8 @@ static int program_opp_freq(int res, int target_level, int current_level)
 {
 	int ret = 0, l3_div;
 	int *curr_opp;
+	unsigned long flags;
 
-	lock_scratchpad_sem();
 	if (res == VDD1_OPP) {
 		curr_opp = &curr_vdd1_opp;
 		clk_set_rate(dpll1_clk, mpu_opps[target_level].rate);
@@ -249,21 +252,28 @@ static int program_opp_freq(int res, int target_level, int current_level)
 			mpu_opps[current_level].rate/1000,
 			mpu_opps[target_level].rate/1000);
 #endif
+#ifdef CONFIG_PM
+		omap3_save_scratchpad_contents();
+#endif
 	} else {
 		curr_opp = &curr_vdd2_opp;
 		l3_div = cm_read_mod_reg(CORE_MOD, CM_CLKSEL) &
 			OMAP3430_CLKSEL_L3_MASK;
+
+		spin_lock_irqsave(&dpll3_clock_lock, flags);
+		lock_scratchpad_sem();
 		ret = clk_set_rate(dpll3_clk,
 				l3_opps[target_level].rate * l3_div);
+#ifdef CONFIG_PM
+		if (!ret)
+			omap3_save_scratchpad_contents();
+#endif
+		unlock_scratchpad_sem();
+		spin_unlock_irqrestore(&dpll3_clock_lock, flags);
 	}
 	if (ret) {
-		unlock_scratchpad_sem();
 		return current_level;
 	}
-#ifdef CONFIG_PM
-	omap3_save_scratchpad_contents();
-#endif
-	unlock_scratchpad_sem();
 
 	*curr_opp = target_level;
 	return target_level;
