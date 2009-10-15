@@ -659,6 +659,9 @@ static int do_touch_multi_msg(struct qtouch_ts_data *ts, struct qtm_object *obj,
 	if (ts->pdata->flags & QTOUCH_FLIP_X)
 		x = (ts->pdata->abs_max_x-1)-x;
 
+	if (ts->pdata->flags & QTOUCH_FLIP_Y)
+		y = (ts->pdata->abs_max_y-1)-y;
+
 	if (ts->pdata->flags & QTOUCH_SWAP_XY)
 		swap(x, y);
 
