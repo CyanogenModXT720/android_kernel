@@ -124,8 +124,6 @@
 #define SHOLEST_POWER_OFF_GPIO		176
 #define SHOLEST_BPWAKE_STROBE_GPIO	157
 #define SHOLEST_APWAKE_TRIGGER_GPIO	141
-#define SHOLEST_HDMI_MUX_SELECT_GPIO    7
-#define SHOLEST_HDMI_MUX_EN_N_GPIO  69
 #define SHOLEST_LM_3530_EN_GPIO     27
 #define DIE_ID_REG_BASE			(L4_WK_34XX_PHYS + 0xA000)
 #define DIE_ID_REG_OFFSET		0x218
@@ -536,16 +534,7 @@ static void sholest_als_init(void)
 static void sholest_misc_init(void)
 {
     printk(KERN_INFO "%s:Initializing\n", __func__);
-    if (gpio_request(SHOLEST_HDMI_MUX_SELECT_GPIO, "HDMI-mux-select") >= 0)
-    {
-        gpio_direction_output(SHOLEST_HDMI_MUX_SELECT_GPIO, 0);
-        gpio_set_value(SHOLEST_HDMI_MUX_SELECT_GPIO, 0);
-    }
-    if (gpio_request(SHOLEST_HDMI_MUX_EN_N_GPIO, "HDMI-mux-enable-n") >= 0)
-    {
-        gpio_direction_output(SHOLEST_HDMI_MUX_EN_N_GPIO, 0);
-        gpio_set_value(SHOLEST_HDMI_MUX_EN_N_GPIO, 0);
-    }
+
     if (gpio_request(SHOLEST_LM_3530_EN_GPIO, "led-enable") >= 0)
     {
         gpio_direction_output(SHOLEST_LM_3530_EN_GPIO, 0);

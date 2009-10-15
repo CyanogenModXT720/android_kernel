@@ -25,10 +25,8 @@
 
 #define SHOLEST_DISPLAY_RESET_GPIO	136
 
-#ifdef CONFIG_PANEL_HDTV
 #define SHOLEST_HDMI_MUX_ENABLE_N_GPIO  69
 #define SHOLEST_HDMI_MUX_SELECT_GPIO    7
-#endif
 
 struct regulator *display_regulator;
 
@@ -271,6 +269,14 @@ void __init sholest_panel_init(void)
 		printk(KERN_ERR "failed to get display reset gpio\n");
 		goto error;
 	}
+
+	gpio_request(SHOLEST_HDMI_MUX_ENABLE_N_GPIO, "HDMI-mux-enable");
+	gpio_direction_output(SHOLEST_HDMI_MUX_ENABLE_N_GPIO, 0);
+	gpio_set_value(SHOLEST_HDMI_MUX_ENABLE_N_GPIO, 0);
+	
+	gpio_request(SHOLEST_HDMI_MUX_SELECT_GPIO, "HDMI-mux-select");
+	gpio_direction_output(SHOLEST_HDMI_MUX_SELECT_GPIO, 0);
+	gpio_set_value(SHOLEST_HDMI_MUX_SELECT_GPIO, 0);
 
 	platform_device_register(&sholest_dss_device);
 #ifdef CONFIG_PANEL_HDTV

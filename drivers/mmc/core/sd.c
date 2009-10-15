@@ -254,6 +254,10 @@ static int mmc_switch_hs(struct mmc_card *card)
 	if (card->sw_caps.hs_max_dtr == 0)
 		return 0;
 
+	/* LIBtt04854 : All of 2GB sd card set to 24Mhz */
+	if (card->csd.read_blkbits == 10)
+		return 0;
+
 	err = -EIO;
 
 	status = kmalloc(64, GFP_KERNEL);
