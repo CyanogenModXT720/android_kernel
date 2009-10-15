@@ -1477,8 +1477,8 @@ static int audio_configure_ssi(struct inode *inode, struct file *file)
 		tx_params.word_length1 = OMAP_MCBSP_WORD_32;
 		ssi = STDAC_SSI;
 #ifdef AUDIO_I2S_MODE
-		tx_cfg_params.fs_polarity  = OMAP_MCBSP_FS_ACTIVE_LOW;
-		tx_cfg_params.phase = OMAP_MCBSP_FRAME_DUALPHASE;
+		/*tx_cfg_params.fs_polarity  = OMAP_MCBSP_FS_ACTIVE_LOW;*/
+		/*tx_cfg_params.phase = OMAP_MCBSP_FRAME_DUALPHASE;*/
 #endif
 		omap_ctrl_writel(omap_ctrl_readl(OMAP2_CONTROL_DEVCONF0) |
 					(1 << OMAP2_CONTROL_DEVCONF0_BIT6),
@@ -1785,7 +1785,39 @@ static int audio_ioctl(struct inode *inode, struct file *file,
 		ret = audio_select_speakers(spkr);
 		break;
 	}
+	/* FM radio Begin */
+	case SOUND_MIXER_FMPATH:
+		{
+			int spkr;
+			TRY(copy_from_user(&spkr, (int *)arg, sizeof(int)))
+			AUDIO_LEVEL2_LOG("SOUND_MIXER_FMPATH with spkr = %#x\n",
+				 spkr);
+			cpcap_audio_state.ext_primary_speaker = spkr;
+			/*
+			FM radio gain is controlled
+			AudioHardwareMot.cpp
+			*/
+			/*cpcap_audio_state.output_gain = 15;*/
+			cpcap_audio_set_audio_state(&cpcap_audio_state);
+			break;
+		}
 
+	case SOUND_MIXER_FMON:
+		{
+			AUDIO_LEVEL2_LOG("SOUND_MIXER_FMON\n");
+			cpcap_audio_state.analog_source =
+				CPCAP_AUDIO_ANALOG_SOURCE_STEREO;
+			cpcap_audio_set_audio_state(&cpcap_audio_state);
+			break;
+		}
+
+	case SOUND_MIXER_FMOFF:
+		{
+			AUDIO_LEVEL2_LOG("SOUND_MIXER_FMOFF\n");
+			cpcap_audio_set_audio_state(&cpcap_audio_state);
+			break;
+		}
+/* FM radio End */
 	case SOUND_MIXER_RECSRC:
 	{
 		int mic;
