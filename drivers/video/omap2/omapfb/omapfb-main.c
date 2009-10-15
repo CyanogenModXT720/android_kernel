@@ -761,6 +761,7 @@ int omapfb_apply_changes(struct fb_info *fbi, int init)
 	struct omapfb_info *ofbi = FB2OFB(fbi);
 	struct fb_var_screeninfo *var = &fbi->var;
 	struct omap_overlay *ovl;
+	struct omap_overlay_info info;
 	u16 posx, posy;
 	u16 outw, outh;
 	int i;
@@ -783,6 +784,8 @@ int omapfb_apply_changes(struct fb_info *fbi, int init)
 			continue;
 		}
 
+		ovl->get_overlay_info(ovl, &info);
+
 		if (init || (ovl->caps & OMAP_DSS_OVL_CAP_SCALE) == 0) {
 			int rotation = (var->rotate + ofbi->rotation[i]) % 4;
 			if (rotation == FB_ROTATE_CW ||
@@ -794,16 +797,16 @@ int omapfb_apply_changes(struct fb_info *fbi, int init)
 				outh = var->yres;
 			}
 		} else {
-			outw = ovl->info.out_width;
-			outh = ovl->info.out_height;
+			outw = info.out_width;
+			outh = info.out_height;
 		}
 
 		if (init) {
 			posx = 0;
 			posy = 0;
 		} else {
-			posx = ovl->info.pos_x;
-			posy = ovl->info.pos_y;
+			posx = info.pos_x;
+			posy = info.pos_y;
 		}
 
 		r = omapfb_setup_overlay(fbi, ovl, posx, posy, outw, outh);
@@ -852,6 +855,7 @@ static int omapfb_pan_display(struct fb_var_screeninfo *var,
 		struct fb_info *fbi)
 {
 	struct omapfb_info *ofbi = FB2OFB(fbi);
+	struct omapfb2_device *fbdev = ofbi->fbdev;
 	struct omap_dss_device *display = fb2display(fbi);
 	int r = 0;
 
@@ -874,10 +878,8 @@ static int omapfb_pan_display(struct fb_var_screeninfo *var,
 		}
 	}
 
-	if (display && display->update && display->sync) {
-		display->sync(display);
+	if (display && display->update)
 		display->update(display, 0, 0, var->xres, var->yres);
-	}
 
 	return r;
 }
@@ -1315,12 +1317,7 @@ static int omapfb_alloc_fbmem_display(struct fb_info *fbi, unsigned long size,
 					oldw, oldh, w, h);
 		}
 
-#ifdef CONFIG_PVR_OMAP_DSS2
-		/* pvr drivers require multi-buffered fb */
-		size = (w * h * bytespp + PAGE_SIZE) * 3;
-#else
 		size = w * h * bytespp;
-#endif
 	}
 
 	if (!size)
@@ -2102,9 +2099,9 @@ static int omapfb_probe(struct platform_device *pdev)
 
 	/* set the update mode */
 	if (def_display->caps & OMAP_DSS_DISPLAY_CAP_MANUAL_UPDATE) {
+#ifdef CONFIG_FB_OMAP2_FORCE_AUTO_UPDATE
 		if (def_display->enable_te)
 			def_display->enable_te(def_display, 1);
-#ifdef CONFIG_FB_OMAP2_FORCE_AUTO_UPDATE
 		if (def_display->set_update_mode)
 			def_display->set_update_mode(def_display,
 					OMAP_DSS_UPDATE_AUTO);
@@ -2124,6 +2121,21 @@ static int omapfb_probe(struct platform_device *pdev)
 		if (def_display->set_update_mode)
 			def_display->set_update_mode(def_display,
 					OMAP_DSS_UPDATE_AUTO);
+	}
+
+	for (i = 0; i < fbdev->num_displays; i++) {
+		struct omap_dss_device *display = fbdev->displays[i];
+		u16 w, h;
+
+		if (!display->get_update_mode || !display->update)
+			continue;
+
+		if (display->get_update_mode(display) ==
+				OMAP_DSS_UPDATE_MANUAL) {
+
+			display->get_resolution(display, &w, &h);
+			display->update(display, 0, 0, w, h);
+		}
 	}
 
 	DBG("display->updated\n");

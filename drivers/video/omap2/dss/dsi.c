@@ -911,117 +911,6 @@ found:
 	return 0;
 }
 
-static int dsi_pll_calc_ddrfreq_fr_sysclk(struct omap_dss_device *dssdev,
-					bool enable_hsdiv,
-					struct dsi_clock_info *cinfo)
-{
-
-	struct omap_video_timings *t = &dssdev->panel.timings;
-	struct dsi_clock_info cur, best;
-	const bool use_dss2_fck = 1;
-	unsigned long dss_clk_fck2;
-	unsigned long Fvpp;
-
-	DSSDBG("dsi_pll_calc_ddrfreq_fr_sysclk\n");
-
-	dss_clk_fck2 = dss_clk_get_rate(DSS_CLK_FCK2);
-
-	if (dssdev->phy.dsi.ddr_clk_hz == dsi.cache_clk_freq &&
-			dsi.cache_cinfo.clkin == dss_clk_fck2) {
-		DSSDBG("DSI clock info found from cache\n");
-		*cinfo = dsi.cache_cinfo;
-#if CONFIG_OMAP2_DSS_USE_DSI_PLL
-		dispc_set_lcd_divisor(dsi.cache_cinfo.lck_div,
-					dsi.cache_cinfo.pck_div);
-#endif
-
-		return 0;
-	}
-
-	memset(&best, 0, sizeof(best));
-	memset(&cur, 0, sizeof(cur));
-
-	cur.dsiphy = dssdev->phy.dsi.ddr_clk_hz * 4;
-
-	cur.use_dss2_fck = use_dss2_fck;
-	if (use_dss2_fck)
-		cur.clkin = dss_clk_fck2;
-	else
-		cur.clkin = dispc_pclk_rate();
-
-	if (cur.clkin < 32000000)
-		cur.highfreq = 0;
-	else
-		cur.highfreq = 1;
-
-
-	/* no highfreq: 0.75MHz < Fint = clkin / regn < 2.1MHz */
-	/* highfreq: 0.75MHz < Fint = clkin / (2*regn) < 2.1MHz */
-	/* To reduce PLL lock time, keep Fint high (around 2 MHz) */
-	cur.fint = 2000000;
-
-	cur.regn = (cur.clkin/cur.fint) - 1;
-	cur.regm = (unsigned long)(cur.regn + 1) * (cur.dsiphy/1000000)
-					/ (2 * cur.clkin / 1000000);
-
-	DSSDBG("ddr_clk_hz %ld cur.dsiphy %ld fint %ld  regn %d regm %d\n",
-			dssdev->phy.dsi.ddr_clk_hz,
-			cur.dsiphy,
-			cur.fint,
-			cur.regn,
-			cur.regm);
-
-	if (t->dsi1_pll_fclk == 0 || t->dsi2_pll_fclk == 0 ||
-		t->dsi1_pll_fclk > 173000000 || t->dsi2_pll_fclk > 173000000) {
-		DSSERR(" Invalid dsi1_pll_fclk =%d dsi2_pll_fclk=%d\n",
-			t->dsi1_pll_fclk, t->dsi2_pll_fclk);
-		return -EINVAL;
-	}
-
-	cur.dsi1_pll_fclk = t->dsi1_pll_fclk * 1000; /* to Mhz */
-	cur.dsi2_pll_fclk = t->dsi2_pll_fclk * 1000; /* to Mhz */
-
-	if (enable_hsdiv == true) {
-		cur.regm4 = (cur.dsiphy / cur.dsi2_pll_fclk) - 1;
-		cur.regm3 = (cur.dsiphy / cur.dsi1_pll_fclk) - 1;
-	} else {
-		cur.regm4 = 0;
-		cur.regm3 = 0;
-	}
-
-	if (dssdev->ctrl.pixel_size == 0) {
-		DSSERR(" dssdev->ctrl.pixel_size = 0 \n");
-		return -EINVAL;
-	}
-
-	Fvpp = cur.dsiphy / dssdev->ctrl.pixel_size;
-	cur.lck_div = 1;
-	cur.pck_div = (cur.dsiphy / Fvpp) / ((cur.regm3 + 1) * cur.lck_div);
-
-   DSSDBG("dsi1_pll_fclk %ld dsi2_pll_fclk %ld pixel_size %d\n",
-			cur.dsi1_pll_fclk,
-			cur.dsi2_pll_fclk,
-			dssdev->ctrl.pixel_size);
-
-	DSSDBG("regm4 %d  regm3 %d  lck %d, pcd %d \n",
-			cur.regm4,
-			cur.regm3,
-			cur.lck_div,
-			cur.pck_div);
-
-	dispc_set_lcd_divisor(cur.lck_div, cur.pck_div);
-
-	if (cinfo)
-		*cinfo = cur;
-
-	dsi.cache_clk_freq = dssdev->phy.dsi.ddr_clk_hz;
-	dsi.cache_req_pck = 0;
-	dsi.cache_cinfo = cur;
-
-	return 0;
-}
-
-#ifndef CONFIG_OMAP2_DSS_USE_DSI_PLL
 static int dsi_pll_calc_ddrfreq(struct omap_dss_device *dssdev,
 				unsigned long clk_freq,
 				struct dsi_clock_info *cinfo)
@@ -1140,7 +1029,6 @@ found:
 
 	return 0;
 }
-#endif
 
 
 int dsi_pll_program(struct dsi_clock_info *cinfo)
@@ -3048,39 +2936,22 @@ static void dsi_display_uninit_dispc(struct omap_dss_device *dssdev)
 static int dsi_display_init_dsi(struct omap_dss_device *dssdev)
 {
 	struct dsi_clock_info cinfo;
-	bool enable_hsclk, enable_hsdiv;
 	int r;
 
 	_dsi_print_reset_status();
 
 #ifdef CONFIG_OMAP2_DSS_USE_DSI_PLL
-	enable_hsclk = true;
-	enable_hsdiv = true;
-
-	r = dsi_pll_init(enable_hsclk, enable_hsdiv);
-	if (r)
-		goto err0;
-
-	r = dsi_pll_calc_ddrfreq_fr_sysclk(dssdev, enable_hsdiv, &cinfo);
-	if (r)
-		goto err1;
-
-	/* Select function clk for DISPC as DSI1_PLL1_FCLK and function clk
-      for DSI as DSI2_PLL_FCLK */
-	dss_select_clk_source(1, 1);
-
+	r = dsi_pll_init(1, 1);
 #else
-	enable_hsclk = false;
-	enable_hsdiv = true;
-
-	r = dsi_pll_init(enable_hsclk, enable_hsdiv);
+	r = dsi_pll_init(1, 0);
+#endif
 	if (r)
 		goto err0;
 
-	r = dsi_pll_calc_ddrfreq(dssdev->phy.dsi.ddr_clk_hz, &cinfo);
+	r = dsi_pll_calc_ddrfreq(dssdev, dssdev->phy.dsi.ddr_clk_hz, &cinfo);
 	if (r)
 		goto err1;
-#endif
+
 	r = dsi_pll_program(&cinfo);
 	if (r)
 		goto err1;
