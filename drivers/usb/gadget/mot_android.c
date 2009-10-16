@@ -354,7 +354,8 @@ static int __init android_bind(struct usb_composite_dev *cdev)
 	if (id < 0)
 		return id;
 	strings_dev[STRING_SERIAL_IDX].id = id;
-	device_desc.iSerialNumber = id;
+	device_desc.iSerialNumber = 0;	
+	/* device_desc.iSerialNumber = id; -By Leon(w21749)*/
 
 	id = usb_string_id(cdev);
 	if (id < 0)
