@@ -64,6 +64,9 @@ extern struct hplens_platform_data sholest_hplens_platform_data;
 #define GPIO_OV8810_STANDBY	64
 #endif
 
+#define OMAP_MCAM_SRC_CLK		864000000
+#define OMAP_MCAM_SRC_DIV		4
+
 #define is_cdma_phone() (!strcmp("CDMA", bp_model))
 extern char *bp_model;
 

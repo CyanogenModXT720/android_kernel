@@ -82,20 +82,6 @@ struct hplens_platform_data sholest_hplens_platform_data = {
 #endif
 
 #if defined(CONFIG_VIDEO_MT9P012) || defined(CONFIG_VIDEO_MT9P012_MODULE)
-
-#define CAM_IOMUX_SAFE_MODE (OMAP343X_PADCONF_PULL_UP | \
-				OMAP343X_PADCONF_PUD_ENABLED | \
-				OMAP343X_PADCONF_MUXMODE7)
-#define CAM_IOMUX_SAFE_MODE_INPUT (OMAP343X_PADCONF_INPUT_ENABLED | \
-				OMAP343X_PADCONF_PULL_UP | \
-				OMAP343X_PADCONF_PUD_ENABLED | \
-				OMAP343X_PADCONF_MUXMODE7)
-#define CAM_IOMUX_FUNC_MODE (OMAP343X_PADCONF_INPUT_ENABLED | \
-				OMAP343X_PADCONF_MUXMODE0)
-
-static void sholest_camera_lines_safe_mode(void);
-static void sholest_camera_lines_func_mode(void);
-
 static struct omap34xxcam_sensor_config mt9p012_cam_hwc = {
 	.sensor_isp = 0,
 	.xclk = OMAP34XXCAM_XCLK_A,
@@ -172,7 +158,7 @@ static int mt9p012_sensor_power_set(struct device* dev, enum v4l2_power power)
 			omap_pm_set_min_bus_tput(dev, OCP_INITIATOR_AGENT, 885735);
 
 			/* Configure pixel clock divider (here?) */
-			omap_writel(0x4, 0x48004f40);
+			omap_writel(OMAP_MCAM_SRC_DIV, 0x48004f40);
 			isp_configure_interface(&mt9p012_if_config);
 
 			/* Request and configure gpio pins */
@@ -246,39 +232,6 @@ struct mt9p012_platform_data sholest_mt9p012_platform_data = {
 	.priv_data_set  = mt9p012_sensor_set_prv_data,
 };
 
-
-/* We can't change the IOMUX config after bootup
- * with the current pad configuration architecture,
- * the next two functions are hack to configure the
- * camera pads at runtime to save power in standby */
-
-void sholest_camera_lines_safe_mode(void)
-{
-	omap_ctrl_writew(CAM_IOMUX_SAFE_MODE_INPUT, 0x011a);
-	omap_ctrl_writew(CAM_IOMUX_SAFE_MODE_INPUT, 0x011c);
-	omap_ctrl_writew(CAM_IOMUX_SAFE_MODE_INPUT, 0x011e);
-	omap_ctrl_writew(CAM_IOMUX_SAFE_MODE_INPUT, 0x0120);
-	omap_ctrl_writew(CAM_IOMUX_SAFE_MODE, 0x0122);
-	omap_ctrl_writew(CAM_IOMUX_SAFE_MODE, 0x0124);
-	omap_ctrl_writew(CAM_IOMUX_SAFE_MODE, 0x0126);
-	omap_ctrl_writew(CAM_IOMUX_SAFE_MODE, 0x0128);
-	omap_ctrl_writew(CAM_IOMUX_SAFE_MODE_INPUT, 0x012a);
-	omap_ctrl_writew(CAM_IOMUX_SAFE_MODE_INPUT, 0x012c);
-}
-
-void sholest_camera_lines_func_mode(void)
-{
-	omap_ctrl_writew(CAM_IOMUX_FUNC_MODE, 0x011a);
-	omap_ctrl_writew(CAM_IOMUX_FUNC_MODE, 0x011c);
-	omap_ctrl_writew(CAM_IOMUX_FUNC_MODE, 0x011e);
-	omap_ctrl_writew(CAM_IOMUX_FUNC_MODE, 0x0120);
-	omap_ctrl_writew(CAM_IOMUX_FUNC_MODE, 0x0122);
-	omap_ctrl_writew(CAM_IOMUX_FUNC_MODE, 0x0124);
-	omap_ctrl_writew(CAM_IOMUX_FUNC_MODE, 0x0126);
-	omap_ctrl_writew(CAM_IOMUX_FUNC_MODE, 0x0128);
-	omap_ctrl_writew(CAM_IOMUX_FUNC_MODE, 0x012a);
-	omap_ctrl_writew(CAM_IOMUX_FUNC_MODE, 0x012c);
-}
 #endif /* #ifdef CONFIG_VIDEO_MT9P012 || CONFIG_VIDEO_MT9P012_MODULE */
 
 #if defined(CONFIG_VIDEO_OV8810)
@@ -427,7 +380,7 @@ static int ov8810_sensor_power_set(struct device *dev, enum v4l2_power power)
 			/* Power Up Sequence */
 
 			/* Configure pixel clock divider (here?) */
-			omap_writel(0x4, 0x48004f40);
+			omap_writel(OMAP_MCAM_SRC_DIV, 0x48004f40);
 
 			/* turn on VWLAN1 power */
 			if (regulator_vwlan1 != NULL) {
