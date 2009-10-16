@@ -23,8 +23,6 @@
 #include "oldisp/isp.h"
 #include "oldisp/ispcsi2.h"
 
-/*It for manual trigger oepration.*/
-
 #define OV8810_DRIVER_NAME  "ov8810"
 #define MOD_NAME "OV8810: "
 
@@ -80,6 +78,7 @@ struct ov8810_flash_params {
 struct ov8810_shutter_params {
 	u32 exp_time;
 	u16 delay_time;
+	u16 type;
 };
 
 struct ov8810_exp_params {
@@ -87,7 +86,10 @@ struct ov8810_exp_params {
 	u32 line_time;
 	u16 num_exp_lines;
 	u16 min_exp_time;
-	u32 max_exp_time;
+	u32 fps_max_exp_time;
+	u32 abs_max_exp_time;
+	u16 min_linear_gain;
+	u16 max_linear_gain;
 };
 
 /**
@@ -123,6 +125,7 @@ struct ov8810_sensor {
 	struct v4l2_rect crop_rect;
 	int state;
 	bool resuming;
+	bool streaming;
 	struct ov8810_clk_params clk;
 	struct ov8810_frame_params frame;
 	struct ov8810_sensor_id sensor_id;
@@ -144,6 +147,9 @@ static struct ov8810_sensor ov8810 = {
 	.state = SENSOR_NOT_DETECTED,
 	.clk = {
 		.xclk = OV8810_XCLK_MIN,
+	},
+	.shutter = {
+		.type = ROLLING_SHUTTER_TYPE,
 	}
 };
 
@@ -262,9 +268,21 @@ static struct vcontrol {
 	},
 	{
 		{
+			.id = V4L2_CID_PRIVATE_SHUTTER_PARAMS,
+			.type = V4L2_CTRL_TYPE_INTEGER,
+			.name = "Shutter Params",
+			.minimum = 0,
+			.maximum = 1,
+			.step = 1,
+			.default_value = 0,
+		},
+		.current_value = 0,
+	},
+	{
+		{
 			.id = V4L2_CID_PRIVATE_START_MECH_SHUTTER_CAPTURE,
 			.type = V4L2_CTRL_TYPE_INTEGER,
-			.name = "Mechanical Shutter",
+			.name = "Start Mech Shutter Capture",
 			.minimum = 0,
 			.maximum = 1,
 			.step = 1,
@@ -453,76 +471,65 @@ int ov8810_set_exposure_time(u32 exp_time, struct v4l2_int_device *s,
 							struct vcontrol *lvc)
 {
 	/* Inputs exp_time in usec */
-	u8 lut[4] = {1, 1, 2, 4}, skip_factor;
 	u16 num_exp_lines;
-	u32 line_time_q8, min_exposure_time, max_exposure_time;
 	int err = 0;
 	struct ov8810_sensor *sensor = s->priv;
 	struct i2c_client *client = sensor->i2c_client;
-
-	/* TEMP - FORCE EXP TIME - GVH */
-	/*~ exp_time = 20000; */
+	u32 line_time_q8 = sensor->exposure.line_time;
 
 	if ((current_power_state == V4L2_POWER_ON) || sensor->resuming) {
 
-		skip_factor = lut[sensor->frame.h_subsample];
-		line_time_q8 = /* usec's (q8) */
-			((((u32)sensor->frame.line_length_pck * 1000) << 8) /
-			(sensor->clk.pclk / 1000) / skip_factor);
-
-		/* Update min/max exposure times */
-		/* TODO: Move these calcs to set_framerate */
-		/*~ min_exposure_time = (ss->exposure.fine_int_tm * 1000000 /
-					~ (current_clk.vt_pix_clk)) + 1; */
-		/* use line time for min until LAEC turned on - GVH */
-		min_exposure_time = line_time_q8 >> 8;
-		max_exposure_time = (line_time_q8 *
-			(sensor->frame.frame_length_lines - 1)) >> 8;
-
-		if (exp_time < min_exposure_time) {
-			dev_err(&client->dev, "Exposure time %d us not within "
-				"the legal range.\n", exp_time);
-			dev_err(&client->dev, "Exposure time must be "
-				"greater than %d us\n", min_exposure_time);
-			exp_time = min_exposure_time;
+		/* Check for FREX (frame mode) setup case */
+		if (sensor->shutter.type == MECH_SHUTTER_TYPE) {
+			/* max out AECL to insure longer than 1 frame */
+			num_exp_lines = 0xFFFF;
+			goto write_aecl;
 		}
 
-		if (exp_time > max_exposure_time) {
+		if (exp_time < sensor->exposure.min_exp_time) {
 			dev_err(&client->dev, "Exposure time %d us not within "
 				"the legal range.\n", exp_time);
 			dev_err(&client->dev, "Exposure time must be "
-				"less than %d us\n", max_exposure_time);
-			exp_time = max_exposure_time;
+				"greater than %d us\n",
+				sensor->exposure.min_exp_time);
+			exp_time = sensor->exposure.min_exp_time;
+		}
+
+		/* OV8810 cannot accept exposure time longer than frame time */
+		if (exp_time > sensor->exposure.fps_max_exp_time) {
+			dev_err(&client->dev, "Exposure time %d us not within "
+				"the legal range.\n", exp_time);
+			dev_err(&client->dev, "Exposure time must be "
+				"less than %d us\n",
+				sensor->exposure.fps_max_exp_time);
+			exp_time = sensor->exposure.fps_max_exp_time;
 		}
 
 		/* calc num lines with rounding */
 		num_exp_lines = ((exp_time << 8) + (line_time_q8 >> 1)) /
 			line_time_q8;
 
-		dev_dbg(&client->dev, "ov8810:set_exposure_time = %d usec, " \
-			"CoarseIntTime = %d, sclk=%d, line_len_pck=%d clks, " \
-			"line_tm = %d/256 us, skip factor=%d\n",
-			exp_time, num_exp_lines, sensor->clk.sclk,
-			sensor->frame.line_length_pck,  line_time_q8,
-			skip_factor);
-
+write_aecl:
 		/* write number of line times to AEL/H registers */
 		err = ov8810_write_reg(client, OV8810_AECL_H,
 			num_exp_lines >> 8);
-		err = ov8810_write_reg(client, OV8810_AECL_L,
+		err |= ov8810_write_reg(client, OV8810_AECL_L,
 			num_exp_lines & 0xFF);
+
+		dev_dbg(&client->dev, "ov8810:set_exposure_time = %d usec, " \
+			"CoarseIntTime = %d, sclk=%d, line_len_pck=%d clks, " \
+			"line_tm = %d/256 us\n",
+			exp_time, num_exp_lines, sensor->clk.sclk,
+			sensor->frame.line_length_pck, line_time_q8);
 
 		/* save results */
 		sensor->exposure.exp_time = exp_time;
-		sensor->exposure.line_time = line_time_q8;
 		sensor->exposure.num_exp_lines = num_exp_lines;
-		sensor->exposure.min_exp_time = min_exposure_time;
-		sensor->exposure.max_exp_time = max_exposure_time;
 	}
 
 	if (err)
 		dev_err(&client->dev, "Error setting exposure time...%d\n",
-									err);
+			err);
 	else {
 		if (lvc)
 			lvc->current_value = exp_time;
@@ -556,10 +563,21 @@ int ov8810_set_gain(u16 linear_gain_Q8, struct v4l2_int_device *s,
 	struct ov8810_sensor *sensor = s->priv;
 	struct i2c_client *client = sensor->i2c_client;
 
-	/* TEMP - FORCE GAIN - GVH */
-	/*~ linear_gain_Q8 = 2 * 256; */
+	if (linear_gain_Q8 < sensor->exposure.min_linear_gain) {
+		dev_err(&client->dev, "Gain=%d out of legal range.\n",
+			linear_gain_Q8);
+		dev_err(&client->dev, "Gain must be greater than %d \n",
+			sensor->exposure.min_linear_gain);
+		linear_gain_Q8 = sensor->exposure.min_linear_gain;
+	}
 
-	/* TODO: Add Limit Checks */
+	if (linear_gain_Q8 > sensor->exposure.max_linear_gain) {
+		dev_err(&client->dev, "Gain=%d out of legal range.\n",
+			linear_gain_Q8);
+		dev_err(&client->dev, "Gain must be less than %d \n",
+			sensor->exposure.max_linear_gain);
+		linear_gain_Q8 = sensor->exposure.max_linear_gain;
+	}
 
 	if ((current_power_state == V4L2_POWER_ON) || sensor->resuming) {
 		if (linear_gain_Q8 >= 8*256) {
@@ -594,6 +612,80 @@ int ov8810_set_gain(u16 linear_gain_Q8, struct v4l2_int_device *s,
 		if (lvc)
 			lvc->current_value = linear_gain_Q8;
 	}
+
+	return err;
+}
+
+/**
+ * ov8810_set_framerate - Sets framerate by adjusting frame_length_lines reg.
+ * @s: pointer to standard V4L2 device structure
+ * @fper: frame period numerator and denominator in seconds
+ * @iframe: enum value corresponding to frame type (size & fps)
+ *
+ * The maximum exposure time is also updated since it is affected by the
+ * frame rate.
+ **/
+static int ov8810_set_framerate(struct v4l2_int_device *s,
+			struct v4l2_fract *fper)
+{
+	u8 lut[4] = {1, 1, 2, 4}, skip_factor;
+	u32 frame_length_lines, line_time_q8;
+	int err = 0, i = 0;
+	struct ov8810_sensor *sensor = s->priv;
+	struct i2c_client *client = sensor->i2c_client;
+	struct vcontrol *lvc = NULL;
+
+	skip_factor = lut[sensor->frame.h_subsample];
+	line_time_q8 = /* usec's (q8) */
+		((((u32)sensor->frame.line_length_pck * 1000) << 8) /
+		(sensor->clk.pclk / 1000) / skip_factor);
+
+	frame_length_lines = (((u32)fper->numerator * 1000000 * 256 /
+			       fper->denominator)) / line_time_q8;
+
+	/* Range check frame_length_lines */
+	if (frame_length_lines > OV8810_MAX_FRAME_LENGTH_LINES)
+		frame_length_lines = OV8810_MAX_FRAME_LENGTH_LINES;
+	else if (frame_length_lines < sensor->frame.frame_length_lines_min)
+		frame_length_lines = sensor->frame.frame_length_lines_min;
+
+	/* Write new frame length to sensor */
+	ov8810_write_reg(client, OV8810_FRM_LEN_LINES_H,
+		frame_length_lines >> 8);
+	ov8810_write_reg(client, OV8810_FRM_LEN_LINES_L,
+		frame_length_lines  & 0xFF);
+
+	/* Save results */
+	sensor->frame.frame_length_lines = frame_length_lines;
+	sensor->exposure.line_time = line_time_q8;
+	/* min_exposure_time = (ss->exposure.fine_int_tm * 1000000 /
+		(current_clk.vt_pix_clk)) + 1; */
+	/* use line time for min until LAEC turned on - GVH */
+	sensor->exposure.min_exp_time = line_time_q8 >> 8;
+	sensor->exposure.fps_max_exp_time = (line_time_q8 *
+		(sensor->frame.frame_length_lines - 1)) >> 8;
+	sensor->exposure.abs_max_exp_time = (line_time_q8 *
+				     (OV8810_MAX_FRAME_LENGTH_LINES - 1)) >> 8;
+
+	/* Update Exposure Time */
+	i = find_vctrl(V4L2_CID_EXPOSURE);
+	if (i >= 0) {
+		lvc = &video_control[i];
+		/* Update min/max for query control */
+		lvc->qc.minimum = sensor->exposure.min_exp_time;
+		lvc->qc.maximum = sensor->exposure.fps_max_exp_time;
+
+		ov8810_set_exposure_time(lvc->current_value, s, lvc);
+	}
+
+	v4l_info(client, "OV8810 Set Framerate: fper=%d/%d, " \
+		"frame_len_lines=%d, fps_max_expT=%dus, " \
+		"abs_max_expT=%dus, line_tm=%d/256, " \
+		"skip_factor=%d\n",
+		fper->numerator, fper->denominator, frame_length_lines,
+		sensor->exposure.fps_max_exp_time,
+		sensor->exposure.abs_max_exp_time,
+		line_time_q8, skip_factor);
 
 	return err;
 }
@@ -664,67 +756,69 @@ int ov8810_set_flash_next_frame(
 		flash_params->shutter_type,
 		(current_power_state == V4L2_POWER_ON) || sensor->resuming);
 
-	if ((current_power_state == V4L2_POWER_ON) || sensor->resuming) {
-		if (flash_params->flash_time != 0) {
+	if (((current_power_state == V4L2_POWER_ON) || sensor->resuming) &&
+		(flash_params->flash_time != 0)) {
 
-			/* Set strobe source frame type */
-			ov8810_read_reg(client, 1, OV8810_FRS4, &data);
-			if (flash_params->shutter_type == ROLLING_SHUTTER_TYPE)
-				data |= 1 << OV8810_FRS4_STRB_SOURCE_SEL_SHIFT;
-			else
-				data &= \
-				~(1 << OV8810_FRS4_STRB_SOURCE_SEL_SHIFT);
-			err = ov8810_write_reg(client, OV8810_FRS4, data);
+		/* Set strobe source frame type */
+		ov8810_read_reg(client, 1, OV8810_FRS4, &data);
+		if (flash_params->shutter_type ==
+			ROLLING_SHUTTER_TYPE) {
+			data |= 1 << OV8810_FRS4_STRB_SOURCE_SEL_SHIFT;
+		} else {
+			data &= ~(1 << OV8810_FRS4_STRB_SOURCE_SEL_SHIFT);
+		}
+		err = ov8810_write_reg(client, OV8810_FRS4, data);
 
-			dev_dbg(&client->dev, "set_flash_next_frame:  " \
-				"OV8810_FRS_4=0x%x\n", data);
+		dev_dbg(&client->dev, "set_flash_next_frame:  " \
+			"OV8810_FRS_4=0x%x\n", data);
 
-			/* Set Strobe Ctrl Reg */
-			data = 0;
-			if (flash_params->shutter_type ==
-							ROLLING_SHUTTER_TYPE)
-				data |= 1 <<
-					OV8810_FRS5_ROLLING_SHUT_STRB_EN_SHIFT;
+		/* Set Strobe Ctrl Reg */
+		data = 0;
+		if (flash_params->shutter_type ==
+						ROLLING_SHUTTER_TYPE) {
+			data |= 1 <<
+				OV8810_FRS5_ROLLING_SHUT_STRB_EN_SHIFT;
+		}
+		if (flash_params->flash_type == LED_FLASH_TYPE) {
+			data |= 1 <<
+				OV8810_FRS5_STROBE_MODE_SHIFT;
+		}
 
-			if (flash_params->flash_type == LED_FLASH_TYPE)
-				data |= 1 << OV8810_FRS5_STROBE_MODE_SHIFT;
+		strb_pulse_width = (flash_params->flash_time << 8) /
+			line_time_q8;
 
+		if (strb_pulse_width < 1)
+			strb_pulse_width = 1;
+		else if (strb_pulse_width > 4)
+			strb_pulse_width = 4;
+
+		data |= (strb_pulse_width - 1) <<
+			OV8810_FRS5_STRB_PLS_WIDTH_SHIFT;
+
+		err |= ov8810_write_reg(client, OV8810_FRS5, data);
+
+		dev_dbg(&client->dev, "set_flash_next_frame:  " \
+			"OV8810_FRS_5=0x%x\n", data);
+
+		/* Set Frame Mode Strobe Pulse Width */
+		if (flash_params->shutter_type == MECH_SHUTTER_TYPE) {
 			strb_pulse_width = (flash_params->flash_time << 8) /
 				line_time_q8;
 
-			if (strb_pulse_width < 1)
-				strb_pulse_width = 1;
-			else if (strb_pulse_width > 4)
-				strb_pulse_width = 4;
+			if (strb_pulse_width > 15)
+				strb_pulse_width = 15;
 
-			data |= (strb_pulse_width - 1) <<
-				OV8810_FRS5_STRB_PLS_WIDTH_SHIFT;
+			err |= ov8810_write_reg(client, OV8810_FRS6,
+				strb_pulse_width);
 
-			err |= ov8810_write_reg(client, OV8810_FRS5, data);
-
-			dev_dbg(&client->dev, "set_flash_next_frame:  " \
-				"OV8810_FRS_5=0x%x\n", data);
-
-			/* Set Frame Mode Strobe Pulse Width */
-			if (flash_params->shutter_type == MECH_SHUTTER_TYPE) {
-				strb_pulse_width = \
-				(flash_params->flash_time << 8) / line_time_q8;
-
-				if (strb_pulse_width > 15)
-					strb_pulse_width = 15;
-
-				err |= ov8810_write_reg(client, OV8810_FRS6,
-					strb_pulse_width);
-
-				dev_dbg(&client->dev,
-					"set_flash_next_frame:  " \
-					"OV8810_FRS_6=0x%x\n",
-					strb_pulse_width);
-			}
-
-			/* Auto reset */
-			flash_params->flash_time = 0;
+			dev_dbg(&client->dev,
+				"set_flash_next_frame:  " \
+				"OV8810_FRS_6=0x%x\n",
+				strb_pulse_width);
 		}
+
+		/* Auto reset */
+		flash_params->flash_time = 0;
 	}
 
 	if (err)
@@ -743,13 +837,16 @@ int ov8810_set_flash_next_frame(
  * @s: pointer to standard V4L2 device structure
  * The function returns 0 upon success.  Otherwise an error code is
  * returned.
+ * This function is expected to be called after streaming has been started and
+ * after shutter parameters have been set.
  */
 int ov8810_start_mech_shutter_capture(
 			struct ov8810_shutter_params *shutter_params,
 			struct v4l2_int_device *s, struct vcontrol *lvc)
 {
-	u16 Tr_lines = 1, Tfrex_lines;
-	int err = 0, adjusted_exp_time;
+	u16 Tr_lines = 1, Tfrex_lines, Tfe2v_lines, addvs_lines;
+	int err = -EINVAL;
+	int adjusted_exp_time;
 	struct ov8810_sensor *sensor = s->priv;
 	struct i2c_client *client = sensor->i2c_client;
 	u32 line_time_q8 = sensor->exposure.line_time;
@@ -759,47 +856,72 @@ int ov8810_start_mech_shutter_capture(
 		shutter_params->exp_time, shutter_params->delay_time,
 		(current_power_state == V4L2_POWER_ON) || sensor->resuming);
 
-	if ((current_power_state == V4L2_POWER_ON) || sensor->resuming) {
-		if (shutter_params->exp_time != 0) {
-
-			/* Set FREX Precharge Time */
-			err = ov8810_write_reg(client, OV8810_FRS1, Tr_lines);
-
-			/* Calc Tfrex time */
-			adjusted_exp_time = shutter_params->exp_time -
-				shutter_params->delay_time;
-			if (adjusted_exp_time < 0)
-				adjusted_exp_time = 0;
-
-			/* Convert Tfrex time to lines (with rounding) */
-			Tfrex_lines = (((adjusted_exp_time << 8) +
-				(line_time_q8 >> 1)) / line_time_q8) + Tr_lines;
-
-			err |= ov8810_write_reg(client, OV8810_FRS2,
-				((Tfrex_lines >> 8) & 0xFF));
-			err |= ov8810_write_reg(client, OV8810_FRS3,
-				((Tfrex_lines) & 0xFF));
-
-			dev_dbg(&client->dev, "start_mech_shutter_capture:  " \
-				"expT=%dus, line_time_q8=%dus/256, " \
-				"shutter_dly=%dus Tfrex_lines=%d\n",
-				shutter_params->exp_time, line_time_q8,
-				shutter_params->delay_time, Tfrex_lines);
-
-			/* start FREX capture */
-			err |= ov8810_write_reg(client, OV8810_FRS7, 0x01);
-
-			/* Auto reset */
-			shutter_params->exp_time = 0;
-		}
+	if (sensor->streaming == false) {
+		dev_dbg(&client->dev, "Error: Sensor must be streaming to " \
+			"start mech shutter capture.\n");
+		return err;
 	}
 
-	if (err) {
+	if ((shutter_params->type != MECH_SHUTTER_TYPE) ||
+			(shutter_params->exp_time == 0)) {
+		dev_dbg(&client->dev, "Error: Invalid shutter params.\n");
+		return err;
+	}
+
+	/* Set FREX Precharge Time */
+	err = ov8810_write_reg(client, OV8810_FRS1, Tr_lines);
+
+	/* Calc Tfrex time */
+	adjusted_exp_time = shutter_params->exp_time -
+		shutter_params->delay_time;
+	if (adjusted_exp_time < 0)
+		adjusted_exp_time = 0;
+
+	/* Convert Tfrex time to lines (with rounding) */
+	Tfrex_lines = (((adjusted_exp_time << 8) +
+		(line_time_q8 >> 1)) / line_time_q8) + Tr_lines;
+
+	err |= ov8810_write_reg(client, OV8810_FRS2,
+		((Tfrex_lines >> 8) & 0xFF));
+	err |= ov8810_write_reg(client, OV8810_FRS3,
+		((Tfrex_lines) & 0xFF));
+
+	/* Calc TFE2V  lines (with rounding)  */
+	Tfe2v_lines = (((shutter_params->delay_time << 8) +
+		(line_time_q8 >> 1)) / line_time_q8);
+
+	/* Set ADDVS lines */
+	addvs_lines = Tfrex_lines + Tfe2v_lines;
+
+	err |= ov8810_write_reg(client, OV8810_ADDVS_H,
+		((addvs_lines >> 8) & 0xFF));
+	err |= ov8810_write_reg(client, OV8810_ADDVS_L,
+		((addvs_lines) & 0xFF));
+
+	dev_dbg(&client->dev, "start_mech_shutter_capture:  " \
+		"expT=%dus, line_time_q8=%dus/256, " \
+		"shutter_dly=%dus Tfrex_lines=%d, " \
+		"Tfe2v_lines=%d, Addvs_lines=%d\n",
+		shutter_params->exp_time, line_time_q8,
+		shutter_params->delay_time, Tfrex_lines,
+		Tfe2v_lines, addvs_lines);
+
+	/*
+	 * start FREX capture & MIPI output simultaneously
+	*/
+	/* enable group latch */
+	err |= ov8810_write_reg(client, 0x30B7, 0x88);
+	/* turn on MIPI output */
+	err |= ov8810_write_reg(client, OV8810_MIPI_CTRL0B, 0x0C);
+	/* do frame trigger */
+	err |= ov8810_write_reg(client, OV8810_FRS7, 0x01);
+	/* disable group latch */
+	err |= ov8810_write_reg(client, 0x30B7, 0x80);
+	/* trigger group latch in the coming V-blank */
+	err |= ov8810_write_reg(client, 0x30FF, 0xFF);
+
+	if (err)
 		dev_err(&client->dev, "Error setting mech shutter registers\n");
-	} else {
-		sensor->shutter.exp_time = shutter_params->exp_time;
-		sensor->shutter.delay_time = shutter_params->delay_time;
-	}
 
 	return err;
 }
@@ -855,26 +977,34 @@ static int ov8810_calc_pclk(struct v4l2_int_device *s)
 	u8 lut3[4] = {1, 2, 4, 8};
 
 	ov8810_read_reg(client, 1, OV8810_R_PLL1, &val);
-	sensor->clk.vt_sys_div = lut1[(val >> 4) & 0xf];
-	sensor->clk.div8 = lut2[val & 0x7];
+	sensor->clk.vt_sys_div = lut1[((val & OV8810_R_PLL1_VT_SYS_DIV_MASK) >>
+		OV8810_R_PLL1_VT_SYS_DIV_SHIFT)];
+
+	sensor->clk.div8 = lut2[val & OV8810_R_PLL1_DIV8_MASK];
 
 	ov8810_read_reg(client, 1, OV8810_R_PLL2, &val);
-	sensor->clk.op_sys_div = lut1[(val >> 4) & 0xf];
-	sensor->clk.op_pix_div = lut1[val & 0xf];
+	sensor->clk.op_sys_div = lut1[((val & OV8810_R_PLL2_OP_SYS_DIV_MASK) >>
+		OV8810_R_PLL2_OP_SYS_DIV_SHIFT)];
+	sensor->clk.op_pix_div = lut1[val & OV8810_R_PLL2_OP_PIX_DIV_MASK];
 
-	if ((val & 0xc) >> 2 == 1)
-		sensor->clk.num_mipi_lanes = 2;
-	else
+	ov8810_read_reg(client, 1, OV8810_MIPI_CTRL0B, &val);
+	if ((val & OV8810_MIPI_CTRL0B_DSBL_DATA_LANE_1_MASK) &&
+			(val & OV8810_MIPI_CTRL0B_DSBL_DATA_LANE_2_MASK))
+		sensor->clk.num_mipi_lanes = 0;
+	else if ((val & OV8810_MIPI_CTRL0B_DSBL_DATA_LANE_1_MASK) ||
+			(val & OV8810_MIPI_CTRL0B_DSBL_DATA_LANE_2_MASK))
 		sensor->clk.num_mipi_lanes = 1;
+	else
+		sensor->clk.num_mipi_lanes = 2;
 
 	ov8810_read_reg(client, 1, OV8810_R_PLL3, &val);
-	sensor->clk.pll_mult = val & 0x7f;
+	sensor->clk.pll_mult = val & OV8810_R_PLL3_PLL_MULT_MASK;
 
 	ov8810_read_reg(client, 1, OV8810_R_PLL4, &val);
-	sensor->clk.pll_pre_div = lut1[val & 0xf];
+	sensor->clk.pll_pre_div = lut1[val & OV8810_R_PLL4_PRE_DIV_MASK];
 
 	ov8810_read_reg(client, 1, OV8810_DSIO0, &val);
-	sensor->clk.rp_clk_div = lut3[val & 0x3];
+	sensor->clk.rp_clk_div = lut3[val & OV8810_DSIO0_RPCLK_DIV_MASK];
 
 	sensor->clk.sclk = sensor->clk.xclk * sensor->clk.pll_mult /
 				sensor->clk.pll_pre_div / sensor->clk.div8 /
@@ -935,7 +1065,6 @@ static int ov8810_set_virtual_id(struct i2c_client *client, u32 id)
 									0x12);
 }
 
-
 /*
  * Calculates the MIPIClk.
  */
@@ -943,39 +1072,16 @@ static u32 ov8810_calc_mipiclk(struct v4l2_int_device *s)
 {
 	struct ov8810_sensor *sensor = s->priv;
 	struct i2c_client *client = sensor->i2c_client;
-	u32 val, pre_divider, multiplier, mipi_sys_div;
-	u32 mipiclk, mclk = 24000000;
 
-	ov8810_read_reg(client, 1, OV8810_R_PLL4, &val);
-	if (val & 0x08)
-		pre_divider = 8;
-	else if (val & 0x04)
-		pre_divider = 4;
-	else if (val & 0x02)
-		pre_divider = 2;
-	else
-		pre_divider = 1;
-
-	ov8810_read_reg(client, 1, OV8810_R_PLL3, &val);
-	multiplier = val & 0x3F;
-
-	ov8810_read_reg(client, 1, OV8810_R_PLL2, &val);
-	if (val & 0x80)
-		mipi_sys_div = 8;
-	else if (val & 0x40)
-		mipi_sys_div = 4;
-	else if (val & 0x20)
-		mipi_sys_div = 2;
-	else
-		mipi_sys_div = 1;
-
-	mipiclk = (mclk * multiplier)/(pre_divider * mipi_sys_div);
+	sensor->clk.mipiclk = (sensor->clk.xclk * sensor->clk.pll_mult) /
+		(sensor->clk.pll_pre_div * sensor->clk.op_sys_div);
 
 	dev_dbg(&client->dev, "ov8810: mipiclk=%u  pre_divider=%u  " \
-		"multiplier=%u  mipi_sys_div=%u\n",
-		mipiclk, pre_divider, multiplier, mipi_sys_div);
+		"multiplier=%u  op_sys_div=%u\n",
+		sensor->clk.mipiclk, sensor->clk.pll_pre_div,
+		sensor->clk.pll_mult, sensor->clk.op_sys_div);
 
-	return mipiclk;
+	return sensor->clk.mipiclk;
 }
 
 /*
@@ -1018,8 +1124,8 @@ static int ov8810_configure(struct v4l2_int_device *s)
 	isize = ov8810_find_size(s, pix->width, pix->height);
 
 	dev_dbg(&client->dev, "ov8810_configure: isize=%d, Req Size=%dx%d, " \
-			"Find Size = %dx%d, fps=%d/%d\n", \
-			isize, pix->width, pix->height,
+		"Find Size = %dx%d, fps=%d/%d\n", \
+		isize, pix->width, pix->height,
 		(int)ov8810_sizes[isize].width,
 		(int)ov8810_sizes[isize].height,
 		sensor->timeperframe.denominator,
@@ -1032,26 +1138,37 @@ static int ov8810_configure(struct v4l2_int_device *s)
 	ov8810_write_reg(client, OV8810_SYS, 0x80);
 	mdelay(5);
 
+	/* Set CSI2 common register settings */
+	err = ov8810_write_regs(client, ov8810_common_csi2);
+	if (err)
+		return err;
+
 	/* configure image size, pll, and pixel format */
 	if (pix->pixelformat == V4L2_PIX_FMT_SGRBG10) {
 		err = ov8810_write_regs(client, ov8810_common[isize]);
-		if (err)
-			return err;
 
 	} else if (pix->pixelformat == V4L2_PIX_FMT_W1S_PATT) {
 		isize = SIZE_8M;
 		err = ov8810_write_regs(client, ov8810_common[isize]);
 
-		err = ov8810_write_reg(client, OV8810_DVP_CTRL08, 0x80);
+		err |= ov8810_write_reg(client, OV8810_DVP_CTRL08, 0x80);
+	}
+	if (err)
+		return err;
+
+	/* Set Shutter related register settings */
+	if (sensor->shutter.type == MECH_SHUTTER_TYPE) {
+		/* Leave MIPI output disabled until
+		   start_mech_shutter_capture */
+		err = ov8810_write_regs(client, ov8810_mech_shutter);
+		if (err)
+			return err;
+	} else {
+		/* Enable MIPI output */
+		err = ov8810_write_reg(client, OV8810_MIPI_CTRL0B, 0x0c);
 		if (err)
 			return err;
 	}
-
-	/* Setting of frame rate (OV suggested way) */
-	/*err = ov8810_set_framerate(client, &sensor->timeperframe, isize); */
-
-	/* Set CSI2 common register settings */
-	err = ov8810_write_regs(client, ov8810_common_csi2);
 
 	sensor->isize = isize;
 
@@ -1078,6 +1195,11 @@ static int ov8810_configure(struct v4l2_int_device *s)
 	/* Update sensor clk and frame parms */
 	ov8810_calc_pclk(s);
 	ov8810_update_frame_params(s);
+
+	/* Setting of frame rate */
+	err = ov8810_set_framerate(s, &sensor->timeperframe);
+	if (err)
+		return err;
 
 	mipiclk = ov8810_calc_mipiclk(s);
 
@@ -1167,6 +1289,7 @@ static int ov8810_configure(struct v4l2_int_device *s)
 
 	/* start streaming */
 	ov8810_write_reg(client, OV8810_IMAGE_SYSTEM, 0x01);
+	sensor->streaming = true;
 
 	return err;
 }
@@ -1252,11 +1375,12 @@ static int ioctl_queryctrl(struct v4l2_int_device *s,
 static int ioctl_g_ctrl(struct v4l2_int_device *s,
 			     struct v4l2_control *vc)
 {
+	int i, retval = 0;
 	struct ov8810_sensor *sensor = s->priv;
 	struct i2c_client *client = sensor->i2c_client;
 	struct vcontrol *lvc;
 	struct  ov8810_sensor_params sensor_params;
-	int i, retval = 0;
+	struct ov8810_sensor_regif sensor_reg;
 
 	i = find_vctrl(vc->id);
 	if (i < 0)
@@ -1280,7 +1404,7 @@ static int ioctl_g_ctrl(struct v4l2_int_device *s,
 			dev_err(&client->dev, "Failed copy_to_user\n");
 		}
 		break;
-	case V4L2_CID_PRIVATE_START_MECH_SHUTTER_CAPTURE:
+	case V4L2_CID_PRIVATE_SHUTTER_PARAMS:
 		if (copy_to_user((void *)vc->value, &(sensor->shutter),
 				sizeof(sensor->shutter))) {
 			retval = -EINVAL;
@@ -1298,11 +1422,19 @@ static int ioctl_g_ctrl(struct v4l2_int_device *s,
 		vc->value = lvc->current_value;
 		break;
 	case V4L2_CID_PRIVATE_SENSOR_REG_REQ:
-		vc->value = lvc->current_value;
-		{
-			dev_dbg(&client->dev, "V4L2_CID_PRIVATE_SENSOR_" \
-				"REG_REQ IOCTL not implemented!\n");
-			retval = -EINVAL;
+		if (copy_from_user(&sensor_reg,
+			(struct ov8810_sensor_regif *)vc->value,
+			sizeof(struct ov8810_sensor_regif)) == 0) {
+			retval =  ov8810_read_reg(client, sensor_reg.len,
+				sensor_reg.addr, &sensor_reg.val);
+			dev_dbg(&client->dev, "SENSOR_REG_REQ IOCTL read-" \
+				"%d: 0x%x=0x%x\n", sensor_reg.len,
+				sensor_reg.addr, sensor_reg.val);
+		}
+		if (copy_to_user((void *)vc->value, &(sensor_reg),
+				sizeof(sensor_reg))) {
+			printk(KERN_ERR "Failed copy_to_user\n");
+			return -EINVAL;
 		}
 		break;
 	case V4L2_CID_PRIVATE_SENSOR_PARAMS_REQ:
@@ -1338,7 +1470,7 @@ static int ioctl_s_ctrl(struct v4l2_int_device *s,
 	struct i2c_client *client = sensor->i2c_client;
 	struct vcontrol *lvc;
 	struct ov8810_flash_params flash_params;
-	struct ov8810_shutter_params shutter_params;
+	struct ov8810_sensor_regif sensor_reg;
 
 	i = find_vctrl(vc->id);
 	if (i < 0)
@@ -1364,18 +1496,50 @@ static int ioctl_s_ctrl(struct v4l2_int_device *s,
 				s, lvc);
 		}
 		break;
-	case V4L2_CID_PRIVATE_START_MECH_SHUTTER_CAPTURE:
-		if (copy_from_user(&shutter_params,
+	case V4L2_CID_PRIVATE_SHUTTER_PARAMS:
+		retval = copy_from_user(&(sensor->shutter),
 				(struct ov8810_shutter_params *)vc->value,
-				sizeof(struct ov8810_shutter_params)) == 0) {
-			retval = ov8810_start_mech_shutter_capture(
-				&shutter_params, s, lvc);
-		}
+				sizeof(struct ov8810_shutter_params));
+		break;
+	case V4L2_CID_PRIVATE_START_MECH_SHUTTER_CAPTURE:
+		retval = ov8810_start_mech_shutter_capture(
+			&(sensor->shutter), s, lvc);
 		break;
 	case V4L2_CID_PRIVATE_SENSOR_REG_REQ:
-		{
-			dev_dbg(&client->dev, "V4L2_CID_PRIVATE_SENSOR_" \
-				"REG_REQ IOCTL not implemented!\n");
+		if (copy_from_user(&sensor_reg,
+				(struct ov8810_sensor_regif *)vc->value,
+				sizeof(struct ov8810_sensor_regif)) == 0) {
+			/* ov8810_write_reg only supports 1-byte writes */
+			dev_dbg(&client->dev, "SENSOR_REG_REQ IOCTL write-" \
+				"%d: 0x%x=0x%x\n", sensor_reg.len,
+				sensor_reg.addr, sensor_reg.val);
+			if (sensor_reg.len == 1) {
+				retval = ov8810_write_reg(client,
+					sensor_reg.addr, sensor_reg.val);
+			} else if (sensor_reg.len == 2) {
+				retval = ov8810_write_reg(client,
+					sensor_reg.addr,
+					(sensor_reg.val & 0xff00) >> 8);
+				retval |= ov8810_write_reg(client,
+					sensor_reg.addr + 1,
+					sensor_reg.val & 0xff);
+			} else if (sensor_reg.len == 4) {
+				retval = ov8810_write_reg(client,
+					sensor_reg.addr,
+					(sensor_reg.val & 0xff000000) >> 24);
+				retval |= ov8810_write_reg(client,
+					sensor_reg.addr + 1,
+					(sensor_reg.val & 0xff0000) >> 16);
+				retval |= ov8810_write_reg(client,
+					sensor_reg.addr + 2,
+					(sensor_reg.val & 0xff00) >> 8);
+				retval |= ov8810_write_reg(client,
+					sensor_reg.addr + 3,
+					sensor_reg.val & 0xff);
+			} else {
+				dev_err(&client->dev, "Error: SENSOR_REG_REQ " \
+					"IOCTL length must = 1, 2, or 4\n");
+			}
 		}
 		break;
 	}
@@ -1554,15 +1718,16 @@ static int ioctl_s_parm(struct v4l2_int_device *s,
 	sensor->timeperframe = *timeperframe;
 
 	desired_fps = timeperframe->denominator / timeperframe->numerator;
-	if ((desired_fps < OV8810_MIN_FPS) || (desired_fps > OV8810_MAX_FPS))
-		rval = -EINVAL;
-
-	if (rval)
+	if ((desired_fps < OV8810_MIN_FPS) || (desired_fps > OV8810_MAX_FPS)) {
 		sensor->timeperframe = timeperframe_old;
-	else
-		*timeperframe = sensor->timeperframe;
-
-	dev_dbg(&client->dev, "Setting FPS=%d\n", desired_fps);
+		dev_err(&client->dev, "Error setting FPS=%d/%d, " \
+			"FPS must be between %d & %d,",
+			timeperframe->denominator, timeperframe->numerator,
+			OV8810_MIN_FPS, OV8810_MAX_FPS);
+		rval = -EINVAL;
+	} else {
+		dev_dbg(&client->dev, "Setting FPS=%d\n", desired_fps);
+	}
 
 	return rval;
 }
@@ -1615,6 +1780,7 @@ static int ioctl_g_priv(struct v4l2_int_device *s, void *p)
 		ov8810_write_reg(c, OV8810_IMAGE_SYSTEM, 0x00);
 	} else {
 		isp_set_xclk(0, OV8810_USE_XCLKA);
+		sensor->streaming = false;
 	}
 
 	if ((current_power_state == V4L2_POWER_STANDBY) &&
@@ -1723,9 +1889,18 @@ static int ioctl_enum_framesizes(struct v4l2_int_device *s,
 }
 
 const struct v4l2_fract ov8810_frameintervals[] = {
-	{ .numerator = 3, .denominator = 15 },
-	{ .numerator = 1, .denominator = 21 },
-	{ .numerator = 1, .denominator = 30 },
+	{ .numerator = 3, .denominator = 3 },
+	{ .numerator = 3, .denominator = 6 },
+	{ .numerator = 3, .denominator = 9 },
+	{ .numerator = 3, .denominator = 12 },
+	{ .numerator = 3, .denominator = 15 },  /* SIZE_8M max fps */
+	{ .numerator = 1, .denominator = 10 },
+	{ .numerator = 1, .denominator = 15 },
+	{ .numerator = 1, .denominator = 20 },
+	{ .numerator = 1, .denominator = 21 }, /* SIZE_2M max fps */
+	{ .numerator = 1, .denominator = 25 },
+	{ .numerator = 1, .denominator = 30 }, /* SIZE_500K &
+						SIZE_125K max fps */
 };
 
 static int ioctl_enum_frameintervals(struct v4l2_int_device *s,
@@ -1745,19 +1920,19 @@ static int ioctl_enum_frameintervals(struct v4l2_int_device *s,
 
 	if ((frmi->width == ov8810_sizes[3].width) &&
 				(frmi->height == ov8810_sizes[3].height)) {
-		/* The only framerate supported by SIZE_8M capture is 5 fps
+		/* The max framerate supported by SIZE_8M capture is 5 fps
 		 */
-		if (frmi->index != 0)
+		if (frmi->index > 4)
 			return -EINVAL;
+
 	} else if ((frmi->width == ov8810_sizes[2].width) &&
 				(frmi->height == ov8810_sizes[2].height)) {
-		/* The only framerates supported by SIZE_2M capture are
-		 * 5 & 21 fps
+		/* The max framerate supported by SIZE_2M capture 21 fps
 		 */
-		if (frmi->index > 1)
+		if (frmi->index > 8)
 			return -EINVAL;
 	} else {
-		if (frmi->index >= 3)
+		if (frmi->index > 10)
 			return -EINVAL;
 	}
 
@@ -1869,13 +2044,11 @@ ov8810_probe(struct i2c_client *client, const struct i2c_device_id *id)
 	sensor->pix.pixelformat = V4L2_PIX_FMT_SGRBG10;
 
 	/* Set min/max limits */
-	/* TODO - turn on this section
-	sensor->min_exposure_time = OV8810_DEF_MIN_EXPOSURE;
-	sensor->fps_max_exposure_time = 33333;
-	sensor->abs_max_exposure_time =OV8810_DEF_MAX_EXPOSURE;
-	sensor->min_linear_gain = OV8810_MIN_LINEAR_GAIN;
-	sensor->max_linear_gain = OV8810_MAX_LINEAR_GAIN;
-	*/
+	sensor->exposure.min_exp_time = OV8810_MIN_EXPOSURE;
+	sensor->exposure.fps_max_exp_time = 33333;
+	sensor->exposure.abs_max_exp_time = OV8810_MAX_EXPOSURE;
+	sensor->exposure.min_linear_gain = OV8810_MIN_LINEAR_GAIN;
+	sensor->exposure.max_linear_gain = OV8810_MAX_LINEAR_GAIN;
 
 	err = v4l2_int_device_register(sensor->v4l2_int_device);
 	if (err)
@@ -1955,4 +2128,3 @@ module_exit(ov8810sensor_cleanup);
 
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("OV8810 camera sensor driver");
-

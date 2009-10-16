@@ -125,7 +125,7 @@
 #define CM_ICLKEN_CAM_EN		0x1
 #define CM_FCLKEN_CAM_EN		0x1
 
-#define CM_CAM_MCLK_HZ			432000000
+#define CM_CAM_MCLK_HZ		(OMAP_MCAM_SRC_CLK/OMAP_MCAM_SRC_DIV)
 
 /* ISP Submodules offset */
 
