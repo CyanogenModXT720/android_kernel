@@ -567,8 +567,6 @@ int check_fb_var(struct fb_info *fbi, struct fb_var_screeninfo *var)
 			var->xres, var->yres,
 			var->xres_virtual, var->yres_virtual);
 
-	var->height             = -1;
-	var->width              = -1;
 	var->grayscale          = 0;
 
 	if (display && display->get_timings) {
