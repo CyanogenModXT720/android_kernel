@@ -25,10 +25,8 @@
 
 #define SHOLEST_DISPLAY_RESET_GPIO	136
 
-#ifdef CONFIG_PANEL_HDTV
 #define SHOLEST_HDMI_MUX_ENABLE_N_GPIO  69
 #define SHOLEST_HDMI_MUX_SELECT_GPIO    7
-#endif
 
 struct regulator *display_regulator;
 

@@ -39,6 +39,13 @@
 #define CPCAP_BATT_IRQ_CC_CAL  0x04
 #define CPCAP_BATT_IRQ_ADCDONE 0x08
 #define CPCAP_BATT_IRQ_MACRO   0x10
+#define CPCAP_REGACC_MIN_LREG CPCAP_REG_MDLC
+#define CPCAP_REGACC_MAX_LREG CPCAP_REG_CLEDC
+#define CPCAP_REGACC_LEN_LREG \
+	(CPCAP_REGACC_MAX_LREG - CPCAP_REGACC_MIN_LREG + 1)
+
+#define REGACC_LREG_INDEX(reg) ((reg) - CPCAP_REGACC_MIN_LREG)
+#define BATT_BITMASK_FFS(mask) (ffs((mask)) - 1)
 
 static int cpcap_batt_ioctl(struct inode *inode,
 			    struct file *file,
@@ -51,6 +58,67 @@ static ssize_t cpcap_batt_read(struct file *file, char *buf, size_t count,
 static int cpcap_batt_probe(struct platform_device *pdev);
 static int cpcap_batt_remove(struct platform_device *pdev);
 static int cpcap_batt_resume(struct platform_device *pdev);
+
+enum CPCAP_CHARGE_CURRENT_T{
+  CPCAP_CHARGE_CURRENT_0MA,
+
+  CPCAP_CHARGE_CURRENT_30MA,
+  CPCAP_CHARGE_CURRENT_60MA,
+  CPCAP_CHARGE_CURRENT_90MA,
+  CPCAP_CHARGE_CURRENT__END_TRICKLE = CPCAP_CHARGE_CURRENT_90MA,
+
+  CPCAP_CHARGE_CURRENT_100MA,
+  CPCAP_CHARGE_CURRENT_200MA,
+  CPCAP_CHARGE_CURRENT_300MA,
+  CPCAP_CHARGE_CURRENT_400MA,
+  CPCAP_CHARGE_CURRENT_500MA,
+  CPCAP_CHARGE_CURRENT_600MA,
+  CPCAP_CHARGE_CURRENT_700MA,
+  CPCAP_CHARGE_CURRENT_800MA,
+  CPCAP_CHARGE_CURRENT_900MA,
+  CPCAP_CHARGE_CURRENT_1000MA,
+  CPCAP_CHARGE_CURRENT_1100MA,
+  CPCAP_CHARGE_CURRENT_1200MA,
+  CPCAP_CHARGE_CURRENT_1300MA,
+  CPCAP_CHARGE_CURRENT_1800MA,
+
+  CPCAP_CHARGE_CURRENT__END = CPCAP_CHARGE_CURRENT_1800MA
+};
+
+enum CPCAP_CHARGE_VOLTAGE_T{
+  CPCAP_CHARGE_VOLTAGE_3_8,
+  CPCAP_CHARGE_VOLTAGE_4_1,
+  CPCAP_CHARGE_VOLTAGE_4_125,
+  CPCAP_CHARGE_VOLTAGE_4_15,
+  CPCAP_CHARGE_VOLTAGE_4_175,
+  CPCAP_CHARGE_VOLTAGE_4_2,
+  CPCAP_CHARGE_VOLTAGE_4_225,
+  CPCAP_CHARGE_VOLTAGE_4_25,
+  CPCAP_CHARGE_VOLTAGE_4_275,
+  CPCAP_CHARGE_VOLTAGE_4_3,
+  CPCAP_CHARGE_VOLTAGE_4_325,
+  CPCAP_CHARGE_VOLTAGE_4_35,
+  CPCAP_CHARGE_VOLTAGE_4_375,
+  CPCAP_CHARGE_VOLTAGE_4_4,
+  CPCAP_CHARGE_VOLTAGE_4_425,
+  CPCAP_CHARGE_VOLTAGE_4_45,
+
+  CPCAP_CHARGE_VOLTAGE__END = CPCAP_CHARGE_VOLTAGE_4_45
+};
+
+static const unsigned short lighting_bits[CPCAP_REGACC_LEN_LREG] =
+{
+  0xFFFF, /*!< CPCAP_REG_MDLC */
+  0x7FFF, /*!< CPCAP_REG_KLC */
+  0x7FFF, /*!< CPCAP_REG_ADLC */
+  0x03FF, /*!< CPCAP_REG_REDC */
+  0x03FF, /*!< CPCAP_REG_GREENC */
+  0x03FF, /*!< CPCAP_REG_BLUEC */
+  0x0FFF, /*!< CPCAP_REG_CFC */
+  0x003C, /*!< CPCAP_REG_ABC */
+  0x03FF, /*!< CPCAP_REG_BLEDC */
+  0x03FF  /*!< CPCAP_REG_CLEDC */
+};
 
 struct cpcap_batt_ps {
 	struct power_supply batt;
@@ -116,6 +184,140 @@ static struct platform_driver cpcap_batt_driver = {
 };
 
 static struct cpcap_batt_ps *cpcap_batt_sply;
+
+static int cpcap_regacc_lighting_write(struct cpcap_device *cpcap,
+						enum cpcap_reg reg,
+						unsigned short value,
+						unsigned short mask)
+{
+	int ret = -EINVAL;
+	if (((reg >= CPCAP_REGACC_MIN_LREG) && (reg <= CPCAP_REGACC_MAX_LREG) &&
+	((mask & ~(lighting_bits[REGACC_LREG_INDEX(reg)])) == 0)) ||
+	((reg == CPCAP_REG_CRM) && (mask == CPCAP_BIT_CHRG_LED_EN))) {
+		ret = cpcap_regacc_write(cpcap, reg, value, mask);
+	}
+
+	return ret;
+}
+
+int cpcap_batt_set_charge_current(struct cpcap_device *cpcap,
+						int charge_current)
+{
+  int ret;
+  unsigned short mask;
+  int shift;
+  enum CPCAP_CHARGE_CURRENT_T i;
+  static unsigned short charge_current_tbl[CPCAP_CHARGE_CURRENT__END + 1] =
+  {
+    /* CPCAP_CHARGE_CURRENT_0MA    */ 0,
+    /* CPCAP_CHARGE_CURRENT_30MA   */ 30,
+    /* CPCAP_CHARGE_CURRENT_60MA   */ 60,
+    /* CPCAP_CHARGE_CURRENT_90MA   */ 90,
+    /* CPCAP_CHARGE_CURRENT_100MA  */ 100,
+    /* CPCAP_CHARGE_CURRENT_200MA  */ 200,
+    /* CPCAP_CHARGE_CURRENT_300MA  */ 300,
+    /* CPCAP_CHARGE_CURRENT_400MA  */ 400,
+    /* CPCAP_CHARGE_CURRENT_500MA  */ 500,
+    /* CPCAP_CHARGE_CURRENT_600MA  */ 600,
+    /* CPCAP_CHARGE_CURRENT_700MA  */ 700,
+    /* CPCAP_CHARGE_CURRENT_800MA  */ 800,
+    /* CPCAP_CHARGE_CURRENT_900MA  */ 900,
+    /* CPCAP_CHARGE_CURRENT_1000MA */ 1000,
+    /* CPCAP_CHARGE_CURRENT_1100MA */ 1100,
+    /* CPCAP_CHARGE_CURRENT_1200MA */ 1200,
+    /* CPCAP_CHARGE_CURRENT_1300MA */ 1300,
+    /* CPCAP_CHARGE_CURRENT_1800MA */ 1800
+  };
+
+  for (i = CPCAP_CHARGE_CURRENT__END; i > 0; i--) {
+	if (charge_current_tbl[i] <= charge_current)
+		break;
+  }
+
+  mask = (CPCAP_BIT_ICHRG3 |
+	CPCAP_BIT_ICHRG2 |
+	CPCAP_BIT_ICHRG1 |
+	CPCAP_BIT_ICHRG0 |
+	CPCAP_BIT_ICHRG_TR1 |
+	CPCAP_BIT_ICHRG_TR0);
+
+  if (i <= CPCAP_CHARGE_CURRENT__END_TRICKLE) {
+	shift = BATT_BITMASK_FFS(CPCAP_BIT_ICHRG_TR1 |
+				CPCAP_BIT_ICHRG_TR0);
+
+    ret = cpcap_regacc_write(cpcap,
+			CPCAP_REG_CRM,
+			(unsigned short)(i << shift),
+			mask);
+  } else {
+  shift = BATT_BITMASK_FFS(CPCAP_BIT_ICHRG3 |
+			CPCAP_BIT_ICHRG2 |
+			CPCAP_BIT_ICHRG3 |
+			CPCAP_BIT_ICHRG0);
+
+  i -= CPCAP_CHARGE_CURRENT__END_TRICKLE;
+
+  ret = cpcap_regacc_write(cpcap,
+			CPCAP_REG_CRM,
+			(unsigned short)(i << shift),
+			mask);
+ }
+
+  ret = cpcap_regacc_lighting_write(cpcap,
+				CPCAP_REG_CRM,
+				(unsigned short)(i == CPCAP_CHARGE_CURRENT_0MA ?
+						0 : CPCAP_BIT_CHRG_LED_EN),
+						CPCAP_BIT_CHRG_LED_EN);
+
+  return ret;
+}
+
+int cpcap_batt_set_charge_voltage(struct cpcap_device *cpcap,
+						int charge_voltage)
+{
+  int ret;
+  unsigned short mask;
+  int shift;
+  enum CPCAP_CHARGE_VOLTAGE_T i;
+  static unsigned short charge_voltage_tbl[CPCAP_CHARGE_VOLTAGE__END + 1] =
+  {
+    /* CPCAP_CHARGE_VOLTAGE_3_8   */ 3800,
+    /* CPCAP_CHARGE_VOLTAGE_4_1   */ 4100,
+    /* CPCAP_CHARGE_VOLTAGE_4_125 */ 4125,
+    /* CPCAP_CHARGE_VOLTAGE_4_15  */ 4150,
+    /* CPCAP_CHARGE_VOLTAGE_4_175 */ 4175,
+    /* CPCAP_CHARGE_VOLTAGE_4_2   */ 4200,
+    /* CPCAP_CHARGE_VOLTAGE_4_225 */ 4225,
+    /* CPCAP_CHARGE_VOLTAGE_4_25  */ 4250,
+    /* CPCAP_CHARGE_VOLTAGE_4_275 */ 4275,
+    /* CPCAP_CHARGE_VOLTAGE_4_3   */ 4300,
+    /* CPCAP_CHARGE_VOLTAGE_4_325 */ 4325,
+    /* CPCAP_CHARGE_VOLTAGE_4_35  */ 4350,
+    /* CPCAP_CHARGE_VOLTAGE_4_375 */ 4375,
+    /* CPCAP_CHARGE_VOLTAGE_4_4   */ 4400,
+    /* CPCAP_CHARGE_VOLTAGE_4_425 */ 4425,
+    /* CPCAP_CHARGE_VOLTAGE_4_45  */ 4450
+    };
+
+    for (i = CPCAP_CHARGE_VOLTAGE__END; i > 0; i--) {
+	if (charge_voltage_tbl[i] <= charge_voltage)
+		break;
+      }
+    mask = (CPCAP_BIT_VCHRG3 |
+		CPCAP_BIT_VCHRG2 |
+		CPCAP_BIT_VCHRG1 |
+		CPCAP_BIT_VCHRG0);
+
+    shift = BATT_BITMASK_FFS(mask);
+
+    ret = cpcap_regacc_write(cpcap,
+				CPCAP_REG_CRM,
+				(unsigned short)(i << shift),
+				mask);
+
+  return ret;
+}
+
 
 void cpcap_batt_irq_hdlr(enum cpcap_irqs irq, void *data)
 {
@@ -310,6 +512,32 @@ static int cpcap_batt_ioctl(struct inode *inode,
 				 sizeof(struct cpcap_adc_us_request)))
 			return -EFAULT;
 		break;
+
+  case CPCAP_IOCTL_BATT_CHARGER_SET_CHARGE_CURRENT:
+  {
+    unsigned short chgr_current = 0;
+    ret = copy_from_user((void *)&chgr_current, (void *)arg,
+						sizeof(chgr_current));
+
+	if (ret != 0)
+		ret = -EFAULT;
+	else
+		ret = cpcap_batt_set_charge_current(sply->cpcap, chgr_current);
+	break;
+  }
+
+  case CPCAP_IOCTL_BATT_CHARGER_SET_CHARGE_VOLTAGE:
+  {
+    unsigned short chgr_voltage = 0;
+    ret = copy_from_user((void *)&chgr_voltage, (void *)arg,
+						sizeof(chgr_voltage));
+
+	if (ret != 0)
+		ret = -EFAULT;
+	else
+		ret = cpcap_batt_set_charge_voltage(sply->cpcap, chgr_voltage);
+	break;
+  }
 
 	default:
 		return -ENOTTY;

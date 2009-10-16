@@ -638,7 +638,6 @@ struct cpcap_regacc {
 #define CPCAP_IOCTL_TTA_READ_STATUS \
      _IOWR(0, CPCAP_IOCTL_NUM_TTA_STATUS_GET, enum cpcap_tta_state*)
 
-
 #ifdef __KERNEL__
 struct cpcap_device {
 	struct spi_device	*spi;

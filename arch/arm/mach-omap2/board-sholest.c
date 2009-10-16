@@ -614,11 +614,11 @@ static struct qtm_touch_keyarray_cfg sholest_key_array_data[] = {
 };
 
 static struct qtouch_ts_platform_data sholest_ts_platform_data = {
-	.irqflags	= (IRQF_TRIGGER_FALLING | IRQF_TRIGGER_LOW),
 	.flags		= (QTOUCH_SWAP_XY |
 			   QTOUCH_USE_MULTITOUCH |
 			   QTOUCH_CFG_BACKUPNV |
 			   QTOUCH_EEPROM_CHECKSUM),
+	.irqflags	= (IRQF_TRIGGER_FALLING | IRQF_TRIGGER_LOW),
 	.abs_min_x	= 0,
 	.abs_max_x	= 1024,
 	.abs_min_y	= 0,
@@ -639,17 +639,19 @@ static struct qtouch_ts_platform_data sholest_ts_platform_data = {
 		.num_keys	= 0,
 	},
 	.power_cfg	= {
-		.idle_acq_int	= 0x08,
-		.active_acq_int	= 0x10,
-		.active_idle_to	= 0x19,
+		.idle_acq_int	= 0x0a,
+		.active_acq_int	= 0x0a,
+		.active_idle_to	= 0x32,
 	},
 	.acquire_cfg	= {
-		.charge_time	= 0x06,
-		.atouch_drift	= 0x00,
+		.charge_time	= 0x08,
+		.reserve0	= 0x00,
 		.touch_drift	= 0x0a,
 		.drift_susp	= 0x01,
 		.touch_autocal	= 0,
 		.sync		= 0,
+		.anti_cal_susp	= 0x05,
+		.anti_cal_sthr	= 0x14,
 	},
 	.multi_touch_cfg	= {
 		.ctrl		= 0x03,
@@ -659,7 +661,7 @@ static struct qtouch_ts_platform_data sholest_ts_platform_data = {
 		.y_size		= 0x0a,
 		.aks_cfg	= 0,
 		.burst_len	= 0x21,
-		.tch_det_thr	= 0x20,
+		.tch_det_thr	= 0x30,
 		.tch_det_int	= 0x02,
 		.orient		= 0,
 		.mrg_to		= 0x19,
@@ -676,6 +678,10 @@ static struct qtouch_ts_platform_data sholest_ts_platform_data = {
 		.x_high_clip	= 0x00,
 		.y_low_clip	= 0x00,
 		.y_high_clip	= 0x00,
+		.x_edge_ori	= 0x00,
+		.x_edge_cdist	= 0x00,
+		.y_edge_ori	= 0x00,
+		.y_edge_cdist	= 0x00,
 	},
 	.linear_tbl_cfg = {
 		.ctrl = 0x00,
@@ -722,15 +728,20 @@ static struct qtouch_ts_platform_data sholest_ts_platform_data = {
 		.shpthr2	= 0x00,
 	},
 	.noise_suppression_cfg = {
-		.ctrl			= 0,
-		.outlier_filter_len	= 0,
-		.reserve0		= 0,
-		.gcaf_upper_limit	= 0,
-		.gcaf_lower_limit	= 0,
-		.gcaf_low_count		= 0,
-		.noise_threshold	= 0,
+		.ctrl			= 0x07,
+		.reserve0		= 0x0000,
+		.gcaf_upper_limit	= 0x0000,
+		.gcaf_lower_limit	= 0x0000,
+		.gcaf_num_active	= 0x03,
+		.noise_threshold	= 0x1e,
 		.reserve1		= 0,
-		.freq_hop_scale		= 0,
+		.freq_hop_scale		= 0x01,
+		.burst_freq_0		= 0x06,
+		.burst_freq_1		= 0x0b,
+		.burst_freq_2		= 0x0f,
+		.burst_freq_3		= 0x13,
+		.burst_freq_4		= 0x15,
+		.gcaf_num_idle		= 0,
 	},
 	.one_touch_gesture_proc_cfg = {
 		.ctrl			= 0,
@@ -772,10 +783,10 @@ static struct qtouch_ts_platform_data sholest_ts_platform_data = {
 		.active_gcaf_depth	= 8,
 	},
 	.noise1_suppression_cfg = {
-		.ctrl		= 0x01,
-		.reserved	= 0x01,
-		.atchthr	= 0x64,
-		.duty_cycle	= 0x08,
+		.ctrl		= 0x00,
+		.reserved	= 0x00,
+		.atchthr	= 0x00,
+		.duty_cycle	= 0x00,
 	},
 	.vkeys			= {
 		.count		= ARRAY_SIZE(sholest_touch_vkeys),
