@@ -247,6 +247,27 @@ typedef struct {
         int                  urb_flag;
 } USB_LOG_IFS_STRUCT;
 
+#ifdef USE_OMAP_SDMA
+#define IPC_DMA_NODE2BUF_ID      1
+#define IPC_DMA_BUF2NODE_ID      2
+
+struct IPC_DMA_MEMCPY {
+	int dma_ch;
+	int node_index;
+	int frame_index;
+	int total_size;
+	USB_IPC_API_PARAMS *ipc_ch;
+	unsigned long      buf_phy;
+	IPC_DATA_HEADER    *header;
+	HW_CTRL_IPC_DATA_NODE_DESCRIPTOR_T  *node_ptr;
+};
+
+extern struct IPC_DMA_MEMCPY ipc_memcpy_node2buf;
+extern struct IPC_DMA_MEMCPY ipc_memcpy_buf2node;
+extern void ipc_dma_node2buf_callback(int lch, u16 ch_status, void *data);
+extern void ipc_dma_buf2node_callback(int lch, u16 ch_status, void *data);
+#endif
+
 extern int ipc_dbg_index;
 extern char ipc_dbg_array[IPC_DBG_ARRAY_SIZE];
 extern unsigned int dma_vsrc;
