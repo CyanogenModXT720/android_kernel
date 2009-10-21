@@ -51,6 +51,10 @@
 #include <linux/kthread.h>
 #include <linux/freezer.h>
 
+#ifdef USE_OMAP_SDMA
+#include <mach/dma.h>
+#endif
+
 /* For debug only */
 #include <linux/io.h>
 #include <mach/io.h>
@@ -458,6 +462,27 @@ int usb_ipc_data_probe(struct usb_interface *intf, const struct usb_device_id *i
 
   usb_ipc_data_param.udev = dev;
 
+#ifdef USE_OMAP_SDMA
+	if (0 != omap_request_dma(IPC_DMA_NODE2BUF_ID, NULL,
+				  ipc_dma_node2buf_callback, NULL,
+				  &ipc_memcpy_node2buf.dma_ch)) {
+		printk(KERN_ERR \
+			"%s: Failed to allocate DMA channel for IPC write\n",
+			__func__);
+		ipc_memcpy_node2buf.dma_ch = -1;
+	}
+	if (0 != omap_request_dma(IPC_DMA_BUF2NODE_ID, NULL,
+				  ipc_dma_buf2node_callback, NULL,
+				  &ipc_memcpy_buf2node.dma_ch)) {
+		printk(KERN_ERR \
+			"%s: Failed to allocate DMA channel for IPC read\n",
+			__func__);
+		ipc_memcpy_buf2node.dma_ch = -1;
+	}
+	printk(KERN_INFO "IPC DMA: ch%d for read, ch%d for write\n",
+		ipc_memcpy_buf2node.dma_ch, ipc_memcpy_node2buf.dma_ch);
+#endif
+
   /* endpoint bulk in*/
   ipc_endpoint = &(intf->cur_altsetting->endpoint[0].desc);
 
@@ -633,6 +658,15 @@ void usb_ipc_data_disconnect(struct usb_interface *intf)
   usb_set_intfdata (intf, NULL);
 
   ipc_api_usb_disconnect(IPC_DATA_CH_NUM);
+
+#ifdef USE_OMAP_SDMA
+	omap_stop_dma(ipc_memcpy_node2buf.dma_ch);
+	omap_free_dma(ipc_memcpy_node2buf.dma_ch);
+	omap_stop_dma(ipc_memcpy_buf2node.dma_ch);
+	omap_free_dma(ipc_memcpy_buf2node.dma_ch);
+	ipc_memcpy_node2buf.dma_ch = -1;
+	ipc_memcpy_buf2node.dma_ch = -1;
+#endif
 
   /* re-init "usb_ipc_data_param" */
   usb_ipc_data_init();
