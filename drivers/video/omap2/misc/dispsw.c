@@ -1231,6 +1231,7 @@ static int __init dispsw_probe(struct platform_device *pdev)
 		gDev->osi[i].ovl = ovl;
 		ovl->set_overlay_info = dispsw_ovl_set_info_lock;
 		ovl->get_overlay_info = dispsw_ovl_get_info_lock;
+		gDev->osi[i].get_func(ovl, &gDev->osi[i].last_info);
 
 		if (gDev->osi[i].set_func == NULL ||
 				gDev->osi[i].get_func == NULL) {
