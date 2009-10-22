@@ -1295,6 +1295,7 @@ int ispccdc_try_size(u32 input_w, u32 input_h, u32 *output_w, u32 *output_h)
 			*output_w -= (*output_w % 16);
 			*output_w += 16;
 		}
+      *output_h -= ispccdc_obj.ccdcin_hstart;
 	}
 
 	ispccdc_obj.ccdcout_w = *output_w;
