@@ -638,13 +638,21 @@ static struct qtouch_ts_platform_data sholest_ts_platform_data = {
 		.keys		= NULL,
 		.num_keys	= 0,
 	},
+#if 1
 	.power_cfg	= {
 		.idle_acq_int	= 0x0a,
 		.active_acq_int	= 0x0a,
 		.active_idle_to	= 0x32,
 	},
+#else
+	.power_cfg      = {
+		.idle_acq_int   = 0xff,
+		.active_acq_int = 0xff,
+		.active_idle_to = 0x32,
+	}
+#endif
 	.acquire_cfg	= {
-		.charge_time	= 0x08,
+		.charge_time	= 0x0a,
 		.reserve0	= 0x00,
 		.touch_drift	= 0x0a,
 		.drift_susp	= 0x01,
@@ -840,7 +848,9 @@ static struct i2c_board_info __initdata sholest_i2c_bus1_board_info[] = {
 	},
 };
 
+#ifdef CONFIG_SENSORS_LIS331DLH
 extern struct lis331dlh_platform_data sholest_lis331dlh_data;
+#endif
 #ifdef CONFIG_MOT_FEAT_LP3907
 extern struct lp3907_platform_data sholest_lp3907_data;
 #endif
@@ -850,10 +860,12 @@ static struct i2c_board_info __initdata sholest_i2c_bus2_board_info[] = {
 		I2C_BOARD_INFO("akm8973", 0x1C),
 		.irq = OMAP_GPIO_IRQ(SHOLEST_AKM8973_INT_GPIO),
 	},
+#ifdef CONFIG_SENSORS_LIS331DLH
 	{
 		I2C_BOARD_INFO("lis331dlh", 0x19),
 		.platform_data = &sholest_lis331dlh_data,
 	},
+#endif
 #ifdef CONFIG_MOT_FEAT_LP3907
 	{
 		I2C_BOARD_INFO("lp3907", 0x61),
