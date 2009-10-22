@@ -124,8 +124,6 @@
 #define SHOLEST_POWER_OFF_GPIO		176
 #define SHOLEST_BPWAKE_STROBE_GPIO	157
 #define SHOLEST_APWAKE_TRIGGER_GPIO	141
-#define SHOLEST_HDMI_MUX_SELECT_GPIO    7
-#define SHOLEST_HDMI_MUX_EN_N_GPIO  69
 #define SHOLEST_LM_3530_EN_GPIO     27
 #define DIE_ID_REG_BASE			(L4_WK_34XX_PHYS + 0xA000)
 #define DIE_ID_REG_OFFSET		0x218
@@ -536,16 +534,7 @@ static void sholest_als_init(void)
 static void sholest_misc_init(void)
 {
     printk(KERN_INFO "%s:Initializing\n", __func__);
-    if (gpio_request(SHOLEST_HDMI_MUX_SELECT_GPIO, "HDMI-mux-select") >= 0)
-    {
-        gpio_direction_output(SHOLEST_HDMI_MUX_SELECT_GPIO, 0);
-        gpio_set_value(SHOLEST_HDMI_MUX_SELECT_GPIO, 0);
-    }
-    if (gpio_request(SHOLEST_HDMI_MUX_EN_N_GPIO, "HDMI-mux-enable-n") >= 0)
-    {
-        gpio_direction_output(SHOLEST_HDMI_MUX_EN_N_GPIO, 0);
-        gpio_set_value(SHOLEST_HDMI_MUX_EN_N_GPIO, 0);
-    }
+
     if (gpio_request(SHOLEST_LM_3530_EN_GPIO, "led-enable") >= 0)
     {
         gpio_direction_output(SHOLEST_LM_3530_EN_GPIO, 0);
@@ -638,13 +627,21 @@ static struct qtouch_ts_platform_data sholest_ts_platform_data = {
 		.keys		= NULL,
 		.num_keys	= 0,
 	},
+#if 1
 	.power_cfg	= {
 		.idle_acq_int	= 0x0a,
 		.active_acq_int	= 0x0a,
 		.active_idle_to	= 0x32,
 	},
+#else
+	.power_cfg      = {
+		.idle_acq_int   = 0xff,
+		.active_acq_int = 0xff,
+		.active_idle_to = 0x32,
+	}
+#endif
 	.acquire_cfg	= {
-		.charge_time	= 0x08,
+		.charge_time	= 0x0a,
 		.reserve0	= 0x00,
 		.touch_drift	= 0x0a,
 		.drift_susp	= 0x01,
@@ -840,7 +837,9 @@ static struct i2c_board_info __initdata sholest_i2c_bus1_board_info[] = {
 	},
 };
 
+#ifdef CONFIG_SENSORS_LIS331DLH
 extern struct lis331dlh_platform_data sholest_lis331dlh_data;
+#endif
 #ifdef CONFIG_MOT_FEAT_LP3907
 extern struct lp3907_platform_data sholest_lp3907_data;
 #endif
@@ -850,10 +849,12 @@ static struct i2c_board_info __initdata sholest_i2c_bus2_board_info[] = {
 		I2C_BOARD_INFO("akm8973", 0x1C),
 		.irq = OMAP_GPIO_IRQ(SHOLEST_AKM8973_INT_GPIO),
 	},
+#ifdef CONFIG_SENSORS_LIS331DLH
 	{
 		I2C_BOARD_INFO("lis331dlh", 0x19),
 		.platform_data = &sholest_lis331dlh_data,
 	},
+#endif
 #ifdef CONFIG_MOT_FEAT_LP3907
 	{
 		I2C_BOARD_INFO("lp3907", 0x61),

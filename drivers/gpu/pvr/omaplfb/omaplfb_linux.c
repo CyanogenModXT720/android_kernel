@@ -221,7 +221,7 @@ void OMAPLFBDisplayInit(void)
 
 void OMAPLFBSync(void)
 {
-	if (lcd_mgr && lcd_mgr->device && omap_gfxoverlay)
+	if (lcd_mgr && lcd_mgr->device && omap_gfxoverlay && lcd_mgr->device->sync)
 		lcd_mgr->device->sync(lcd_mgr->device);
 }
 
@@ -241,9 +241,10 @@ void OMAPLFBFlip(OMAPLFB_SWAPCHAIN *psSwapChain, unsigned long paddr)
 						  &gfxoverlayinfo);
 		lcd_mgr->apply(lcd_mgr);
 
-		lcd_mgr->device->update(lcd_mgr->device, 0, 0,
-					gfxoverlayinfo.width,
-					gfxoverlayinfo.height);
+		if (lcd_mgr->device->update)
+			lcd_mgr->device->update(lcd_mgr->device, 0, 0,
+						gfxoverlayinfo.width,
+						gfxoverlayinfo.height);
 
 		pixels = (paddr - fb_info->fix.smem_start) /
 			(fb_info->var.bits_per_pixel / 8);
