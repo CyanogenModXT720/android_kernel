@@ -230,9 +230,30 @@ static struct dispsw_mr_support sholest_dispsw_hdtv_4 = {
 	.panel_config = OMAP_DSS_LCD_TFT,
 };
 
+#ifdef CONFIG_TVOUT_SHOLEST
+static struct dispsw_mr_support sholest_dispsw_tv = {
+	.dev_name = "tv",
+	.res_name = "ntsc",
+	.dev_timing = {
+    .x_res = 720,
+    .y_res = 482,
+    .pixel_clock = 13500,
+    .hsw = 64,
+    .hfp = 16,
+    .hbp = 58,
+    .vsw = 6,
+    .vfp = 6,
+    .vbp = 31,
+	},
+	.panel_config = (OMAP_DSS_LCD_TFT|OMAP_DSS_LCD_IVS|OMAP_DSS_LCD_IHS),
+};
+#endif
 static struct dispsw_mr_support *sholest_dispsw_resolutions[] = {
 	&sholest_dispsw_hdtv_2,
 	&sholest_dispsw_hdtv_4,
+#ifdef CONFIG_TVOUT_SHOLEST
+    &sholest_dispsw_tv,
+#endif
 };
 
 static struct dispsw_board_info sholest_dispsw_data = {

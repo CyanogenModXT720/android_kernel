@@ -295,9 +295,11 @@ static void dispsw_rotate(struct dispsw_osi *osi,
 	if (rotate == info->rotation)
 		return;
 
+#ifndef CONFIG_TVOUT_SHOLEST
 	/* Video plane rotation is handled else where */
 	if (osi->id != OMAP_DSS_GFX)
 		return;
+#endif
 
 	/* It is assumed that the GFX plane is not currently rotated */
 	if (info->rotation != 0)
