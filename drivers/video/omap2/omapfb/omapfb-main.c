@@ -29,7 +29,9 @@
 #include <linux/platform_device.h>
 #include <linux/omapfb.h>
 #include <linux/earlysuspend.h>
-
+#ifdef CONFIG_FB_OMAP2_MTD_LOGO
+#include <linux/mtd/mtd.h>
+#endif
 #include <mach/display.h>
 #include <mach/vram.h>
 #include <mach/vrfb.h>
@@ -37,6 +39,7 @@
 #include "omapfb.h"
 
 #define MODULE_NAME     "omapfb"
+
 
 static char *def_mode;
 static char *def_vram;
@@ -51,7 +54,6 @@ static unsigned int omapfb_test_pattern;
 module_param_named(test, omapfb_test_pattern, bool, 0644);
 #endif
 
-#ifdef DEBUG
 static void draw_pixel(struct fb_info *fbi, int x, int y, unsigned color)
 {
 	struct fb_var_screeninfo *var = &fbi->var;
@@ -86,7 +88,7 @@ static void draw_pixel(struct fb_info *fbi, int x, int y, unsigned color)
 		__raw_writel(color, p);
 	}
 }
-
+#ifdef DEBUG
 static void fill_fb(struct fb_info *fbi)
 {
 	struct fb_var_screeninfo *var = &fbi->var;
@@ -2009,6 +2011,98 @@ static int omapfb_parse_def_modes(struct omapfb2_device *fbdev)
 	return r;
 }
 
+#ifdef CONFIG_FB_OMAP2_MTD_LOGO
+/* The mtd logo image size is fixed at 2 eraseblocks */
+#define LOGO_IMAGE_BLOCKS  2
+#define LOGO_MTD_NAME	"logo"
+
+int show_mtd_logo(struct fb_info *info)
+{
+	struct mtd_info *mtd = NULL;
+	struct fb_image image;
+	unsigned int color;
+	unsigned int image_size;
+	unsigned int num_blocks;
+	int ret, retbuf, i, j, p, blocks;
+
+	DBG("\nshow_mtd_logo");
+
+	mtd = get_mtd_device_nm(LOGO_MTD_NAME);
+	if (!mtd) {
+		printk(KERN_ERR "Cann't find logo mtd info\n");
+		return -ENODEV;
+	}
+
+	image_size = mtd->erasesize * LOGO_IMAGE_BLOCKS;
+	num_blocks = (unsigned int)((unsigned int)mtd->size / mtd->erasesize);
+
+	image.data = kmalloc(image_size, GFP_KERNEL);
+	if (!image.data) {
+		printk(KERN_ERR "show_mtd_logo oom\n");
+		return -ENOMEM;
+	}
+
+	memset((void *)image.data, 0, image_size);
+
+	blocks = 0;
+	for (i = 0; i < num_blocks; i++) {
+		if (blocks < LOGO_IMAGE_BLOCKS) {
+
+			ret = mtd->block_isbad(mtd, i * mtd->erasesize);
+			if (ret) {
+				printk(KERN_DEBUG "bad blocks at %d in logo\n",
+									i);
+				/* skip the bad eraseblock */
+				continue;
+
+			} else {
+				mtd->read(mtd, i*mtd->erasesize,
+						mtd->erasesize, &retbuf,
+				(char *)(image.data + blocks * mtd->erasesize));
+				blocks++;
+
+				if (blocks == LOGO_IMAGE_BLOCKS)
+					break;
+			}
+		}
+	}
+
+	if (blocks != LOGO_IMAGE_BLOCKS) {
+		printk(KERN_ERR "too many bad blocks at logo partition\n");
+		kfree(image.data);
+		return -ENOMEM;
+	}
+
+	image.width = info->var.xres;
+	/* 3 bytes per pixel, the logo image format is fixed at RGB888 */
+	image.height = (unsigned int)((image_size/info->var.xres)/3);
+	image.dx = 0;
+	image.dy = (unsigned int)((info->var.yres - image.height)/2);
+
+	/* Per requirement, the first pixel will be the background color */
+	color = (image.data[0] << 16) | (image.data[1] << 8) | image.data[2];
+
+	/* draw the background */
+	for (i = 0 ; i < info->var.yres ; i++)
+		for (j = 0 ; j < info->var.xres; j++)
+			draw_pixel(info, j, i, color);
+
+	/* draw the logo */
+	p = 0;
+	for (i = 0; i < image.height; i++)
+		for (j = 0; j < image.width; j++) {
+			color = ((image.data[p] << 16) |
+				 (image.data[p+1] << 8) | image.data[p+2]);
+			p += 3;
+			draw_pixel(info, image.dx+j, image.dy+i, color);
+	}
+
+	kfree(image.data);
+
+	return 0;
+}
+#endif
+
 static int omapfb_probe(struct platform_device *pdev)
 {
 	struct omapfb2_device *fbdev = NULL;
@@ -2090,7 +2184,9 @@ static int omapfb_probe(struct platform_device *pdev)
 	}
 
 	DBG("mgr->apply'ed\n");
-
+#ifdef CONFIG_FB_OMAP2_MTD_LOGO
+	show_mtd_logo(fbdev->fbs[0]);
+#endif
 	r = def_display->enable(def_display);
 	if (r) {
 		dev_err(fbdev->dev, "Failed to enable display '%s'\n",
@@ -2107,13 +2203,6 @@ static int omapfb_probe(struct platform_device *pdev)
 			def_display->set_update_mode(def_display,
 					OMAP_DSS_UPDATE_AUTO);
 #else
-		if (def_display->enable_te) {
-			if ((def_display->te_support) &&
-				(def_display->te_support(def_display) == true))
-				def_display->enable_te(def_display, 1);
-			else
-				def_display->enable_te(def_display, 0);
-		}
 		if (def_display->set_update_mode)
 			def_display->set_update_mode(def_display,
 					OMAP_DSS_UPDATE_MANUAL);
@@ -2123,6 +2212,26 @@ static int omapfb_probe(struct platform_device *pdev)
 			def_display->set_update_mode(def_display,
 					OMAP_DSS_UPDATE_AUTO);
 	}
+
+
+#ifdef CONFIG_FB_OMAP2_MTD_LOGO
+	for (i = 0; i < fbdev->num_displays; i++) {
+		struct omap_dss_device *display = fbdev->displays[i];
+		u16 w, h;
+
+		if (!display->get_update_mode || !display->update)
+			continue;
+
+		if (display->get_update_mode(display) ==
+				OMAP_DSS_UPDATE_MANUAL) {
+
+			display->get_resolution(display, &w, &h);
+			display->update(display, 0, 0, w, h);
+		}
+	}
+#endif
+
+
 
 	DBG("display->updated\n");
 

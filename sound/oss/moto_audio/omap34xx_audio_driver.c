@@ -26,6 +26,11 @@
 #include <linux/dma-mapping.h>
 #include <linux/sound.h>
 #include <linux/poll.h>
+
+#ifdef CONFIG_WAKELOCK
+#include <linux/wakelock.h>
+#endif
+
 #include <mach/mux.h>
 #include <mach/control.h>
 #include "omap34xx_audio_driver.h"
@@ -45,7 +50,7 @@
 
 /* This is the number of total kernel buffers */
 #define AUDIO_NBFRAGS_WRITE 2
-#define AUDIO_NBFRAGS_READ 10
+#define AUDIO_NBFRAGS_READ 15
 
 #define AUDIO_TIMEOUT HZ
 
@@ -290,8 +295,8 @@ static const struct sample_rate_info_t valid_sample_rates[] = {
 	{.rate = 48000, .cpcap_audio_rate = CPCAP_AUDIO_STDAC_RATE_48000_HZ},
 };
 
-static DEFINE_SPINLOCK(audio_write_lock);
-static DEFINE_SPINLOCK(audio_read_lock);
+static DEFINE_MUTEX(audio_write_lock);
+static DEFINE_MUTEX(audio_read_lock);
 static unsigned long flags;
 static int read_buf_full;
 static int primary_spkr_setting = CPCAP_AUDIO_OUT_NONE;
@@ -299,6 +304,9 @@ static int secondary_spkr_setting = CPCAP_AUDIO_OUT_NONE;
 static int mic_setting = CPCAP_AUDIO_IN_NONE;
 static unsigned int capture_mode;
 static struct omap_mcbsp_wrapper *mcbsp_wrapper;
+#ifdef CONFIG_WAKELOCK
+static struct wake_lock mcbsp_wakelock;
+#endif
 
 #ifdef MCBSP_WRAPPER
 
@@ -385,6 +393,10 @@ static void omap2_mcbsp_set_recv_param(unsigned int id,
 		mcbsp_cfg->pcr0 = mcbsp_cfg->pcr0 | CLKRP;
 	if (rp->fs_polarity == OMAP_MCBSP_FS_ACTIVE_LOW)
 		mcbsp_cfg->pcr0 = mcbsp_cfg->pcr0 | FSRP;
+
+#ifdef CONFIG_USE_MCBSP_FIFO
+	mcbsp_cfg->wken = mcbsp_cfg->wken | RRDYEN;
+#endif
 	return;
 }
 
@@ -1502,6 +1514,10 @@ static int audio_configure_ssi(struct inode *inode, struct file *file)
 
 	TRY(omap_mcbsp_set_io_type(ssi, 0))
 
+#ifdef CONFIG_WAKELOCK
+	wake_lock(&mcbsp_wakelock);
+#endif
+
 	TRY(omap_mcbsp_request(ssi))
 
 	TRY(omap2_mcbsp_reset(ssi))
@@ -1519,6 +1535,9 @@ static int audio_configure_ssi(struct inode *inode, struct file *file)
 
 out:
 	omap_mcbsp_free(ssi);
+#ifdef CONFIG_WAKELOCK
+	wake_unlock(&mcbsp_wakelock);
+#endif
 	return -EPERM ;
 }
 
@@ -1545,6 +1564,9 @@ int audio_stop_ssi(struct inode *inode, struct file *file)
 
 	(void)omap2_mcbsp_reset(ssi);
 	(void)omap_mcbsp_free(ssi);
+#ifdef CONFIG_WAKELOCK
+	wake_unlock(&mcbsp_wakelock);
+#endif
 
 	return 0;
 
@@ -1974,8 +1996,22 @@ static ssize_t audio_write(struct file *file, const char *buffer, size_t count,
 			goto out;
 		}
 
-		spin_lock_irqsave(&audio_write_lock, flags);
+		/* Workaround for CPCAP channel inversion issue */
+		if (minor == state.dev_dsp &&
+			(cpcap_audio_state.stdac_primary_speaker ==
+					CPCAP_AUDIO_OUT_STEREO_HEADSET ||
+			cpcap_audio_state.stdac_secondary_speaker ==
+				CPCAP_AUDIO_OUT_STEREO_HEADSET)) {
+			int lc;
+			short *ptr = (short *)(buf->data + buf->offset);
+			for (lc = 0; lc < chunksize / 2; lc += 2) {
+				ptr[lc] = -ptr[lc];
+				if (ptr[lc] == (short)0x8000)
+					ptr[lc] = (short)0x7FFF;
+			}
+		}
 
+		mutex_lock(&audio_write_lock);
 		buffer += chunksize;
 		count -= chunksize;
 		buf->offset += chunksize;
@@ -1998,7 +2034,7 @@ static ssize_t audio_write(struct file *file, const char *buffer, size_t count,
 	if (buffer - buffer0)
 		ret = buffer - buffer0;
 
-	spin_unlock_irqrestore(&audio_write_lock, flags);
+	mutex_unlock(&audio_write_lock);
 
 out:
 	mutex_unlock(&audio_lock);
@@ -2165,7 +2201,7 @@ static ssize_t audio_codec_read(struct file *file, char *buffer, size_t size,
 						 AUDIO_TIMEOUT);
 		mutex_lock(&audio_lock);
 
-		spin_lock_irqsave(&audio_read_lock, flags);
+		mutex_lock(&audio_read_lock);
 
 		read_buf_full--;
 
@@ -2175,7 +2211,7 @@ static ssize_t audio_codec_read(struct file *file, char *buffer, size_t size,
 		if (copy_to_user(buffer, buf->data, str->fragsize)) {
 			AUDIO_ERROR_LOG("Audio: CopyTo User failed \n");
 			ret = -EFAULT;
-			spin_unlock_irqrestore(&audio_read_lock, flags);
+			mutex_unlock(&audio_read_lock);
 			goto err;
 		}
 
@@ -2184,7 +2220,7 @@ static ssize_t audio_codec_read(struct file *file, char *buffer, size_t size,
 
 		size -= str->fragsize;
 
-		spin_unlock_irqrestore(&audio_read_lock, flags);
+		mutex_unlock(&audio_read_lock);
 	}
 
 	ret = local_size;
@@ -2225,12 +2261,16 @@ static int __init audio_init(void)
 	if (err)
 		return err;
 
+#ifdef CONFIG_WAKELOCK
+	wake_lock_init(&mcbsp_wakelock, WAKE_LOCK_SUSPEND, "mcbsp");
+#endif
 	return 0;
 }
 
 static void __exit audio_exit(void)
 {
 	platform_driver_unregister(&audio_driver);
+	wake_lock_destroy(&mcbsp_wakelock);
 }
 
 static int audio_probe(struct platform_device *dev)
