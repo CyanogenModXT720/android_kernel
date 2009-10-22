@@ -315,6 +315,8 @@ static void hs_work(struct work_struct *work)
 			" Redetect:"
 			" Headset detached: Connected=%d\n", NO_DEVICE);
 
+   cpcap_irq_mask(data_3mm5->cpcap, CPCAP_IRQ_PTT);
+
 	/*Enable HSMIC NO0 path*/
 	control_val = control_analog_switch(CPCAP_GPIO_SWITCH_HSMIC, data_3mm5);
 	if (control_val < 0) {
@@ -333,6 +335,8 @@ static void hs_work(struct work_struct *work)
 
 		/* Give PTTS time to settle */
 		mdelay(2);
+
+    cpcap_irq_unmask(data_3mm5->cpcap, CPCAP_IRQ_PTT);
 
 	read_ptt = cpcap_irq_sense(data_3mm5->cpcap, CPCAP_IRQ_PTT, 1);
 	if (read_ptt <= 0) {
