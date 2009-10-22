@@ -567,6 +567,8 @@ int check_fb_var(struct fb_info *fbi, struct fb_var_screeninfo *var)
 			var->xres, var->yres,
 			var->xres_virtual, var->yres_virtual);
 
+	var->height             = -1;
+	var->width              = -1;
 	var->grayscale          = 0;
 
 	if (display && display->get_timings) {
@@ -759,6 +761,7 @@ int omapfb_apply_changes(struct fb_info *fbi, int init)
 	struct omapfb_info *ofbi = FB2OFB(fbi);
 	struct fb_var_screeninfo *var = &fbi->var;
 	struct omap_overlay *ovl;
+	struct omap_overlay_info info;
 	u16 posx, posy;
 	u16 outw, outh;
 	int i;
@@ -781,6 +784,8 @@ int omapfb_apply_changes(struct fb_info *fbi, int init)
 			continue;
 		}
 
+		ovl->get_overlay_info(ovl, &info);
+
 		if (init || (ovl->caps & OMAP_DSS_OVL_CAP_SCALE) == 0) {
 			int rotation = (var->rotate + ofbi->rotation[i]) % 4;
 			if (rotation == FB_ROTATE_CW ||
@@ -792,16 +797,16 @@ int omapfb_apply_changes(struct fb_info *fbi, int init)
 				outh = var->yres;
 			}
 		} else {
-			outw = ovl->info.out_width;
-			outh = ovl->info.out_height;
+			outw = info.out_width;
+			outh = info.out_height;
 		}
 
 		if (init) {
 			posx = 0;
 			posy = 0;
 		} else {
-			posx = ovl->info.pos_x;
-			posy = ovl->info.pos_y;
+			posx = info.pos_x;
+			posy = info.pos_y;
 		}
 
 		r = omapfb_setup_overlay(fbi, ovl, posx, posy, outw, outh);
