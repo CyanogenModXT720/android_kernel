@@ -1902,6 +1902,7 @@ static ssize_t audio_write(struct file *file, const char *buffer, size_t count,
 			state.stdac_out_stream : state.codec_out_stream;
 
 	mutex_lock(&audio_lock);
+	mutex_lock(&audio_write_lock);
 
 	if (minor == state.dev_dsp) {
 		if (!str->active) {
@@ -1983,7 +1984,6 @@ static ssize_t audio_write(struct file *file, const char *buffer, size_t count,
 			}
 		}
 
-		mutex_lock(&audio_write_lock);
 		buffer += chunksize;
 		count -= chunksize;
 		buf->offset += chunksize;

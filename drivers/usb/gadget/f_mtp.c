@@ -182,6 +182,7 @@ struct usb_mtp_context {
 	int error;
 	int cancel;
 	int ctl_cancel;
+	int intr_in_busy;
 
 	wait_queue_head_t rx_wq;
 	wait_queue_head_t tx_wq;
@@ -340,6 +341,7 @@ static void mtp_int_complete(struct usb_ep *ep, struct usb_request *req)
 		mtp_err("status is %d %p len=%d\n",
 		req->status, req, req->actual);
 
+	g_usb_mtp_context.intr_in_busy = 0;
 	return;
 }
 
@@ -353,7 +355,6 @@ static ssize_t mtp_read(struct file *fp, char __user *buf,
 	while (count > 0) {
 		mtp_debug("count=%d\n", count);
 		if (g_usb_mtp_context.error) {
-			mtp_err("error\n");
 			return -EIO;
 		}
 		/* we will block until we're online */
@@ -464,7 +465,6 @@ static ssize_t mtp_write(struct file *fp, const char __user *buf,
 	while (count > 0) {
 		mtp_debug("count=%d\n", count);
 		if (g_usb_mtp_context.error) {
-			mtp_err("error\n");
 			return -EIO;
 		}
 		/* get an idle tx request to use */
@@ -562,6 +562,11 @@ static int mtp_ioctl(struct inode *inode, struct file *file,
 
 	switch (cmd) {
 	case MTP_IOC_EVENT:
+		if (g_usb_mtp_context.intr_in_busy) {
+			mtp_err("interrupt in request busy\n");
+			return -EBUSY;
+		}
+
 		count = MIN(_IOC_SIZE(cmd), MTP_EVENT_SIZE);
 		if (copy_from_user(event.data, (void *)arg,  count))
 			return -EINVAL;
@@ -580,6 +585,7 @@ static int mtp_ioctl(struct inode *inode, struct file *file,
 		req->zero = 0;
 		if (usb_ep_queue(g_usb_mtp_context.intr_in, req, GFP_ATOMIC))
 			return -EINVAL;
+		g_usb_mtp_context.intr_in_busy = 1;
 		break;
 	case MTP_IOC_SEND_ZLP:
 		req = req_get(&g_usb_mtp_context.tx_reqs);
@@ -837,7 +843,7 @@ mtp_function_unbind(struct usb_configuration *c, struct usb_function *f)
 	req_free(g_usb_mtp_context.int_tx_req, g_usb_mtp_context.intr_in);
 	req_free(g_usb_mtp_context.ctl_tx_req,
 	g_usb_mtp_context.cdev->gadget->ep0);
-
+	g_usb_mtp_context.intr_in_busy = 0;
 	misc_deregister(&mtp_device);
     remove_proc_entry("mtpctl", NULL);
 }
@@ -923,7 +929,7 @@ mtp_function_bind(struct usb_configuration *c, struct usb_function *f)
 		req_new(g_usb_mtp_context.intr_in, BULK_BUFFER_SIZE);
 	if (!g_usb_mtp_context.int_tx_req)
 		goto autoconf_fail;
-
+	g_usb_mtp_context.intr_in_busy = 0;
 	g_usb_mtp_context.int_tx_req->complete = mtp_int_complete;
 
 	g_usb_mtp_context.ctl_tx_req =
