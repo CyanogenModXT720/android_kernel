@@ -435,7 +435,7 @@ void musb_g_tx(struct musb *musb, u8 epnum)
 	do {
 		/* CSR cannot be zero. If we encounter this condition, just free
 			 the request and exit */
-		if (!csr) {
+		if ((dma != NULL) && !csr) {
 			printk(KERN_INFO "TXCSR is zero for %s \n",
 						 musb_ep->end_point.name);
 			if (request)
