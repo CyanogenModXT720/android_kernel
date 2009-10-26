@@ -142,12 +142,6 @@ static int hdtv_panel_resume(struct omap_dss_device *dssdev)
     return ret;
 }
 
-static bool hdtv_panel_te_support(struct omap_dss_device *dssdev)
-{
-	DBG("%s not supported\n", __func__);
-	return true;
-}
-
 static struct omap_dss_driver hdtv_panel_driver = {
 	.probe = hdtv_panel_probe,
 	.remove = hdtv_panel_remove,
@@ -158,7 +152,6 @@ static struct omap_dss_driver hdtv_panel_driver = {
 	.resume = hdtv_panel_resume,
 	.setup_update = hdtv_panel_setup_update,
 	.enable_te = hdtv_panel_enable_te,
-	//.te_support = hdtv_panel_te_support,
 	.set_rotate = hdtv_panel_rotate,
 	.set_mirror = hdtv_panel_mirror,
 	.run_test = hdtv_panel_run_test,
