@@ -107,11 +107,11 @@ static int sholes_panel_dss_probe(struct omap_dss_device *dssdev)
 	if (!data)
 		return -ENOMEM;
 	INIT_WORK(&data->work, sholes_panel_display_on);
-	init_waitqueue_head(&data->wait);
+	// init_waitqueue_head(&data->wait);
 #ifdef CONFIG_FB_OMAP2_MTD_LOGO
-	atomic_set(&data->state, PANEL_OFF);
+//	atomic_set(&data->state, PANEL_OFF);
 #else
-	atomic_set(&data->state, PANEL_ON);
+//	atomic_set(&data->state, PANEL_ON);
 #endif
 	data->dssdev = dssdev;
 	dssdev->data = data;
@@ -335,7 +335,7 @@ static struct omap_dss_driver sholes_panel_dss_driver = {
 	.resume = sholes_panel_dss_resume,
 	.setup_update = sholes_panel_dss_setup_update,
 	.enable_te = sholes_panel_dss_enable_te,
-	.te_support = sholes_panel_dss_te_support,
+	//.te_support = sholes_panel_dss_te_support,
 	.set_rotate = sholes_panel_dss_rotate,
 	.set_mirror = sholes_panel_dss_mirror,
 	.run_test = sholes_panel_dss_run_test,
