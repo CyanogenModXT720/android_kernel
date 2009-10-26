@@ -190,7 +190,8 @@ static int lis331dlh_hw_init(struct lis331dlh_data *lis)
 static void lis331dlh_device_power_off(struct lis331dlh_data *lis)
 {
 	int err;
-	u8 buf[2] = { CTRL_REG4, PM_OFF };
+/*	u8 buf[2] = { CTRL_REG4, PM_OFF }; */
+	u8 buf[2] = { CTRL_REG1, PM_OFF };
 
 	err = lis331dlh_i2c_write(lis, buf, 1);
 	if (err < 0)

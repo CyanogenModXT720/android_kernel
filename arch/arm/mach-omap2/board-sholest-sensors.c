@@ -16,11 +16,15 @@
 #include <linux/input.h>
 #include <linux/sfh7743.h>
 #include <linux/bu52014hfv.h>
+#ifdef CONFIG_SENSORS_LIS331DLH
 #include <linux/lis331dlh.h>
+#endif
 #include <linux/delay.h>
 #include <linux/regulator/consumer.h>
 #include <linux/vib-gpio.h>
+#ifdef CONFIG_VIB_PWM
 #include <linux/vib-pwm.h>
+#endif
 
 #ifdef CONFIG_ARM_OF
 #include <mach/dt_path.h>
@@ -30,7 +34,9 @@
 #include <mach/mux.h>
 #include <mach/gpio.h>
 #include <mach/keypad.h>
+#ifdef CONFIG_VIB_PWM
 #include <mach/dmtimer.h>
+#endif
 
 #define SHOLEST_PROX_INT_GPIO		180
 #define SHOLEST_HF_NORTH_GPIO		10
@@ -40,9 +46,9 @@
 #define SHOLEST_VIBRATOR_GPIO		181
 #ifdef CONFIG_VIB_PWM
 #define SHOLEST_VIBRATOR_EN_GPIO	9
-#endif
 #define SHOLEST_LVIBRATOR_PERIOD	5714
 #define SHOLEST_LVIBRATOR_DUTY		2857
+#endif
 
 static struct regulator *sholest_vibrator_regulator;
 static int sholest_vibrator_initialization(void)
@@ -93,6 +99,7 @@ static struct platform_device sholest_vib_gpio = {
     },
 };
 
+#ifdef CONFIG_VIB_PWM
 static struct omap_dm_timer *vib_pwm_timer;
 static int sholest_lvibrator_initialization(void)
 {
@@ -106,7 +113,6 @@ static int sholest_lvibrator_initialization(void)
 	load_reg = timer_rate * SHOLEST_LVIBRATOR_PERIOD / 1000000;
 	cmp_reg = timer_rate * (SHOLEST_LVIBRATOR_PERIOD -
 				SHOLEST_LVIBRATOR_DUTY) / 1000000;
-	omap_dm_timer_enable(vib_pwm_timer);
 	omap_dm_timer_set_source(vib_pwm_timer, OMAP_TIMER_SRC_32_KHZ);
 	omap_dm_timer_set_load(vib_pwm_timer, 1, -load_reg);
 	omap_dm_timer_set_match(vib_pwm_timer, 1, -cmp_reg);
@@ -119,6 +125,7 @@ static int sholest_lvibrator_initialization(void)
 static void sholest_lvibrator_exit(void)
 {
 	omap_dm_timer_stop(vib_pwm_timer);
+	omap_dm_timer_disable(vib_pwm_timer);
 }
 
 static void sholest_lvibrator_power_on(void)
@@ -126,6 +133,9 @@ static void sholest_lvibrator_power_on(void)
 #ifdef CONFIG_VIB_PWM
 	gpio_set_value(SHOLEST_VIBRATOR_EN_GPIO, 1);
 #endif
+	if (vib_pwm_timer == NULL)
+		sholest_lvibrator_initialization();
+	omap_dm_timer_enable(vib_pwm_timer);
 	omap_dm_timer_start(vib_pwm_timer);
 }
 
@@ -135,6 +145,7 @@ static void sholest_lvibrator_power_off(void)
 	gpio_set_value(SHOLEST_VIBRATOR_EN_GPIO, 0);
 #endif
 	omap_dm_timer_stop(vib_pwm_timer);
+	omap_dm_timer_disable(vib_pwm_timer);
 }
 
 static struct vib_pwm_platform_data sholest_vib_pwm_data = {
@@ -152,6 +163,7 @@ static struct platform_device sholest_vib_pwm = {
 		.platform_data = &sholest_vib_pwm_data,
 	},
 };
+#endif
 
 static struct regulator *sholest_sfh7743_regulator;
 static int sholest_sfh7743_initialization(void)
@@ -203,6 +215,7 @@ static struct bu52014hfv_platform_data bu52014hfv_platform_data = {
 	.north_is_desk = 1,
 };
 
+#ifdef CONFIG_SENSORS_LIS331DLH
 struct lis331dlh_platform_data sholest_lis331dlh_data;
 static void __init sholest_lis331dlh_init(void)
 {
@@ -295,6 +308,7 @@ struct lis331dlh_platform_data sholest_lis331dlh_data = {
 	.negate_y	= 1,
 	.negate_z	= 1,
 };
+#endif
 
 static void __init sholest_akm8973_init(void)
 {
@@ -340,7 +354,9 @@ static struct platform_device *sholest_sensors[] __initdata = {
 	&sfh7743_platform_device,
 	&omap3430_hall_effect_dock,
 	&sholest_vib_gpio,
+#ifdef CONFIG_VIB_PWM
 	&sholest_vib_pwm,
+#endif
 };
 
 static void sholest_hall_effect_init(void)
@@ -360,6 +376,8 @@ void __init sholest_sensors_init(void)
 	sholest_hall_effect_init();
 	sholest_vibrator_init();
 	sholest_akm8973_init();
+#ifdef CONFIG_SENSORS_LIS331DLH
 	sholest_lis331dlh_init();
+#endif
 	platform_add_devices(sholest_sensors, ARRAY_SIZE(sholest_sensors));
 }

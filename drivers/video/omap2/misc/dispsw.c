@@ -295,9 +295,11 @@ static void dispsw_rotate(struct dispsw_osi *osi,
 	if (rotate == info->rotation)
 		return;
 
+#ifndef CONFIG_TVOUT_SHOLEST
 	/* Video plane rotation is handled else where */
 	if (osi->id != OMAP_DSS_GFX)
 		return;
+#endif
 
 	/* It is assumed that the GFX plane is not currently rotated */
 	if (info->rotation != 0)
@@ -1231,6 +1233,7 @@ static int __init dispsw_probe(struct platform_device *pdev)
 		gDev->osi[i].ovl = ovl;
 		ovl->set_overlay_info = dispsw_ovl_set_info_lock;
 		ovl->get_overlay_info = dispsw_ovl_get_info_lock;
+		gDev->osi[i].get_func(ovl, &gDev->osi[i].last_info);
 
 		if (gDev->osi[i].set_func == NULL ||
 				gDev->osi[i].get_func == NULL) {

@@ -62,8 +62,6 @@ struct cpcap_tta_det_data {
   unsigned char gpio_val;
 };
 
-static struct cpcap_device *misc_cpcap;
-
 static int cpcap_tta_ioctl(struct inode *inode,
 		struct file *file,
 		unsigned int cmd,
@@ -105,20 +103,11 @@ static int cpcap_tta_ioctl(struct inode *inode,
       enable_tta();
       mdelay(10);
       gpio_val = gpio_get_value(SHOLEST_TTA_CHRG_DET_N_GPIO);
-      retval = cpcap_regacc_read(misc_cpcap, CPCAP_REG_INTS2, &vbus);
-      if (retval)
-	return retval;
 
-      vbus  = ((vbus & CPCAP_BIT_VBUSVLD_S) ? 1 : 0);
-
-      if (!gpio_val) {
-		if (!vbus)
+      if (!gpio_val)
 			state = TTA_DETECTED;
-		else
+      else
 			state = TTA_NOT_DETECTED;
-      } else {
-      state = TTA_NOT_DETECTED;
-      }
 
       if (copy_to_user((void *)arg,
 		(void *)&state, sizeof(state)))
@@ -330,7 +319,6 @@ static int cpcap_tta_chgr_probe(struct platform_device *pdev)
   platform_set_drvdata(pdev, data);
   INIT_DELAYED_WORK(&data->work, tta_detection_work);
 
-  misc_cpcap = data->cpcap;  /* kept for misc device */
   retval = misc_register(&tta_dev);
   if (retval)
 	return -EFAULT;

@@ -211,6 +211,7 @@ static void omap_hwcontrol(struct mtd_info *mtd, int cmd, unsigned int ctrl)
 		__raw_writeb(cmd, info->nand.IO_ADDR_W);
 	}
 }
+}
 
 /*
  * omap_read_buf16 - read data from NAND controller into buffer
