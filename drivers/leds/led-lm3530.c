@@ -53,12 +53,9 @@ struct lm3530_data {
 };
 
 #ifdef CONFIG_LEDS_SHOLEST
-enum lm3530_als_circ_type {
-	ALS_INDOOR = 0,
-	ALS_OUTDOOR = 1
-};
-
-static lm3530_als_circ_type als_circ = ALS_INDOOR;
+#define ALS_INDOOR	0
+#define ALS_OUTDOOR	1
+static uint8_t als_circ = ALS_INDOOR;
 #endif
 
 struct lm3530_reg {
@@ -184,7 +181,7 @@ static int ld_lm3530_init_registers(struct lm3530_data *als_data)
 
 #ifdef CONFIG_LEDS_SHOLEST
 static int ld_lm3530_switch_als_circumstance(struct lm3530_data *als_data,
-					     lm3530_als_circ_type set_als)
+					     uint8_t set_als)
 {
 	uint8_t gen_conf = 0;
 
