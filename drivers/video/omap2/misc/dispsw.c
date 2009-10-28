@@ -387,7 +387,9 @@ static void dispsw_align(struct dispsw_osi *osi,
 		break;
 	case DISPSW_ALIGN_BOTTOM_CENTER:
 		x = dispsw_center_align(w, dw, &paddr, bpp);
-		y = dispsw_far_side_align(h, dh, &paddr, stride);
+		/* add 10 avoid bottom of subtitle is lost */
+		/* becauseof panel size difference 	*/
+		y = dispsw_far_side_align(h+10, dh, &paddr, stride);
 		break;
 	case DISPSW_ALIGN_BOTTOM_RIGHT:
 		x = dispsw_far_side_align(w, dw, &paddr, bpp);
