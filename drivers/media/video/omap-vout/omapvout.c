@@ -300,6 +300,17 @@ static void omapvout_free_resources(struct omapvout_device *vout)
 	kfree(vout);
 }
 
+#ifdef CONFIG_TVOUT_SHOLEST
+static int video_status;
+void set_video_status(int onoff)
+{
+  video_status = onoff;
+}
+int get_video_status(void)
+{
+  return video_status;
+}
+#endif
 /*=== V4L2 Interface Functions =========================================*/
 
 static int omapvout_open(struct file *file)
@@ -310,6 +321,9 @@ static int omapvout_open(struct file *file)
 
 	DBG("omapvout_open\n");
 
+#ifdef CONFIG_TVOUT_SHOLEST
+  set_video_status(1);
+#endif
 	vout = video_drvdata(file);
 
 	if (vout == NULL) {
@@ -389,7 +403,9 @@ static int omapvout_release(struct file *file)
 	struct omapvout_device *vout;
 
 	DBG("omapvout_release\n");
-
+#ifdef CONFIG_TVOUT_SHOLEST
+  set_video_status(0);
+#endif
 	vout = video_drvdata(file);
 
 	if (vout == NULL) {
