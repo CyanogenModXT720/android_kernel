@@ -153,4 +153,8 @@ struct dispsw_res {
 #define DISPSW_S_RES		_IOW(DISPSW_IOCTL_MAGIC, \
 				    DISPSW_IOCTL_BASE+4, struct dispsw_res)
 
+#ifdef CONFIG_TVOUT_SHOLEST
+extern int get_video_status(void);
+#endif
+
 #endif /* __DISPSW_H__ */
