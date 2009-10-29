@@ -544,14 +544,14 @@ static struct vkey sholest_touch_vkeys[] = {
 	},
 	{
 		.code		= KEY_HOME,
-		.center_x	= 162,
+		.center_x	= 168, /* 162 */
 		.center_y	= 906,
 		.width		= 89,
 		.height		= 57,
 	},
 	{
 		.code		= KEY_BACK,
-		.center_x	= 292,
+		.center_x	= 304, /* 292 */
 		.center_y	= 906,
 		.width		= 89,
 		.height		= 57,
@@ -1571,7 +1571,7 @@ static int __init sholest_omap_mdm_ctrl_init(void)
 static struct omap_vout_config sholest_vout_platform_data = {
 	.max_width = 1280,
 	.max_height = 720,
-	.max_buffer_size = 0x1C2000,
+	.max_buffer_size = 0x1C3000,
 	.num_buffers = 8,
 	.num_devices = 2,
 	.device_ids = {1, 2},
@@ -1717,6 +1717,17 @@ static void __init sholest_power_off_init(void)
 	platform_driver_register(&cpcap_charger_connected_driver);
 }
 
+#if defined(CONFIG_VIDEO_MIPI_DLI_TEST)
+static struct platform_device sholest_mipi_dli_device = {
+	.name = "mipi_dli_tester",
+	.id = -1,
+};
+static void __init sholest_mipi_dli_init(void)
+{
+	platform_device_register(&sholest_mipi_dli_device);
+}
+#endif
+
 static void __init sholest_init(void)
 {
 	int ret = 0;
@@ -1765,6 +1776,9 @@ static void __init sholest_init(void)
 	sholest_gadget_init();
 #ifdef CONFIG_MOT_FEAT_MDTV
 	sholest_mdtv_init();
+#endif
+#if defined(CONFIG_VIDEO_MIPI_DLI_TEST)
+	sholest_mipi_dli_init();
 #endif
 #ifdef CONFIG_MEM_DUMP
 	reset_proc_init();

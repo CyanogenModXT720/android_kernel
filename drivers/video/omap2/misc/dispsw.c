@@ -387,7 +387,9 @@ static void dispsw_align(struct dispsw_osi *osi,
 		break;
 	case DISPSW_ALIGN_BOTTOM_CENTER:
 		x = dispsw_center_align(w, dw, &paddr, bpp);
-		y = dispsw_far_side_align(h, dh, &paddr, stride);
+		/* add 10 avoid bottom of subtitle is lost */
+		/* becauseof panel size difference 	*/
+		y = dispsw_far_side_align(h+10, dh, &paddr, stride);
 		break;
 	case DISPSW_ALIGN_BOTTOM_RIGHT:
 		x = dispsw_far_side_align(w, dw, &paddr, bpp);
@@ -477,10 +479,19 @@ static int dispsw_ovl_set_info(struct omap_overlay *ovl,
 			osi->force_cnt--;
 			info->enabled = osi->stored_enable;
 		}
-
-		if (info->enabled && osi->override)
+		if (info->enabled && osi->override) {
+#ifndef CONFIG_TVOUT_SHOLEST
 			dispsw_override_ovl(osi, info);
+#else
+			if (ovl->id == OMAP_DSS_VIDEO2) {
+				if (get_video_status() != 1)
+					dispsw_override_ovl(osi, info);
+				}
+			else
+				dispsw_override_ovl(osi, info);
 
+#endif
+		}
 		rc = osi->set_func(ovl, info);
 	}
 
