@@ -125,10 +125,6 @@ static int __init sholest_dt_kp_init(void)
 			sholest_keypad_matrix_info.keymap = \
 				(unsigned short *)kp_prop;
 
-		kp_prop = of_get_property(kp_node, DT_PROP_KEYPAD_NAME, NULL);
-		if (kp_prop != NULL)
-			sholest_keypad_data.name = kp_prop;
-
 		of_node_put(kp_node);
 	}
 

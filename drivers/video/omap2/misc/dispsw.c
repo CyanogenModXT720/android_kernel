@@ -486,9 +486,10 @@ static int dispsw_ovl_set_info(struct omap_overlay *ovl,
 			if (ovl->id == OMAP_DSS_VIDEO2) {
 				if (get_video_status() != 1)
 					dispsw_override_ovl(osi, info);
-				else
-					dispsw_override_ovl(osi, info);
 				}
+			else
+				dispsw_override_ovl(osi, info);
+
 #endif
 		}
 		rc = osi->set_func(ovl, info);

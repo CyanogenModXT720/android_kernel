@@ -544,14 +544,14 @@ static struct vkey sholest_touch_vkeys[] = {
 	},
 	{
 		.code		= KEY_HOME,
-		.center_x	= 162,
+		.center_x	= 168, /* 162 */
 		.center_y	= 906,
 		.width		= 89,
 		.height		= 57,
 	},
 	{
 		.code		= KEY_BACK,
-		.center_x	= 292,
+		.center_x	= 304, /* 292 */
 		.center_y	= 906,
 		.width		= 89,
 		.height		= 57,
