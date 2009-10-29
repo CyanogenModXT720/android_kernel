@@ -322,6 +322,12 @@ config VIDEO_MIPI_INTERFACE
 	---help---
 	  This is for MIPI INTERFACE functiionality
 
+config VIDEO_MIPI_DLI_TEST
+	tristate "MIPI INTERFACE functionality"
+	depends on MIPI_INTERFACE && VIDEO_V4L2
+	---help---
+	  This is for MIPI INTERFACE functiionality
+
 config VIDEO_OV8810
 	tristate "OV8810 raw sensor driver (8MP)"
 	depends on I2C && VIDEO_V4L2

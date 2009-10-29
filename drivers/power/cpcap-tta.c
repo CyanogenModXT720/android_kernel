@@ -43,13 +43,15 @@ enum cpcap_tta_det_state {
    TTA_CONFIG,
    TTA_ATTACHED,
    TTA_DETACHED,
-   FTM_CABLE
+   FTM_CABLE,
+   INVALID_CABLE
 };
 
 struct read_sense_data {
   unsigned short clear_int:1;
   unsigned short dplus:1;
   unsigned short dminus:1;
+  unsigned short vbus_2v0:1;
   unsigned short vbus_4v4:1;
 };
 
@@ -112,7 +114,6 @@ static int cpcap_tta_ioctl(struct inode *inode,
       if (copy_to_user((void *)arg,
 		(void *)&state, sizeof(state)))
 	retval = -EFAULT;
-
     }
     break;
 
@@ -146,6 +147,7 @@ static int get_sense(struct cpcap_tta_det_data *data)
 		return retval;
 
   data->sense.vbus_4v4  = ((value & CPCAP_BIT_VBUSVLD_S) ? 1 : 0);
+  data->sense.vbus_2v0  = ((value & CPCAP_BIT_SESSVLD_S) ? 1 : 0);
 
   retval = cpcap_regacc_read(cpcap, CPCAP_REG_INTS4, &value);
   if (retval)
@@ -191,16 +193,18 @@ static void tta_detection_work(struct work_struct *work)
       get_sense(data);
 
 	if (!(data->gpio_val)) {
-		if (!(data->sense.vbus_4v4))
-			data->state = TTA_ATTACHED;
-		else
+		if (!(data->sense.vbus_4v4)) {
+			if (!(data->sense.vbus_2v0))
+				data->state = TTA_ATTACHED;
+			else
+				data->state = INVALID_CABLE;
+		} else {
 			data->state = FTM_CABLE;
-
+		}
 	schedule_delayed_work(&data->work, msecs_to_jiffies(0));
 	} else {
 	data->state = TTA_NONE;
 	}
-
       break;
 
   case TTA_ATTACHED:
@@ -241,6 +245,7 @@ static void tta_detection_work(struct work_struct *work)
       }
       break;
 
+  case INVALID_CABLE:
   case FTM_CABLE:
       data->state = TTA_NONE;
       disable_tta();

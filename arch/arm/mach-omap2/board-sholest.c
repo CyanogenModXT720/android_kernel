@@ -1717,6 +1717,17 @@ static void __init sholest_power_off_init(void)
 	platform_driver_register(&cpcap_charger_connected_driver);
 }
 
+#if defined(CONFIG_VIDEO_MIPI_DLI_TEST)
+static struct platform_device sholest_mipi_dli_device = {
+	.name = "mipi_dli_tester",
+	.id = -1,
+};
+static void __init sholest_mipi_dli_init(void)
+{
+	platform_device_register(&sholest_mipi_dli_device);
+}
+#endif
+
 static void __init sholest_init(void)
 {
 	int ret = 0;
@@ -1765,6 +1776,9 @@ static void __init sholest_init(void)
 	sholest_gadget_init();
 #ifdef CONFIG_MOT_FEAT_MDTV
 	sholest_mdtv_init();
+#endif
+#if defined(CONFIG_VIDEO_MIPI_DLI_TEST)
+	sholest_mipi_dli_init();
 #endif
 #ifdef CONFIG_MEM_DUMP
 	reset_proc_init();

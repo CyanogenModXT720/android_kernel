@@ -1808,8 +1808,15 @@ void isp_csi2_isr(void)
 	if (csi2_irqstatus & ISPCSI2_IRQSTATUS_ECC_CORRECTION_IRQ)
 		printk(KERN_DEBUG "CSI2: ECC correction done\n");
 
+#if defined(CONFIG_VIDEO_MIPI_DLI_TEST)
+	if (csi2_irqstatus & ISPCSI2_IRQSTATUS_ECC_NO_CORRECTION_IRQ) {
+		printk(KERN_ERR "CSI2: ECC correction failed\n");
+		ecc_counter++;
+	}
+#else
 	if (csi2_irqstatus & ISPCSI2_IRQSTATUS_ECC_NO_CORRECTION_IRQ)
 		printk(KERN_ERR "CSI2: ECC correction failed\n");
+#endif
 
 	if (csi2_irqstatus & ISPCSI2_IRQSTATUS_COMPLEXIO2_ERR_IRQ)
 		printk(KERN_ERR "CSI2: ComplexIO #2 failed\n");

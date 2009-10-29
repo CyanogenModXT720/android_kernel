@@ -303,8 +303,8 @@ static struct regulator_init_data cpcap_regulator[CPCAP_NUM_REGULATORS] = {
 	},
 	[CPCAP_VWLAN2] = {
 		.constraints = {
-			.min_uV			= 3000000,
-			.max_uV			= 3000000,
+			.min_uV			= 3300000,
+			.max_uV			= 3300000,
 			.valid_ops_mask		= REGULATOR_CHANGE_STATUS,
 			.apply_uV		= 1,
 		},
