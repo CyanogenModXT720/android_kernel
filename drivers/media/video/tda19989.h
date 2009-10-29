@@ -1,9 +1,17 @@
+/*
+ * Copyright (C) 2009 Motorola Inc.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ */
+
 #ifndef __INCLUDED_TDA19989__
 #define __INCLUDED_TDA19989__
 
 #include <linux/types.h>
 
-/*#define TMFL_CEC_AVAILABLE*/
+#define TDA19989_CEC_AVAILABLE
 
 #define TDA19989_I2C_ARG_MAX_DATA	(128)
 
@@ -24,9 +32,11 @@ struct i2cMsgArg {
 				    TDA19989_IOCTL_BASE+2, int)
 #define TDA19989_INT_ENABLE	_IOW(TDA19989_IOCTL_MAGIC, \
 				    TDA19989_IOCTL_BASE+3, int)
-#ifdef TMFL_CEC_AVAILABLE
+#ifdef TDA19989_CEC_AVAILABLE
 #define TDA19989_CEC_CAL_TIME	_IO(TDA19989_IOCTL_MAGIC, \
 				    TDA19989_IOCTL_BASE+4)
+#define TDA19989_CEC_REG_ENABLE _IOW(TDA19989_IOCTL_MAGIC, \
+				    TDA19989_IOCTL_BASE+5, int)
 #endif
 
 #endif
