@@ -323,8 +323,8 @@ config VIDEO_MIPI_INTERFACE
 	  This is for MIPI INTERFACE functiionality
 
 config VIDEO_MIPI_DLI_TEST
-	tristate "MIPI INTERFACE functionality"
-	depends on MIPI_INTERFACE && VIDEO_V4L2
+	tristate "MIPI DLI TEST functionality"
+	depends on VIDEO_MIPI_INTERFACE && VIDEO_V4L2
 	---help---
 	  This is for MIPI INTERFACE functiionality
 
