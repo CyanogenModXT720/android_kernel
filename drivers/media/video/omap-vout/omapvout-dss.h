@@ -26,8 +26,12 @@ struct omapvout_dss_vrfb {
 	/* VRFB dma config data */
 	u32 en;
 	u32 fn;
+	u32 src_mode;
+	u32 src_ei;
+	u32 src_fi;
 	u32 dst_ei;
 	u32 dst_fi;
+	bool decimate_src;
 
 	/* VRFB dma channel data */
 	int dma_id;
