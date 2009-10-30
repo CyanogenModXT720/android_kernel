@@ -722,6 +722,11 @@ int cpcap_uc_stop(struct cpcap_device *cpcap, enum cpcap_macro macro);
 unsigned char cpcap_uc_status(struct cpcap_device *cpcap,
 			      enum cpcap_macro macro);
 
+#if defined(CONFIG_LEDS_FLASH_RESET)
+int cpcap_direct_misc_write(unsigned short reg, unsigned short value,\
+							unsigned short mask);
+#endif
+
 #ifdef CONFIG_TTA_CHARGER
 void enable_tta(void);
 void disable_tta(void);

@@ -39,6 +39,10 @@
 #if defined(CONFIG_VIDEO_OV8810) || defined(CONFIG_VIDEO_OV8810_MODULE)
 #include <../drivers/media/video/ov8810.h>
 #include <../drivers/media/video/oldisp/ispcsi2.h>
+#if defined(CONFIG_LEDS_FLASH_RESET)
+#include <linux/spi/cpcap.h>
+#include <linux/spi/cpcap-regbits.h>
+#endif
 #define OV8810_CSI2_CLOCK_POLARITY	0	/* +/- pin order */
 #define OV8810_CSI2_DATA0_POLARITY	0	/* +/- pin order */
 #define OV8810_CSI2_DATA1_POLARITY	0	/* +/- pin order */
@@ -311,6 +315,10 @@ static int ov8810_sensor_power_set(struct device *dev, enum v4l2_power power)
 	/*Basic turn on operation is will be first one time executed.*/
 	static bool regulator_poweron = 0;
 	
+#if defined(CONFIG_LEDS_FLASH_RESET)
+	static bool flash_detected;
+#endif
+
 	switch (power) {
 	case V4L2_POWER_OFF:
 		/* Release pm constraints */
@@ -339,6 +347,13 @@ static int ov8810_sensor_power_set(struct device *dev, enum v4l2_power power)
 		gpio_set_value(GPIO_OV8810_RESET, 0);
 		gpio_set_value(GPIO_OV8810_STANDBY, 0);
 
+#if defined(CONFIG_LEDS_FLASH_RESET)
+		/*If Xenon flash module didn't detected,
+			FLASH_RESET pin control.*/
+		if (flash_detected == false)
+			cpcap_direct_misc_write(CPCAP_REG_GPIO0,\
+				0, CPCAP_BIT_GPIO0DRV);
+#endif
 		gpio_free(GPIO_OV8810_RESET);
 		gpio_free(GPIO_OV8810_STANDBY);
 	break;
@@ -445,6 +460,15 @@ static int ov8810_sensor_power_set(struct device *dev, enum v4l2_power power)
 			/* nRESET is active LOW. set HIGH to release reset */
 			gpio_set_value(GPIO_OV8810_RESET, 1);
 			
+#if defined(CONFIG_LEDS_FLASH_RESET)
+			flash_detected = bd7885_device_detection();
+
+			/*If Xenon flash module didn't detected,
+				FLASH_RESET pin control.*/
+			if (flash_detected == false)
+				cpcap_direct_misc_write(CPCAP_REG_GPIO0,\
+					CPCAP_BIT_GPIO0DRV, CPCAP_BIT_GPIO0DRV);
+#endif
 			/* give sensor sometime to get out of the reset.
 			 * Datasheet says 2400 xclks. At 6 MHz, 400 usec is
 			 * enough

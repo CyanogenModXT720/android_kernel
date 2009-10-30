@@ -514,6 +514,18 @@ static int adc_ioctl(unsigned int cmd, unsigned long arg)
 	return retval;
 }
 
+#if defined(CONFIG_LEDS_FLASH_RESET)
+int cpcap_direct_misc_write(unsigned short reg, unsigned short value,\
+						unsigned short mask)
+{
+	int retval = -EINVAL;
+
+	retval = cpcap_regacc_write(misc_cpcap, reg, value, mask);
+
+	return retval;
+}
+#endif
+
 static int ioctl(struct inode *inode,
 		 struct file *file, unsigned int cmd, unsigned long arg)
 {
