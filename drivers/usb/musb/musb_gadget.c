@@ -433,6 +433,16 @@ void musb_g_tx(struct musb *musb, u8 epnum)
 
 	dma = is_dma_capable() ? musb_ep->dma : NULL;
 	do {
+		/* CSR cannot be zero. If we encounter this condition, just free
+			 the request and exit */
+		if ((dma != NULL) && !csr) {
+			printk(KERN_INFO "TXCSR is zero for %s \n",
+						 musb_ep->end_point.name);
+			if (request)
+				musb_g_giveback(musb_ep, request, -EPIPE);
+			break;
+		}
+
 		/* REVISIT for high bandwidth, MUSB_TXCSR_P_INCOMPTX
 		 * probably rates reporting as a host error
 		 */
