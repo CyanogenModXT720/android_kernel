@@ -233,6 +233,12 @@ config LEDS_AF_LED
 	help
 	  This option enables support for LEDs connected to CPCAP.
 	  
+config LEDS_FLASH_RESET
+	tristate "LED Support for FLASH_RESET pin control"
+	depends on LEDS_CLASS && LEDS_BD7885
+	help
+	  This option enables support for LED's FLASH_RESET pin operation.
+
 comment "LED Triggers"
 
 config LEDS_TRIGGERS
