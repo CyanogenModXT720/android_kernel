@@ -40,8 +40,10 @@ static int sholest_panel_enable(struct omap_dss_device *dssdev)
 			printk(KERN_ERR "failed to get regulator for display");
 			return PTR_ERR(display_regulator);
 		}
+/*#ifndef CONFIG_FB_OMAP2_MTD_LOGO*/
 		regulator_enable(display_regulator);
 		return 0;
+/*#endif*/
 	}
 
 	regulator_enable(display_regulator);
@@ -231,7 +233,7 @@ static struct dispsw_mr_support sholest_dispsw_hdtv_4 = {
 };
 
 #ifdef CONFIG_TVOUT_SHOLEST
-static struct dispsw_mr_support sholest_dispsw_tv = {
+static struct dispsw_mr_support sholest_dispsw_tv_ntsc = {
 	.dev_name = "tv",
 	.res_name = "ntsc",
 	.dev_timing = {
@@ -247,12 +249,31 @@ static struct dispsw_mr_support sholest_dispsw_tv = {
 	},
 	.panel_config = (OMAP_DSS_LCD_TFT|OMAP_DSS_LCD_IVS|OMAP_DSS_LCD_IHS),
 };
+
+static struct dispsw_mr_support sholest_dispsw_tv_pal = {
+	.dev_name = "tv",
+	.res_name = "pal",
+	.dev_timing = {
+    .x_res = 720,
+    .y_res = 574,
+    .pixel_clock = 13500,
+    .hsw = 64,
+    .hfp = 12,
+    .hbp = 68,
+    .vsw = 5,
+    .vfp = 5,
+    .vbp = 41,
+	},
+	.panel_config = (OMAP_DSS_LCD_TFT|OMAP_DSS_LCD_IVS|OMAP_DSS_LCD_IHS),
+};
 #endif
+
 static struct dispsw_mr_support *sholest_dispsw_resolutions[] = {
 	&sholest_dispsw_hdtv_2,
 	&sholest_dispsw_hdtv_4,
 #ifdef CONFIG_TVOUT_SHOLEST
-    &sholest_dispsw_tv,
+  &sholest_dispsw_tv_ntsc,
+  &sholest_dispsw_tv_pal,
 #endif
 };
 

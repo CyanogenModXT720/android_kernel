@@ -10,9 +10,11 @@
 #include <linux/pagemap.h>
 #include <linux/platform_device.h>
 #include <linux/workqueue.h>
+#include <linux/sched.h>
 
 #include <mach/display.h>
 #include <mach/dma.h>
+#include <asm/atomic.h>
 
 #include "panel-sholes.h"
 
@@ -41,6 +43,11 @@
 #define EDISCO_SHORT_WRITE_1	0x23
 #define EDISCO_SHORT_WRITE_0	0x13
 
+#define PANEL_OFF     0x0
+#define PANEL_ENABLED 0x1
+#define PANEL_UPDATED 0x2
+#define PANEL_ON      0x3
+
 static struct omap_video_timings sholes_panel_timings = {
 	.x_res		= 480,
 	.y_res		= 854,
@@ -57,6 +64,8 @@ static struct omap_video_timings sholes_panel_timings = {
 struct sholes_data {
 	struct work_struct work;
 	struct omap_dss_device *dssdev;
+	wait_queue_head_t wait;
+	atomic_t state;
 };
 
 #define DEVICE_NAME  "lcd-sholes"
@@ -80,16 +89,35 @@ static struct omap_dss_device *gDssdev;
 
 /*=== DSS Interface Functions =======================================*/
 
+static bool is_updated_or_off(struct sholes_data *data, int *state)
+{
+	/* if state is updated or off, return with lock held */
+	*state = atomic_cmpxchg(&data->state, PANEL_UPDATED, PANEL_ON);
+	if (*state == PANEL_UPDATED || *state == PANEL_OFF)
+		return true;
+	return false;
+}
+
 static void sholes_panel_display_on(struct work_struct *work)
 {
 	struct sholes_data *sholes_data = container_of(work, struct sholes_data,
 						       work);
-	u8 data;
+	u8 data[7];
+	int state;
+
+	wait_event(sholes_data->wait, is_updated_or_off(sholes_data, &state));
+
+	if (state == PANEL_OFF) {
+		DBG("cancel panel on\n");
+		return;
+	}
+
+	DBG("panel_display_on\n");
 
 	sholes_data->dssdev->sync(sholes_data->dssdev);
-	data = EDISCO_CMD_SET_DISPLAY_ON;
+	data[0] = EDISCO_CMD_SET_DISPLAY_ON;
 	dsi_bus_lock();
-	dsi_vc_dcs_write(EDISCO_CMD_VC, &data, 1);
+	dsi_vc_dcs_write(EDISCO_CMD_VC, data, 1);
 	dsi_bus_unlock();
 }
 
@@ -107,11 +135,11 @@ static int sholes_panel_dss_probe(struct omap_dss_device *dssdev)
 	if (!data)
 		return -ENOMEM;
 	INIT_WORK(&data->work, sholes_panel_display_on);
-	// init_waitqueue_head(&data->wait);
+	init_waitqueue_head(&data->wait);
 #ifdef CONFIG_FB_OMAP2_MTD_LOGO
-//	atomic_set(&data->state, PANEL_OFF);
+	atomic_set(&data->state, PANEL_OFF);
 #else
-//	atomic_set(&data->state, PANEL_ON);
+	atomic_set(&data->state, PANEL_ON);
 #endif
 	data->dssdev = dssdev;
 	dssdev->data = data;
@@ -120,6 +148,11 @@ static int sholes_panel_dss_probe(struct omap_dss_device *dssdev)
 
 static void sholes_panel_dss_remove(struct omap_dss_device *dssdev)
 {
+	struct sholes_data *data = (struct sholes_data *) dssdev->data;
+
+	atomic_set(&data->state, PANEL_OFF);
+	wake_up(&data->wait);
+	cancel_work_sync(&data->work);
 	kfree(dssdev->data);
 	return;
 }
@@ -127,6 +160,7 @@ static void sholes_panel_dss_remove(struct omap_dss_device *dssdev)
 static int sholes_panel_dss_enable(struct omap_dss_device *dssdev)
 {
 	u8 data[7];
+	struct sholes_data *sholes_data = (struct sholes_data *) dssdev->data;
 	int ret;
 
 	DBG("sholes_panel_dss_enable\n");
@@ -138,6 +172,10 @@ static int sholes_panel_dss_enable(struct omap_dss_device *dssdev)
 	}
 
 	mutex_lock(&gDev->mtx);
+	if (gDev->fod_en) {
+		atomic_set(&sholes_data->state, PANEL_OFF);
+		wake_up(&sholes_data->wait);
+	}
 	gDev->dss_en = 1;
 	gDev->panel_en = 1;
 	mutex_unlock(&gDev->mtx);
@@ -199,7 +237,11 @@ static int sholes_panel_dss_enable(struct omap_dss_device *dssdev)
 
 	mdelay(200);
 
-	schedule_work(&((struct sholes_data *)dssdev->data)->work);
+	if (atomic_cmpxchg(&sholes_data->state, PANEL_OFF, PANEL_ENABLED) ==
+		    PANEL_OFF) {
+		DBG("panel enabled\n");
+		schedule_work(&sholes_data->work);
+	}
 
 	return 0;
 error:
@@ -209,6 +251,12 @@ error:
 static void sholes_panel_disable(struct omap_dss_device *dssdev)
 {
 	u8 data[1];
+	struct sholes_data *sholes_data = (struct sholes_data *) dssdev->data;
+
+	atomic_set(&sholes_data->state, PANEL_OFF);
+	wake_up(&sholes_data->wait);
+	cancel_work_sync(&sholes_data->work);
+	DBG("panel off\n");
 
 	data[0] = EDISCO_CMD_SET_DISPLAY_OFF;
 	dsi_vc_dcs_write(EDISCO_CMD_VC, data, 1);
@@ -245,9 +293,15 @@ static void sholes_panel_dss_disable(struct omap_dss_device *dssdev)
 static void sholes_panel_dss_setup_update(struct omap_dss_device *dssdev,
 				      u16 x, u16 y, u16 w, u16 h)
 {
-
 	u8 data[5];
 	int ret;
+	struct sholes_data *sholes_data = (struct sholes_data *) dssdev->data;
+
+	if (atomic_cmpxchg(&sholes_data->state, PANEL_ENABLED,
+				PANEL_UPDATED) == PANEL_ENABLED) {
+		DBG("panel updated\n");
+		wake_up(&sholes_data->wait);
+	}
 
 	/* set page, column address */
 	data[0] = EDISCO_CMD_SET_PAGE_ADDRESS;
@@ -320,11 +374,6 @@ static int sholes_panel_dss_resume(struct omap_dss_device *dssdev)
 	return sholes_panel_dss_enable(dssdev);
 }
 
-static bool sholes_panel_dss_te_support(struct omap_dss_device *dssdev)
-{
-	return true;
-}
-
 static struct omap_dss_driver sholes_panel_dss_driver = {
 	.probe = sholes_panel_dss_probe,
 	.remove = sholes_panel_dss_remove,
@@ -335,7 +384,6 @@ static struct omap_dss_driver sholes_panel_dss_driver = {
 	.resume = sholes_panel_dss_resume,
 	.setup_update = sholes_panel_dss_setup_update,
 	.enable_te = sholes_panel_dss_enable_te,
-	//.te_support = sholes_panel_dss_te_support,
 	.set_rotate = sholes_panel_dss_rotate,
 	.set_mirror = sholes_panel_dss_mirror,
 	.run_test = sholes_panel_dss_run_test,

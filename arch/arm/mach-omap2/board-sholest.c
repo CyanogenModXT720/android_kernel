@@ -124,7 +124,6 @@
 #define SHOLEST_POWER_OFF_GPIO		176
 #define SHOLEST_BPWAKE_STROBE_GPIO	157
 #define SHOLEST_APWAKE_TRIGGER_GPIO	141
-#define SHOLEST_LM_3530_EN_GPIO     27
 #define DIE_ID_REG_BASE			(L4_WK_34XX_PHYS + 0xA000)
 #define DIE_ID_REG_OFFSET		0x218
 #define MAX_USB_SERIAL_NUM		17
@@ -240,12 +239,16 @@ static struct platform_device usb_mass_storage_device = {
 
 static int cpcap_usb_connected_probe(struct platform_device *pdev)
 {
+	/* Wake up MUSB from lowpower state */
+	musb_disable_idle(1);
 	android_usb_set_connected(1);
 	return 0;
 }
 
 static int cpcap_usb_connected_remove(struct platform_device *pdev)
 {
+	/* Enable low power state for MUSB */
+	musb_disable_idle(0);
 	android_usb_set_connected(0);
 	return 0;
 }
@@ -531,17 +534,6 @@ static void sholest_als_init(void)
 	omap_cfg_reg(AC27_34XX_GPIO92);
 }
 
-static void sholest_misc_init(void)
-{
-    printk(KERN_INFO "%s:Initializing\n", __func__);
-
-    if (gpio_request(SHOLEST_LM_3530_EN_GPIO, "led-enable") >= 0)
-    {
-        gpio_direction_output(SHOLEST_LM_3530_EN_GPIO, 0);
-        gpio_set_value(SHOLEST_LM_3530_EN_GPIO, 1);
-    }
-}
-
 static struct vkey sholest_touch_vkeys[] = {
 	{
 		.code		= KEY_MENU,
@@ -552,14 +544,14 @@ static struct vkey sholest_touch_vkeys[] = {
 	},
 	{
 		.code		= KEY_HOME,
-		.center_x	= 162,
+		.center_x	= 168, /* 162 */
 		.center_y	= 906,
 		.width		= 89,
 		.height		= 57,
 	},
 	{
 		.code		= KEY_BACK,
-		.center_x	= 292,
+		.center_x	= 304, /* 292 */
 		.center_y	= 906,
 		.width		= 89,
 		.height		= 57,
@@ -799,15 +791,15 @@ static struct lm3530_platform_data omap3430_als_light_data = {
 	.als_zone_info = 0x00,
 	.als_resistor_sel = 0x11, /* 13.531kOhm */
 	.brightness_control = 0x00,
-	.zone_boundary_0 = 0x33,
-	.zone_boundary_1 = 0x66,
-	.zone_boundary_2 = 0x99,
-	.zone_boundary_3 = 0xCC,
+	.zone_boundary_0 = 0x11,
+	.zone_boundary_1 = 0x3D,
+	.zone_boundary_2 = 0x6D,
+	.zone_boundary_3 = 0x9D,
 	.zone_target_0 = 0x19,
-	.zone_target_1 = 0x33,
-	.zone_target_2 = 0x4c,
-	.zone_target_3 = 0x66,
-	.zone_target_4 = 0x7f,
+	.zone_target_1 = 0x31,
+	.zone_target_2 = 0x31,
+	.zone_target_3 = 0x31,
+	.zone_target_4 = 0x53,
 	.manual_current = 0x33,
 	.upper_curr_sel = 5,
 	.lower_curr_sel = 2,
@@ -820,7 +812,7 @@ static struct lm3554_platform_data sholest_camera_flash = {
 	.flash_duration_def = 0x28,
 	.config_reg_1_def = 0xe0,
 	.config_reg_2_def = 0xf0,
-	.vin_monitor_def = 0x03,
+	.vin_monitor_def = 0x01,
 	.gpio_reg_def = 0x0,
 };
 
@@ -1579,8 +1571,8 @@ static int __init sholest_omap_mdm_ctrl_init(void)
 static struct omap_vout_config sholest_vout_platform_data = {
 	.max_width = 1280,
 	.max_height = 720,
-	.max_buffer_size = 0x1C2000,
-	.num_buffers = 6,
+	.max_buffer_size = 0x1C3000,
+	.num_buffers = 8,
 	.num_devices = 2,
 	.device_ids = {1, 2},
 };
@@ -1725,6 +1717,17 @@ static void __init sholest_power_off_init(void)
 	platform_driver_register(&cpcap_charger_connected_driver);
 }
 
+#if defined(CONFIG_VIDEO_MIPI_DLI_TEST)
+static struct platform_device sholest_mipi_dli_device = {
+	.name = "mipi_dli_tester",
+	.id = -1,
+};
+static void __init sholest_mipi_dli_init(void)
+{
+	platform_device_register(&sholest_mipi_dli_device);
+}
+#endif
+
 static void __init sholest_init(void)
 {
 	int ret = 0;
@@ -1748,7 +1751,6 @@ static void __init sholest_init(void)
 	sholest_spi_init();
 	sholest_flash_init();
 	sholest_serial_init();
-    sholest_misc_init();
 	sholest_als_init();
 	sholest_panel_init();
 	sholest_sensors_init();
@@ -1775,8 +1777,11 @@ static void __init sholest_init(void)
 #ifdef CONFIG_MOT_FEAT_MDTV
 	sholest_mdtv_init();
 #endif
+#if defined(CONFIG_VIDEO_MIPI_DLI_TEST)
+	sholest_mipi_dli_init();
+#endif
 #ifdef CONFIG_MEM_DUMP
-    reset_proc_init();
+	reset_proc_init();
 #endif
 }
 

@@ -56,6 +56,9 @@
 #define LM3530_MAX_LED_VALUE	0xFF
 #define LM3530_MANUAL_VALUE		0x64
 
+#define LM3530_ALS_ZONE_MAX     0x4
+#define LM3530_ALS_ZONE_MIN     0x0
+
 #ifdef __KERNEL__
 struct lm3530_platform_data {
 	u8  power_up_gen_config;

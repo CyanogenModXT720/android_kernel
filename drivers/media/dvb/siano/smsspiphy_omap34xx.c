@@ -202,11 +202,15 @@ int smsmdtv_power_control(int pwrup_enable)
 	ret = omap_cfg_reg(AD3_34XX_MDTV_CS_ON);
 	ret = omap_cfg_reg(AA3_34XX_MDTV_CLK_ON);
 
-	/* PWDN High */
+	/* PWDN Output High */
+	omap_cfg_reg(V8_34XX_GPIO53_OUT);
+
 	gpio_set_value(MDTV_PWDN_GPIO, 1);
 	udelay(20);  /* at least, T = 10usec */
 
-	/* Reset High */
+	/* Reset Output High */
+	omap_cfg_reg(U8_34XX_GPIO54_OUT);
+
 	gpio_set_value(MDTV_RESET_N_GPIO, 1);
 	udelay(20);  /* at least, T = 10usec */
 
@@ -237,6 +241,12 @@ int smsmdtv_power_control(int pwrup_enable)
 	ret = omap_cfg_reg(AD4_34XX_MDTV_SOMI_OFF);
 	ret = omap_cfg_reg(AD3_34XX_MDTV_CS_OFF);
 	ret = omap_cfg_reg(AA3_34XX_MDTV_CLK_OFF);
+
+	/* PWDN Input No-pull */
+	omap_cfg_reg(V8_34XX_GPIO53_INPUT);
+
+	/* Reset Input No-pull */
+	omap_cfg_reg(U8_34XX_GPIO54_INPUT);
 	}
 
   if (ret < 0)

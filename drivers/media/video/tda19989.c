@@ -1,3 +1,12 @@
+/*
+ * drivers/media/video/tda19989.c
+ *
+ * Copyright (C) 2009 Motorola Inc.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ */
 
 #include <linux/version.h>
 #include <linux/kernel.h>
@@ -33,6 +42,9 @@
 /* TODO: These GPIO numbers should really be part of the platform data */
 #define HDMI_INT_PIN_GPIO_NUM	25
 #define HDMI_PWR_EN_GPIO_NUM	26
+#ifdef TDA19989_CEC_AVAILABLE
+#define MMC_DETECT_GPIO_NUM 163
+#endif
 
 struct tda19989_data {
 	struct mutex  mtx; /* Lock for all struct accesses */
@@ -58,6 +70,7 @@ struct tda19989_data {
 #ifdef TDA19989_CEC_AVAILABLE
 	struct regulator *cec_regulator;
 #endif
+	int cec_use_reg;
 };
 
 static struct tda19989_data *gDev;
@@ -96,15 +109,24 @@ static int i2cTda19989_write(struct i2cMsgArg *pArg)
 	pData = &pArg->Data[0];
 
 	gDev->client->addr = pArg->slaveAddr;
-	while (length--) {
-		rc = i2c_smbus_write_byte_data(gDev->client, reg, *pData);
-		if (rc != 0) {
-			printk(KERN_ERR "I2cTda19989_write error [%d]\n", rc);
-			break;
-		}
 
-		reg++;
-		pData++;
+	if ((length > 1) && (pArg->slaveAddr == 0x34)) {
+		rc = i2c_smbus_write_i2c_block_data(
+				gDev->client, reg, length, pData);
+		if (rc != 0) {
+			printk(KERN_ERR "i2cTda19989 W(B) err:%d\n", rc);
+		}
+	} else {
+		while (length--) {
+			rc = i2c_smbus_write_byte_data(
+					gDev->client, reg, *pData);
+			if (rc != 0) {
+				printk(KERN_ERR "I2cTda19989 W err:%d\n", rc);
+				break;
+			}
+			reg++;
+			pData++;
+		}
 	}
 	return ((rc == 0) ? 0 : -EFAULT);
 }
@@ -114,29 +136,120 @@ static int i2cTda19989_read(struct i2cMsgArg *pArg)
 	u8 reg;
 	u8 length;
 	u8 *pData;
+	int rc = 0;
 
 	reg = pArg->firstRegister;
 	length = pArg->lenData;
 	pData = &pArg->Data[0];
 
 	gDev->client->addr = pArg->slaveAddr;
-	while (length--) {
-		*pData = (u8)i2c_smbus_read_byte_data(gDev->client, reg);
-		reg++;
-		pData++;
+
+	if ((length > 1) && (pArg->slaveAddr == 0x34)) {
+		rc = i2c_smbus_read_i2c_block_data(
+				gDev->client, reg, length, pData);
+		if ((u8)rc != length) {
+			printk(KERN_ERR "i2cTda19989 R(B) err:%d\n", rc);
+			return -EFAULT;
+		}
+	} else {
+		while (length--) {
+			rc = i2c_smbus_read_byte_data(gDev->client, reg);
+			if (rc < 0) {
+				printk(KERN_ERR "i2cTda19989 R err:%d\n", rc);
+				return -EFAULT;
+			}
+			*pData = (u8)rc ;
+			reg++;
+			pData++;
+		}
 	}
 	return 0;
 }
+
+#ifdef TDA19989_CEC_AVAILABLE
+static int cec_calibration(void)
+{
+	int i;
+	int rc = 0;
+	int prevInt_en = 0;
+	struct timeval prevTime, curTime, resultTime;
+
+	if (gDev->int_enabled) {
+		prevInt_en = 1;
+		disable_irq(OMAP_GPIO_IRQ(HDMI_INT_PIN_GPIO_NUM));
+		if (gDev->waiter)
+			wake_up_interruptible(&gDev->int_wait);
+		gDev->int_enabled = false;
+	}
+	gpio_direction_output(HDMI_INT_PIN_GPIO_NUM, 0);
+	gpio_set_value(HDMI_INT_PIN_GPIO_NUM, 0);
+
+	do_gettimeofday(&prevTime);
+	mdelay(9);
+	for (i = 0; i < 500; i++) {
+		do_gettimeofday(&curTime);
+		resultTime.tv_usec = curTime.tv_usec-prevTime.tv_usec;
+		if (resultTime.tv_usec > 9990)
+			break;
+		udelay(2);
+	}
+	gpio_set_value(HDMI_INT_PIN_GPIO_NUM, 1);
+	do_gettimeofday(&curTime);
+
+	gpio_direction_input(HDMI_INT_PIN_GPIO_NUM);
+	resultTime.tv_usec = curTime.tv_usec - prevTime.tv_usec;
+	printk(KERN_DEBUG "Time interval: %d\n", (int)resultTime.tv_usec);
+
+	if (prevInt_en) {
+		enable_irq(OMAP_GPIO_IRQ(HDMI_INT_PIN_GPIO_NUM));
+		gDev->int_enabled = true;
+	}
+
+	return rc;
+}
+
+static int cec_regulator_enable(int en)
+{
+	int rc = 0;
+	int reg_en;
+	reg_en = regulator_is_enabled(gDev->cec_regulator);
+
+	if (en) {
+		if (!reg_en) {
+			if (regulator_enable(gDev->cec_regulator) < 0) {
+				printk(KERN_ERR "tda19989 regulator_enable failed\n");
+				rc = -1;
+			}
+			regulator_set_voltage(gDev->cec_regulator,
+							3300000, 3300000);
+		} else {
+			printk(KERN_DEBUG "Already Regulator is set\n");
+		}
+	} else {
+		if (reg_en && gpio_get_value(MMC_DETECT_GPIO_NUM)) {
+			if (regulator_disable(gDev->cec_regulator) < 0) {
+				printk(KERN_ERR "tda19989 regulator_disable failed\n");
+				rc = -1;
+			}
+		} else {
+			printk(KERN_DEBUG "MMC or Reg disabled:%d\n", reg_en);
+		}
+	}
+	return ((rc == 0) ? 0 : -EFAULT);
+}
+#endif
+
+int hdmiCec_useReg(void)
+{
+    return gDev->cec_use_reg;
+}
+EXPORT_SYMBOL(hdmiCec_useReg);
 
 /*===========================================================================*/
 
 static int tda19989_open(struct inode *inode, struct file *filp)
 {
 	int rc;
-
-#ifdef TDA19989_CEC_AVAILABLE
-	struct res_handle *cec_rhandle;
-#endif
 
 	printk(KERN_DEBUG "tda19989_open\n");
 
@@ -182,23 +295,14 @@ static int tda19989_open(struct inode *inode, struct file *filp)
 	disable_irq(OMAP_GPIO_IRQ(HDMI_INT_PIN_GPIO_NUM));
 
 #ifdef TDA19989_CEC_AVAILABLE
-	if (gpio_get_value(MMC_DETECT_GPIO_NUM)) {
-		cec_regulator = regulator_get(NULL, "vwlan2");
-		if (IS_ERR(cec_regulator)) {
-			printk(KERN_ERR "tda19989 get regulator failed\n");
-			rc = -ENODEV;
-			goto failed_irq
-		}
-		if (regulator_enable(cec_regulator) < 0) {
-			printk(KERN_ERR "tda19989 enable regulator failed\n");
-			rc = -ENODEV;
-			goto failed_irq
-		}
-		regulator_set_voltage(cec_regulator, 3300000, 3300000);
-	} else {
-		printk(KERN_ERR "tda19989 mmc is inserted\n");
+	gDev->cec_regulator = regulator_get(NULL, "vwlan2");
+	if (IS_ERR(gDev->cec_regulator)) {
+		printk(KERN_ERR "tda19989 get regulator failed\n");
+		rc = -ENODEV;
+		goto failed_irq;
 	}
 #endif
+	gDev->cec_use_reg = false;
 
 	gDev->missed_int = false;
 
@@ -240,7 +344,10 @@ static int tda19989_release(struct inode *inode, struct file *filp)
 	gpio_direction_input(HDMI_PWR_EN_GPIO_NUM);
 	gpio_free(HDMI_PWR_EN_GPIO_NUM);
 
-	/* TODO: release CEC resource? */
+#ifdef TDA19989_CEC_AVAILABLE
+	if (gDev->cec_regulator)
+		regulator_put(gDev->cec_regulator);
+#endif
 
 	mutex_unlock(&gDev->mtx);
 
@@ -313,11 +420,6 @@ static int tda19989_ioctl(struct inode *inode, struct file *filp,
 	struct i2cMsgArg mArg;
 	int en;
 
-#ifdef TDA19989_CEC_AVAILABLE
-	int i;
-	struct timeval prevTime, curTime, resultTime;
-#endif
-
 	if (unlikely(_IOC_TYPE(cmd) != TDA19989_IOCTL_MAGIC)) {
 		printk(KERN_ERR "Bad command value (%d)\n", cmd);
 		return -EINVAL;
@@ -378,26 +480,25 @@ static int tda19989_ioctl(struct inode *inode, struct file *filp,
 		break;
 #ifdef TDA19989_CEC_AVAILABLE
 	case TDA19989_CEC_CAL_TIME:
-		gpio_direction_output(HDMI_INT_PIN_GPIO_NUM, 0);
-		gpio_set_value(HDMI_INT_PIN_GPIO_NUM, 0);
-
-		do_gettimeofday(&prevTime);
-		mdelay(9);
-		for (i = 0; i < 500; i++) {
-			do_gettimeofday(&curTime);
-			resultTime.tv_usec = curTime.tv_usec-prevTime.tv_usec;
-			if (resultTime.tv_usec > 9980)
-				break;
-			udelay(2);
+		rc = cec_calibration();
+		if (rc != 0) {
+			printk(KERN_ERR	"tda19989 CEC cal error (%d)\n", rc);
+			rc = -EFAULT;
 		}
-
-		gpio_set_value(HDMI_INT_PIN_GPIO_NUM, 1);
-		do_gettimeofday(&curTime);
-
-		gpio_direction_output(HDMI_INT_PIN_GPIO_NUM, 1);
-		resultTime.tv_usec = curTime.tv_usec - prevTime.tv_usec;
-		printk(KERN_DEBUG "Time interval: %d\n",
-						(int)resultTime.tv_usec);
+		break;
+	case TDA19989_CEC_REG_ENABLE:
+		if (copy_from_user(&en, (int *)arg, sizeof(en))) {
+			printk(KERN_ERR	"tda19989: CEC Pull-up pwr copy from error\n");
+			rc = -EFAULT;
+			break;
+		}
+		if (en && !gDev->cec_use_reg) {
+			rc = cec_regulator_enable(true);
+			gDev->cec_use_reg = true;
+		} else if (!en && gDev->cec_use_reg) {
+			rc = cec_regulator_enable(false);
+			gDev->cec_use_reg = false;
+		}
 		break;
 #endif
 	default:

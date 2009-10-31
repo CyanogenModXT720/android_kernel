@@ -916,5 +916,8 @@ const static struct capture_size_ov ov8810_sizes[] = {
 	{ 3264, 2448 },
 };
 
-#endif /* ifndef OV8810_H */
+#if defined(CONFIG_LEDS_FLASH_RESET)
+extern bool bd7885_device_detection(void);
+#endif
 
+#endif /* ifndef OV8810_H */

@@ -245,24 +245,6 @@ Because it include gpio request. If it is call many time, it makes error conditi
 */
 static int bd7885_io_init(void)
 {
-#if 0
-    /*Initialize F_RDY_N pin for Xenon flash control.*/
-    if (omap_request_gpio(F_RDY_N_GPIO) != 0) {
-	printk(KERN_ERR "Could not request GPIO %d", F_RDY_N_GPIO);
-	return -EIO;
-    }
-    /* set to output mode */
-    omap_set_gpio_direction(F_RDY_N_GPIO, 1);
-
-    /*Set high turn off AF LED. AF LED initial operatiion is turn off.*/
-    if (power_ic_lighting_write_reg (POWER_IC_REG_CPCAP_REDC, LD_CPCAP_RGB_OFF, LD_CPCAP_RGB_MASK) != 0) {
-	printk(KERN_ERR "Could not lighting \n");
-	return -EIO;
-    }
-
-    /*RF_TX_EN pin set to low. It meaning CHGEN able status.*/
-    power_ic_gpio_config(POWER_IC_GPIO_NUM_0, POWER_IC_GPIO_DIR_OUTPUT, POWER_IC_GPIO_LVL_LOW);
-#endif
     return 0;
 }
 
@@ -275,14 +257,14 @@ static int bd7885_quench_level_set(
 
     /*Quench level is from 1 to 31 if bypassing bu9847.*/
     if ((level < 1) || (level > 31))
-	return -1;
+	return -EFAULT;
 
     ret = bd7885_reg_write(client, BD7885_QUENCHADJ_REG, \
 		level << BD7885_VSTOPADJ_SHIFT);
 
     if (ret != 0) {
 	printk(KERN_ERR "bd7885_quench_level_set failed\n");
-	return -1;
+	return -EFAULT;
     }
 
     return 0;
@@ -296,7 +278,7 @@ static int bd7885_charge_enable_sequence(struct i2c_client *client)
     /*Register value write down for charge enable.*/
     if (bd7885_reg_writes(client, bd7885_charege_enalbe_tbl) != 0) {
 	printk(KERN_ERR "bd7885_reg_writes failed\n");
-	return -1;
+	return -EFAULT;
     }
 
     return 0;
@@ -309,7 +291,7 @@ int bd7885_charge_disable_sequence(struct i2c_client *client)
     /*Register value write down for charge disable.*/
     if (bd7885_reg_writes(client, bd7885_charge_disable_tbl) != 0) {
 	printk(KERN_ERR "bd7885_reg_writes failed\n");
-	return -1;
+	return -EFAULT;
     }
 
     return 0;
@@ -320,28 +302,30 @@ static int bd7885_charge_enable(struct i2c_client *client)
 
     if (bd7885_charge_enable_sequence(client) != 0) {
 	printk(KERN_ERR "%s: bd7885_reg_writes failed\n", __FUNCTION__);
-	return -1;
+	return -EFAULT;
     }
 
     return 0;
 }
-#if 0
-static int bd7885_af_led_control(bool on)
+
+#if defined(CONFIG_LEDS_FLASH_RESET)
+bool bd7885_device_detection(void)
 {
-    if (on) {
-	/*Turn on AF LED.*/
-	if (power_ic_lighting_write_reg (POWER_IC_REG_CPCAP_REDC, 0xFE | LD_CPCAP_RGB_ON, LD_CPCAP_RGB_MASK) != 0) {
-		printk(KERN_ERR "%s: AF LED control failed\n", __FUNCTION__);
-		return -1;
+	u8 reg_val = 0;
+	int ret = 0;
+
+	/*Driver ID fetch and de*/
+	ret = bd7885_reg_read(bd7885_i2c_client, BD7885_HW_ID_REG, &reg_val);
+
+	if (ret != 0) {
+		printk(KERN_ERR "Xenon flash HW ID read fail\n");
+		return false;
 	}
-    } else {
-	/*Turn off AF LED.*/
-	if (power_ic_lighting_write_reg (POWER_IC_REG_CPCAP_REDC, LD_CPCAP_RGB_OFF, LD_CPCAP_RGB_MASK) != 0) {
-		printk(KERN_ERR "%s: AF LED control failed\n", __FUNCTION__);
-		return -1;
-	}
-    }
-    return 0;
+
+	if (reg_val == BD7885_HW_ID_VAL)
+		return true;
+
+	return false;
 }
 #endif
 
@@ -373,17 +357,9 @@ static int bd7885_probe(struct i2c_client *client, const struct i2c_device_id *i
 	strncpy(client->name, BD7885_DRIVER_NAME, I2C_NAME_SIZE);
 	i2c_set_clientdata(client, chip);
 
-#if 0
-       ret = i2c_attach_client(client);
-       if (ret != 0) {
-	    printk(KERN_INFO "i2c_attach_client failed\n");
-       }
-#endif
-
        ret = misc_register(&bd7885_device);
-       if (ret != 0) {
-	    printk(KERN_INFO "misc_register failed\n");
-       }
+	if (ret != 0)
+		printk(KERN_INFO "misc_register failed\n");
 
 	mutex_init(&chip->lock);
 
@@ -453,7 +429,6 @@ static int bd7885_ioctl(struct inode *inode, struct file *file, unsigned int cmd
     case BD7885_IOCTL_SET_CHARGE_LEVEL:
     case BD7885_IOCTL_SET_MODE:
     case BD7885_IOCTL_SET_QUENCH_THRESHOLD:
-    case BD7885_IOCTL_SET_AF_LED:
     case BD7885_IOCTL_READY_STROBE_MANUAL:
     case BD7885_IOCTL_FIRE_STROBE_MANUAL:
       if (copy_from_user(&rwbuf, argp, sizeof(rwbuf)))
@@ -468,7 +443,7 @@ static int bd7885_ioctl(struct inode *inode, struct file *file, unsigned int cmd
     for (reg_cnt = 0; reg_cnt <= BD7885_STATUS_REG; reg_cnt++) {
 	if (bd7885_reg_read(bd7885_i2c_client, reg_cnt, &bd7885_reg_status_tbl[reg_cnt]) != 0) {
 		printk(KERN_INFO "bd7885_reg_read_filed. reg_addr = %d\n", reg_cnt);
-		return -1;
+		return -EFAULT;
 	}
      }
 
@@ -500,7 +475,7 @@ static int bd7885_ioctl(struct inode *inode, struct file *file, unsigned int cmd
 			return error;
 	} else {
 		printk(KERN_INFO "BD7885 init failed.\n");
-		return -1;
+		return -EFAULT;
 	}
 	break;
 
@@ -574,15 +549,6 @@ static int bd7885_ioctl(struct inode *inode, struct file *file, unsigned int cmd
 #endif
 	break;
 
-    case BD7885_IOCTL_SET_AF_LED:
-#if 0
-       /*Apply VSTOPADJ value on Xenon flash.*/
-       error = bd7885_af_led_control(rwbuf);
-       if (error != 0)
-		return error;
-#endif
-	break;
-
     case BD7885_IOCTL_READY_STROBE_MANUAL:
 		ov8810_strobe_manual_ready();
 	break;
@@ -619,7 +585,7 @@ static int bd7885_ioctl(struct inode *inode, struct file *file, unsigned int cmd
  */
 static int __init bd7885_init(void)
 {
-    int ret = -1;
+    int ret = -EFAULT;
 
     ret = i2c_add_driver(&bd7885_driver);
     if (ret != 0) {
