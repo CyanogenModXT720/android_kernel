@@ -27,6 +27,8 @@
 #include <linux/interrupt.h>
 #include <linux/led-lm3530.h>
 #include <linux/types.h>
+#include <linux/gpio_mapping.h>
+#include <mach/gpio.h>
 
 int als_resistor_val[16] = {1, 9260, 4630, 3090, 2310,
 1850, 1540, 1320, 1160, 1030, 925, 842, 772, 712, 661, 617};
@@ -53,6 +55,9 @@ struct lm3530_data {
 };
 
 #ifdef CONFIG_LEDS_SHOLEST
+/* For less power consumption */
+#define LM3530_LEDDRV_EN    get_gpio_by_name("lcd_panel_reset")
+/* Two-way ALS transition */
 #define ALS_INDOOR	0
 #define ALS_OUTDOOR	1
 static uint8_t als_circ = ALS_INDOOR;
@@ -276,7 +281,14 @@ static void ld_lm3530_brightness_set(struct led_classdev *led_cdev,
 		}
 		if (als_data->mode == AUTOMATIC)
 			msleep(step * 4);
+
+#ifdef CONFIG_LEDS_SHOLEST
+		gpio_set_value(LM3530_LEDDRV_EN, 0);
+#endif
 	} else {
+#ifdef CONFIG_LEDS_SHOLEST
+		gpio_set_value(LM3530_LEDDRV_EN, 1);
+#endif
 		switch (als_data->mode) {
 		case AUTOMATIC:
 			if (als_data->led_on == 0) {
