@@ -848,8 +848,6 @@ int omapvout_dss_enable(struct omapvout_device *vout)
 
 	/* Check if we should decimate the source frame by 2 */
 	vout->dss->vrfb.decimate_src = false;
-	if (vout->crop.width == 1280 && vout->crop.height == 720)
-		vout->dss->vrfb.decimate_src = true;
 
 	return 0;
 }
