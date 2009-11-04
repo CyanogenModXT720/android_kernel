@@ -316,7 +316,11 @@ static int ov8810_sensor_power_set(struct device *dev, enum v4l2_power power)
 	static bool regulator_poweron = 0;
 	
 #if defined(CONFIG_LEDS_FLASH_RESET)
-	static bool flash_detected;
+	static enum detect_type {
+		FLASH_COUPLE_LINE = 0,
+		FLASH_SINGLE_LINE,
+		FLASH_NOT_DETECTED,
+	} flash_detected = FLASH_NOT_DETECTED;
 #endif
 
 	switch (power) {
@@ -350,7 +354,7 @@ static int ov8810_sensor_power_set(struct device *dev, enum v4l2_power power)
 #if defined(CONFIG_LEDS_FLASH_RESET)
 		/*If Xenon flash module didn't detected,
 			FLASH_RESET pin control.*/
-		if (flash_detected == false)
+		if (flash_detected == FLASH_COUPLE_LINE)
 			cpcap_direct_misc_write(CPCAP_REG_GPIO0,\
 				0, CPCAP_BIT_GPIO0DRV);
 #endif
@@ -461,11 +465,15 @@ static int ov8810_sensor_power_set(struct device *dev, enum v4l2_power power)
 			gpio_set_value(GPIO_OV8810_RESET, 1);
 			
 #if defined(CONFIG_LEDS_FLASH_RESET)
-			flash_detected = bd7885_device_detection();
-
+			if (flash_detected == FLASH_NOT_DETECTED) {
+				if (bd7885_device_detection())
+					flash_detected = FLASH_SINGLE_LINE;
+				else
+					flash_detected = FLASH_COUPLE_LINE;
+			}
 			/*If Xenon flash module didn't detected,
 				FLASH_RESET pin control.*/
-			if (flash_detected == false)
+			if (flash_detected == FLASH_COUPLE_LINE)
 				cpcap_direct_misc_write(CPCAP_REG_GPIO0,\
 					CPCAP_BIT_GPIO0DRV, CPCAP_BIT_GPIO0DRV);
 #endif
