@@ -34,8 +34,9 @@
 #define EDISCO_CMD_SET_COLUMN_ADDRESS	0x2A
 #define EDISCO_CMD_SET_PAGE_ADDRESS	0x2B
 #define EDISCO_CMD_SET_TEAR_ON		0x35
+#define EDISCO_CMD_SET_TEAR_OFF		0x34
 #define EDISCO_CMD_SET_TEAR_SCANLINE	0x44
-
+#define EDISCO_CMD_READ_DDB_START	0xA1
 #define EDISCO_CMD_VC   0
 #define EDISCO_VIDEO_VC 1
 
@@ -47,6 +48,10 @@
 #define PANEL_ENABLED 0x1
 #define PANEL_UPDATED 0x2
 #define PANEL_ON      0x3
+
+#define SUPPLIER_ID_AUO 0x0186
+#define SUPPLIER_ID_TMD 0x0126
+#define SUPPLIER_ID_INVALID 0xFFFF
 
 static struct omap_video_timings sholes_panel_timings = {
 	.x_res		= 480,
@@ -157,6 +162,32 @@ static void sholes_panel_dss_remove(struct omap_dss_device *dssdev)
 	return;
 }
 
+static u16 sholes_panel_read_supplier_id(struct omap_dss_device *dssdev)
+{
+	static u16 id = SUPPLIER_ID_INVALID;
+	u8 data[2];
+
+	if (id == SUPPLIER_ID_AUO || id == SUPPLIER_ID_TMD)
+		goto end;
+
+	if (dsi_vc_set_max_rx_packet_size(EDISCO_CMD_VC, 2))
+		goto end;
+
+	if (dsi_vc_dcs_read(EDISCO_CMD_VC, EDISCO_CMD_READ_DDB_START,
+	    data, 2) != 2)
+		goto end;
+
+	if (dsi_vc_set_max_rx_packet_size(EDISCO_CMD_VC, 1))
+		goto end;
+
+	id = (data[0] << 8) | data[1];
+
+	if (id != SUPPLIER_ID_AUO && id != SUPPLIER_ID_TMD)
+		id = SUPPLIER_ID_INVALID;
+end:
+	return id;
+}
+
 static int sholes_panel_dss_enable(struct omap_dss_device *dssdev)
 {
 	u8 data[7];
@@ -208,7 +239,8 @@ static int sholes_panel_dss_enable(struct omap_dss_device *dssdev)
 	 * D[1]=0 (Grama correction On);
 	 * D[0]=0 (Enhanced Image Correction OFF) */
 	data[0] = 0xb4;
-	data[1] = 0x1f;
+	data[1] = sholes_panel_read_supplier_id(dssdev)
+			== SUPPLIER_ID_AUO ? 0xf : 0x1f;
 	ret = dsi_vc_dcs_write(EDISCO_CMD_VC, data, 2);
 
 	/* set page, column address */
@@ -242,7 +274,8 @@ static int sholes_panel_dss_enable(struct omap_dss_device *dssdev)
 		DBG("panel enabled\n");
 		schedule_work(&sholes_data->work);
 	}
-
+	DBG("supplier id: 0x%04x\n",
+		(unsigned int)sholes_panel_read_supplier_id(dssdev));
 	return 0;
 error:
 	return -EINVAL;
@@ -328,20 +361,27 @@ static int sholes_panel_dss_enable_te(struct omap_dss_device *dssdev, bool enabl
 	u8 data[3];
 	int ret;
 
-	data[0] = EDISCO_CMD_SET_TEAR_ON;
-	data[1] = 0x00;
-	ret = dsi_vc_dcs_write(EDISCO_CMD_VC, data, 2);
-	if (ret)
-		goto error;
+	if (enable) {
+		data[0] = EDISCO_CMD_SET_TEAR_ON;
+		data[1] = 0x00;
+		ret = dsi_vc_dcs_write(EDISCO_CMD_VC, data, 2);
+		if (ret)
+			goto error;
 
-	data[0] = EDISCO_CMD_SET_TEAR_SCANLINE;
-	data[1] = 0x03;
-	data[2] = 0x00;
-	ret = dsi_vc_dcs_write(EDISCO_CMD_VC, data, 3);
-	if (ret)
-		goto error;
+		data[0] = EDISCO_CMD_SET_TEAR_SCANLINE;
+		data[1] = 0x03;
+		data[2] = 0x00;
+		ret = dsi_vc_dcs_write(EDISCO_CMD_VC, data, 3);
+		if (ret)
+			goto error;
+	} else {
+		data[0] = EDISCO_CMD_SET_TEAR_OFF;
+		ret = dsi_vc_dcs_write(EDISCO_CMD_VC, data, 1);
+		if (ret)
+			goto error;
+	}
 
-	DBG("edisco_ctrl_enable_te \n");
+/*	DBG("edisco_ctrl_enable_te \n");	*/
 	return 0;
 
 error:
