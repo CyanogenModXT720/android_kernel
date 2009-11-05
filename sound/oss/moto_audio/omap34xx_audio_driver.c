@@ -1819,7 +1819,7 @@ static int audio_ioctl(struct inode *inode, struct file *file,
 			FM radio gain is controlled
 			AudioHardwareMot.cpp
 			*/
-			/*cpcap_audio_state.output_gain = 15;*/
+			cpcap_audio_state.output_gain = 10;
 			cpcap_audio_set_audio_state(&cpcap_audio_state);
 			break;
 		}
@@ -1875,9 +1875,9 @@ static int audio_ioctl(struct inode *inode, struct file *file,
 					CPCAP_AUDIO_CODEC_ON)
 				cpcap_audio_state.codec_mute =
 						CPCAP_AUDIO_CODEC_UNMUTE;
-
-			cpcap_audio_state.output_gain = gain;
 		}
+		cpcap_audio_state.output_gain = gain;
+
 		cpcap_audio_set_audio_state(&cpcap_audio_state);
 		AUDIO_LEVEL2_LOG("SOUND_MIXER_VOLUME, output_gain = %d\n",
 				cpcap_audio_state.output_gain);
@@ -1938,11 +1938,16 @@ static ssize_t audio_write(struct file *file, const char *buffer, size_t count,
 			state.stdac_out_stream : state.codec_out_stream;
 
 	mutex_lock(&audio_lock);
+	mutex_lock(&audio_write_lock);
 
 	if (minor == state.dev_dsp) {
 		if (!str->active) {
 			int temp_size = count % STDAC_FIFO_SIZE;
+	if (temp_size != 0)
 			str->fragsize = (count - temp_size) + STDAC_FIFO_SIZE;
+	else
+		str->fragsize = count;
+
 			str->nbfrags = AUDIO_NBFRAGS_WRITE;
 			if (audio_setup_buf(str, file->private_data)) {
 				AUDIO_ERROR_LOG("Unable to allocate memory\n");
@@ -1954,7 +1959,12 @@ static ssize_t audio_write(struct file *file, const char *buffer, size_t count,
 	} else {
 		if (!str->active) {
 			int temp_size = count % CODEC_FIFO_SIZE;
-			str->fragsize = (count - temp_size) + CODEC_FIFO_SIZE;
+
+	if (temp_size != 0)
+		str->fragsize = (count - temp_size) + CODEC_FIFO_SIZE;
+	else
+		str->fragsize = count;
+
 			str->nbfrags = AUDIO_NBFRAGS_WRITE;
 			if (audio_setup_buf(str, file->private_data)) {
 				AUDIO_ERROR_LOG("Unable to allocate memory\n");
@@ -2011,7 +2021,6 @@ static ssize_t audio_write(struct file *file, const char *buffer, size_t count,
 			}
 		}
 
-		mutex_lock(&audio_write_lock);
 		buffer += chunksize;
 		count -= chunksize;
 		buf->offset += chunksize;
@@ -2072,6 +2081,7 @@ static int audio_codec_open(struct inode *inode, struct file *file)
 							primary_spkr_setting;
 			cpcap_audio_state.microphone = mic_setting;
 		}
+    cpcap_audio_set_audio_state(&cpcap_audio_state);
 	} else {
 		if (file->f_mode & FMODE_WRITE) {
 			state.codec_out_stream =
@@ -2082,20 +2092,22 @@ static int audio_codec_open(struct inode *inode, struct file *file)
 			audio_buffer_reset(state.codec_out_stream, inode);
 			TRY(audio_configure_ssi(inode, file))
 			map_audioic_speakers();
+			cpcap_audio_set_audio_state(&cpcap_audio_state);
 		}
 
 		if (file->f_mode & FMODE_READ) {
+			cpcap_audio_state.microphone = mic_setting;
+			cpcap_audio_set_audio_state(&cpcap_audio_state);
 			state.codec_in_stream =
-			    kmalloc(sizeof(struct audio_stream), GFP_KERNEL);
+			kmalloc(sizeof(struct audio_stream), GFP_KERNEL);
 			memset(state.codec_in_stream, 0,
 			       sizeof(struct audio_stream));
 			state.codec_in_stream->inode = inode;
+			msleep(8);
 			TRY(audio_configure_ssi(inode, file))
-			cpcap_audio_state.microphone = mic_setting;
 		}
 	}
 
-	cpcap_audio_set_audio_state(&cpcap_audio_state);
 
 out:
 	mutex_unlock(&audio_lock);
@@ -2106,7 +2118,7 @@ static int audio_codec_release(struct inode *inode, struct file *file)
 {
 	mutex_lock(&audio_lock);
 	state.dev_dsp1_open_count = 0;
-
+  read_buf_full = 0;
 	cpcap_audio_state.codec_mode = CPCAP_AUDIO_CODEC_OFF;
 	cpcap_audio_state.codec_mute = CPCAP_AUDIO_CODEC_MUTE;
 	cpcap_audio_state.codec_primary_speaker = CPCAP_AUDIO_OUT_NONE;
@@ -2273,6 +2285,47 @@ static void __exit audio_exit(void)
 	wake_lock_destroy(&mcbsp_wakelock);
 }
 
+static void audio_callback(int status)
+{
+	mutex_lock(&audio_lock);
+	if (status == 1 || status == 2) {
+		if (cpcap_audio_state.stdac_primary_speaker ==
+					CPCAP_AUDIO_OUT_STEREO_HEADSET) {
+			cpcap_audio_state.stdac_primary_speaker =
+							CPCAP_AUDIO_OUT_NONE;
+			cpcap_audio_set_audio_state(&cpcap_audio_state);
+			cpcap_audio_state.stdac_primary_speaker =
+						CPCAP_AUDIO_OUT_STEREO_HEADSET;
+			cpcap_audio_set_audio_state(&cpcap_audio_state);
+		}
+		if (cpcap_audio_state.codec_primary_speaker ==
+					CPCAP_AUDIO_OUT_STEREO_HEADSET) {
+			cpcap_audio_state.codec_primary_speaker =
+							CPCAP_AUDIO_OUT_NONE;
+			cpcap_audio_set_audio_state(&cpcap_audio_state);
+			cpcap_audio_state.codec_primary_speaker =
+					CPCAP_AUDIO_OUT_STEREO_HEADSET;
+			cpcap_audio_set_audio_state(&cpcap_audio_state);
+		}
+		if (cpcap_audio_state.ext_primary_speaker ==
+					CPCAP_AUDIO_OUT_STEREO_HEADSET) {
+			cpcap_audio_state.ext_primary_speaker =
+							CPCAP_AUDIO_OUT_NONE;
+			cpcap_audio_set_audio_state(&cpcap_audio_state);
+			cpcap_audio_state.ext_primary_speaker =
+					CPCAP_AUDIO_OUT_STEREO_HEADSET;
+			cpcap_audio_set_audio_state(&cpcap_audio_state);
+		}
+		if (cpcap_audio_state.microphone == CPCAP_AUDIO_IN_HEADSET) {
+			cpcap_audio_state.microphone = CPCAP_AUDIO_IN_NONE;
+			cpcap_audio_set_audio_state(&cpcap_audio_state);
+			cpcap_audio_state.microphone = CPCAP_AUDIO_IN_HEADSET;
+			cpcap_audio_set_audio_state(&cpcap_audio_state);
+		}
+	}
+	mutex_unlock(&audio_lock);
+}
+
 static int audio_probe(struct platform_device *dev)
 {
 	mcbsp_wrapper =
@@ -2296,7 +2349,7 @@ static int audio_probe(struct platform_device *dev)
 
 	cpcap_audio_state.cpcap = dev->dev.platform_data;
 	cpcap_audio_init(&cpcap_audio_state);
-
+	cpcap_audio_state.cpcap->h2w_new_state = &audio_callback;
 	return 0;
 }
 

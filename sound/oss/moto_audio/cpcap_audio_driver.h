@@ -22,6 +22,7 @@
 
 #include <linux/soundcard.h>
 #include <linux/spi/cpcap-regbits.h>
+#include <linux/spi/cpcap.h>
 
 #define AUDIO_I2S_MODE
 
