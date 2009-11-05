@@ -51,6 +51,11 @@
 #define ERROR_EXIT _err
 #define TRY(a)  if (unlikely(a)) goto ERROR_EXIT;
 
+// LIBtt28069, LIBtt27871
+#if defined(CONFIG_MACH_SHOLEST)
+#define CPCAP_AUDIO_LOG_LEVEL 0
+#endif
+
 static struct cpcap_audio_state previous_state_struct = {
 	NULL,
 	CPCAP_AUDIO_MODE_NORMAL,
@@ -1120,7 +1125,15 @@ void cpcap_audio_set_audio_state(struct cpcap_audio_state *state)
 
 	previous_state_struct = *state;
 
+// LIBtt28069, LIBtt27871
+#if defined(CONFIG_MACH_SHOLEST)
+#if (CPCAP_AUDIO_LOG_LEVEL >= 1)
 	cpcap_audio_register_dump(state);
+#endif
+#else /* CONFIG_MACH_SHOLEST */
+	cpcap_audio_register_dump(state);
+#endif /* CONFIG_MACH_SHOLEST */
+
 }
 
 void cpcap_audio_init(struct cpcap_audio_state *state)
