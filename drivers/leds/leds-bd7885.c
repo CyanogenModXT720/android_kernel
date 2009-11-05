@@ -185,13 +185,13 @@ static int bd7885_reg_write(struct i2c_client *client, u8 reg_addr, u8 reg_value
     /* Fail if the length is too small */
     if ((reg_addr == BD7885_HW_ID_REG) || (reg_addr == BD7885_STATUS_REG) \
 		|| (reg_addr > BD7885_STATUS_REG)) {
-	printk("bd7885_reg_write: length is invalid\n");
+	printk(KERN_ERR "bd7885_reg_write: length is invalid\n");
 	return -EINVAL;
     }
 
     /* Fail if we weren't able to initialize (yet) */
     if (client == NULL) {
-	printk("bd7885_reg_write: initialization failed\n");
+	printk(KERN_ERR "bd7885_reg_write: initialization failed\n");
 	return -EINVAL;
     }
 
@@ -205,8 +205,9 @@ static int bd7885_reg_write(struct i2c_client *client, u8 reg_addr, u8 reg_value
 
 	/* On failure, output the error code and delay before trying again */
 	if (retval < 0) {
-		printk("bd7885_reg_write: write of reg 0x%X failed: %d\n", value[0], retval);
-		msleep(10);
+		printk(KERN_ERR "bd7885 write 0x%X failed: %d\n",\
+				value[0], retval);
+		msleep(5);
 	}
     } while ((retval < 0) && (i-- >= 0));
 
@@ -218,7 +219,7 @@ static int bd7885_reg_write(struct i2c_client *client, u8 reg_addr, u8 reg_value
     }
 
     /* Delay after every I2C access or IC will NAK */
-    msleep(10);
+    msleep(5);
 
     return retval;
 }
@@ -398,8 +399,20 @@ static struct i2c_driver bd7885_driver = {
 
 static int bd7885_open(struct inode *inode, struct file *file)
 {
-  printk(KERN_INFO "%s is called.\n", __FUNCTION__);
-  return nonseekable_open(inode, file);
+	unsigned char reg_cnt = 0;
+
+	for (reg_cnt = 0; reg_cnt <= BD7885_STATUS_REG; reg_cnt++) {
+		if (bd7885_reg_read(bd7885_i2c_client, reg_cnt,\
+					&bd7885_reg_status_tbl[reg_cnt]) != 0) {
+			printk(KERN_ERR "bd7885_read failed. addr = %d\n",\
+					reg_cnt);
+			return -EFAULT;
+		}
+	}
+
+	printk(KERN_INFO "%s is called.\n",\
+					__func__);
+	return nonseekable_open(inode, file);
 }
 
 static int bd7885_release(struct inode *inode, struct file *file)
@@ -413,7 +426,6 @@ static int bd7885_ioctl(struct inode *inode, struct file *file, unsigned int cmd
     void __user *argp = (void __user *)arg;
     unsigned char rwbuf, data1, data2;
     bd7885_cfg rw_reg_buf;
-    unsigned char reg_cnt = 0;
 
     int error = E_OK;
 
@@ -429,6 +441,7 @@ static int bd7885_ioctl(struct inode *inode, struct file *file, unsigned int cmd
     case BD7885_IOCTL_SET_CHARGE_LEVEL:
     case BD7885_IOCTL_SET_MODE:
     case BD7885_IOCTL_SET_QUENCH_THRESHOLD:
+    case BD7885_IOCTL_GET_STATUS:
     case BD7885_IOCTL_READY_STROBE_MANUAL:
     case BD7885_IOCTL_FIRE_STROBE_MANUAL:
       if (copy_from_user(&rwbuf, argp, sizeof(rwbuf)))
@@ -436,66 +449,84 @@ static int bd7885_ioctl(struct inode *inode, struct file *file, unsigned int cmd
       break;
 
     default:
+      printk(KERN_ERR "Abnormal value input = %d.\n", cmd);
       break;
     }
 
-    /*Read out status register information.*/
-    for (reg_cnt = 0; reg_cnt <= BD7885_STATUS_REG; reg_cnt++) {
-	if (bd7885_reg_read(bd7885_i2c_client, reg_cnt, &bd7885_reg_status_tbl[reg_cnt]) != 0) {
-		printk(KERN_INFO "bd7885_reg_read_filed. reg_addr = %d\n", reg_cnt);
-		return -EFAULT;
-	}
-     }
+    printk(KERN_ERR "BD7785_cmd = %d.\n", cmd);
 
     /* interact with driver */
     switch (cmd) {
     case BD7885_IOCTL_GET_REGISTER:
-      error = bd7885_reg_read(bd7885_i2c_client, rw_reg_buf.reg, &rw_reg_buf.data);
+	printk(KERN_ERR "BD7785_cmd = BD7885_IOCTL_GET_REGISTER is called.\n");
+       error = bd7885_reg_read(bd7885_i2c_client, rw_reg_buf.reg,\
+							&rw_reg_buf.data);
 	if (error != 0) {
+		printk(KERN_ERR "bd7885_read failed. addr = %d\n",\
+						rw_reg_buf.reg);
 		return error;
 	}
       break;
 
     case BD7885_IOCTL_SET_REGISTER:
-      error = bd7885_reg_write(bd7885_i2c_client, rw_reg_buf.reg, rw_reg_buf.data);
+	printk(KERN_ERR "BD7785_cmd = BD7885_IOCTL_SET_REGISTER is called.\n");
+
+	error = bd7885_reg_write(bd7885_i2c_client, rw_reg_buf.reg,\
+							rw_reg_buf.data);
 	if (error != 0) {
+		printk(KERN_ERR "bd7885_read failed. addr = %d\n",\
+						rw_reg_buf.reg);
 		return error;
 	}
 	break;
 
     case BD7885_IOCTL_SET_CHARGING:
+	printk(KERN_ERR "BD7785_cmd = BD7885_IOCTL_SET_CHARGING is called.\n");
+
 	if (rwbuf == BD7885_CHARGE_ENABLE) {
 		error = bd7885_charge_enable(bd7885_i2c_client);
-		if (error != 0)
+		if (error != 0) {
+			printk(KERN_ERR "BD7885 cmd = %d\n", cmd);
 			return error;
+		}
 
 	} else if (rwbuf == BD7885_CHARGE_DISABLE) {
 		error = bd7885_charge_disable_sequence(bd7885_i2c_client);
-		if (error != 0)
+		if (error != 0) {
+			printk(KERN_ERR "BD7885 cmd = %d\n", cmd);
 			return error;
+		}
 	} else {
-		printk(KERN_INFO "BD7885 init failed.\n");
+		printk(KERN_ERR "BD7885 charging status abnormal.\n");
 		return -EFAULT;
 	}
 	break;
 
     case BD7885_IOCTL_SET_CHARGE_LEVEL:
-	rwbuf &= BD7885_FULL_ADJ_LVL_MASK;
+	printk(KERN_ERR "BD7785_cmd = BD7885_IOCTL_SET_CHARGE_LEVEL is called.\n");
 
+	rwbuf &= BD7885_FULL_ADJ_LVL_MASK;
        /*Apply FULLADJ setting.*/
        error = bd7885_reg_write(bd7885_i2c_client, BD7885_FULLADJ_REG, rwbuf);
-       if (error != 0)
+	if (error != 0) {
+		printk(KERN_ERR "BD7885 cmd = %d write failure.\n", cmd);
 		return error;
+	}
 	break;
 
     case BD7885_IOCTL_GET_STATUS:
+	printk(KERN_ERR "BD7785_cmd = BD7885_IOCTL_GET_STATUS is called.\n");
+
        error = bd7885_reg_read(bd7885_i2c_client, BD7885_STATUS_REG, &rwbuf);
-       if (error != 0) {
+	if (error != 0) {
+		printk(KERN_ERR "BD7885 cmd = %d write failure.\n", cmd);
 		return error;
-       }
+	}
 	break;
 
     case BD7885_IOCTL_SET_MODE:
+	printk(KERN_ERR "BD7785_cmd = BD7885_IOCTL_SET_MODE is called.\n");
+
        /*Apply Mode setting.*/
        if (rwbuf == BD7885_STROBE_QUENCH_MODE) {
 		/* Set QUENCH_EN, Set PCNT_EN */
@@ -521,13 +552,16 @@ static int bd7885_ioctl(struct inode *inode, struct file *file, unsigned int cmd
 
        error = bd7885_reg_write(bd7885_i2c_client, BD7885_QUENCHCNT_REG, data1);
        error |= bd7885_reg_write(bd7885_i2c_client, BD7885_DRVCNT_REG, data2);
-       if (error != 0)
+	if (error != 0) {
+		printk(KERN_ERR "BD7885 cmd = %d write failure.\n", cmd);
 		return error;
+	}
        break;
 
     case BD7885_IOCTL_SET_QUENCH_THRESHOLD:
-       /*Apply VSTOPADJ & PTR value to Xenon flash.*/
+	printk(KERN_ERR "BD7785_cmd = BD7885_IOCTL_SET_QUENCH_THRESHOLD is called.\n");
 
+       /*Apply VSTOPADJ & PTR value to Xenon flash.*/
 #if defined(CONFIG_LEDS_BU9847)
        /*Quench level fetch from EEPROM.*/
        if (rwbuf != 0) {
@@ -544,8 +578,10 @@ static int bd7885_ioctl(struct inode *inode, struct file *file, unsigned int cmd
 		error = bd7885_reg_write(bd7885_i2c_client, \
 				BD7885_DRVCNT_REG, data1);
        }
-       if (error != 0)
+	if (error != 0) {
+		printk(KERN_ERR "BD7885 cmd = %d write failure.\n", cmd);
 		return error;
+	}
 #endif
 	break;
 
@@ -564,11 +600,16 @@ static int bd7885_ioctl(struct inode *inode, struct file *file, unsigned int cmd
     /* return information to user */
     switch (cmd) {
     case BD7885_IOCTL_GET_REGISTER:
+	printk(KERN_ERR "BD7785_cmd = BD7885_IOCTL_GET_REGISTER copy to user.\n");
+
       if (copy_to_user(argp, &rw_reg_buf, sizeof(rw_reg_buf)))
 	return -EFAULT;
       break;
 
     case BD7885_IOCTL_GET_STATUS:
+	printk(KERN_ERR "BD7785_cmd = BD7885_IOCTL_GET_STATUS copy to user.\n");
+	printk(KERN_ERR "status value = %d\n", rwbuf);
+
       if (copy_to_user(argp, &rwbuf, sizeof(rwbuf)))
 	return -EFAULT;
       break;

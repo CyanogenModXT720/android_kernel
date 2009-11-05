@@ -60,6 +60,9 @@
 #include <../drivers/media/video/hplens.h>
 #endif
 
+static void sholest_camera_lines_safe_mode(void);
+static void sholest_camera_lines_func_mode(void);
+
 #ifdef CONFIG_VIDEO_OMAP3_HPLENS
 static int hplens_power_set(enum v4l2_power power)
 {
@@ -316,11 +319,20 @@ static int ov8810_sensor_power_set(struct device *dev, enum v4l2_power power)
 	static bool regulator_poweron = 0;
 	
 #if defined(CONFIG_LEDS_FLASH_RESET)
-	static bool flash_detected;
+	static enum detect_type {
+		FLASH_COUPLE_LINE = 0,
+		FLASH_SINGLE_LINE,
+		FLASH_NOT_DETECTED,
+	} flash_detected = FLASH_NOT_DETECTED;
 #endif
 
 	switch (power) {
 	case V4L2_POWER_OFF:
+#if defined(CONFIG_VIDEO_MIPI_INTERFACE)
+		/* Power Down Sequence */
+		isp_csi2_complexio_power(ISP_CSI2_POWER_OFF);
+#endif
+
 		/* Release pm constraints */
 		omap_pm_set_min_bus_tput(dev, OCP_INITIATOR_AGENT, 0);
 		/* Turn off power */
@@ -329,6 +341,7 @@ static int ov8810_sensor_power_set(struct device *dev, enum v4l2_power power)
 			regulator_put(regulator_vcam);
 			regulator_vcam = NULL;
 		} else {
+			sholest_camera_lines_safe_mode();
 			pr_err("%s: Regulator for vcam is not "\
 					"initialized\n", __func__);
 			return -EIO;
@@ -340,6 +353,7 @@ static int ov8810_sensor_power_set(struct device *dev, enum v4l2_power power)
 			regulator_put(regulator_vwlan1);
 			regulator_vwlan1 = NULL;
 		} else {
+			sholest_camera_lines_safe_mode();
 			pr_err("%s: Regulator for vwlan1 is not "\
 					"initialized\n", __func__);
 			return -EIO;
@@ -350,14 +364,18 @@ static int ov8810_sensor_power_set(struct device *dev, enum v4l2_power power)
 #if defined(CONFIG_LEDS_FLASH_RESET)
 		/*If Xenon flash module didn't detected,
 			FLASH_RESET pin control.*/
-		if (flash_detected == false)
+		if (flash_detected == FLASH_COUPLE_LINE)
 			cpcap_direct_misc_write(CPCAP_REG_GPIO0,\
 				0, CPCAP_BIT_GPIO0DRV);
 #endif
 		gpio_free(GPIO_OV8810_RESET);
 		gpio_free(GPIO_OV8810_STANDBY);
+
+		sholest_camera_lines_safe_mode();
 	break;
 	case V4L2_POWER_ON:
+
+		sholest_camera_lines_func_mode();
 	        /* Set min throughput to:
 	         *  2592 x 1944 x 2bpp x 30fps x 3 L3 accesses */
 	         omap_pm_set_min_bus_tput(dev, OCP_INITIATOR_AGENT, 885735);
@@ -461,11 +479,15 @@ static int ov8810_sensor_power_set(struct device *dev, enum v4l2_power power)
 			gpio_set_value(GPIO_OV8810_RESET, 1);
 			
 #if defined(CONFIG_LEDS_FLASH_RESET)
-			flash_detected = bd7885_device_detection();
-
+			if (flash_detected == FLASH_NOT_DETECTED) {
+				if (bd7885_device_detection())
+					flash_detected = FLASH_SINGLE_LINE;
+				else
+					flash_detected = FLASH_COUPLE_LINE;
+			}
 			/*If Xenon flash module didn't detected,
 				FLASH_RESET pin control.*/
-			if (flash_detected == false)
+			if (flash_detected == FLASH_COUPLE_LINE)
 				cpcap_direct_misc_write(CPCAP_REG_GPIO0,\
 					CPCAP_BIT_GPIO0DRV, CPCAP_BIT_GPIO0DRV);
 #endif
@@ -495,6 +517,23 @@ struct ov8810_platform_data sholest_ov8810_platform_data = {
 };
 
 #endif  /* #ifdef CONFIG_VIDEO_OV8810*/
+
+/* We can't change the IOMUX config after bootup
+ * with the current pad configuration architecture,
+ * the next two functions are hack to configure the
+ * camera pads at runtime to save power in standby */
+
+void sholest_camera_lines_safe_mode(void)
+{
+	omap_writew(0x0704, 0x4800207C);
+	omap_writew(0x0704, 0x480020D0);
+}
+
+void sholest_camera_lines_func_mode(void)
+{
+	omap_writew(0x0704, 0x4800207C);
+	omap_writew(0x061C, 0x480020D0);
+}
 
 void __init sholest_camera_init(void)
 {

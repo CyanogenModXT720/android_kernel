@@ -228,6 +228,7 @@ static struct
 	unsigned pll_locked;
 
 	struct completion bta_completion;
+	struct completion packet_sent_completion;
 
 	struct task_struct *thread;
 	wait_queue_head_t waitqueue;
@@ -561,6 +562,9 @@ void dsi_irq_handler(void)
 		if (vcstatus & DSI_VC_IRQ_BTA)
 			complete(&dsi.bta_completion);
 
+		if (vcstatus & DSI_VC_IRQ_PACKET_SENT)
+			complete(&dsi.packet_sent_completion);
+
 		if (vcstatus & DSI_VC_IRQ_ERROR_MASK) {
 			DSSERR("DSI VC(%d) error, vc irqstatus %x\n",
 				       i, vcstatus);
@@ -652,6 +656,24 @@ static void dsi_vc_disable_bta_irq(int channel)
 
 	l = dsi_read_reg(DSI_VC_IRQENABLE(channel));
 	l &= ~DSI_VC_IRQ_BTA;
+	dsi_write_reg(DSI_VC_IRQENABLE(channel), l);
+}
+
+static void dsi_vc_enable_packet_sent_irq(int channel)
+{
+	u32 l;
+
+	l = dsi_read_reg(DSI_VC_IRQENABLE(channel));
+	l |= DSI_VC_IRQ_PACKET_SENT;
+	dsi_write_reg(DSI_VC_IRQENABLE(channel), l);
+}
+
+static void dsi_vc_disable_packet_sent_irq(int channel)
+{
+	u32 l;
+
+	l = dsi_read_reg(DSI_VC_IRQENABLE(channel));
+	l &= ~DSI_VC_IRQ_PACKET_SENT;
 	dsi_write_reg(DSI_VC_IRQENABLE(channel), l);
 }
 
@@ -1943,6 +1965,8 @@ static int dsi_vc_send_long(int channel, u8 data_type, u8 *data, u16 len,
 		return -EINVAL;
 	}
 
+	INIT_COMPLETION(dsi.packet_sent_completion);
+	dsi_vc_enable_packet_sent_irq(channel);
 
 	dsi_vc_write_long_header(channel, data_type, len, ecc);
 
@@ -1987,6 +2011,11 @@ static int dsi_vc_send_long(int channel, u8 data_type, u8 *data, u16 len,
 		dsi_vc_write_long_payload(channel, b1, b2, b3, 0);
 	}
 
+	if (wait_for_completion_timeout(&dsi.packet_sent_completion,
+	    msecs_to_jiffies(10)) == 0)
+		DSSERR("Failed to send long packet\n");
+
+	dsi_vc_disable_packet_sent_irq(channel);
 
 	return r;
 }
@@ -2013,8 +2042,16 @@ static int dsi_vc_send_short(int channel, u8 data_type, u16 data, u8 ecc)
 
 	r = (data_id << 0) | (data << 8) | (ecc << 24);
 
+	INIT_COMPLETION(dsi.packet_sent_completion);
+	dsi_vc_enable_packet_sent_irq(channel);
+
 	dsi_write_reg(DSI_VC_SHORT_PACKET_HEADER(channel), r);
 
+	if (wait_for_completion_timeout(&dsi.packet_sent_completion,
+	    msecs_to_jiffies(10)) == 0)
+		DSSERR("Failed to send short packet\n");
+
+	dsi_vc_disable_packet_sent_irq(channel);
 
 	return 0;
 }
@@ -2655,8 +2692,10 @@ static void dsi_update_screen_dispc(struct omap_dss_device *dssdev,
 
 	dss_start_update(dssdev);
 
-	if (use_te_trigger)
+	if (use_te_trigger) {
+		dssdev->driver->enable_te(dssdev, 1);
 		dsi_vc_send_bta(1);
+	}
 }
 
 static void dsi_framedone_irq_callback(void *data, u32 mask)
@@ -3123,6 +3162,8 @@ static void dsi_display_disable(struct omap_dss_device *dssdev)
 	mutex_lock(&dsi.lock);
 	dsi_bus_lock();
 
+	complete_all(&dsi.packet_sent_completion);
+
 	if (dssdev->state == OMAP_DSS_DISPLAY_DISABLED ||
 			dssdev->state == OMAP_DSS_DISPLAY_SUSPENDED)
 		goto end;
@@ -3153,6 +3194,7 @@ static int dsi_display_suspend(struct omap_dss_device *dssdev)
 	dsi_bus_lock();
 
 	dsi.error_recovery.enabled = false;
+	complete_all(&dsi.packet_sent_completion);
 
 	if (dssdev->state == OMAP_DSS_DISPLAY_DISABLED ||
 			dssdev->state == OMAP_DSS_DISPLAY_SUSPENDED)
@@ -3591,7 +3633,10 @@ int dsi_init(struct platform_device *pdev)
 
 	/* XXX fail properly */
 
+	printk(KERN_INFO "ASK036 TEST\n");
+
 	init_completion(&dsi.bta_completion);
+	init_completion(&dsi.packet_sent_completion);
 	init_completion(&dsi.update_completion);
 
 	dsi.thread = kthread_create(dsi_update_thread, NULL, "dsi");
