@@ -1584,6 +1584,23 @@ struct suspend_info {
 	struct fb_info *fbi;
 };
 
+#ifdef CONFIG_TVOUT_SHOLEST
+static struct omap_dss_device *fb2displaytv(struct fb_info *fbi)
+{
+	struct omapfb_info *ofbi = FB2OFB(fbi);
+	struct omap_dss_device *device;
+	int i;
+	for (i = 0; i < ofbi->num_overlays; i++) {
+		if (ofbi->overlays[i]->manager) {
+			device = ofbi->overlays[i]->manager->device;
+			if (strcmp(device->name, "tv") == 0)
+				return device;
+		}
+	}
+	return NULL;
+}
+#endif
+
 void suspend(struct early_suspend *h)
 {
 	struct suspend_info *info = container_of(h, struct suspend_info,
@@ -1592,9 +1609,20 @@ void suspend(struct early_suspend *h)
 	struct omapfb_info *ofbi = FB2OFB(fbi);
 	struct omapfb2_device *fbdev = ofbi->fbdev;
 	struct omap_dss_device *display = fb2display(fbi);
+#ifdef CONFIG_TVOUT_SHOLEST
+	struct omap_dss_device *displaytv = fb2displaytv(fbi);
+#endif
 
+#ifdef CONFIG_TVOUT_SHOLEST
+	if (displaytv)
+		displaytv->suspend(displaytv);
+
+	if (display && (display != displaytv))
+		display->suspend(display);
+#else
 	if (display->suspend)
 		display->suspend(display);
+#endif
 
 	omapfb_vrfb_suspend_all(fbdev);
 }
@@ -1607,11 +1635,22 @@ void resume(struct early_suspend *h)
 	struct omapfb_info *ofbi = FB2OFB(fbi);
 	struct omapfb2_device *fbdev = ofbi->fbdev;
 	struct omap_dss_device *display = fb2display(fbi);
+#ifdef CONFIG_TVOUT_SHOLEST
+	struct omap_dss_device *displaytv = fb2displaytv(fbi);
+#endif
 
 	omapfb_vrfb_resume_all(fbdev);
 
+#ifdef CONFIG_TVOUT_SHOLEST
+	if (display)
+		display->resume(display);
+
+	if (displaytv && (displaytv != display))
+		displaytv->resume(displaytv);
+#else
 	if (display->resume)
 		display->resume(display);
+#endif
 }
 
 struct suspend_info suspend_info = {
