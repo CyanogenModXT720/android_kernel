@@ -567,7 +567,7 @@ void venc_exit(void)
 
 static void venc_power_on(struct omap_dss_device *dssdev)
 {
-	omap_pm_set_min_bus_tput(&dssdev->dev, OCP_INITIATOR_AGENT, 124416*3);
+	omap_pm_set_min_bus_tput(&dssdev->dev, OCP_INITIATOR_AGENT, 124416*30);
 
 	venc_enable_clocks(1);
 

@@ -155,6 +155,7 @@ struct dispsw_res {
 
 #ifdef CONFIG_TVOUT_SHOLEST
 extern int get_video_status(void);
+extern bool get_video_work_status(void);
 #endif
 
 #endif /* __DISPSW_H__ */

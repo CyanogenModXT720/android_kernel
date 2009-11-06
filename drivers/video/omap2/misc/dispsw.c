@@ -205,7 +205,11 @@ static bool dispsw_crop(struct dispsw_osi *osi,
 	if (w == info->out_width && h == info->out_height)
 		goto exit;
 
+#ifndef CONFIG_TVOUT_SHOLEST
 	if (osi->id == OMAP_DSS_GFX || (info->width == info->out_width &&
+#else
+	if ((info->width == info->out_width &&
+#endif
 					info->height == info->out_height)) {
 		info->width = w;
 		info->height = h;
@@ -237,10 +241,23 @@ static void dispsw_scale(struct dispsw_osi *osi,
 	int tw, th;
 	int ratio;
 	const int shift = 10; /* Fixed point shift factor */
+#ifdef CONFIG_TVOUT_SHOLEST
+	enum dispsw_scale saved_scale;
+	bool save_flag = false;
+#endif
 
 	w = info->width;
 	h = info->height;
 
+#ifdef CONFIG_TVOUT_SHOLEST
+	if (osi->id == OMAP_DSS_VIDEO2) {
+		if (get_video_status()) {
+			saved_scale = osi->scale;
+			osi->scale = DISPSW_SCALE_IGNORE;
+			save_flag = true;
+		}
+	}
+#endif
 	switch (osi->scale) {
 	case DISPSW_SCALE_FIT_TO_SCREEN:
 		if (osi->lock_aspect_ratio) {
@@ -278,6 +295,14 @@ static void dispsw_scale(struct dispsw_osi *osi,
 
 	info->out_width = w;
 	info->out_height = h;
+#ifdef CONFIG_TVOUT_SHOLEST
+	if (osi->id == OMAP_DSS_VIDEO2) {
+		if (save_flag == true) {
+			osi->scale = saved_scale;
+			save_flag = false;
+		}
+	}
+#endif
 }
 
 static void dispsw_rotate(struct dispsw_osi *osi,
@@ -479,19 +504,10 @@ static int dispsw_ovl_set_info(struct omap_overlay *ovl,
 			osi->force_cnt--;
 			info->enabled = osi->stored_enable;
 		}
-		if (info->enabled && osi->override) {
-#ifndef CONFIG_TVOUT_SHOLEST
-			dispsw_override_ovl(osi, info);
-#else
-			if (ovl->id == OMAP_DSS_VIDEO2) {
-				if (get_video_status() != 1)
-					dispsw_override_ovl(osi, info);
-				}
-			else
-				dispsw_override_ovl(osi, info);
 
-#endif
-		}
+		if (info->enabled && osi->override)
+			dispsw_override_ovl(osi, info);
+
 		rc = osi->set_func(ovl, info);
 	}
 
