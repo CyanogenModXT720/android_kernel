@@ -63,7 +63,7 @@ struct tda19989_data {
 	bool pwr_enabled;
 
 	spinlock_t int_lock; /* Spin lock for missing interrupt*/
-	bool missed_int;
+	bool int_occurred;
 
 	bool exiting;
 
@@ -79,22 +79,33 @@ static struct tda19989_data *gDev;
 
 static irqreturn_t hdmi_int_irq(int irq, void *dev_inst)
 {
-	unsigned long lock_flags;
-
 	printk(KERN_DEBUG "hdmi_int_irq\n");
 
 	if (gDev) {
-		/* Do not lock the mutex since this is an ISR */
-		if (gDev->waiter && !gDev->exiting) {
-			wake_up_interruptible(&gDev->int_wait);
-		} else {
-			spin_lock_irqsave(&gDev->int_lock, lock_flags);
-			gDev->missed_int = true;
-			spin_unlock_irqrestore(&gDev->int_lock, lock_flags);
-		}
+		spin_lock(&gDev->int_lock);
+		gDev->int_occurred = true;
+		wake_up_interruptible(&gDev->int_wait);
+		spin_unlock(&gDev->int_lock);
 	}
 
 	return IRQ_HANDLED;
+}
+
+static int check_int(void)
+{
+	int rc = 0;
+	unsigned long lock_flags;
+
+	spin_lock_irqsave(&gDev->int_lock, lock_flags);
+	if (gDev->int_occurred)	{
+		rc = 1;
+		gDev->int_occurred = false;
+	} else if (gDev->exiting || !gDev->int_enabled) {
+		rc = 1;
+	}
+	spin_unlock_irqrestore(&gDev->int_lock, lock_flags);
+
+	return rc;
 }
 
 static int i2cTda19989_write(struct i2cMsgArg *pArg)
@@ -304,7 +315,7 @@ static int tda19989_open(struct inode *inode, struct file *filp)
 #endif
 	gDev->cec_use_reg = false;
 
-	gDev->missed_int = false;
+	gDev->int_occurred = false;
 
 	mutex_unlock(&gDev->mtx);
 
@@ -358,7 +369,6 @@ static ssize_t tda19989_read(struct file *fp, char __user *buf,
 						size_t count, loff_t *ppos)
 {
 	int rc = 0;
-	unsigned long lock_flags;
 
 	printk(KERN_DEBUG "tda19989_read\n");
 
@@ -379,21 +389,12 @@ static ssize_t tda19989_read(struct file *fp, char __user *buf,
 		goto exit;
 	}
 
-	spin_lock_irqsave(&gDev->int_lock, lock_flags);
-	if (gDev->missed_int) {
-		printk(KERN_DEBUG "return missed\n");
-		gDev->missed_int = false;
-		spin_unlock_irqrestore(&gDev->int_lock, lock_flags);
-		goto exit;
-	}
-	spin_unlock_irqrestore(&gDev->int_lock, lock_flags);
-
 	printk(KERN_DEBUG "waiting ...\n");
 	gDev->waiter = true;
 
 	mutex_unlock(&gDev->mtx);
 
-	interruptible_sleep_on(&gDev->int_wait);
+	wait_event_interruptible(gDev->int_wait, check_int());
 
 	mutex_lock(&gDev->mtx);
 
