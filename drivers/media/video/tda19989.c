@@ -313,6 +313,7 @@ static int tda19989_open(struct inode *inode, struct file *filp)
 		goto failed_irq;
 	}
 #endif
+
 	gDev->cec_use_reg = false;
 
 	gDev->int_occurred = false;
