@@ -1815,11 +1815,7 @@ static int audio_ioctl(struct inode *inode, struct file *file,
 			AUDIO_LEVEL2_LOG("SOUND_MIXER_FMPATH with spkr = %#x\n",
 				 spkr);
 			cpcap_audio_state.ext_primary_speaker = spkr;
-			/*
-			FM radio gain is controlled
-			AudioHardwareMot.cpp
-			*/
-			cpcap_audio_state.output_gain = 10;
+			cpcap_audio_state.output_gain = 13;
 			cpcap_audio_set_audio_state(&cpcap_audio_state);
 			break;
 		}
@@ -1836,6 +1832,11 @@ static int audio_ioctl(struct inode *inode, struct file *file,
 	case SOUND_MIXER_FMOFF:
 		{
 			AUDIO_LEVEL2_LOG("SOUND_MIXER_FMOFF\n");
+			/* w21558, add to turn off audio block */
+			cpcap_audio_state.ext_primary_speaker =
+				CPCAP_AUDIO_OUT_NONE;
+			cpcap_audio_state.ext_secondary_speaker =
+				CPCAP_AUDIO_OUT_NONE;
 			cpcap_audio_set_audio_state(&cpcap_audio_state);
 			break;
 		}
@@ -1879,8 +1880,11 @@ static int audio_ioctl(struct inode *inode, struct file *file,
 		cpcap_audio_state.output_gain = gain;
 
 		cpcap_audio_set_audio_state(&cpcap_audio_state);
-		AUDIO_LEVEL2_LOG("SOUND_MIXER_VOLUME, output_gain = %d\n",
+		/*AUDIO_LEVEL2_LOG("SOUND_MIXER_VOLUME, output_gain = %d\n",
+				cpcap_audio_state.output_gain);*/
+		AUDIO_LEVEL1_LOG("SOUND_MIXER_VOLUME, output_gain = %d\n",
 				cpcap_audio_state.output_gain);
+
 		break;
 	}
 
