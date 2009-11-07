@@ -35,6 +35,7 @@
 #include "omapvout-vbq.h"
 #include "omapvout-bp.h"
 
+#define V4L2_CID_PRIVATE_DECIMATE_BY_2		(V4L2_CID_PRIVATE_BASE + 0x921)
 #define MODULE_NAME "omapvout"
 
 /* list of image formats supported by OMAP2 video pipelines */
@@ -1009,6 +1010,10 @@ static int omapvout_vidioc_g_ctrl(struct file *file, void *priv,
 	case V4L2_CID_BG_COLOR:
 		ctrl->value = vout->bg_color;
 		break;
+	case V4L2_CID_PRIVATE_DECIMATE_BY_2:
+		ctrl->value = (int) omapvout_dss_get_decimate(vout);
+		break;
+
 	default:
 		rc = -EINVAL;
 		break;
@@ -1062,6 +1067,10 @@ static int omapvout_vidioc_s_ctrl(struct file *file, void *priv,
 			vout->bg_color = v;
 		}
 		break;
+	case V4L2_CID_PRIVATE_DECIMATE_BY_2:
+		omapvout_dss_set_decimate(vout, ((v) ? true : false));
+		break;
+
 	default:
 		rc = -EINVAL;
 		break;

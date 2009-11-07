@@ -64,14 +64,14 @@
 #define SENSOR_NOT_DETECTED	0
 
 /* XCLK Frequency in Hz*/
-#define OV8810_XCLK_MIN		24000000
-#define OV8810_XCLK_MAX		24000000
+#define OV8810_XCLK_MIN		27000000
+#define OV8810_XCLK_MAX		27000000
 
 #define OV8810_MAX_FRAME_LENGTH_LINES 0xFFFF
 
 /* Gain Values (linear, Q8) */
 #define OV8810_MIN_LINEAR_GAIN	((u16)(1.0 * 256))
-#define OV8810_MAX_LINEAR_GAIN	((u16)(15.5 * 256))
+#define OV8810_MAX_LINEAR_GAIN	((u16)(31.0 * 256))
 
 /* Exposure time values (usecs)*/
 #define OV8810_MIN_EXPOSURE	100
@@ -132,6 +132,7 @@
 #define OV8810_IMAGE_SYSTEM		0x30FA
 #define OV8810_IMAGE_TRANSFORM	0x30F8
 #define OV8810_CBAR	 			0x3303
+#define OV8810_DIG_GAIN 			0x3309
 #define OV8810_SIZE_H0 			0x3316
 #define OV8810_DVP_CTRL08		0x3508
 #define OV8810_DVP_CTRL0E		0x350E
@@ -350,8 +351,8 @@ const static struct ov8810_reg ov8810_common[OV_NUM_IMAGE_SIZES][140] = {
 		{0x30b3 , 0x0a},
 		{0x33e5 , 0x02},
 		{0x30f8 , 0x4f},
-		{0x3020 , 0x01},
-		{0x3021 , 0x5e},
+		{0x3020 , 0x01},  /* 30 fps, 10ms blanking */
+		{0x3021 , 0x89},  /* 30 fps, 10ms blanking */
 		{0x3022 , 0x11},	/* insert dummy */
 		{0x3023 , 0xE0},
 		{0x3024 , 0x00},
@@ -380,7 +381,9 @@ const static struct ov8810_reg ov8810_common[OV_NUM_IMAGE_SIZES][140] = {
 		{0x3331 , 0x20},
 		{0x3332 , 0x20},
 		{0x3333 , 0x41},
-		{0x3301 , 0x0f}, /* should this be 0x05? */
+		{0x3301 , 0x07}, /* enable dig_gain & vario_pixel */
+		{0x3308 , 0x3b}, /* set dig_gain manual mode */
+		{0x3309 , 0x00}, /* set dig_gain = 1x */
 		{0x3091 , 0x00},
 		{0x3006 , 0x00},
 		{0x3082 , 0x80},
@@ -447,13 +450,13 @@ const static struct ov8810_reg ov8810_common[OV_NUM_IMAGE_SIZES][140] = {
 		{0x3000 , 0x0f},	/* 2x analog gain */
 		{0x3002 , 0x01},	/* max exposure line */
 		{0x3003 , 0x57},
-		{0x300e , 0x25},	/* 2-lane, RAW 10, PCLK = 12MHz,
-						MIPI_PCLK = 1.25x12 = 15MHz,
-						MIPI_CLK = 60MHz, 30fps */
+		{0x300e , 0x25},	/* 2-lane, RAW 10, PCLK = 13.5MHz,
+						MIPI_PCLK = 1.25x13.5 = 16.9MHz,
+						MIPI_CLK = 67.5MHz,
+						MCLK = 27Mhz, 30fps */
 		{0x300f , 0x84},
-		{0x3010 , 0x28},
+		{0x3010 , 0x2c},
 		{0x3011 , 0x22},
-		/* {0x30fa , 0x01}, */
 		{0x30e7 , 0x41},  /* active lo FREX */
 		{OV8810_REG_TERM, OV8810_VAL_TERM},
 	},
@@ -488,12 +491,8 @@ const static struct ov8810_reg ov8810_common[OV_NUM_IMAGE_SIZES][140] = {
 		{0x30b3 , 0x09},
 		{0x33e5 , 0x01},
 		{0x30f8 , 0x4a},
-		/* {0x3020 , 0x02}, */   /* 31.5 fps */
-		/* {0x3021 , 0x90}, */   /* 31.5 fps */
-		/* {0x3020 , 0x02}, */   /* 28.8 fps, 4.7ms blanking */
-		/* {0x3021 , 0xce}, */   /* 28.8 fps, 4.7ms blanking */
-		{0x3020 , 0x03},   /* 25.0 fps, 10ms blanking */
-		{0x3021 , 0x3e},   /* 25.0 fps, 10ms blanking */
+		{0x3020 , 0x03},   /* 30.0 fps, 10ms blanking */
+		{0x3021 , 0x58},   /* 30.0 fps, 10ms blanking */
 		{0x3022 , 0x09},
 		{0x3023 , 0x08},
 		{0x3024 , 0x00},
@@ -521,7 +520,9 @@ const static struct ov8810_reg ov8810_common[OV_NUM_IMAGE_SIZES][140] = {
 		{0x3331 , 0x20},
 		{0x3332 , 0x20},
 		{0x3333 , 0x41},
-		{0x3301 , 0x0f}, /* should this be 0x05? */
+		{0x3301 , 0x07}, /* enable dig_gain & vario_pixel */
+		{0x3308 , 0x3b}, /* set dig_gain manual mode */
+		{0x3309 , 0x00}, /* set dig_gain = 1x */
 		{0x3091 , 0x00},
 		{0x3006 , 0x00},
 		{0x3082 , 0x80},
@@ -588,13 +589,13 @@ const static struct ov8810_reg ov8810_common[OV_NUM_IMAGE_SIZES][140] = {
 		{0x3000 , 0x0f},	/* 2x analog gain */
 		{0x3002 , 0x02},	/* max exposure line */
 		{0x3003 , 0x89},
-		{0x300e , 0x25},	/* 2-lane, RAW 10, PCLK = 24MHz,
-						MIPI_PCLK = 1.25x24 = 30MHz,
-						MIPI_CLK = 120MHz, 31.5fps */
+		{0x300e , 0x25},	/* 2-lane, RAW 10, PCLK = 29.7MHz,
+						MIPI_PCLK = 1.25x29.7 = 37.1MHz,
+						MIPI_CLK = 148.5MHz,
+						MCLK = 27Mhz, 30fps */
 		{0x300f , 0x44},
-		{0x3010 , 0x28},
+		{0x3010 , 0x2c},
 		{0x3011 , 0x22},
-		/* {0x30fa , 0x01}, */
 		{0x30e7 , 0x41},  /* active lo FREX */
 		{OV8810_REG_TERM, OV8810_VAL_TERM},
 	},
@@ -633,12 +634,8 @@ const static struct ov8810_reg ov8810_common[OV_NUM_IMAGE_SIZES][140] = {
 		{0x302d , 0x60},
 		{0x302e , 0x04},
 		{0x302f , 0xc8},
-		/* {0x3020 , 0x04}, */  /* 21.5 fps */
-		/* {0x3021 , 0xf4}, */  /* 21.5 fps */
-		/* {0x3020 , 0x05}, */  /* 20.0 fps, 4.7ms blanking */
-		/* {0x3021 , 0x53}, */  /* 20.0 fps, 4.7ms blanking */
-		{0x3020 , 0x05},  /* 17.9 fps, 10ms blanking */
-		{0x3021 , 0xE3},  /* 17.9 fps, 10ms blanking */
+		{0x3020 , 0x06},  /* 21.0 fps, 10ms blanking */
+		{0x3021 , 0x10},  /* 21.0 fps, 10ms blanking */
 		{0x3022 , 0x09},
 		{0x3023 , 0x10},
 		{0x3024 , 0x00},
@@ -663,7 +660,9 @@ const static struct ov8810_reg ov8810_common[OV_NUM_IMAGE_SIZES][140] = {
 		{0x3331 , 0x20},
 		{0x3332 , 0x20},
 		{0x3333 , 0x41},
-		{0x3301 , 0x0b}, /* should this be 0x01? */
+		{0x3301 , 0x03}, /* enable dig_gain */
+		{0x3308 , 0x3b}, /* set dig_gain manual mode */
+		{0x3309 , 0x00}, /* set dig_gain = 1x */
 		{0x3091 , 0x00},
 		{0x3006 , 0x00},
 		{0x3082 , 0x80},
@@ -730,13 +729,13 @@ const static struct ov8810_reg ov8810_common[OV_NUM_IMAGE_SIZES][140] = {
 		{0x3000 , 0x0f},	/* 2x analog gain */
 		{0x3002 , 0x04},	/* max exposure line */
 		{0x3003 , 0xed},
-		{0x300e , 0x25},	/* 2-lane, RAW 10, PCLK = 62.4MHz,
-						MIPI_PCLK = 1.25x62.4 = 78MHz,
-						MIPI_CLK = 312MHz, 21fps */
+		{0x300e , 0x25},	/* 2-lane, RAW 10, PCLK = 75.6MHz,
+						MIPI_PCLK = 1.25x75.6 = 94.5MHz,
+						MIPI_CLK = 312MHz,
+						MCLK = 27Mhz, 21fps */
 		{0x300f , 0x24},
-		{0x3010 , 0x34},
+		{0x3010 , 0x38},
 		{0x3011 , 0x22},
-		/* {0x30fa , 0x01}, */
 		{0x30e7 , 0x41},  /* active lo FREX */
 		{OV8810_REG_TERM, OV8810_VAL_TERM},
 	},
@@ -775,8 +774,8 @@ const static struct ov8810_reg ov8810_common[OV_NUM_IMAGE_SIZES][140] = {
 		{0x302d, 0xc0},
 		{0x302e, 0x09},
 		{0x302f, 0x90},
-		{0x3020, 0x09},  /* 6.833 fps */
-		{0x3021, 0xb4},  /* 6.833 fps */
+		{0x3020, 0x09},  /* 7.685 fps */
+		{0x3021, 0xb4},  /* 7.685 fps */
 		{0x3022, 0x0f},
 		{0x3023, 0x78},
 		{0x3024, 0x00},
@@ -801,7 +800,9 @@ const static struct ov8810_reg ov8810_common[OV_NUM_IMAGE_SIZES][140] = {
 		{0x3331, 0x20},
 		{0x3332, 0x20},
 		{0x3333, 0x41},
-		{0x3301 , 0x01},
+		{0x3301 , 0x03}, /* enable dig_gain */
+		{0x3308 , 0x3b}, /* set dig_gain manual mode */
+		{0x3309 , 0x00}, /* set dig_gain = 1x */
 		{0x3091, 0x00},
 		{0x3006, 0x00},
 		{0x3082, 0x80},
@@ -868,11 +869,12 @@ const static struct ov8810_reg ov8810_common[OV_NUM_IMAGE_SIZES][140] = {
 		{0x3000, 0x0f},	/* 2x, analog, gain */
 		{0x3002, 0x09},	/* max, exposure, line */
 		{0x3003, 0xb2},
-		{0x300e, 0x25},	/* 2-lane, RAW, 10, PCLK = 62.4MHz,
-						MIPI_PCLK = 1.25x62.4 = 78MHz,
-						MIPI_CLK = 312MHz, 6.34fps */
+		{0x300e, 0x25},	/* 2-lane, RAW, 10, PCLK = 75.6MHz,
+						MIPI_PCLK = 1.25x75.6 = 94.5MHz,
+						MIPI_CLK = 312MHz,
+						MCLK = 27Mhz, 7.685fps */
 		{0x300f, 0x24},
-		{0x3010, 0x28},
+		{0x3010, 0x38},
 		{0x3011, 0x22},
 		{0x30e7 , 0x41},  /* active lo FREX */
 		{OV8810_REG_TERM, OV8810_VAL_TERM},

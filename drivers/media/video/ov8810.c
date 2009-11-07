@@ -211,8 +211,8 @@ static struct vcontrol {
 			.id = V4L2_CID_GAIN,
 			.type = V4L2_CTRL_TYPE_INTEGER,
 			.name = "Analog Gain",
-			.minimum = 0,
-			.maximum = -1,
+			.minimum = OV8810_MIN_LINEAR_GAIN,
+			.maximum = OV8810_MAX_LINEAR_GAIN,
 			.step = LINEAR_GAIN_STEP,
 			.default_value = DEF_LINEAR_GAIN,
 		},
@@ -540,7 +540,7 @@ write_aecl:
 
 
 /**
- * ov8810_set_gain - sets sensor analog gain per input value
+ * ov8810_set_gain - sets sensor analog & digital gain per input value
  * @lineargain: q8 analog gain value to be set on device
  * @s: pointer to standard V4L2 device structure
  * @lvc: pointer to V4L2 analog gain entry in ov8810_video_control array
@@ -548,6 +548,8 @@ write_aecl:
  * If the requested analog gain is within the allowed limits, the HW
  * is configured to use the new gain value, and the ov8810_video_control
  * array is updated with the new current value.
+ * Up to 2x digital gain will be used in addition to analog gain to achieve
+ * the desired gain if necessary.
  * The function returns 0 upon success.  Otherwise an error code is
  * returned.
  */
@@ -555,10 +557,10 @@ int ov8810_set_gain(u16 linear_gain_Q8, struct v4l2_int_device *s,
 							struct vcontrol *lvc)
 {
 	/* Inputs linear Q8 gain */
-	u16 gain_stage_2x = 0;
+	u16 anlg_gain_stage_2x = 0, dgtl_gain_stage_2x = 0;
 	u16 shift_bits = 0;
-	u16 gain_fraction = 0;
-	u16 gain_register = 0;
+	u16 anlg_gain_fraction = 0;
+	u16 anlg_gain_register = 0, dgtl_gain_register = 0;
 	int err = 0;
 	struct ov8810_sensor *sensor = s->priv;
 	struct i2c_client *client = sensor->i2c_client;
@@ -580,29 +582,39 @@ int ov8810_set_gain(u16 linear_gain_Q8, struct v4l2_int_device *s,
 	}
 
 	if ((current_power_state == V4L2_POWER_ON) || sensor->resuming) {
-		if (linear_gain_Q8 >= 8*256) {
-			gain_stage_2x = 0x70;
+		if (linear_gain_Q8 >= 16*256) {
+			dgtl_gain_stage_2x = 0x80;
+			anlg_gain_stage_2x = 0x70;
+			shift_bits = 4;
+		} else if (linear_gain_Q8 >= 8*256) {
+			anlg_gain_stage_2x = 0x70;
 			shift_bits = 3;
 		} else if (linear_gain_Q8 >= 4*256) {
-			gain_stage_2x = 0x30;
+			anlg_gain_stage_2x = 0x30;
 			shift_bits = 2;
 		} else if (linear_gain_Q8 >= 2*256) {
-			gain_stage_2x = 0x10;
+			anlg_gain_stage_2x = 0x10;
 			shift_bits = 1;
 		}
 
-		gain_fraction = linear_gain_Q8 >> shift_bits;
+		anlg_gain_fraction = linear_gain_Q8 >> shift_bits;
 		 /* subt 1 (Q8) and take upper 4 bits */
-		gain_fraction = (gain_fraction - (1*256)) >> 4;
-		if (gain_fraction > 0x0f)
-			gain_fraction = 0x0f;
+		anlg_gain_fraction = (anlg_gain_fraction - (1*256)) >> 4;
+		if (anlg_gain_fraction > 0x0f)
+			anlg_gain_fraction = 0x0f;
 
-		gain_register = gain_stage_2x | gain_fraction;
+		anlg_gain_register = anlg_gain_stage_2x | anlg_gain_fraction;
+		dgtl_gain_register = dgtl_gain_stage_2x;
 
-		dev_dbg(&client->dev, "gain =%d/256, gain reg = 0x%x\n",
-			linear_gain_Q8, gain_register);
+		dev_dbg(&client->dev, "gain =%d/256, angl_gain reg = 0x%x, " \
+			"dgtl_gain_reg = 0x%x\n",
+			linear_gain_Q8, anlg_gain_register,
+			dgtl_gain_register);
 
-		err = ov8810_write_reg(client, OV8810_AGCL, gain_register);
+		err = ov8810_write_reg(client, OV8810_AGCL,
+			anlg_gain_register);
+		err = ov8810_write_reg(client, OV8810_DIG_GAIN,
+			dgtl_gain_register);
 	}
 
 	if (err) {
@@ -663,7 +675,7 @@ static int ov8810_set_framerate(struct v4l2_int_device *s,
 	/* use line time for min until LAEC turned on - GVH */
 	sensor->exposure.min_exp_time = line_time_q8 >> 8;
 	sensor->exposure.fps_max_exp_time = (line_time_q8 *
-		(sensor->frame.frame_length_lines - 1)) >> 8;
+		(sensor->frame.frame_length_lines - 8)) >> 8;
 	sensor->exposure.abs_max_exp_time = (line_time_q8 *
 				     (OV8810_MAX_FRAME_LENGTH_LINES - 1)) >> 8;
 
@@ -1893,7 +1905,9 @@ const struct v4l2_fract ov8810_frameintervals[] = {
 	{ .numerator = 3, .denominator = 6 },
 	{ .numerator = 3, .denominator = 9 },
 	{ .numerator = 3, .denominator = 12 },
-	{ .numerator = 3, .denominator = 15 },  /* SIZE_8M max fps */
+	{ .numerator = 3, .denominator = 15 },
+	{ .numerator = 3, .denominator = 18 },
+	{ .numerator = 3, .denominator = 21 },  /* SIZE_8M max fps */
 	{ .numerator = 1, .denominator = 10 },
 	{ .numerator = 1, .denominator = 15 },
 	{ .numerator = 1, .denominator = 20 },
@@ -1920,19 +1934,19 @@ static int ioctl_enum_frameintervals(struct v4l2_int_device *s,
 
 	if ((frmi->width == ov8810_sizes[3].width) &&
 				(frmi->height == ov8810_sizes[3].height)) {
-		/* The max framerate supported by SIZE_8M capture is 5 fps
+		/* The max framerate supported by SIZE_8M capture is 7 fps
 		 */
-		if (frmi->index > 4)
+		if (frmi->index > 6)
 			return -EINVAL;
 
 	} else if ((frmi->width == ov8810_sizes[2].width) &&
 				(frmi->height == ov8810_sizes[2].height)) {
 		/* The max framerate supported by SIZE_2M capture 21 fps
 		 */
-		if (frmi->index > 8)
+		if (frmi->index > 10)
 			return -EINVAL;
 	} else {
-		if (frmi->index > 10)
+		if (frmi->index > 12)
 			return -EINVAL;
 	}
 

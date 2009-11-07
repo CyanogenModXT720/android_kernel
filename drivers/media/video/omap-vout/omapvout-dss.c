@@ -813,6 +813,7 @@ int omapvout_dss_open(struct omapvout_device *vout, u16 *disp_w, u16 *disp_h)
 	INIT_WORK(&vout->dss->work, omapvout_dss_perform_update);
 
 	vout->dss->enabled = false;
+	vout->dss->vrfb.decimate_src = false;
 
 failed:
 	return rc;
@@ -845,9 +846,6 @@ int omapvout_dss_enable(struct omapvout_device *vout)
 	vout->dss->need_cfg = true;
 
 	vout->dss->enabled = true;
-
-	/* Check if we should decimate the source frame by 2 */
-	vout->dss->vrfb.decimate_src = false;
 
 	return 0;
 }
@@ -922,5 +920,15 @@ int omapvout_dss_update(struct omapvout_device *vout)
 	}
 
 	return 0;
+}
+
+bool omapvout_dss_get_decimate(struct omapvout_device *vout)
+{
+	return vout->dss->vrfb.decimate_src;
+}
+
+void omapvout_dss_set_decimate(struct omapvout_device *vout, bool enable)
+{
+	vout->dss->vrfb.decimate_src = enable;
 }
 

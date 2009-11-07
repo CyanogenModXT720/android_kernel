@@ -382,7 +382,7 @@ static int ov8810_sensor_power_set(struct device *dev, enum v4l2_power power)
 
 #if defined (CONFIG_VIDEO_MIPI_INTERFACE)
 		printk(KERN_DEBUG "ov8810_sensor_power_set(ON)\n");
-		if (previous_power == V4L2_POWER_OFF)
+		/*if (previous_power == V4L2_POWER_OFF)*/
 			isp_csi2_reset();
 
 		lanecfg.clk.pol = OV8810_CSI2_CLOCK_POLARITY;
