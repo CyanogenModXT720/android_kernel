@@ -52,6 +52,9 @@ struct lm3530_data {
 	uint8_t current_divisor;
 	uint8_t current_array[8];
 	uint8_t led_on;
+#ifdef CONFIG_LEDS_SHOLEST
+	uint8_t als_circ;
+#endif
 };
 
 #ifdef CONFIG_LEDS_SHOLEST
@@ -60,7 +63,6 @@ struct lm3530_data {
 /* Two-way ALS transition */
 #define ALS_INDOOR	0
 #define ALS_OUTDOOR	1
-static uint8_t als_circ = ALS_INDOOR;
 #endif
 
 struct lm3530_reg {
@@ -197,14 +199,12 @@ static int ld_lm3530_switch_als_circumstance(struct lm3530_data *als_data,
 
 	switch (set_als) {
 	case ALS_INDOOR:
-		if (lm3530_write_reg(als_data, LM3530_GEN_CONFIG,
-					((gen_conf & 0xE3) | 0x10)) ||
-		    lm3530_write_reg(als_data, LM3530_ALS_RESISTOR_SELECT,
-					0x11) ||
-		    lm3530_write_reg(als_data, LM3530_ALS_ZB0_REG, 0x11) ||
-		    lm3530_write_reg(als_data, LM3530_ALS_ZB1_REG, 0x3D) ||
-		    lm3530_write_reg(als_data, LM3530_ALS_ZB2_REG, 0x6D) ||
-		    lm3530_write_reg(als_data, LM3530_ALS_ZB3_REG, 0x9D) ||
+		if (lm3530_write_reg(als_data, LM3530_ALS_RESISTOR_SELECT,
+					0x22) ||
+		    lm3530_write_reg(als_data, LM3530_ALS_ZB0_REG, 0x0B) ||
+		    lm3530_write_reg(als_data, LM3530_ALS_ZB1_REG, 0x29) ||
+		    lm3530_write_reg(als_data, LM3530_ALS_ZB2_REG, 0x48) ||
+		    lm3530_write_reg(als_data, LM3530_ALS_ZB3_REG, 0xAA) ||
 		    lm3530_write_reg(als_data, LM3530_ALS_Z0T_REG, 0x19) ||
 		    lm3530_write_reg(als_data, LM3530_ALS_Z1T_REG, 0x31) ||
 		    lm3530_write_reg(als_data, LM3530_ALS_Z2T_REG, 0x31) ||
@@ -213,17 +213,15 @@ static int ld_lm3530_switch_als_circumstance(struct lm3530_data *als_data,
 			pr_err("%s:ALS indoor setting failed\n", __func__);
 			return -EINVAL;
 		}
-		als_circ = ALS_INDOOR;
+		als_data->als_circ = ALS_INDOOR;
 		break;
 	case ALS_OUTDOOR:
-		if (lm3530_write_reg(als_data, LM3530_GEN_CONFIG,
-					((gen_conf & 0xE3) | 0x18)) ||
-		    lm3530_write_reg(als_data, LM3530_ALS_RESISTOR_SELECT,
-					0xEE) ||
-		    lm3530_write_reg(als_data, LM3530_ALS_ZB0_REG, 0x11) ||
-		    lm3530_write_reg(als_data, LM3530_ALS_ZB1_REG, 0x4F) ||
-		    lm3530_write_reg(als_data, LM3530_ALS_ZB2_REG, 0x8D) ||
-		    lm3530_write_reg(als_data, LM3530_ALS_ZB3_REG, 0xCB) ||
+		if (lm3530_write_reg(als_data, LM3530_ALS_RESISTOR_SELECT,
+					0xFF) ||
+		    lm3530_write_reg(als_data, LM3530_ALS_ZB0_REG, 0x07) ||
+		    lm3530_write_reg(als_data, LM3530_ALS_ZB1_REG, 0x4B) ||
+		    lm3530_write_reg(als_data, LM3530_ALS_ZB2_REG, 0x86) ||
+		    lm3530_write_reg(als_data, LM3530_ALS_ZB3_REG, 0xC1) ||
 		    lm3530_write_reg(als_data, LM3530_ALS_Z0T_REG, 0x53) ||
 		    lm3530_write_reg(als_data, LM3530_ALS_Z1T_REG, 0x53) ||
 		    lm3530_write_reg(als_data, LM3530_ALS_Z2T_REG, 0x53) ||
@@ -232,7 +230,7 @@ static int ld_lm3530_switch_als_circumstance(struct lm3530_data *als_data,
 			pr_err("%s:ALS outdoor setting failed\n", __func__);
 			return -EINVAL;
 		}
-		als_circ = ALS_OUTDOOR;
+		als_data->als_circ = ALS_OUTDOOR;
 		break;
 	default:
 		pr_err("%s:Invalid ALS circumstance\n", __func__);
@@ -286,13 +284,22 @@ static void ld_lm3530_brightness_set(struct led_classdev *led_cdev,
 		gpio_set_value(LM3530_LEDDRV_EN, 0);
 #endif
 	} else {
-#ifdef CONFIG_LEDS_SHOLEST
-		gpio_set_value(LM3530_LEDDRV_EN, 1);
-#endif
 		switch (als_data->mode) {
 		case AUTOMATIC:
 			if (als_data->led_on == 0) {
 				brightness = als_data->als_pdata->gen_config | 0x01;
+#ifdef CONFIG_LEDS_SHOLEST
+				/* Set current 26mA */
+				brightness = (brightness & 0xE3) | 0x18;
+				/* Set LEDDRV_EN on */
+				gpio_set_value(LM3530_LEDDRV_EN, 1);
+				msleep(1);
+				/* Reinitialize lm3530 */
+				ld_lm3530_init_registers(als_data);
+				/* Set ALS as indoor mode */
+				ld_lm3530_switch_als_circumstance(als_data,
+					ALS_INDOOR);
+#endif
 				if (lm3530_write_reg(als_data, LM3530_GEN_CONFIG, brightness)) {
 					pr_err("%s:writing failed while setting brightness:%d\n",
 					__func__, error);
@@ -308,10 +315,26 @@ static void ld_lm3530_brightness_set(struct led_classdev *led_cdev,
 						__func__, error);
 
 				als_data->led_on = 1;
-
 			}
 			break;
 		case MANUAL:
+#ifdef CONFIG_LEDS_SHOLEST
+			if (als_data->led_on == 0) {
+				/* Set LEDDRV_EN on */
+				gpio_set_value(LM3530_LEDDRV_EN, 1);
+				msleep(1);
+
+				/* Restore configurations to disable ALS */
+				lm3530_write_reg(als_data,
+					LM3530_ALS_CONFIG, LM3530_MANUAL_VALUE);
+				lm3530_write_reg(als_data,
+					LM3530_ALS_RESISTOR_SELECT, 0x00);
+				lm3530_write_reg(als_data,
+					LM3530_BRIGHTNESS_RAMP_RATE, 0x00);
+
+				als_data->led_on = 1;
+			}
+#endif
 			error = lm3530_write_reg(als_data,
 						 LM3530_BRIGHTNESS_CTRL_REG,
 						 value / 2);
@@ -553,7 +576,7 @@ void ld_lm3530_work_queue(struct work_struct *work)
 		       __func__, als_data->zone);
 
 #ifdef CONFIG_LEDS_SHOLEST
-	if ((als_circ == ALS_OUTDOOR) &&
+	if ((als_data->als_circ == ALS_OUTDOOR) &&
 	    (als_data->zone == LM3530_ALS_ZONE_MIN)) {
 		pr_info("%s:Switch ALS configuratiosn into indoor mode\n",
 			__func__);
@@ -561,7 +584,7 @@ void ld_lm3530_work_queue(struct work_struct *work)
 
 		enable_irq(als_data->client->irq);
 		return;
-	} else if ((als_circ == ALS_INDOOR) &&
+	} else if ((als_data->als_circ == ALS_INDOOR) &&
 		   (als_data->zone == LM3530_ALS_ZONE_MAX)) {
 		pr_info("%s:Switch ALS configuratiosn into outdoor mode\n",
 			__func__);
@@ -706,6 +729,9 @@ static int ld_lm3530_probe(struct i2c_client *client,
 	als_data->led_dev.name = LD_LM3530_LED_DEV;
 	als_data->led_dev.brightness_set = ld_lm3530_brightness_set;
 	als_data->led_on = 0;
+#ifdef CONFIG_LEDS_SHOLEST
+	als_data->als_circ = ALS_INDOOR;
+#endif
 
 	als_data->working_queue = create_singlethread_workqueue("als_wq");
 	if (!als_data->working_queue) {
