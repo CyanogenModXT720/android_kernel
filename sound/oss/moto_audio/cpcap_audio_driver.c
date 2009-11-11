@@ -1199,6 +1199,13 @@ void cpcap_audio_init(struct cpcap_audio_state *state)
 	logged_cpcap_write(state->cpcap, CPCAP_REG_RXCOA, 0, 0x7FF);
 	logged_cpcap_write(state->cpcap, CPCAP_REG_RXSDOA, 0, 0x1FFF);
 	logged_cpcap_write(state->cpcap, CPCAP_REG_RXEPOA, 0, 0x7FFF);
+
+	/* 	The problem which speaker noise generated
+		when phone enter the suspend mode is fixed.
+	*/
+	logged_cpcap_write(state->cpcap, CPCAP_REG_A2LA,
+		CPCAP_BIT_A2_FREE_RUN, CPCAP_BIT_A2_FREE_RUN);
+
 #if !defined(CONFIG_MACH_SHOLEST)
 	logged_cpcap_write(state->cpcap, CPCAP_REG_GPIO4,
 			   CPCAP_BIT_GPIO4DIR, CPCAP_BIT_GPIO4DIR);
