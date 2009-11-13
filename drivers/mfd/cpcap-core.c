@@ -183,7 +183,6 @@ static struct platform_device *cpcap_devices[] = {
 #endif
 	&cpcap_3mm5_device,
 	&cpcap_rtc_device,
-	&cpcap_uc_device,
 #ifdef CONFIG_TTA_CHARGER
 	&cpcap_tta_det_device,
 #endif
