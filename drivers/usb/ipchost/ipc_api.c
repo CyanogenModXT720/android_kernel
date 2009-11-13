@@ -357,6 +357,9 @@ void usb_ipc_api_read_callback(USB_IPC_CHANNEL_INDEX ch_index, int read_flag, in
             if( ret != 0) { // error
                 IPC_USB_READ_ERROR(usb_ipc_channels[ch_index], ipc_notify_status);
             }
+		ipc_dbg_array[ipc_dbg_index++] = 0x12;
+		if (ipc_dbg_index >= IPC_DBG_ARRAY_SIZE)
+			ipc_dbg_index = 0;
             return;
         }
 
@@ -405,6 +408,9 @@ void usb_ipc_api_read_callback(USB_IPC_CHANNEL_INDEX ch_index, int read_flag, in
 	}
 
 #ifdef USE_OMAP_SDMA
+	ipc_dbg_array[ipc_dbg_index++] = 0x13;
+	if (ipc_dbg_index >= IPC_DBG_ARRAY_SIZE)
+		ipc_dbg_index = 0;
         ipc_dma_memcpy_buf2node(&usb_ipc_channels[ch_index]);
 #else
         size = header->frames[0].length;

@@ -44,10 +44,10 @@
 #define EDISCO_SHORT_WRITE_1	0x23
 #define EDISCO_SHORT_WRITE_0	0x13
 
-#define PANEL_OFF     0x0
+#define PANEL_OFF 0x0
 #define PANEL_ENABLED 0x1
 #define PANEL_UPDATED 0x2
-#define PANEL_ON      0x3
+#define PANEL_ON 0x3
 
 #define SUPPLIER_ID_AUO 0x0186
 #define SUPPLIER_ID_TMD 0x0126
@@ -102,6 +102,7 @@ static bool is_updated_or_off(struct sholes_data *data, int *state)
 		return true;
 	return false;
 }
+
 
 static void sholes_panel_display_on(struct work_struct *work)
 {
@@ -270,7 +271,7 @@ static int sholes_panel_dss_enable(struct omap_dss_device *dssdev)
 	mdelay(200);
 
 	if (atomic_cmpxchg(&sholes_data->state, PANEL_OFF, PANEL_ENABLED) ==
-		    PANEL_OFF) {
+	    PANEL_OFF) {
 		DBG("panel enabled\n");
 		schedule_work(&sholes_data->work);
 	}
@@ -326,12 +327,13 @@ static void sholes_panel_dss_disable(struct omap_dss_device *dssdev)
 static void sholes_panel_dss_setup_update(struct omap_dss_device *dssdev,
 				      u16 x, u16 y, u16 w, u16 h)
 {
+
 	u8 data[5];
 	int ret;
 	struct sholes_data *sholes_data = (struct sholes_data *) dssdev->data;
 
-	if (atomic_cmpxchg(&sholes_data->state, PANEL_ENABLED,
-				PANEL_UPDATED) == PANEL_ENABLED) {
+	if (atomic_cmpxchg(&sholes_data->state, PANEL_ENABLED, PANEL_UPDATED)
+	    == PANEL_ENABLED) {
 		DBG("panel updated\n");
 		wake_up(&sholes_data->wait);
 	}

@@ -166,6 +166,7 @@ struct platform_device cpcap_af_led = {
 #endif
 
 static struct platform_device *cpcap_devices[] = {
+	&cpcap_uc_device,
 	&cpcap_adc_device,
 	&cpcap_key_device,
 	&cpcap_batt_device,
@@ -182,7 +183,6 @@ static struct platform_device *cpcap_devices[] = {
 #endif
 	&cpcap_3mm5_device,
 	&cpcap_rtc_device,
-	&cpcap_uc_device,
 #ifdef CONFIG_TTA_CHARGER
 	&cpcap_tta_det_device,
 #endif

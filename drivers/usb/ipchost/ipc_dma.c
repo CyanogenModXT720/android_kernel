@@ -69,21 +69,8 @@
 
 #define DEBUG(args...)  //printk(args)
 
-#define IPC_DMA_NODE2BUF_ID      1
-#define IPC_DMA_BUF2NODE_ID      2
-
-typedef struct {
-	int dma_ch;
-	int node_index;
-	int frame_index;
-	int total_size;
-	USB_IPC_API_PARAMS *ipc_ch;
-	unsigned long      buf_phy;
-	IPC_DATA_HEADER    *header;
-	HW_CTRL_IPC_DATA_NODE_DESCRIPTOR_T  *node_ptr;
-} IPC_DMA_MEMCPY;
-
-IPC_DMA_MEMCPY ipc_memcpy_node2buf, ipc_memcpy_buf2node;
+struct IPC_DMA_MEMCPY ipc_memcpy_node2buf;
+struct IPC_DMA_MEMCPY ipc_memcpy_buf2node;
 
 extern USB_IPC_API_PARAMS  usb_ipc_channels[MAX_USB_IPC_CHANNELS];
 
@@ -128,7 +115,6 @@ void ipc_dma_node2buf_callback (int lch, u16 ch_status, void *data)
 
         if( (ipc_memcpy_node2buf.node_ptr[ipc_memcpy_node2buf.node_index].comand & NODE_DESCRIPTOR_END_BIT) || (ipc_memcpy_node2buf.node_index >= (ipc_memcpy_node2buf.ipc_ch->max_node_num) ) || ipc_memcpy_node2buf.frame_index >= header->nb_frame ) {
                 omap_stop_dma(ipc_memcpy_node2buf.dma_ch);
-		omap_free_dma(ipc_memcpy_node2buf.dma_ch);
 
 		//consistent_sync (ipc_ch->write_ptr.temp_buff, ipc_ch->max_temp_buff_size, DMA_FROM_DEVICE);
 		dma_cache_maint((void *)ipc_ch->write_ptr.temp_buff, ipc_ch->max_temp_buff_size, DMA_FROM_DEVICE);
@@ -183,9 +169,7 @@ int ipc_dma_memcpy_node2buf(USB_IPC_API_PARAMS *ipc_ch, HW_CTRL_IPC_DATA_NODE_DE
 
 	DEBUG("%s\n", __FUNCTION__);
 
-	/* alloc DMA channel */
-	ret = omap_request_dma(IPC_DMA_NODE2BUF_ID, NULL, ipc_dma_node2buf_callback, NULL, &ipc_memcpy_node2buf.dma_ch);
-	if(ret != 0)   { /* error: using memcpy */
+	if (ipc_memcpy_node2buf.dma_ch == -1)   { /* error: using memcpy */
 	        /* copy data into write URB buffer */
         	frame_size = 0;
 	        frame_index = 0;
@@ -318,7 +302,6 @@ void ipc_dma_buf2node_callback (int lch, u16 ch_status, void *data)
         if( (ipc_memcpy_buf2node.node_index >= ipc_memcpy_buf2node.ipc_ch->read_ptr.node_num) || 
 	    (ipc_memcpy_buf2node.frame_index >= ipc_memcpy_buf2node.header->nb_frame) ) {
                 omap_stop_dma(ipc_memcpy_buf2node.dma_ch);
-                omap_free_dma(ipc_memcpy_buf2node.dma_ch);
 
                 ipc_ch->read_ptr.node_ptr[ipc_memcpy_buf2node.node_index - 1].comand  |= NODE_DESCRIPTOR_END_BIT;
 
@@ -338,8 +321,14 @@ void ipc_dma_buf2node_callback (int lch, u16 ch_status, void *data)
 	        if(ipc_memcpy_buf2node.ipc_ch->cfg.read_callback != NULL)  {
         	        ipc_status.nb_bytes = ipc_memcpy_buf2node.total_size;
                 	ipc_status.channel  = &ipc_memcpy_buf2node.ipc_ch->ch;
+			ipc_dbg_array[ipc_dbg_index++] = 0x16;
+			if (ipc_dbg_index >= IPC_DBG_ARRAY_SIZE)
+				ipc_dbg_index = 0;
 	                ipc_memcpy_buf2node.ipc_ch->cfg.read_callback(&ipc_status);
         	} else {
+			ipc_dbg_array[ipc_dbg_index++] = 0x1E;
+			if (ipc_dbg_index >= IPC_DBG_ARRAY_SIZE)
+				ipc_dbg_index = 0;
                 	//up(&ipc_memcpy_buf2node.ipc_ch->read_ptr.read_mutex);
                 	SEM_UNLOCK(&ipc_memcpy_buf2node.ipc_ch->read_ptr.read_mutex);
 	        }
@@ -356,6 +345,16 @@ void ipc_dma_buf2node_callback (int lch, u16 ch_status, void *data)
 	DEBUG("Continue DMA:buf_phy=%lx total_size=%d node_index=%d frame_index=%d\n", ipc_memcpy_buf2node.buf_phy, ipc_memcpy_buf2node.total_size, ipc_memcpy_buf2node.node_index, ipc_memcpy_buf2node.frame_index);
         /* set DMA parameters, then start DMA transfer */
         OMAP_DMA_MEM2MEM_START(ipc_memcpy_buf2node.dma_ch, ipc_memcpy_buf2node.buf_phy, NODE_BUF_PHYS_ADDR(ipc_ch->read_ptr.node_ptr[ipc_memcpy_buf2node.node_index].data_ptr), size);
+	dma_psrc = (unsigned int)ipc_memcpy_buf2node.buf_phy;
+	dma_vdest = (unsigned int)ipc_ch->read_ptr.node_ptr[\
+			ipc_memcpy_buf2node.node_index].data_ptr;
+	dma_pdest = (unsigned int)NODE_BUF_PHYS_ADDR(ipc_ch->read_ptr.node_ptr[\
+			ipc_memcpy_buf2node.node_index].data_ptr);
+	dma_size = size;
+	dma_ch = (unsigned int)ipc_memcpy_buf2node.dma_ch;
+	ipc_dbg_array[ipc_dbg_index++] = 0x15;
+	if (ipc_dbg_index >= IPC_DBG_ARRAY_SIZE)
+		ipc_dbg_index = 0;
 }
 
 /*
@@ -363,16 +362,13 @@ void ipc_dma_buf2node_callback (int lch, u16 ch_status, void *data)
  */
 void ipc_dma_memcpy_buf2node(USB_IPC_API_PARAMS *ipc_ch)
 {
-        int ret;
         int size, len, index, frame_index, num;
         IPC_DATA_HEADER *header;
         HW_CTRL_IPC_WRITE_STATUS_T  ipc_status;
 
 	DEBUG("%s\n", __FUNCTION__);
 
-        /* alloc DMA channel */
-        ret = omap_request_dma(IPC_DMA_BUF2NODE_ID, NULL, ipc_dma_buf2node_callback, NULL, &ipc_memcpy_buf2node.dma_ch);
-        if(ret != 0)   { /* error: using memcpy */
+	if (ipc_memcpy_buf2node.dma_ch == -1)   { /* error: using memcpy */
 		header = (IPC_DATA_HEADER *)(ipc_ch->read_ptr.temp_buff);
 	        size = header->frames[0].length;
         	//len  = sizeof(IPC_DATA_HEADER);
@@ -406,6 +402,9 @@ void ipc_dma_memcpy_buf2node(USB_IPC_API_PARAMS *ipc_ch)
 		/* clear flag to indicate API read function call is done */
 	        ipc_ch->read_flag = 0;
 		if(ipc_ch->cfg.read_callback != NULL)  {
+			ipc_dbg_array[ipc_dbg_index++] = 0x1F;
+			if (ipc_dbg_index >= IPC_DBG_ARRAY_SIZE)
+				ipc_dbg_index = 0;
 			 ipc_status.nb_bytes = ipc_ch->read_ptr.total_num;
                 	 ipc_status.channel  = &ipc_ch->ch;
 			 ipc_ch->cfg.read_callback(&ipc_status);
@@ -441,5 +440,15 @@ void ipc_dma_memcpy_buf2node(USB_IPC_API_PARAMS *ipc_ch)
 
         /* set DMA parameters, then start DMA transfer */
         OMAP_DMA_MEM2MEM_START(ipc_memcpy_buf2node.dma_ch, ipc_memcpy_buf2node.buf_phy, NODE_BUF_PHYS_ADDR(ipc_ch->read_ptr.node_ptr[ipc_memcpy_buf2node.node_index].data_ptr), size);
+	dma_psrc = (unsigned int)ipc_memcpy_buf2node.buf_phy;
+	dma_vdest = (unsigned int)ipc_ch->read_ptr.node_ptr[\
+			ipc_memcpy_buf2node.node_index].data_ptr;
+	dma_pdest = (unsigned int)NODE_BUF_PHYS_ADDR(ipc_ch->read_ptr.node_ptr[\
+			ipc_memcpy_buf2node.node_index].data_ptr);
+	dma_size = size;
+	dma_ch = ipc_memcpy_buf2node.dma_ch;
+	ipc_dbg_array[ipc_dbg_index++] = 0x14;
+	if (ipc_dbg_index >= IPC_DBG_ARRAY_SIZE)
+		ipc_dbg_index = 0;
 }
 #endif

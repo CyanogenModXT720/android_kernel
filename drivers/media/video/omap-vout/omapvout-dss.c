@@ -27,6 +27,9 @@
 
 #define VRFB_TX_TIMEOUT		1000
 
+#define DSS_MANUAL_MODE_THRESHOLD 307200 // 640*480
+static bool toggleUpdateMode = false;
+
 /*=== Local Functions ==================================================*/
 
 static int omapvout_dss_format_bytespp(u32 pixelformat)
@@ -839,6 +842,16 @@ int omapvout_dss_enable(struct omapvout_device *vout)
 {
 	/* It is assumed that the caller has locked the vout mutex */
 
+	if (vout->win.w.height*vout->win.w.width > DSS_MANUAL_MODE_THRESHOLD) {
+		struct omap_dss_device *dev;
+		dev = vout->dss->overlay->manager->device;
+
+		if (dev && dev->set_update_mode) {
+			if (!dev->set_update_mode(dev, OMAP_DSS_UPDATE_AUTO))
+				toggleUpdateMode = true;
+		}
+	}
+
 	/* Reset the current frame idx */
 	vout->dss->cur_q_idx = -1;
 
@@ -857,7 +870,6 @@ void omapvout_dss_disable(struct omapvout_device *vout)
 	struct omap_overlay *ovly;
 	struct omap_dss_device *dev;
 	struct videobuf_buffer *buf, *tmp;
-
 	/* It is assumed that the caller has locked the vout mutex */
 
 	memset(&o_info, 0, sizeof(o_info));
@@ -866,6 +878,15 @@ void omapvout_dss_disable(struct omapvout_device *vout)
 	vout->dss->enabled = false;
 
 	dev = vout->dss->overlay->manager->device;
+
+	if (toggleUpdateMode) {
+		rc = dev->set_update_mode(dev, OMAP_DSS_UPDATE_MANUAL);
+	if (rc)
+		DBG("Setting DSS update mode failed %d\n", rc);
+	else
+		toggleUpdateMode = false;
+	}
+
 	if (vout->dss->working && dev->sync) {
 		/* Allow the current frame to finish */
 		mutex_unlock(&vout->mtx);

@@ -252,10 +252,6 @@ static struct {
 	struct audio_stream *stdac_in_stream;
 	struct audio_stream *codec_out_stream;
 	struct audio_stream *codec_in_stream;
-	unsigned int accy_client_id;
-	unsigned long int connected_accy_mask;
-	unsigned long int interested_accy_mask;
-	wait_queue_head_t accy_wait_queue;
 } state;
 
 struct cpcap_audio_state cpcap_audio_state = {
@@ -1947,11 +1943,11 @@ static ssize_t audio_write(struct file *file, const char *buffer, size_t count,
 	if (minor == state.dev_dsp) {
 		if (!str->active) {
 			int temp_size = count % STDAC_FIFO_SIZE;
-	if (temp_size != 0)
-			str->fragsize = (count - temp_size) + STDAC_FIFO_SIZE;
-	else
-		str->fragsize = count;
-
+			if (temp_size != 0)
+				str->fragsize = (count - temp_size) +
+								STDAC_FIFO_SIZE;
+			else
+				str->fragsize = count;
 			str->nbfrags = AUDIO_NBFRAGS_WRITE;
 			if (audio_setup_buf(str, file->private_data)) {
 				AUDIO_ERROR_LOG("Unable to allocate memory\n");
@@ -1963,12 +1959,11 @@ static ssize_t audio_write(struct file *file, const char *buffer, size_t count,
 	} else {
 		if (!str->active) {
 			int temp_size = count % CODEC_FIFO_SIZE;
-
-	if (temp_size != 0)
-		str->fragsize = (count - temp_size) + CODEC_FIFO_SIZE;
-	else
-		str->fragsize = count;
-
+			if (temp_size != 0)
+				str->fragsize = (count - temp_size) +
+								CODEC_FIFO_SIZE;
+			else
+				str->fragsize = count;
 			str->nbfrags = AUDIO_NBFRAGS_WRITE;
 			if (audio_setup_buf(str, file->private_data)) {
 				AUDIO_ERROR_LOG("Unable to allocate memory\n");
@@ -2085,7 +2080,7 @@ static int audio_codec_open(struct inode *inode, struct file *file)
 							primary_spkr_setting;
 			cpcap_audio_state.microphone = mic_setting;
 		}
-    cpcap_audio_set_audio_state(&cpcap_audio_state);
+		cpcap_audio_set_audio_state(&cpcap_audio_state);
 	} else {
 		if (file->f_mode & FMODE_WRITE) {
 			state.codec_out_stream =
@@ -2111,8 +2106,6 @@ static int audio_codec_open(struct inode *inode, struct file *file)
 			TRY(audio_configure_ssi(inode, file))
 		}
 	}
-
-
 out:
 	mutex_unlock(&audio_lock);
 	return ret;
@@ -2122,7 +2115,8 @@ static int audio_codec_release(struct inode *inode, struct file *file)
 {
 	mutex_lock(&audio_lock);
 	state.dev_dsp1_open_count = 0;
-  read_buf_full = 0;
+
+	read_buf_full = 0;
 	cpcap_audio_state.codec_mode = CPCAP_AUDIO_CODEC_OFF;
 	cpcap_audio_state.codec_mute = CPCAP_AUDIO_CODEC_MUTE;
 	cpcap_audio_state.codec_primary_speaker = CPCAP_AUDIO_OUT_NONE;

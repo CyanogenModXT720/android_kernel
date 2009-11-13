@@ -339,8 +339,13 @@ static void usbnet_if_config(struct work_struct *work)
 
 	memset(&ifr, 0, sizeof(ifr));
 	strncpy(ifr.ifr_ifrn.ifrn_name, "usb0", strlen("usb0") + 1);
-	ifr.ifr_flags = ((g_usbnet_ifc.usbnet_config_dev->flags) |
+	if (g_usbnet_ifc.iff_flag & IFF_UP)
+		ifr.ifr_flags = ((g_usbnet_ifc.usbnet_config_dev->flags) |
 			g_usbnet_ifc.iff_flag);
+	else
+		ifr.ifr_flags = (g_usbnet_ifc.usbnet_config_dev->flags)&
+			~IFF_UP;
+
 	err = devinet_ioctl(dev_net(g_usbnet_ifc.usbnet_config_dev),
 			  SIOCSIFFLAGS, &ifr);
 
@@ -660,8 +665,15 @@ static void do_set_config(u16 new_config)
 				break;
 			}
 		}
+		netif_start_queue(g_net_dev);
 
-	} else {/* Disable Endpoints */
+	} else {
+		netif_stop_queue(g_net_dev);
+		g_usbnet_ifc.ip_addr = 0;
+		g_usbnet_ifc.iff_flag = 0;
+		g_usbnet_ifc.usbnet_config_dev = g_usbnet_context->dev;
+		schedule_work(&g_usbnet_ifc.usbnet_config_wq);
+		/* Disable Endpoints */
 		if (g_usbnet_context->bulk_in)
 			usb_ep_disable(g_usbnet_context->bulk_in);
 		if (g_usbnet_context->bulk_out)
@@ -823,15 +835,9 @@ struct usb_function *usbnet_function_enable(int enable, int id)
 			g_usbnet_device.function.descriptors = fs_function;
 			g_usbnet_device.function.hs_descriptors = hs_function;
 			intf_desc.bInterfaceNumber = id;
-			netif_start_queue(g_net_dev);
 		} else {
 			g_usbnet_device.function.descriptors = null_function;
 			g_usbnet_device.function.hs_descriptors = null_function;
-			netif_stop_queue(g_net_dev);
-			g_usbnet_ifc.ip_addr = 0;
-			g_usbnet_ifc.iff_flag = 0;
-			g_usbnet_ifc.usbnet_config_dev = g_usbnet_context->dev;
-			schedule_work(&g_usbnet_ifc.usbnet_config_wq);
 		}
 		return &g_usbnet_device.function;
 	}

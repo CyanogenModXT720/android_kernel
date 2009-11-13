@@ -40,10 +40,10 @@ static int sholest_panel_enable(struct omap_dss_device *dssdev)
 			printk(KERN_ERR "failed to get regulator for display");
 			return PTR_ERR(display_regulator);
 		}
-/*#ifndef CONFIG_FB_OMAP2_MTD_LOGO*/
+#ifndef CONFIG_FB_OMAP2_MTD_LOGO
 		regulator_enable(display_regulator);
 		return 0;
-/*#endif*/
+#endif
 	}
 
 	regulator_enable(display_regulator);
