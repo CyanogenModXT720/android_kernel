@@ -106,8 +106,14 @@ static irqreturn_t spibus_interrupt(int irq, void *context)
 {
 	struct spiphy_dev_s *spiphy_dev = (struct spiphy_dev_s *) context;
 
+	/* w21558 */
+	/*disable_irq_nosync(spiphy_dev->irq);*/
+
 	if (spiphy_dev->interruptHandler)
 		spiphy_dev->interruptHandler(spiphy_dev->intr_context);
+
+	/* w21558 */
+	/*enable_irq(spiphy_dev->irq);*/
 
 	return IRQ_HANDLED;
 }
@@ -203,28 +209,27 @@ int smsmdtv_power_control(int pwrup_enable)
 	ret = omap_cfg_reg(AA3_34XX_MDTV_CLK_ON);
 
 	/* PWDN Output High */
-	omap_cfg_reg(V8_34XX_GPIO53_OUT);
+	/*omap_cfg_reg(V8_34XX_GPIO53_OUT);*/
+	gpio_direction_output(MDTV_PWDN_GPIO, 1);
 
-	gpio_set_value(MDTV_PWDN_GPIO, 1);
 	udelay(20);  /* at least, T = 10usec */
 
 	/* Reset Output High */
-	omap_cfg_reg(U8_34XX_GPIO54_OUT);
+	/*omap_cfg_reg(U8_34XX_GPIO54_OUT);*/
+	gpio_direction_output(MDTV_RESET_N_GPIO, 1);
 
-	gpio_set_value(MDTV_RESET_N_GPIO, 1);
 	udelay(20);  /* at least, T = 10usec */
 
 	/* SMSMDTV interrupt enable */
 	if (smsmdtv_int_enable_flag == INTERRUPT_DISABLE) {
-	enable_irq(OMAP_GPIO_IRQ(SMS_IRQ_GPIO));
+		enable_irq(gpio_to_irq(SMS_IRQ_GPIO));
 	smsmdtv_int_enable_flag = INTERRUPT_ENABLE;
 	printk(KERN_INFO "enable_irq().\n");
 	}
   } else {
-
     /* SMSMDTV interrupt disable */
     if (smsmdtv_int_enable_flag == INTERRUPT_ENABLE) {
-      disable_irq(OMAP_GPIO_IRQ(SMS_IRQ_GPIO));
+			disable_irq(gpio_to_irq(SMS_IRQ_GPIO));
       smsmdtv_int_enable_flag = INTERRUPT_DISABLE;
       printk(KERN_INFO "disable_irq().\n");
     }
@@ -243,10 +248,12 @@ int smsmdtv_power_control(int pwrup_enable)
 	ret = omap_cfg_reg(AA3_34XX_MDTV_CLK_OFF);
 
 	/* PWDN Input No-pull */
-	omap_cfg_reg(V8_34XX_GPIO53_INPUT);
+	/*omap_cfg_reg(V8_34XX_GPIO53_INPUT);*/
+	gpio_direction_input(MDTV_PWDN_GPIO);
 
 	/* Reset Input No-pull */
-	omap_cfg_reg(U8_34XX_GPIO54_INPUT);
+	/*omap_cfg_reg(U8_34XX_GPIO54_INPUT);*/
+	gpio_direction_input(MDTV_RESET_N_GPIO);
 	}
 
   if (ret < 0)
@@ -316,7 +323,7 @@ void *smsspiphy_init(void *context,
 
   /*spi_loop_test(slave);*/
 
-  spiphy_dev->irq = OMAP_GPIO_IRQ(SMS_IRQ_GPIO);
+  spiphy_dev->irq = gpio_to_irq(SMS_IRQ_GPIO);
 
   set_irq_type(spiphy_dev->irq, IRQ_TYPE_EDGE_RISING);
 	ret = request_irq(spiphy_dev->irq, spibus_interrupt, \
@@ -328,7 +335,7 @@ void *smsspiphy_init(void *context,
 	}
 
 	/* interrupt disable */
-	disable_irq(OMAP_GPIO_IRQ(SMS_IRQ_GPIO));
+	disable_irq(gpio_to_irq(SMS_IRQ_GPIO));
 	smsmdtv_int_enable_flag = INTERRUPT_DISABLE;
 	printk(KERN_INFO "smsspiphy_init(): disable_irq\n");
 

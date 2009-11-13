@@ -267,7 +267,7 @@ static ssize_t smschar_read(struct file *file, char __user *buf,
 		    (struct smscore_buffer_t *)dev->pending_data.next;
 #ifdef MOT_FEAT_KERNEL_KLOCKWORK_FIEXED
 		if (((int) count - copied) < cb->size)
-			actual_size = (int) count;
+			actual_size = (int) (count - copied);
 		else
 			actual_size = cb->size;
 #else

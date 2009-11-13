@@ -79,22 +79,23 @@ void __init sholest_mdtv_init(void)
 	/* MTV_INT pin */
 	gpio_request(SHOLEST_MDTV_INT_GPIO, "sms1130 int");
 	gpio_direction_input(SHOLEST_MDTV_INT_GPIO);
-	omap_cfg_reg(T3_34XX_GPIO38);
+	/*omap_cfg_reg(T3_34XX_GPIO38);*/
 
 	/* MTV_PWDN pin - low */
 	gpio_request(SHOLEST_MDTV_PWDN_GPIO, "sms1130 pwdn");
 	gpio_direction_output(SHOLEST_MDTV_PWDN_GPIO, 0);
-	omap_cfg_reg(V8_34XX_GPIO53_OUT);
+	/*omap_cfg_reg(V8_34XX_GPIO53_OUT);*/
 
 	/* MTV_RST_N pin - low */
 	gpio_request(SHOLEST_MDTV_RESET_N_GPIO, "sms1130 reset");
 	gpio_direction_output(SHOLEST_MDTV_RESET_N_GPIO, 0);
-	omap_cfg_reg(U8_34XX_GPIO54_OUT);
+	/*omap_cfg_reg(U8_34XX_GPIO54_OUT);*/
 
 	/* MTV_REG_EN pin - low */
 	gpio_request(SHOLEST_MDTV_REG_EN_GPIO, "lp3907 en");
 	gpio_direction_output(SHOLEST_MDTV_REG_EN_GPIO, 0);
-	omap_cfg_reg(V8_34XX_GPIO53_OUT);
+	/*omap_cfg_reg(V8_34XX_GPIO53_OUT);*/
+
 
 	printk(KERN_INFO "[TDMB] sholest_mdtv_init()\n");
 }
