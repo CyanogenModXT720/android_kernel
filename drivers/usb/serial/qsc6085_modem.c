@@ -97,6 +97,7 @@ struct modem_port {
 	struct list_head filled_read_bufs;
 	int processing;
 	int sending;
+	unsigned int port_closing;
 	struct work_struct wake_and_write;
 	struct work_struct usb_wkup_work;
 };
@@ -319,7 +320,9 @@ static void modem_read_bulk_callback(struct urb *urb)
 		so the queue cannot dry up */
 	}
 
-	if (likely(modem_port_ptr->susp_count == 0))
+	if (likely(modem_port_ptr->susp_count == 0) &&
+	   (modem_port_ptr->port_closing != 1)
+	  )
 		tasklet_schedule(&modem_port_ptr->urb_task);
 	spin_unlock(&modem_port_ptr->read_lock);
 
@@ -504,6 +507,7 @@ static int modem_open(struct tty_struct *tty,
 
 	port->serial->interface->needs_remote_wakeup = 1;
 
+	modem_port_ptr->port_closing = 0;
 	modem_port_ptr->port = port;
 
 	INIT_LIST_HEAD(&modem_port_ptr->spare_read_urbs);
@@ -737,6 +741,8 @@ static void modem_close(struct tty_struct *tty,
 			 __func__);
 		return;
 	}
+
+	modem_port_ptr->port_closing = 1;
 
 	/*  For the data modem port, the pm interface needs to be get here
 	 *  and will be put back at serial_close() of usb-serial.c
