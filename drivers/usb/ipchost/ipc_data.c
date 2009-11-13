@@ -51,6 +51,14 @@
 #include <linux/kthread.h>
 #include <linux/freezer.h>
 
+#ifdef USE_OMAP_SDMA
+#include <mach/dma.h>
+#endif
+
+/* For debug only */
+#include <linux/io.h>
+#include <mach/io.h>
+
 /* Module */
 MODULE_DESCRIPTION("OMAP SAM IPC Test Module");
 MODULE_AUTHOR("Motorola");
@@ -89,6 +97,15 @@ extern USB_LOG_IFS_STRUCT ipc_log_param;
 #ifndef USB_STACK_SEND_ZERO_PACKET
 static int ipc_data_urb_actual_len = 0;
 #endif
+
+int ipc_dbg_index;
+char ipc_dbg_array[IPC_DBG_ARRAY_SIZE];
+unsigned int dma_vsrc;
+unsigned int dma_psrc;
+unsigned int dma_vdest;
+unsigned int dma_pdest;
+unsigned int dma_size;
+unsigned int dma_ch;
 
 #ifdef CONFIG_PM
 static void ipc_suspend_work(struct work_struct *work)
@@ -170,6 +187,9 @@ static int ipc_data_read_buffer(unsigned char *buff, int size)
   usb_ipc_data_param.ipc_events |= IPC_DATA_RD;
   spin_unlock_irqrestore(&ipc_event_lock, flags);
   wake_up(&kipcd_wait);
+	ipc_dbg_array[ipc_dbg_index++] = 0x1;
+	if (ipc_dbg_index >= IPC_DBG_ARRAY_SIZE)
+		ipc_dbg_index = 0;
 
   return ret;
 }
@@ -198,6 +218,9 @@ static void ipc_data_read_callback(struct urb *urb)
   usb_ipc_data_param.ipc_events |= IPC_DATA_RD_CB;
   spin_unlock_irqrestore(&ipc_event_lock, flags);
   wake_up(&kipcd_wait);
+	ipc_dbg_array[ipc_dbg_index++] = 0x11;
+	if (ipc_dbg_index >= IPC_DBG_ARRAY_SIZE)
+		ipc_dbg_index = 0;
 }
 
 /*
@@ -276,10 +299,16 @@ static void ipc_events(void)
       if(usb_ipc_data_param.sleeping == 0) {
         ret = usb_submit_urb(&usb_ipc_data_param.read_urb, GFP_ATOMIC|GFP_DMA);
         spin_unlock_bh(&usb_ipc_data_param.pm_lock);
+	ipc_dbg_array[ipc_dbg_index++] = 0x2;
+	if (ipc_dbg_index >= IPC_DBG_ARRAY_SIZE)
+		ipc_dbg_index = 0;
       }
       else {
         usb_ipc_data_param.read_urb_used = 1;
         spin_unlock_bh(&usb_ipc_data_param.pm_lock);
+	ipc_dbg_array[ipc_dbg_index++] = 0x3;
+	if (ipc_dbg_index >= IPC_DBG_ARRAY_SIZE)
+		ipc_dbg_index = 0;
       }
 #else
       ret = usb_submit_urb(&usb_ipc_data_param.read_urb, GFP_ATOMIC|GFP_DMA);
@@ -433,6 +462,27 @@ int usb_ipc_data_probe(struct usb_interface *intf, const struct usb_device_id *i
 
   usb_ipc_data_param.udev = dev;
 
+#ifdef USE_OMAP_SDMA
+	if (0 != omap_request_dma(IPC_DMA_NODE2BUF_ID, NULL,
+				  ipc_dma_node2buf_callback, NULL,
+				  &ipc_memcpy_node2buf.dma_ch)) {
+		printk(KERN_ERR \
+			"%s: Failed to allocate DMA channel for IPC write\n",
+			__func__);
+		ipc_memcpy_node2buf.dma_ch = -1;
+	}
+	if (0 != omap_request_dma(IPC_DMA_BUF2NODE_ID, NULL,
+				  ipc_dma_buf2node_callback, NULL,
+				  &ipc_memcpy_buf2node.dma_ch)) {
+		printk(KERN_ERR \
+			"%s: Failed to allocate DMA channel for IPC read\n",
+			__func__);
+		ipc_memcpy_buf2node.dma_ch = -1;
+	}
+	printk(KERN_INFO "IPC DMA: ch%d for read, ch%d for write\n",
+		ipc_memcpy_buf2node.dma_ch, ipc_memcpy_node2buf.dma_ch);
+#endif
+
   /* endpoint bulk in*/
   ipc_endpoint = &(intf->cur_altsetting->endpoint[0].desc);
 
@@ -491,6 +541,18 @@ int usb_ipc_data_probe(struct usb_interface *intf, const struct usb_device_id *i
  */
 void usb_ipc_data_disconnect(struct usb_interface *intf)
 {
+	int i;
+	unsigned int dma_rev, dma_sys_st, dma_ocp_sys_conf, dma_gcr;
+	unsigned int dma_irq_st_0, dma_irq_st_1, dma_irq_st_2, dma_irq_st_3;
+	unsigned int dma_irq_en_0, dma_irq_en_1, dma_irq_en_2, dma_irq_en_3;
+	unsigned int dma_caps_0, dma_caps_1, dma_caps_2, dma_caps_3;
+	unsigned int dma_ccr, dma_clnk_ctrl, dma_cicr, dma_csr;
+	unsigned int dma_csdp, dma_cen, dma_cfn, dma_cssa, dma_cdsa;
+	unsigned int dma_csei, dma_csfi, dma_cdei, dma_cdfi, dma_csac;
+	unsigned int dma_cdac, dma_ccen, dma_ccfn, dma_color;
+	unsigned int intc_itr_0, intc_itr_1, intc_itr_2;
+	unsigned int intc_mir_0, intc_mir_1, intc_mir_2;
+
   //DEBUG("Enter %s\n", __FUNCTION__);
   /* unlink URBs */
   kthread_stop(kipcd_task);
@@ -504,9 +566,107 @@ void usb_ipc_data_disconnect(struct usb_interface *intf)
   usb_unlink_urb (&usb_ipc_data_param.read_urb);
   usb_unlink_urb (&usb_ipc_data_param.write_urb);
 
+	dma_rev = omap_readl(0x48056000);
+	dma_irq_st_0 = omap_readl(0x48056008);
+	dma_irq_st_1 = omap_readl(0x4805600c);
+	dma_irq_st_2 = omap_readl(0x48056010);
+	dma_irq_st_3 = omap_readl(0x48056014);
+	dma_irq_en_0 = omap_readl(0x48056018);
+	dma_irq_en_1 = omap_readl(0x4805601c);
+	dma_irq_en_2 = omap_readl(0x48056020);
+	dma_irq_en_3 = omap_readl(0x48056024);
+	dma_sys_st = omap_readl(0x48056028);
+	dma_ocp_sys_conf = omap_readl(0x4805602c);
+	dma_caps_0 = omap_readl(0x48056064);
+	dma_caps_1 = omap_readl(0x4805606c);
+	dma_caps_2 = omap_readl(0x48056070);
+	dma_caps_3 = omap_readl(0x48056074);
+	dma_gcr = omap_readl(0x48056078);
+	dma_ccr = omap_readl(0x48056080 + 0x60 * dma_ch);
+	dma_clnk_ctrl = omap_readl(0x48056084 + 0x60 * dma_ch);
+	dma_cicr = omap_readl(0x48056088 + 0x60 * dma_ch);
+	dma_csr = omap_readl(0x4805608c + 0x60 * dma_ch);
+	dma_csdp = omap_readl(0x48056090 + 0x60 * dma_ch);
+	dma_cen = omap_readl(0x48056094 + 0x60 * dma_ch);
+	dma_cfn = omap_readl(0x48056098 + 0x60 * dma_ch);
+	dma_cssa = omap_readl(0x4805609c + 0x60 * dma_ch);
+	dma_cdsa = omap_readl(0x480560a0 + 0x60 * dma_ch);
+	dma_csei = omap_readl(0x480560a4 + 0x60 * dma_ch);
+	dma_csfi = omap_readl(0x480560a8 + 0x60 * dma_ch);
+	dma_cdei = omap_readl(0x480560ac + 0x60 * dma_ch);
+	dma_cdfi = omap_readl(0x480560b0 + 0x60 * dma_ch);
+	dma_csac = omap_readl(0x480560b4 + 0x60 * dma_ch);
+	dma_cdac = omap_readl(0x480560b8 + 0x60 * dma_ch);
+	dma_ccen = omap_readl(0x480560bc + 0x60 * dma_ch);
+	dma_ccfn = omap_readl(0x480560c0 + 0x60 * dma_ch);
+	dma_color = omap_readl(0x480560c4 + 0x60 * dma_ch);
+	intc_itr_0 = omap_readl(0x48200080);
+	intc_itr_1 = omap_readl(0x48200080 + 0x20);
+	intc_itr_2 = omap_readl(0x48200080 + 0x40);
+	intc_mir_0 = omap_readl(0x48200084);
+	intc_mir_1 = omap_readl(0x48200084 + 0x20);
+	intc_mir_2 = omap_readl(0x48200084 + 0x40);
+	for (i = 0; i < IPC_DBG_ARRAY_SIZE; i++) {
+		printk(KERN_INFO "\t0x%02x\n",
+			(unsigned int)ipc_dbg_array[ipc_dbg_index++]);
+		if (ipc_dbg_index >= IPC_DBG_ARRAY_SIZE)
+			ipc_dbg_index = 0;
+	}
+	printk(KERN_INFO "Current index: %d\n", ipc_dbg_index);
+	printk(KERN_INFO \
+		"dma_psrc = 0x%08x\n"
+		"dma_vdest = 0x%08x\n"
+		"dma_pdest = 0x%08x\n"
+		"dma_size = %u\n"
+		"dma_ch = %u\n",
+		dma_psrc, dma_vdest, dma_pdest, dma_size, dma_ch);
+	printk(KERN_INFO "DMA Register Dump:\n"
+		"dma_rev = 0x%08x\t\tdma_sys_st = 0x%08x\n"
+		"dma_irq_st_0 = 0x%08x\tdma_irq_st_1 = 0x%08x\n"
+		"dma_irq_st_2 = 0x%08x\tdma_irq_st_3 = 0x%08x\n"
+		"dma_irq_en_0 = 0x%08x\tdma_irq_en_1 = 0x%08x\n"
+		"dma_irq_en_2 = 0x%08x\tdma_irq_en_3 = 0x%08x\n"
+		"dma_caps_0 = 0x%08x\t\tdma_caps_1 = 0x%08x\n"
+		"dma_caps_2 = 0x%08x\t\tdma_caps_3 = 0x%08x\n"
+		"dma_ocp_sys_conf = 0x%08x\n"
+		"dma_gcr = 0x%08x\n",
+		dma_rev, dma_sys_st, dma_irq_st_0, dma_irq_st_1,
+		dma_irq_st_2, dma_irq_st_3, dma_irq_en_0, dma_irq_en_1,
+		dma_irq_en_2, dma_irq_en_3, dma_caps_0, dma_caps_1,
+		dma_caps_2, dma_caps_3, dma_ocp_sys_conf, dma_gcr);
+	printk(KERN_INFO "DMA Channel Register Dump:\n"
+		"dma_ccr = 0x%08x\tdma_clnk_ctrl = 0x%08x\n"
+		"dma_cicr = 0x%08x\tdma_csr = 0x%08x\n"
+		"dma_csdp = 0x%08x\tdma_cen = 0x%08x\n"
+		"dma_cfn = 0x%08x\tdma_cssa = 0x%08x\n"
+		"dma_cdsa = 0x%08x\tdma_csei = 0x%08x\n"
+		"dma_csfi = 0x%08x\tdma_cdei = 0x%08x\n"
+		"dma_cdfi = 0x%08x\tdma_csac = 0x%08x\n"
+		"dma_cdac = 0x%08x\tdma_ccen = 0x%08x\n"
+		"dma_ccfn = 0x%08x\tdma_color = 0x%08x\n",
+		dma_ccr, dma_clnk_ctrl, dma_cicr, dma_csr, dma_csdp,
+		dma_cen, dma_cfn, dma_cssa, dma_cdsa, dma_csei, dma_csfi,
+		dma_cdei, dma_cdfi, dma_csac, dma_cdac, dma_ccen, dma_ccfn,
+		dma_color);
+	printk(KERN_INFO "INTC Status and Mask register Dump:\n"
+		"intc_itr_0 = 0x%08x\tintc_itr_1 = 0x%08x\n"
+		"intc_itr_2 = 0x%08x\tintc_mir_0 = 0x%08x\n"
+		"intc_mir_1 = 0x%08x\tintc_mir_2 = 0x%08x\n",
+		intc_itr_0, intc_itr_1, intc_itr_2,
+		intc_mir_0, intc_mir_1, intc_mir_2);
+
   usb_set_intfdata (intf, NULL);
 
   ipc_api_usb_disconnect(IPC_DATA_CH_NUM);
+
+#ifdef USE_OMAP_SDMA
+	omap_stop_dma(ipc_memcpy_node2buf.dma_ch);
+	omap_free_dma(ipc_memcpy_node2buf.dma_ch);
+	omap_stop_dma(ipc_memcpy_buf2node.dma_ch);
+	omap_free_dma(ipc_memcpy_buf2node.dma_ch);
+	ipc_memcpy_node2buf.dma_ch = -1;
+	ipc_memcpy_buf2node.dma_ch = -1;
+#endif
 
   /* re-init "usb_ipc_data_param" */
   usb_ipc_data_init();
@@ -624,6 +784,9 @@ static int usb_ipc_resume(struct usb_interface *iface)
 			ret = usb_submit_urb(&usb_ipc_data_param.read_urb,
 				GFP_ATOMIC|GFP_DMA);
 			usb_ipc_data_param.read_urb_used = 0;
+			ipc_dbg_array[ipc_dbg_index++] = 0x4;
+			if (ipc_dbg_index >= IPC_DBG_ARRAY_SIZE)
+				ipc_dbg_index = 0;
 			DEBUG("data read urb restarted, ret=%d.\n", ret);
 		}
 		if (usb_ipc_data_param.write_urb_used) {
@@ -672,6 +835,9 @@ static struct usb_driver usb_ipc_driver = {
 static int __init usb_ipc_init(void)
 {
   int result;
+
+	ipc_dbg_index = 0;
+	memset((void *)ipc_dbg_array, 0xff, IPC_DBG_ARRAY_SIZE);
 
   /* IPC API relevant initialization */
   ipc_api_init();

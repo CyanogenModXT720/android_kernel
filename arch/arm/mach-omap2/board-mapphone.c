@@ -216,16 +216,12 @@ static struct platform_device usb_mass_storage_device = {
 
 static int cpcap_usb_connected_probe(struct platform_device *pdev)
 {
-	/* Wake up MUSB from lowpower state */
-	musb_disable_idle(1);
 	android_usb_set_connected(1);
 	return 0;
 }
 
 static int cpcap_usb_connected_remove(struct platform_device *pdev)
 {
-	/* Enable low power state for MUSB */
-	musb_disable_idle(0);
 	android_usb_set_connected(0);
 	return 0;
 }
@@ -434,7 +430,7 @@ static struct qtouch_ts_platform_data mapphone_ts_platform_data = {
 	.abs_max_p	= 255,
 	.abs_min_w	= 0,
 	.abs_max_w	= 15,
-	.nv_checksum	= 0xfdfc,
+	.nv_checksum	= 0xfaf5,
 	.fuzz_x		= 0,
 	.fuzz_y		= 0,
 	.fuzz_p		= 2,
@@ -530,16 +526,16 @@ static struct lm3530_platform_data omap3430_als_light_data = {
 	.als_config = 0x7c,
 	.brightness_ramp = 0x36,
 	.als_zone_info = 0x00,
-	.als_resistor_sel = 0xf4,
+	.als_resistor_sel = 0x21,
 	.brightness_control = 0x00,
-	.zone_boundary_0 = 0x01,
-	.zone_boundary_1 = 0x06,
-	.zone_boundary_2 = 0x44,
-	.zone_boundary_3 = 0xff,
-	.zone_target_0 = 0x56,
-	.zone_target_1 = 0x6e,
-	.zone_target_2 = 0x6e,
-	.zone_target_3 = 0x79,
+	.zone_boundary_0 = 0x02,
+	.zone_boundary_1 = 0x10,
+	.zone_boundary_2 = 0x43,
+	.zone_boundary_3 = 0xfc,
+	.zone_target_0 = 0x51,
+	.zone_target_1 = 0x6c,
+	.zone_target_2 = 0x6c,
+	.zone_target_3 = 0x6c,
 	.zone_target_4 = 0x7e,
 	.manual_current = 0x13,
 	.upper_curr_sel = 6,
