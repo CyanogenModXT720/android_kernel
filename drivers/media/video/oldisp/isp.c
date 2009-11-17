@@ -368,7 +368,7 @@ static void isp_csia_isr(unsigned long status, isp_vbq_callback_ptr arg1,
 
 	if (status & CSIA)
 		isp_csi2_isr();
-	}
+}
 
 /**
  * isp_set_sgdma_callback - Set Scatter-Gather DMA Callback.
@@ -587,7 +587,7 @@ int isp_unset_callback(enum isp_callback_type type)
 		break;
 	case CBK_SBL_OVF:
 		omap_writel((omap_readl(ISP_IRQ0ENABLE)) &
-						~IRQ0ENABLE_OVF_IRQ, ISP_IRQ0ENABLE);
+			~IRQ0ENABLE_OVF_IRQ, ISP_IRQ0ENABLE);
 		break;
 	default:
 		break;
@@ -969,7 +969,6 @@ int isp_configure_interface(struct isp_interface_config *config)
 
 		isp_csi2_ctx_config_format(0, config->u.csi.format);
 		isp_csi2_ctx_update(0, false);
-
 
 		isp_set_callback(CBK_CSIA, isp_csia_isr, NULL, NULL);
 
@@ -1938,6 +1937,13 @@ int isp_handle_private(int cmd, void *arg)
       ispresizer_config_filter_coef(resizer_coef);
       }
    break;
+   case VIDIOC_PRIVATE_ISP_CCDC_BAYER_CFG:
+	   {
+		   struct ispccdc_color_offset *offset;
+		   offset = (struct ispccdc_color_offset *)arg;
+		   ispccdc_set_crop_offset_dynamic(*offset);
+	   }
+	   break;
 	default:
 		rval = -EINVAL;
 		break;
@@ -2182,7 +2188,7 @@ int isp_try_fmt_cap(struct v4l2_pix_format *pix_input,
 		ispccdc_config_crop(0,
 		(pix_input->height-adjusted_height)/2,
 		adjusted_height + (pix_input->height-adjusted_height)/2,
-			pix_input->width);
+		pix_input->width);
 	} else {
 		ispccdc_config_crop(0, 0, 0, 0);
 	}
@@ -2391,33 +2397,33 @@ int isp_get(void)
 	if (isp_obj.ref_count == 0) {
 		isp_obj.cam_ick = clk_get(&camera_dev, "cam_ick");
 		if (IS_ERR(isp_obj.cam_ick)) {
-			DPRINTK_ISPCTRL("ISP_ERR: clk_get for "
+			DPRINTK_ISPCTRL("ISP_ERR : clk_get for "
 							"cam_ick failed\n");
 			ret_err = PTR_ERR(isp_obj.cam_ick);
 			goto out_clk_get_ick;
 		}
 		isp_obj.cam_mclk = clk_get(&camera_dev, "cam_mclk");
 		if (IS_ERR(isp_obj.cam_mclk)) {
-			DPRINTK_ISPCTRL("ISP_ERR: clk_get for "
+			DPRINTK_ISPCTRL("ISP_ERR : clk_get for "
 							"cam_mclk failed\n");
 			ret_err = PTR_ERR(isp_obj.cam_mclk);
 			goto out_clk_get_mclk;
 		}
 		isp_obj.csi2_fck = clk_get(&camera_dev, "csi2_96m_fck");
 		if (IS_ERR(isp_obj.csi2_fck)) {
-			DPRINTK_ISPCTRL("ISP_ERR: clk_get for csi2_fclk"
+			DPRINTK_ISPCTRL("ISP_ERR : clk_get for csi2_fclk"
 								" failed\n");
 			ret_err = PTR_ERR(isp_obj.csi2_fck);
 			goto out_clk_get_csi2_fclk;
 		}
 		ret_err = clk_enable(isp_obj.cam_ick);
 		if (ret_err) {
-			DPRINTK_ISPCTRL("ISP_ERR: clk_en for ick failed\n");
+			DPRINTK_ISPCTRL("ISP_ERR : clk_en for ick failed\n");
 			goto out_clk_enable_ick;
 		}
 		ret_err = clk_enable(isp_obj.cam_mclk);
 		if (ret_err) {
-			DPRINTK_ISPCTRL("ISP_ERR: clk_en for mclk failed\n");
+			DPRINTK_ISPCTRL("ISP_ERR : clk_en for mclk failed\n");
 			goto out_clk_enable_mclk;
 		}
 		ret_err = clk_enable(isp_obj.csi2_fck);
@@ -2433,7 +2439,7 @@ int isp_get(void)
 	mutex_unlock(&(isp_obj.isp_mutex));
 
 
-	DPRINTK_ISPCTRL("isp_get: new %d\n", isp_obj.ref_count);
+	DPRINTK_ISPCTRL("isp_get : new %d\n", isp_obj.ref_count);
 	return isp_obj.ref_count;
 
 out_clk_enable_csi2_fclk:
@@ -2678,7 +2684,7 @@ struct page **map_user_memory_to_kernel(
 			if (unlikely(ret != nr_pages)) {
 				kfree(ppages);
 				ppages = NULL;
-				printk(KERN_ERR "isp: Mapping user pages"
+				printk(KERN_ERR "isp : Mapping user pages"
 						" to kernel failed\n");
 			}
 			if (nr_pages_mapped)
@@ -2702,12 +2708,12 @@ void unmap_user_memory_from_kernel(struct page **pages, int nr_pages)
 	if (pages != NULL) {
 		for (i = 0; i < nr_pages; ++i)
 			page_cache_release(pages[i]);
-		}
 	}
+}
 
 /**
  * isp_run_resizer - Run the resizer on memory based input
- *									and output.
+ * and output.
  * @userdata: address to the passed in data structure.
  *
  * Returns 0 on success, < 0 otherwise.
@@ -2717,7 +2723,7 @@ int isp_run_resizer(void *userdata)
 	int i;
 	int ret = -1;
 	struct ispprv_run_resizer *presizer_user = \
-							(struct ispprv_run_resizer *)userdata;
+		(struct ispprv_run_resizer *)userdata;
 	u32 input_buffer_size, output_buffer_size;
 	u32 input_nr_pages, output_nr_pages;
 	struct page **input_pages = NULL;
@@ -2734,17 +2740,17 @@ int isp_run_resizer(void *userdata)
 	memcpy(&resizer_param, presizer_user, \
 		sizeof(struct ispprv_run_resizer));
 
-	DPRINTK_ISPCTRL("\nisp_run_resizer: input(%d-%d) - output(%d-%d)\n",
-										resizer_param.input_width,
-										resizer_param.input_height,
-										resizer_param.output_width,
-										resizer_param.output_height);
+	DPRINTK_ISPCTRL("\nisp_run_resizer : input(%d-%d) - output(%d-%d)\n",
+		resizer_param.input_width,
+		resizer_param.input_height,
+		resizer_param.output_width,
+		resizer_param.output_height);
 
-	DPRINTK_ISPCTRL("isp_run_resizer: start(%d-%d) - end(%d-%d)\n",
-										resizer_param.left,
-										resizer_param.top,
-										resizer_param.crop_width,
-										resizer_param.crop_height);
+	DPRINTK_ISPCTRL("isp_run_resizer : start(%d-%d) - end(%d-%d)\n",
+		resizer_param.left,
+		resizer_param.top,
+		resizer_param.crop_width,
+		resizer_param.crop_height);
 
 	if (presizer_user->datain == 0 || presizer_user->dataout == 0)
 		return -EINVAL;
@@ -2752,9 +2758,9 @@ int isp_run_resizer(void *userdata)
 	ispresizer_save_context();
 
 	input_buffer_size = ALIGN_TO(presizer_user->input_width* \
-										presizer_user->input_height*2 , 0x100);
+		presizer_user->input_height*2 , 0x100);
 	input_pages = map_user_memory_to_kernel(presizer_user->datain,
-									input_buffer_size, &input_nr_pages);
+		input_buffer_size, &input_nr_pages);
 	if (input_pages == NULL) {
 		ret = -EINVAL;
 		printk(KERN_ERR "isp_run_resizer : memory allocation failed\n");
@@ -2762,9 +2768,9 @@ int isp_run_resizer(void *userdata)
 	}
 
 	output_buffer_size = ALIGN_TO(presizer_user->output_width* \
-											presizer_user->output_height*2, 0x1000);
+		presizer_user->output_height*2, 0x1000);
 	output_pages = map_user_memory_to_kernel(presizer_user->dataout,
-									output_buffer_size, &output_nr_pages);
+		output_buffer_size, &output_nr_pages);
 	if (output_pages == NULL) {
 		ret = -EINVAL;
 		printk(KERN_ERR "isp_run_resizer() memory allocation failed\n");
@@ -2787,24 +2793,24 @@ int isp_run_resizer(void *userdata)
 	}
 
 	if ((resizer_param.left == 0) && (resizer_param.top == 0)) {
-		ret = ispresizer_try_size(&resizer_param.input_width,
-												&resizer_param.input_height,
-												&resizer_param.output_width,
-												&resizer_param.output_height);
+			ret = ispresizer_try_size(&resizer_param.input_width,
+			&resizer_param.input_height,
+			&resizer_param.output_width,
+			&resizer_param.output_height);
 
-		ret = ispresizer_config_size(resizer_param.input_width,
-													resizer_param.input_height,
-													resizer_param.output_width,
-													resizer_param.output_height);
+			ret = ispresizer_config_size(resizer_param.input_width,
+			resizer_param.input_height,
+			resizer_param.output_width,
+			resizer_param.output_height);
 
 		ispresizer_set_inaddr(isp_addr_in);
 	} else {
 		ispresizer_trycrop(resizer_param.left,
-										resizer_param.top,
-										resizer_param.crop_width,
-										resizer_param.crop_height,
-										resizer_param.output_width,
-										resizer_param.output_height);
+			resizer_param.top,
+			resizer_param.crop_width,
+			resizer_param.crop_height,
+			resizer_param.output_width,
+			resizer_param.output_height);
 
 		ispresizer_applycrop();
 
@@ -2853,14 +2859,14 @@ exit_cleanup:
 		kfree(output_pages);
 	}
 
-	DPRINTK_ISPCTRL("isp_run_resizer: exit.\n");
+	DPRINTK_ISPCTRL("isp_run_resizer : exit.\n");
 	return ret;
 }
 EXPORT_SYMBOL(isp_run_resizer);
 
 /**
  * isp_run_preview - Run the preview on memory based input
- *									and output.
+ * and output.
  * @userdata: address to the passed in data structure.
  *
  * Returns 0 on success, < 0 otherwise.
@@ -2890,16 +2896,16 @@ int isp_run_preview(void *userdata)
 		sizeof(struct ispprv_run_hardpipe));
 
 	DPRINTK_ISPCTRL("\nnisp_run_preview() input(%d-%d) - output(%d-%d)\n",
-										preview_param.input_width,
-										preview_param.input_height,
-										preview_param.output_width,
-										preview_param.output_height);
+		preview_param.input_width,
+		preview_param.input_height,
+		preview_param.output_width,
+		preview_param.output_height);
 
 	DPRINTK_ISPCTRL("isp_run_preview() start(%d-%d) - end(%d-%d)\n",
-										preview_param.left,
-										preview_param.top,
-										preview_param.crop_width,
-										preview_param.crop_height);
+		preview_param.left,
+		preview_param.top,
+		preview_param.crop_width,
+		preview_param.crop_height);
 
 	if (ppreview_user->datain == 0 || ppreview_user->dataout == 0)
 		return -EINVAL;
@@ -2910,22 +2916,22 @@ int isp_run_preview(void *userdata)
 	ispccdc_config_crop(0, 0, 0, 0);
 
 	ret = isppreview_try_size(preview_param.input_width,
-											preview_param.input_height,
-											&preview_param.output_width,
-											&preview_param.output_height);
+		preview_param.input_height,
+		&preview_param.output_width,
+		&preview_param.output_height);
 	if (ret < 0)
 		goto exit_cleanup;
 	ret = isppreview_config_size(preview_param.input_width,
-													preview_param.input_height,
-													preview_param.output_width,
-													preview_param.output_height);
+		preview_param.input_height,
+		preview_param.output_width,
+		preview_param.output_height);
 	if (ret < 0)
 		goto exit_cleanup;
 
 	input_buffer_size = ALIGN_TO(ppreview_user->input_width* \
-										ppreview_user->input_height*2 , 0x100);
+		ppreview_user->input_height*2 , 0x100);
 	input_pages = map_user_memory_to_kernel(preview_param.datain,
-									input_buffer_size, &input_nr_pages);
+		input_buffer_size, &input_nr_pages);
 	if (input_pages == NULL) {
 		ret = -EINVAL;
 		printk(KERN_ERR "isp_run_preview : memory allocation failed\n");
@@ -2933,9 +2939,9 @@ int isp_run_preview(void *userdata)
 	}
 
 	output_buffer_size = ALIGN_TO(ppreview_user->output_width* \
-											ppreview_user->output_height*2, 0x1000);
+		ppreview_user->output_height*2, 0x1000);
 	output_pages = map_user_memory_to_kernel(preview_param.dataout,
-									output_buffer_size, &output_nr_pages);
+		output_buffer_size, &output_nr_pages);
 	if (output_pages == NULL) {
 		ret = -EINVAL;
 		printk(KERN_ERR "isp_run_preview memory allocation failed\n");
@@ -2983,39 +2989,39 @@ int isp_run_preview(void *userdata)
 
 	if ((preview_param.left == 0) && (preview_param.top == 0)) {
 		ret = ispresizer_try_size(&resizer_param.input_width,
-												&resizer_param.input_height,
-												&resizer_param.output_width,
-												&resizer_param.output_height);
+				&resizer_param.input_height,
+				&resizer_param.output_width,
+				&resizer_param.output_height);
 		if (ret < 0)
 			goto exit_cleanup;
 		ret = ispresizer_config_size(resizer_param.input_width,
-													resizer_param.input_height,
-													resizer_param.output_width,
-													resizer_param.output_height);
+				resizer_param.input_height,
+				resizer_param.output_width,
+				resizer_param.output_height);
 		if (ret < 0)
 			goto exit_cleanup;
 		ispresizer_set_inaddr(buff_addr_mapped);
 	} else {
 		ispresizer_trycrop(preview_param.left,
-										preview_param.top,
-										preview_param.crop_width,
-										preview_param.crop_height,
-										resizer_param.output_width,
-										resizer_param.output_height);
+				preview_param.top,
+				preview_param.crop_width,
+				preview_param.crop_height,
+				resizer_param.output_width,
+				resizer_param.output_height);
 
 		ispresizer_applycrop();
 
 		/*pixel alignment in 32bit space, vertical must be 0 per TRM */
 		omap_writel(((preview_param.left%16) <<
-							ISPRSZ_IN_START_HORZ_ST_SHIFT) |
-							(0 <<
-							ISPRSZ_IN_START_VERT_ST_SHIFT),
-							ISPRSZ_IN_START);
+					ISPRSZ_IN_START_HORZ_ST_SHIFT) |
+					(0 <<
+					ISPRSZ_IN_START_VERT_ST_SHIFT),
+					ISPRSZ_IN_START);
 
 		/* Align input address for cropping, per TRM  */
 		ispresizer_set_inaddr(buff_addr_mapped +
-							(preview_param.top*resizer_param.input_width*2)
-							+ ((preview_param.left/16)*32));
+				(preview_param.top*resizer_param.input_width*2)
+				+ ((preview_param.left/16)*32));
 	}
 
 	ispresizer_set_outaddr(isp_addr_out);
@@ -3053,7 +3059,7 @@ exit_cleanup:
 		kfree(output_pages);
 	}
 
-	DPRINTK_ISPCTRL("isp_run_preview: exit.\n");
+	DPRINTK_ISPCTRL("isp_run_preview : exit.\n");
 	return ret;
 }
 EXPORT_SYMBOL(isp_run_preview);
@@ -3068,34 +3074,34 @@ void isp_print_status(void)
 	if (!is_ispctrl_debug_enabled())
 		return;
 
-	DPRINTK_ISPCTRL("###CM_FCLKEN_CAM=0x%x\n",
+	DPRINTK_ISPCTRL("###CM_FCLKEN_CAM = 0x%x\n",
 					omap_readl(OMAP3_CM_FCLKEN_CAM));
-	DPRINTK_ISPCTRL("###CM_ICLKEN_CAM=0x%x\n",
+	DPRINTK_ISPCTRL("###CM_ICLKEN_CAM = 0x%x\n",
 					omap_readl(OMAP3_CM_ICLKEN_CAM));
-	DPRINTK_ISPCTRL("###CM_CLKSEL_CAM=0x%x\n",
+	DPRINTK_ISPCTRL("###CM_CLKSEL_CAM = 0x%x\n",
 					omap_readl(OMAP3_CM_CLKSEL_CAM));
-	DPRINTK_ISPCTRL("###CM_AUTOIDLE_CAM=0x%x\n",
+	DPRINTK_ISPCTRL("###CM_AUTOIDLE_CAM = 0x%x\n",
 					omap_readl(OMAP3_CM_AUTOIDLE_CAM));
-	DPRINTK_ISPCTRL("###CM_CLKEN_PLL[18:16] should be 0x7, = 0x%x\n",
+	DPRINTK_ISPCTRL("###CM_CLKEN_PLL[18 : 16] should be 0x7, = 0x%x\n",
 					omap_readl(OMAP3_CM_CLKEN_PLL));
 	DPRINTK_ISPCTRL("###CM_CLKSEL2_PLL[18 : 8] should be 0x2D, "
 			"[6 : 0] should be 1 = 0x%x\n",
 			omap_readl(OMAP3_CM_CLKSEL2_PLL));
-	DPRINTK_ISPCTRL("###CTRL_PADCONF_CAM_HS=0x%x\n",
+	DPRINTK_ISPCTRL("###CTRL_PADCONF_CAM_HS = 0x%x\n",
 					omap_readl(CTRL_PADCONF_CAM_HS));
-	DPRINTK_ISPCTRL("###CTRL_PADCONF_CAM_XCLKA=0x%x\n",
+	DPRINTK_ISPCTRL("###CTRL_PADCONF_CAM_XCLKA = 0x%x\n",
 					omap_readl(CTRL_PADCONF_CAM_XCLKA));
-	DPRINTK_ISPCTRL("###CTRL_PADCONF_CAM_D1=0x%x\n",
+	DPRINTK_ISPCTRL("###CTRL_PADCONF_CAM_D1 = 0x%x\n",
 					omap_readl(CTRL_PADCONF_CAM_D1));
-	DPRINTK_ISPCTRL("###CTRL_PADCONF_CAM_D3=0x%x\n",
+	DPRINTK_ISPCTRL("###CTRL_PADCONF_CAM_D3 = 0x%x\n",
 					omap_readl(CTRL_PADCONF_CAM_D3));
-	DPRINTK_ISPCTRL("###CTRL_PADCONF_CAM_D5=0x%x\n",
+	DPRINTK_ISPCTRL("###CTRL_PADCONF_CAM_D5 = 0x%x\n",
 					omap_readl(CTRL_PADCONF_CAM_D5));
-	DPRINTK_ISPCTRL("###CTRL_PADCONF_CAM_D7=0x%x\n",
+	DPRINTK_ISPCTRL("###CTRL_PADCONF_CAM_D7 = 0x%x\n",
 					omap_readl(CTRL_PADCONF_CAM_D7));
-	DPRINTK_ISPCTRL("###CTRL_PADCONF_CAM_D9=0x%x\n",
+	DPRINTK_ISPCTRL("###CTRL_PADCONF_CAM_D9 = 0x%x\n",
 					omap_readl(CTRL_PADCONF_CAM_D9));
-	DPRINTK_ISPCTRL("###CTRL_PADCONF_CAM_D11=0x%x\n",
+	DPRINTK_ISPCTRL("###CTRL_PADCONF_CAM_D11 = 0x%x\n",
 					omap_readl(CTRL_PADCONF_CAM_D11));
 }
 EXPORT_SYMBOL(isp_print_status);

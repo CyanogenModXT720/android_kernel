@@ -500,6 +500,24 @@ void ispccdc_enable_lsc(u8 enable)
 }
 EXPORT_SYMBOL(ispccdc_enable_lsc);
 
+
+/**
+ * ispccdc_set_crop_offset_dynamic - Store the component order as component offset.
+ * @raw_fmt: Input data component order.
+ *
+ * Turns the component order into a horizontal & vertical offset and store
+ * offsets to be used later.
+ **/
+void ispccdc_set_crop_offset_dynamic(struct ispccdc_color_offset offset)
+{
+	printk(KERN_INFO "ipsccdc crop offset dyn(%d)\n", offset.offsetcode);
+	if (offset.offsetcode > ISPCCDC_INPUT_FMT_GB_RG)
+		offset.offsetcode = 0;
+	ispccdc_set_crop_offset(offset.offsetcode);
+
+}
+EXPORT_SYMBOL(ispccdc_set_crop_offset_dynamic);
+
 /**
  * ispccdc_set_crop_offset - Store the component order as component offset.
  * @raw_fmt: Input data component order.
@@ -527,6 +545,8 @@ void ispccdc_set_crop_offset(enum ispccdc_raw_fmt raw_fmt)
 		ispccdc_obj.ccdcin_hstart = 1;
 		break;
 	}
+	printk(KERN_INFO "ispccdc_crop_offset(%d)\n", raw_fmt);
+
 	ispccdc_obj.ccdcin_woffset = ispccdc_obj.ccdcin_wstart;
 	ispccdc_obj.ccdcin_hoffset = ispccdc_obj.ccdcin_hstart;
 }
@@ -588,7 +608,7 @@ int ispccdc_config_datapath(enum ccdc_input input, enum ccdc_output output)
 	struct ispccdc_syncif syncif;
 	struct ispccdc_bclamp blkcfg;
 
-	u32 colptn = (ISPCCDC_COLPTN_Gr_Cy << ISPCCDC_COLPTN_CP0PLC0_SHIFT) |
+   u32 colptn = (ISPCCDC_COLPTN_Gr_Cy << ISPCCDC_COLPTN_CP0PLC0_SHIFT) |
 		(ISPCCDC_COLPTN_R_Ye << ISPCCDC_COLPTN_CP0PLC1_SHIFT) |
 		(ISPCCDC_COLPTN_Gr_Cy << ISPCCDC_COLPTN_CP0PLC2_SHIFT) |
 		(ISPCCDC_COLPTN_R_Ye << ISPCCDC_COLPTN_CP0PLC3_SHIFT) |

@@ -63,7 +63,7 @@ long hp3a_unlocked_ioctl(struct file *file, unsigned int cmd,
 				&statistics,
 				sizeof(struct hp3a_statistics)) != 0)
 				ret = -EFAULT;
-			}
+		}
 		break;
 	}
 	/*
@@ -179,8 +179,8 @@ long hp3a_unlocked_ioctl(struct file *file, unsigned int cmd,
 			ret = -1;
 			if (req_buf.count > 0) {
 				fh->buffers = kzalloc(req_buf.count * \
-						sizeof(struct hp3a_internal_buffer),
-						GFP_KERNEL);
+					sizeof(struct hp3a_internal_buffer),
+					GFP_KERNEL);
 				if (fh->buffers) {
 					fh->buffer_count = req_buf.count;
 					for (i = 0; i < fh->buffer_count; ++i)
@@ -209,7 +209,7 @@ long hp3a_unlocked_ioctl(struct file *file, unsigned int cmd,
 				if (fh->buffers[buffer.index].buffer_size
 					==	0) {
 					ret = map_user_to_kernel(&buffer,
-							&(fh->buffers[buffer.index]));
+						&(fh->buffers[buffer.index]));
 				}
 			}
 		} else {
@@ -231,7 +231,7 @@ long hp3a_unlocked_ioctl(struct file *file, unsigned int cmd,
 			if (buffer.index >= 0 && buffer.index <
 				fh->buffer_count) {
 				if (fh->buffers[buffer.index].buffer_size &&
-						fh->buffers[buffer.index].pages) {
+					fh->buffers[buffer.index].pages) {
 					unmap_buffer_from_kernel(
 						&(fh->buffers[buffer.index]));
 					ret = 0;
@@ -288,10 +288,10 @@ long hp3a_unlocked_ioctl(struct file *file, unsigned int cmd,
 			ret = hp3a_configure_raw(&config);
 			if (SUCCEEDED(ret)) {
 				if (copy_to_user((struct hp3a_raw_config *)arg,
-						&config,
+					&config,
 					sizeof(struct hp3a_raw_config)) != 0)
 					ret = -EFAULT;
-				}
+			}
 		} else {
 			ret = -EFAULT;
 		}
@@ -327,6 +327,7 @@ long hp3a_unlocked_ioctl(struct file *file, unsigned int cmd,
 	 */
 	case HP3A_S_V4L2_DEV_INDEX: {
 		fh->v4l2_dev = (int)arg;
+		g_tc.default_v4l2_dev = fh->v4l2_dev;
 		ret = 0;
 		break;
 	}

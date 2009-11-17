@@ -66,6 +66,7 @@ void initialize_hp3a_framework(struct hp3a_dev *device)
 		g_tc.raw_buffer  = NULL;
 		g_tc.exposure_sync = 2;
 		g_tc.gain_sync = 1;
+		g_tc.default_v4l2_dev = 0;
 
 		/* Initialize task queues. */
 		hp3a_initialize_queue(&g_tc.hist_stat_queue, 8,
@@ -191,16 +192,18 @@ int hp3a_set_sensor_param(struct hp3a_sensor_param *param, struct hp3a_fh *fh)
 				sensor_param.exposure = param->exposure;
 				sensor_param.gain = 0;
 
-				ret = hp3a_enqueue(&g_tc.sensor_write_queue,
-							&sensor_param);
+				ret = hp3a_enqueue_irqsave(
+						&g_tc.sensor_write_queue,
+						&sensor_param);
 			}
 
 			if (g_tc.current_gain != param->gain) {
 				sensor_param.exposure = 0;
 				sensor_param.gain = param->gain;
 
-				ret = hp3a_enqueue(&g_tc.sensor_write_queue,
-						&sensor_param);
+				ret = hp3a_enqueue_irqsave(
+					&g_tc.sensor_write_queue,
+					&sensor_param);
 			}
 		} else {
 			struct cam_sensor_settings sensor_settings = {
@@ -477,7 +480,8 @@ static void hp3a_task(struct work_struct *work)
 	/**
 	 * Setup exposure and gain for next frame.
 	 */
-	if (hp3a_dequeue(&g_tc.sensor_write_queue, &sensor_param) == 0) {
+	if (hp3a_dequeue_irqsave(&g_tc.sensor_write_queue, \
+	&sensor_param) == 0) {
 		sensor_settings.exposure = sensor_param.exposure;
 		sensor_settings.gain = sensor_param.gain;
 
@@ -487,8 +491,8 @@ static void hp3a_task(struct work_struct *work)
 			sensor_settings.flags |= OMAP34XXCAM_SET_GAIN;
 
 		/**
-		* Write and read sensor settings.
-		*/
+		 * Write and read sensor settings.
+		 */
 		omap34xxcam_sensor_settings(sensor_param.v4l2_dev, \
 				&sensor_settings);
 
@@ -514,5 +518,21 @@ static void hp3a_task(struct work_struct *work)
 			/* Save new programmed in exposure value. */
 			g_tc.current_exposure = sensor_settings.exposure;
 		}
+	} else if (frame_index == 1) {
+		/**
+		 * Read sensor settings.
+		 */
+		omap34xxcam_sensor_settings(g_tc.default_v4l2_dev, \
+				&sensor_settings);
+
+		sensor_param.frame_id = frame_index;
+		g_tc.current_exposure = sensor_param.exposure \
+			= sensor_settings.exposure;
+		g_tc.current_gain = sensor_param.gain \
+			= sensor_settings.gain;
+
+		/* Queue new value for stats collecton. */
+		hp3a_enqueue_irqsave(&g_tc.sensor_read_queue, \
+			&sensor_param);
 	}
 }

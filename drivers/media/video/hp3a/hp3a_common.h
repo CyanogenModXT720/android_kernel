@@ -245,6 +245,7 @@ struct hp3a_statistics {
  **/
 struct hp3a_context {
 	int initialized;
+	int default_v4l2_dev;
 	int v4l2_streaming;
 	int update_hardpipe;
 	int hist_done;

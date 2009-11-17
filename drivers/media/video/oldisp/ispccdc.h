@@ -215,6 +215,8 @@ void ispccdc_set_wenlog(u32 wenlog);
 
 void ispccdc_set_dcsub(u32 dcsub);
 
+void ispccdc_set_crop_offset_dynamic(struct ispccdc_color_offset offset);
+
 void ispccdc_set_crop_offset(enum ispccdc_raw_fmt);
 
 #endif		/* OMAP_ISP_CCDC_H */
