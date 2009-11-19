@@ -448,8 +448,6 @@ static struct i2c_driver lp3907_driver = {
 	},
 	.probe	  = lp3907_probe,
 	.remove	  = __devexit_p(lp3907_remove),
-	.resume   = lp3907_resume,
-	.suspend  = lp3907_suspend,
 	.id_table = lp3907_id,
 };
 

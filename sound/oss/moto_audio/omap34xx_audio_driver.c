@@ -1172,15 +1172,20 @@ static int audio_select_speakers(int spkr)
 		local_spkr = -1;
 	}
 
-	AUDIO_LEVEL1_LOG("spkr1 = %#x, spkr2 = %#x\n", spkr1, spkr2);
+	AUDIO_LEVEL3_LOG("spkr1 = %#x, spkr2 = %#x\n", spkr1, spkr2);
 
+	/* LIBtt21120, to setup audio path, this routine have to remove */
+	#if 0
 	if (spkr1 != primary_spkr_setting || spkr2 != secondary_spkr_setting) {
+	#endif
 		primary_spkr_setting = spkr1;
 		secondary_spkr_setting = spkr2;
 		map_audioic_speakers();
 		cpcap_audio_state.output_gain = 0;
 		cpcap_audio_set_audio_state(&cpcap_audio_state);
+	#if 0
 	}
+	#endif
 
 	return 0;
 }
@@ -1799,7 +1804,7 @@ static int audio_ioctl(struct inode *inode, struct file *file,
 	{
 		int spkr;
 		TRY(copy_from_user(&spkr, (int *)arg, sizeof(int)))
-		AUDIO_LEVEL2_LOG("SOUND_MIXER_OUTSRC with spkr = %#x\n", spkr);
+		AUDIO_LEVEL1_LOG("SOUND_MIXER_OUTSRC with spkr = %#x\n", spkr);
 		ret = audio_select_speakers(spkr);
 		break;
 	}
