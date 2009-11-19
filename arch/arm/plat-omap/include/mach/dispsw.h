@@ -84,6 +84,7 @@ enum dispsw_rotate {
 enum dispsw_scale {
 	DISPSW_SCALE_IGNORE,
 	DISPSW_SCALE_FIT_TO_SCREEN,
+	DISPSW_SCALE_FOR_TVOUT, /* TV OUT scale */
 	DISPSW_SCALE_PERCENT, /* Percent of increase or decrease of plane */
 };
 
@@ -102,6 +103,7 @@ enum dispsw_align {
 	DISPSW_ALIGN_LEFT_CENTER,
 	DISPSW_ALIGN_RIGHT,
 	DISPSW_ALIGN_RIGHT_CENTER,
+	DISPSW_ALIGN_CENTER_TVOUT, /* TV OUT align */
 	DISPSW_ALIGN_PERCENT,  /* Percent of display size to align to.
 				* Top-left of display to top-left of plane
 				*/
@@ -155,7 +157,6 @@ struct dispsw_res {
 
 #ifdef CONFIG_TVOUT_SHOLEST
 extern int get_video_status(void);
-extern bool get_video_work_status(void);
 #endif
 
 #endif /* __DISPSW_H__ */

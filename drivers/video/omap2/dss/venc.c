@@ -234,15 +234,9 @@ static const struct venc_config venc_config_ntsc_trm = {
 };
 
 static const struct venc_config venc_config_pal_bdghi = {
-#ifdef CONFIG_TVOUT_SHOLEST
-	.f_control				= 0x0,
-	.vidout_ctrl				= 0x1,
-	.sync_ctrl				= 0x00001040,
-#else
 	.f_control				= 0,
 	.vidout_ctrl				= 0,
 	.sync_ctrl				= 0,
-#endif
 	.hfltr_ctrl				= 0,
 	.x_color				= 0,
 	.line21					= 0,
@@ -436,11 +430,7 @@ static const struct venc_config *venc_timings_to_config(
 		struct omap_video_timings *timings)
 {
 	if (memcmp(&omap_dss_pal_timings, timings, sizeof(*timings)) == 0)
-#ifdef CONFIG_TVOUT_SHOLEST
-		return &venc_config_pal_bdghi;
-#else
 		return &venc_config_pal_trm;
-#endif
 
 	if (memcmp(&omap_dss_ntsc_timings, timings, sizeof(*timings)) == 0)
 		return &venc_config_ntsc_trm;
@@ -804,24 +794,39 @@ int venc_init_display(struct omap_dss_device *dssdev)
 #ifdef CONFIG_TVOUT_SHOLEST
 int venc_tv_connect(void)
 {
-    int tv_int;
+	int tv_int;
+	int bu_x, bu_y, bu_ctrl;
 
-    printk(KERN_INFO "Entered tv_connect()\n");
+	DSSDBG("Entered tv_connect()\n");
 
-    venc_enable_clocks(1);
+	mutex_lock(&venc.venc_lock);
 
-    venc_write_reg(VENC_TVDETGP_INT_START_STOP_X, 0x00140001);
-    venc_write_reg(VENC_TVDETGP_INT_START_STOP_Y, 0x00010001);
-    venc_write_reg(VENC_GEN_CTRL, 0x00010001);
+	venc_enable_clocks(1);
 
-    msleep(10);
+	bu_x = venc_read_reg(VENC_TVDETGP_INT_START_STOP_X);
+	bu_y = venc_read_reg(VENC_TVDETGP_INT_START_STOP_X);
+	bu_ctrl = venc_read_reg(VENC_GEN_CTRL);
 
-    tv_int = gpio_get_value(OMAP_TVINT_GPIO);
-    printk("venc_tv_connect() %d \n", tv_int);
+	venc_write_reg(VENC_TVDETGP_INT_START_STOP_X, 0x00140001);
+	venc_write_reg(VENC_TVDETGP_INT_START_STOP_Y, 0x00010001);
+	venc_write_reg(VENC_GEN_CTRL, 0x00010001);
 
-    venc_enable_clocks(0);
+	msleep(10);
 
-    return tv_int;
+	tv_int = gpio_get_value(OMAP_TVINT_GPIO);
+	printk("venc_tv_connect() %d \n", tv_int);
+	if (tv_int == 0)
+	{
+		venc_write_reg(VENC_TVDETGP_INT_START_STOP_X, bu_x);
+		venc_write_reg(VENC_TVDETGP_INT_START_STOP_Y, bu_y);
+		venc_write_reg(VENC_GEN_CTRL, (bu_ctrl & ~1));
+	}
+
+	venc_enable_clocks(0);
+
+	mutex_unlock(&venc.venc_lock);
+
+	return tv_int;
 }
 EXPORT_SYMBOL(venc_tv_connect);
 

@@ -205,11 +205,7 @@ static bool dispsw_crop(struct dispsw_osi *osi,
 	if (w == info->out_width && h == info->out_height)
 		goto exit;
 
-#ifndef CONFIG_TVOUT_SHOLEST
 	if (osi->id == OMAP_DSS_GFX || (info->width == info->out_width &&
-#else
-	if ((info->width == info->out_width &&
-#endif
 					info->height == info->out_height)) {
 		info->width = w;
 		info->height = h;
@@ -241,23 +237,10 @@ static void dispsw_scale(struct dispsw_osi *osi,
 	int tw, th;
 	int ratio;
 	const int shift = 10; /* Fixed point shift factor */
-#ifdef CONFIG_TVOUT_SHOLEST
-	enum dispsw_scale saved_scale;
-	bool save_flag = false;
-#endif
-
 	w = info->width;
 	h = info->height;
 
-#ifdef CONFIG_TVOUT_SHOLEST
-	if (osi->id == OMAP_DSS_VIDEO2) {
-		if (get_video_status()) {
-			saved_scale = osi->scale;
-			osi->scale = DISPSW_SCALE_IGNORE;
-			save_flag = true;
-		}
-	}
-#endif
+
 	switch (osi->scale) {
 	case DISPSW_SCALE_FIT_TO_SCREEN:
 		if (osi->lock_aspect_ratio) {
@@ -277,6 +260,30 @@ static void dispsw_scale(struct dispsw_osi *osi,
 		w += (((w << shift) / 100) * osi->v_scale_percent) >> shift;
 		h += (((h << shift) / 100) * osi->h_scale_percent) >> shift;
 		break;
+
+#ifdef CONFIG_TVOUT_SHOLEST    
+	case DISPSW_SCALE_FOR_TVOUT:
+		DBG("DISPSW_SCALE_FOR_TVOUT \n");
+		if ( !get_video_status()) {
+			if (osi->lock_aspect_ratio) {
+				tw = (osi->disp_w << shift) / w;
+				th = (osi->disp_h << shift) / h;
+				ratio = (tw < th) ? tw : th;
+				w = (w * ratio) >> shift;
+				h = (h * ratio) >> shift;
+				w = (w + 1) & ~1;
+				h = (h + 1) & ~1;
+			}
+			else {
+				w = osi->disp_w;
+				h = osi->disp_h;
+			}
+			DBG(" info->out_width 11 w= %d \n", w );
+			w = 678; // fixed for TV panel size
+		}
+		break;
+ #endif   
+
 	case DISPSW_SCALE_IGNORE:
 	default:
 		break;
@@ -295,14 +302,6 @@ static void dispsw_scale(struct dispsw_osi *osi,
 
 	info->out_width = w;
 	info->out_height = h;
-#ifdef CONFIG_TVOUT_SHOLEST
-	if (osi->id == OMAP_DSS_VIDEO2) {
-		if (save_flag == true) {
-			osi->scale = saved_scale;
-			save_flag = false;
-		}
-	}
-#endif
 }
 
 static void dispsw_rotate(struct dispsw_osi *osi,
@@ -363,6 +362,10 @@ static void dispsw_align(struct dispsw_osi *osi,
 	int dw, dh;
 	int bpp, stride;
 	unsigned long paddr;
+#ifdef CONFIG_TVOUT_SHOLEST
+	enum dispsw_align saved_align;
+	bool save_flag = false;
+#endif
 
 	x = info->pos_x;
 	y = info->pos_y;
@@ -438,6 +441,15 @@ static void dispsw_align(struct dispsw_osi *osi,
 		x = (dw * osi->v_align_percent) / 100;
 		y = (dh * osi->h_align_percent) / 100;
 		break;
+#ifdef CONFIG_TVOUT_SHOLEST
+	case DISPSW_ALIGN_CENTER_TVOUT:
+		x = dispsw_center_align(w, dw, &paddr, bpp);
+		y = dispsw_center_align(h, dh, &paddr, stride);
+		if (!get_video_status()) {
+			x +=14; /* fixed value for TV panel specific*/
+		}
+		break;
+#endif
 	}
 
 	info->pos_x = ((x + 1) & ~1);
