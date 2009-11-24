@@ -218,7 +218,7 @@ int32 DirectInform (void* param1, void* param2)
 		   ((DISABLECHANNEL_PACKET*)informdata->data)->host_interface,
 		   ((DISABLECHANNEL_PACKET*)informdata->data)->client_interface);
             channel = ((DISABLECHANNEL_PACKET*)informdata->data)->channel;
-            chdat   = &direct->channel_data[channel-direct->channel_min];
+	    chdat   = &direct->channel_data[channel-direct->channel_min];
 
             chdat->refcount--;
             wake_up_interruptible(&chdat->close_wait);

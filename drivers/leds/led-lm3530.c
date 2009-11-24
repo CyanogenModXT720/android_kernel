@@ -199,43 +199,65 @@ static int ld_lm3530_switch_als_circumstance(struct lm3530_data *als_data,
 
 	switch (set_als) {
 	case ALS_INDOOR:
-		if (lm3530_write_reg(als_data, LM3530_ALS_RESISTOR_SELECT,
-					0x22) ||
-		    lm3530_write_reg(als_data, LM3530_ALS_ZB0_REG, 0x0B) ||
-		    lm3530_write_reg(als_data, LM3530_ALS_ZB1_REG, 0x29) ||
-		    lm3530_write_reg(als_data, LM3530_ALS_ZB2_REG, 0x48) ||
-		    lm3530_write_reg(als_data, LM3530_ALS_ZB3_REG, 0xAA) ||
-		    lm3530_write_reg(als_data, LM3530_ALS_Z0T_REG, 0x19) ||
-		    lm3530_write_reg(als_data, LM3530_ALS_Z1T_REG, 0x31) ||
-		    lm3530_write_reg(als_data, LM3530_ALS_Z2T_REG, 0x31) ||
-		    lm3530_write_reg(als_data, LM3530_ALS_Z3T_REG, 0x31) ||
-		    lm3530_write_reg(als_data, LM3530_ALS_Z4T_REG, 0x53)) {
-			pr_err("%s:ALS indoor setting failed\n", __func__);
-			return -EINVAL;
-		}
+		/* Set ALS configuration for Indoor mode */
+        als_data->als_pdata->als_resistor_sel = 0x31;
+        als_data->als_pdata->zone_boundary_0  = 0x04;
+        als_data->als_pdata->zone_boundary_1  = 0x18;
+        als_data->als_pdata->zone_boundary_2  = 0x2B;
+        als_data->als_pdata->zone_boundary_3  = 0x58;
+        als_data->als_pdata->zone_target_0    = 0x19;
+        als_data->als_pdata->zone_target_1    = 0x31;
+        als_data->als_pdata->zone_target_2    = 0x31;
+        als_data->als_pdata->zone_target_3    = 0x31;
+        als_data->als_pdata->zone_target_4    = 0x53;
+        /* Circumstance parameter */
 		als_data->als_circ = ALS_INDOOR;
 		break;
 	case ALS_OUTDOOR:
-		if (lm3530_write_reg(als_data, LM3530_ALS_RESISTOR_SELECT,
-					0xFF) ||
-		    lm3530_write_reg(als_data, LM3530_ALS_ZB0_REG, 0x07) ||
-		    lm3530_write_reg(als_data, LM3530_ALS_ZB1_REG, 0x4B) ||
-		    lm3530_write_reg(als_data, LM3530_ALS_ZB2_REG, 0x86) ||
-		    lm3530_write_reg(als_data, LM3530_ALS_ZB3_REG, 0xC1) ||
-		    lm3530_write_reg(als_data, LM3530_ALS_Z0T_REG, 0x53) ||
-		    lm3530_write_reg(als_data, LM3530_ALS_Z1T_REG, 0x53) ||
-		    lm3530_write_reg(als_data, LM3530_ALS_Z2T_REG, 0x53) ||
-		    lm3530_write_reg(als_data, LM3530_ALS_Z3T_REG, 0x53) ||
-		    lm3530_write_reg(als_data, LM3530_ALS_Z4T_REG, 0x7A)) {
-			pr_err("%s:ALS outdoor setting failed\n", __func__);
-			return -EINVAL;
-		}
-		als_data->als_circ = ALS_OUTDOOR;
+        /* Set ALS configuration for Outdoor mode */
+        als_data->als_pdata->als_resistor_sel = 0xC6;
+        als_data->als_pdata->zone_boundary_0  = 0x08;
+        als_data->als_pdata->zone_boundary_1  = 0x39;
+        als_data->als_pdata->zone_boundary_2  = 0x86;
+        als_data->als_pdata->zone_boundary_3  = 0xC9;
+        als_data->als_pdata->zone_target_0    = 0x53;
+        als_data->als_pdata->zone_target_1    = 0x53;
+        als_data->als_pdata->zone_target_2    = 0x53;
+        als_data->als_pdata->zone_target_3    = 0x53;
+        als_data->als_pdata->zone_target_4    = 0x7A;
+		/* Circumstance parameter */
+        als_data->als_circ = ALS_OUTDOOR;
 		break;
 	default:
 		pr_err("%s:Invalid ALS circumstance\n", __func__);
 		break;
 	}
+
+    /* Write registers set */
+    if (lm3530_write_reg(als_data, LM3530_ALS_RESISTOR_SELECT,
+                         als_data->als_pdata->als_resistor_sel) ||
+        lm3530_write_reg(als_data, LM3530_ALS_ZB0_REG,
+                         als_data->als_pdata->zone_boundary_0) ||
+        lm3530_write_reg(als_data, LM3530_ALS_ZB1_REG,
+                         als_data->als_pdata->zone_boundary_1) ||
+        lm3530_write_reg(als_data, LM3530_ALS_ZB2_REG,
+                         als_data->als_pdata->zone_boundary_2) ||
+        lm3530_write_reg(als_data, LM3530_ALS_ZB3_REG,
+                         als_data->als_pdata->zone_boundary_3) ||
+        lm3530_write_reg(als_data, LM3530_ALS_Z0T_REG,
+                         als_data->als_pdata->zone_target_0) ||
+        lm3530_write_reg(als_data, LM3530_ALS_Z1T_REG,
+                         als_data->als_pdata->zone_target_1) ||
+        lm3530_write_reg(als_data, LM3530_ALS_Z2T_REG,
+                         als_data->als_pdata->zone_target_2) ||
+        lm3530_write_reg(als_data, LM3530_ALS_Z3T_REG,
+                         als_data->als_pdata->zone_target_3) ||
+        lm3530_write_reg(als_data, LM3530_ALS_Z4T_REG,
+                         als_data->als_pdata->zone_target_4)) {
+        pr_err("%s:ALS indoor setting failed\n", __func__);
+        return -EINVAL;
+    }
+
 	return 0;
 }
 #endif
@@ -243,114 +265,82 @@ static int ld_lm3530_switch_als_circumstance(struct lm3530_data *als_data,
 static void ld_lm3530_brightness_set(struct led_classdev *led_cdev,
 				     enum led_brightness value)
 {
-	uint8_t brightness = 0;
+	int brightness = 0;
 	int error = 0;
-	int step = 0;
+	int old_led_on;
 	struct lm3530_data *als_data =
 	    container_of(led_cdev, struct lm3530_data, led_dev);
 
-	/* Get the number of steps to zero brightness */
-	if (als_data->zone == 0)
-		step = als_data->als_pdata->zone_target_0;
-	else if (als_data->zone == 1)
-		step = als_data->als_pdata->zone_target_1;
-	else if (als_data->zone == 2)
-		step = als_data->als_pdata->zone_target_2;
-	else if (als_data->zone == 3)
-		step = als_data->als_pdata->zone_target_3;
-	else if (als_data->zone == 4)
-		step = als_data->als_pdata->zone_target_4;
+	if (als_data->mode == AUTOMATIC) {
+#ifdef CONFIG_LEDS_SHOLEST
+                /* Set current 26mA */
+                als_data->als_pdata->gen_config =
+                        (als_data->als_pdata->gen_config & 0xE3) | 0x18;
+#endif
+		brightness = als_data->als_pdata->gen_config;
+        } else {
+#ifdef CONFIG_LEDS_SHOLEST
+                /* Set current 19mA */
+                als_data->als_pdata->gen_config =
+                        (als_data->als_pdata->gen_config & 0xE3) | 0x10;
+#endif
+		brightness = als_data->als_pdata->manual_current;
+        }
 
 	if (value == LED_OFF) {
-		error = lm3530_write_reg(als_data, LM3530_BRIGHTNESS_RAMP_RATE,
-			     0x03);
-		if (error != 0)
-			pr_err("%s:Unable to set the ramp rate: %d\n",
-			       __func__, error);
-
 		als_data->led_on = 0;
-		brightness = als_data->als_pdata->gen_config &
-			LD_LM3530_LAST_BRIGHTNESS_MASK;
-
+		brightness &= LD_LM3530_LAST_BRIGHTNESS_MASK;
 		if (lm3530_write_reg(als_data, LM3530_GEN_CONFIG, brightness)) {
 			pr_err("%s:writing failed while setting brightness:%d\n",
 				__func__, error);
 			return;
 		}
-		if (als_data->mode == AUTOMATIC)
-			msleep(step * 4);
-
 #ifdef CONFIG_LEDS_SHOLEST
 		gpio_set_value(LM3530_LEDDRV_EN, 0);
 #endif
 	} else {
-		switch (als_data->mode) {
-		case AUTOMATIC:
-			if (als_data->led_on == 0) {
-				brightness = als_data->als_pdata->gen_config | 0x01;
+		brightness |= 0x01;
 #ifdef CONFIG_LEDS_SHOLEST
-				/* Set current 26mA */
-				brightness = (brightness & 0xE3) | 0x18;
-				/* Set LEDDRV_EN on */
-				gpio_set_value(LM3530_LEDDRV_EN, 1);
-				msleep(1);
-				/* Reinitialize lm3530 */
-				ld_lm3530_init_registers(als_data);
-				/* Set ALS as indoor mode */
-				ld_lm3530_switch_als_circumstance(als_data,
-					ALS_INDOOR);
+                if (als_data->led_on == 0) {
+                        /* Set LEDDRV_EN on */
+                        gpio_set_value(LM3530_LEDDRV_EN, 1);
+                        msleep(1);
+
+                        if (als_data->mode != MANUAL) {
+                                /* Reinitialize lm3530 */
+                                ld_lm3530_init_registers(als_data);
+                                /* Set ALS as indoor mode */
+                                ld_lm3530_switch_als_circumstance(als_data,
+                                                                  ALS_INDOOR);
+                        } else {
+                                /* Restore configurations to disable ALS */
+                                lm3530_write_reg(als_data,
+                                        LM3530_ALS_CONFIG, LM3530_MANUAL_VALUE);
+                                lm3530_write_reg(als_data,
+                                        LM3530_ALS_RESISTOR_SELECT, 0x00);
+                                lm3530_write_reg(als_data,
+                                        LM3530_BRIGHTNESS_RAMP_RATE, 0x00);
+                        }
+                }
 #endif
-				if (lm3530_write_reg(als_data, LM3530_GEN_CONFIG, brightness)) {
-					pr_err("%s:writing failed while setting brightness:%d\n",
-					__func__, error);
-					return;
-				}
-				/* Wait until the IC has a chance to turn on
-				and set the brightness level */
-				msleep(5);
-				error = lm3530_write_reg(als_data, LM3530_BRIGHTNESS_RAMP_RATE,
-					als_data->als_pdata->brightness_ramp);
-				if (error != 0)
-					pr_err("%s:Unable to set the ramp rate: %d\n",
-						__func__, error);
-
-				als_data->led_on = 1;
-			}
-			break;
-		case MANUAL:
-#ifdef CONFIG_LEDS_SHOLEST
-			if (als_data->led_on == 0) {
-				/* Set LEDDRV_EN on */
-				gpio_set_value(LM3530_LEDDRV_EN, 1);
-				msleep(1);
-
-				/* Restore configurations to disable ALS */
-				lm3530_write_reg(als_data,
-					LM3530_ALS_CONFIG, LM3530_MANUAL_VALUE);
-				lm3530_write_reg(als_data,
-					LM3530_ALS_RESISTOR_SELECT, 0x00);
-				lm3530_write_reg(als_data,
-					LM3530_BRIGHTNESS_RAMP_RATE, 0x00);
-
-				als_data->led_on = 1;
-			}
-#endif
-			error = lm3530_write_reg(als_data,
-						 LM3530_BRIGHTNESS_CTRL_REG,
-						 value / 2);
-			if (error) {
+		if (lm3530_write_reg(als_data, LM3530_GEN_CONFIG, brightness)) {
+			pr_err("%s:writing failed while setting brightness:%d\n",
+				__func__, error);
+			return;
+		}
+		if (lm3530_write_reg(als_data, LM3530_BRIGHTNESS_CTRL_REG,
+			value / 2)) {
 				pr_err("%s:Failed to set brightness:%d\n",
-					__func__, error);
-				return;
-			}
-			brightness = als_data->als_pdata->manual_current;
-			if (lm3530_write_reg(als_data, LM3530_GEN_CONFIG, brightness)) {
-				pr_err("%s:writing failed while setting brightness:%d\n",
-					__func__, error);
-				return;
-			}
-			als_data->last_requested_brightness = value;
-			break;
+				__func__, error);
+			return;
+		}
+		als_data->last_requested_brightness = value;
+		old_led_on = als_data->led_on;
+		als_data->led_on = 1;
+
+		if (als_data->mode != MANUAL && old_led_on == 0) {
+			disable_irq(als_data->client->irq);
+			queue_work(als_data->working_queue, &als_data->wq);
 		}
 	}
 }
@@ -372,53 +362,55 @@ static ssize_t ld_lm3530_als_store(struct device *dev, struct device_attribute
 	struct i2c_client *client = container_of(dev->parent, struct i2c_client,
 						 dev);
 	struct lm3530_data *als_data = i2c_get_clientdata(client);
+	int config;
 	unsigned long mode_value;
+	uint8_t brightness = 0;
 
 	error = strict_strtoul(buf, 10, &mode_value);
 
 	if (error < 0)
 		return -1;
+	if (mode_value != MANUAL
+		    && mode_value != AUTOMATIC
+		    && mode_value != MANUAL_SENSOR)
+		return -1;
 
-	if (mode_value >= AUTOMATIC) {
+	if (mode_value == AUTOMATIC)
+		brightness = als_data->als_pdata->gen_config;
+	else
+		brightness = als_data->als_pdata->manual_current;
 
+	if (mode_value == AUTOMATIC) {
 		ld_lm3530_init_registers(als_data);
 		error = lm3530_write_reg(als_data, LM3530_GEN_CONFIG,
-					 als_data->als_pdata->gen_config);
+					 brightness);
 		if (error) {
 			pr_err("%s:Initialize Gen Config Reg failed %d\n",
 			       __func__, error);
 			als_data->mode = -1;
 			return -1;
 		}
-		error = lm3530_write_reg(als_data,
-				LM3530_BRIGHTNESS_RAMP_RATE,
-				als_data->als_pdata->brightness_ramp);
-		if (error != 0)
-			pr_err("%s:Unable to set the ramp rate: %d\n",
-				__func__, error);
-
 		als_data->mode = AUTOMATIC;
-		disable_irq(als_data->client->irq);
-		queue_work(als_data->working_queue, &als_data->wq);
-
 	} else {
-		als_data->mode = MANUAL;
-
-		error = lm3530_write_reg(als_data, LM3530_ALS_CONFIG,
-			LM3530_MANUAL_VALUE);
+		als_data->mode = mode_value;
+		config = LM3530_MANUAL_VALUE;
+		if (mode_value != MANUAL)
+			config |= LM3530_SENSOR_ENABLE;
+		error = lm3530_write_reg(als_data, LM3530_ALS_CONFIG, config);
 		if (error) {
 			pr_err("%s:Failed to set manual mode:%d\n",
 			       __func__, error);
 			return -1;
 		}
 
-		lm3530_write_reg(als_data, LM3530_ALS_RESISTOR_SELECT,
-			0x00);
-		error = lm3530_write_reg(als_data, LM3530_BRIGHTNESS_RAMP_RATE,
-			     0x00);
-		if (error != 0)
-			pr_err("%s:Unable to set the ramp rate: %d\n",
-			       __func__, error);
+		if (lm3530_write_reg(als_data, LM3530_GEN_CONFIG, brightness)) {
+			pr_err("%s:writing failed while setting brightness:%d\n",
+				__func__, error);
+			return -1;
+		}
+
+		config = (mode_value == MANUAL ? 0 : als_data->als_pdata->als_resistor_sel);
+		lm3530_write_reg(als_data, LM3530_ALS_RESISTOR_SELECT, config);
 
 		error = lm3530_write_reg(als_data,
 					 LM3530_BRIGHTNESS_CTRL_REG,
@@ -430,6 +422,12 @@ static ssize_t ld_lm3530_als_store(struct device *dev, struct device_attribute
 			return -1;
 		}
 	}
+
+	if (mode_value != MANUAL) {
+		disable_irq(als_data->client->irq);
+		queue_work(als_data->working_queue, &als_data->wq);
+	}
+
 	return als_data->mode;
 }
 
@@ -873,29 +871,14 @@ static int lm3530_suspend(struct i2c_client *client, pm_message_t mesg)
 
 static int lm3530_resume(struct i2c_client *client)
 {
-	uint8_t zone_dump;
-	int ret;
 	struct lm3530_data *als_data = i2c_get_clientdata(client);
 
 	if (lm3530_debug)
 		pr_info("%s: Resuming\n", __func__);
 
-	ret = lm3530_read_reg(als_data,
-			      LM3530_ALS_ZONE_REG, &zone_dump);
-	if (ret)
-		pr_info("%s: Could not read out of suspend\n", __func__);
-
 	/* Work around a HW issue that the HW will not generate an
 	interrupt when enabled */
-	if ((zone_dump & LM3530_ALS_READ_MASK) == 0) {
-		input_event(als_data->idev, EV_MSC, MSC_RAW, 10);
-		input_event(als_data->idev, EV_LED, LED_MISC,
-			als_data->lux_passed_value[0].lux_value);
-		input_sync(als_data->idev);
-		als_data->zone = 0;
-	}
-
-	enable_irq(als_data->client->irq);
+	queue_work(als_data->working_queue, &als_data->wq);
 
 	return 0;
 }

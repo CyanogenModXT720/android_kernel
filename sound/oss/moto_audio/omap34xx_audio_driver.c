@@ -2352,6 +2352,7 @@ static int audio_probe(struct platform_device *dev)
 
 	cpcap_audio_state.cpcap = dev->dev.platform_data;
 	cpcap_audio_init(&cpcap_audio_state);
+
 	cpcap_audio_state.cpcap->h2w_new_state = &audio_callback;
 	return 0;
 }
