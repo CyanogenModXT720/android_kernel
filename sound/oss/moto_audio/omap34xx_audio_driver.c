@@ -1816,7 +1816,11 @@ static int audio_ioctl(struct inode *inode, struct file *file,
 			AUDIO_LEVEL2_LOG("SOUND_MIXER_FMPATH with spkr = %#x\n",
 				 spkr);
 			cpcap_audio_state.ext_primary_speaker = spkr;
-			cpcap_audio_state.output_gain = 13;
+/* 	FM radio output gain is controlled by cpcap_audio_driver.c
+	So, this value should not be changed here.
+	This value should be synced other output gain value.
+*/
+			cpcap_audio_state.output_gain = 0xFF;
 			cpcap_audio_set_audio_state(&cpcap_audio_state);
 			break;
 		}
@@ -2352,7 +2356,6 @@ static int audio_probe(struct platform_device *dev)
 
 	cpcap_audio_state.cpcap = dev->dev.platform_data;
 	cpcap_audio_init(&cpcap_audio_state);
-
 	cpcap_audio_state.cpcap->h2w_new_state = &audio_callback;
 	return 0;
 }

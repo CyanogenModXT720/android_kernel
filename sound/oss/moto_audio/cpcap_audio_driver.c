@@ -864,33 +864,64 @@ static void cpcap_audio_configure_input_gains(
 /* In case of sholes tablet, FM radio use external pga.
    FM radio have a different gain table. So we should set gain separately
 */
+
+#define EXT_PGA_SPEAKER_OUT_GAIN         0x12
+#define EXT_PGA_HEADSET_OUT_GAIN         0x08
+
 static void cpcap_audio_configure_output_gains(
 	struct cpcap_audio_state *state,
 	struct cpcap_audio_state *previous_state)
 {
+/*	FM radio volume gain control routine is added by w21558
+*/
+#if 1
 	if (state->output_gain != previous_state->output_gain) {
 		struct cpcap_regacc reg_changes = { 0 };
 		unsigned int temp_output_gain = state->output_gain & 0x0000000F;
+		unsigned int ext_pag_output_gain = EXT_PGA_HEADSET_OUT_GAIN;
+		unsigned short prev_output_gain = 0;
 
-/* w21558, FM radio output gain */
-		unsigned int ext_pag_output_gain;
-		ext_pag_output_gain = (state->output_gain) ? 0x07 : 0x00;
-#if 1
+		if (state->output_gain == 0xFF) {
+			/* Only external PGA gain is changed */
+			int ret_val = 0;
+
+			ret_val = cpcap_regacc_read(state->cpcap,
+				CPCAP_REG_RXVC, &prev_output_gain);
+			prev_output_gain = (prev_output_gain & 0x00000F00) >> 8;
+
+			reg_changes.value |=
+			    ((prev_output_gain << 2) | (prev_output_gain << 8) |
+			     (ext_pag_output_gain << 12));
+		} else {
+
+			ext_pag_output_gain = (state->output_gain) ? \
+						EXT_PGA_HEADSET_OUT_GAIN : 0x00;
+
 		reg_changes.value |=
 		    ((temp_output_gain << 2) | (temp_output_gain << 8) |
 		     (ext_pag_output_gain << 12));
-#else
-		reg_changes.value |=
-		    ((temp_output_gain << 2) | (temp_output_gain << 8) |
-		     (temp_output_gain << 12));
-#endif
-/* */
+		}
 
 		reg_changes.mask = 0xFF3C;
 
 		logged_cpcap_write(state->cpcap, CPCAP_REG_RXVC,
 				reg_changes.value, reg_changes.mask);
 	}
+#else
+	if (state->output_gain != previous_state->output_gain) {
+		struct cpcap_regacc reg_changes = { 0 };
+		unsigned int temp_output_gain = state->output_gain & 0x0000000F;
+
+		reg_changes.value |=
+		    ((temp_output_gain << 2) | (temp_output_gain << 8) |
+		     (temp_output_gain << 12));
+
+		reg_changes.mask = 0xFF3C;
+
+		logged_cpcap_write(state->cpcap, CPCAP_REG_RXVC,
+				reg_changes.value, reg_changes.mask);
+	}
+#endif
 }
 
 static void cpcap_audio_configure_output(
