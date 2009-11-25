@@ -278,14 +278,14 @@ static void ld_lm3530_brightness_set(struct led_classdev *led_cdev,
 			(als_data->als_pdata->gen_config & 0xE3) | 0x18;
 #endif
 		brightness = als_data->als_pdata->gen_config;
-        } else {
+	} else {
 #ifdef CONFIG_LEDS_SHOLEST
 		/* Set current 19mA */
 		als_data->als_pdata->gen_config =
 			(als_data->als_pdata->gen_config & 0xE3) | 0x10;
 #endif
 		brightness = als_data->als_pdata->manual_current;
-        }
+	}
 
 	if (value == LED_OFF) {
 		als_data->led_on = 0;
@@ -323,6 +323,7 @@ static void ld_lm3530_brightness_set(struct led_classdev *led_cdev,
 			}
 		}
 #endif
+		pr_info("%s:LM3530_GEN_CONFIG=%x\n", __func__, brightness);
 		if (lm3530_write_reg(als_data, LM3530_GEN_CONFIG, brightness)) {
 			pr_err("%s:writing failed while setting brightness:%d\n",
 				__func__, error);
@@ -375,10 +376,21 @@ static ssize_t ld_lm3530_als_store(struct device *dev, struct device_attribute
 		    && mode_value != MANUAL_SENSOR)
 		return -1;
 
-	if (mode_value == AUTOMATIC)
+	if (mode_value == AUTOMATIC) {
+#ifdef CONFIG_LEDS_SHOLEST
+		/* Set current 26mA */
+		als_data->als_pdata->gen_config =
+			(als_data->als_pdata->gen_config & 0xE3) | 0x18;
+#endif
 		brightness = als_data->als_pdata->gen_config;
-	else
+	} else {
+#ifdef CONFIG_LEDS_SHOLEST
+		/* Set current 19mA */
+		als_data->als_pdata->gen_config =
+			(als_data->als_pdata->gen_config & 0xE3) | 0x10;
+#endif
 		brightness = als_data->als_pdata->manual_current;
+	}
 
 	if (mode_value == AUTOMATIC) {
 		ld_lm3530_init_registers(als_data);
