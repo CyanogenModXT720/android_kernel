@@ -200,63 +200,63 @@ static int ld_lm3530_switch_als_circumstance(struct lm3530_data *als_data,
 	switch (set_als) {
 	case ALS_INDOOR:
 		/* Set ALS configuration for Indoor mode */
-        als_data->als_pdata->als_resistor_sel = 0x31;
-        als_data->als_pdata->zone_boundary_0  = 0x04;
-        als_data->als_pdata->zone_boundary_1  = 0x18;
-        als_data->als_pdata->zone_boundary_2  = 0x2B;
-        als_data->als_pdata->zone_boundary_3  = 0x58;
-        als_data->als_pdata->zone_target_0    = 0x19;
-        als_data->als_pdata->zone_target_1    = 0x31;
-        als_data->als_pdata->zone_target_2    = 0x31;
-        als_data->als_pdata->zone_target_3    = 0x31;
-        als_data->als_pdata->zone_target_4    = 0x53;
-        /* Circumstance parameter */
+		als_data->als_pdata->als_resistor_sel = 0x31;
+		als_data->als_pdata->zone_boundary_0  = 0x04;
+		als_data->als_pdata->zone_boundary_1  = 0x18;
+		als_data->als_pdata->zone_boundary_2  = 0x2B;
+		als_data->als_pdata->zone_boundary_3  = 0x58;
+		als_data->als_pdata->zone_target_0    = 0x19;
+		als_data->als_pdata->zone_target_1    = 0x31;
+		als_data->als_pdata->zone_target_2    = 0x31;
+		als_data->als_pdata->zone_target_3    = 0x31;
+		als_data->als_pdata->zone_target_4    = 0x53;
+		/* Circumstance parameter */
 		als_data->als_circ = ALS_INDOOR;
 		break;
 	case ALS_OUTDOOR:
-        /* Set ALS configuration for Outdoor mode */
-        als_data->als_pdata->als_resistor_sel = 0xC6;
-        als_data->als_pdata->zone_boundary_0  = 0x08;
-        als_data->als_pdata->zone_boundary_1  = 0x39;
-        als_data->als_pdata->zone_boundary_2  = 0x86;
-        als_data->als_pdata->zone_boundary_3  = 0xC9;
-        als_data->als_pdata->zone_target_0    = 0x53;
-        als_data->als_pdata->zone_target_1    = 0x53;
-        als_data->als_pdata->zone_target_2    = 0x53;
-        als_data->als_pdata->zone_target_3    = 0x53;
-        als_data->als_pdata->zone_target_4    = 0x7A;
+		/* Set ALS configuration for Outdoor mode */
+		als_data->als_pdata->als_resistor_sel = 0xC6;
+		als_data->als_pdata->zone_boundary_0  = 0x08;
+		als_data->als_pdata->zone_boundary_1  = 0x39;
+		als_data->als_pdata->zone_boundary_2  = 0x86;
+		als_data->als_pdata->zone_boundary_3  = 0xC9;
+		als_data->als_pdata->zone_target_0    = 0x53;
+		als_data->als_pdata->zone_target_1    = 0x53;
+		als_data->als_pdata->zone_target_2    = 0x53;
+		als_data->als_pdata->zone_target_3    = 0x53;
+		als_data->als_pdata->zone_target_4    = 0x7A;
 		/* Circumstance parameter */
-        als_data->als_circ = ALS_OUTDOOR;
+		als_data->als_circ = ALS_OUTDOOR;
 		break;
 	default:
 		pr_err("%s:Invalid ALS circumstance\n", __func__);
 		break;
 	}
 
-    /* Write registers set */
-    if (lm3530_write_reg(als_data, LM3530_ALS_RESISTOR_SELECT,
-                         als_data->als_pdata->als_resistor_sel) ||
-        lm3530_write_reg(als_data, LM3530_ALS_ZB0_REG,
-                         als_data->als_pdata->zone_boundary_0) ||
-        lm3530_write_reg(als_data, LM3530_ALS_ZB1_REG,
-                         als_data->als_pdata->zone_boundary_1) ||
-        lm3530_write_reg(als_data, LM3530_ALS_ZB2_REG,
-                         als_data->als_pdata->zone_boundary_2) ||
-        lm3530_write_reg(als_data, LM3530_ALS_ZB3_REG,
-                         als_data->als_pdata->zone_boundary_3) ||
-        lm3530_write_reg(als_data, LM3530_ALS_Z0T_REG,
-                         als_data->als_pdata->zone_target_0) ||
-        lm3530_write_reg(als_data, LM3530_ALS_Z1T_REG,
-                         als_data->als_pdata->zone_target_1) ||
-        lm3530_write_reg(als_data, LM3530_ALS_Z2T_REG,
-                         als_data->als_pdata->zone_target_2) ||
-        lm3530_write_reg(als_data, LM3530_ALS_Z3T_REG,
-                         als_data->als_pdata->zone_target_3) ||
-        lm3530_write_reg(als_data, LM3530_ALS_Z4T_REG,
-                         als_data->als_pdata->zone_target_4)) {
-        pr_err("%s:ALS indoor setting failed\n", __func__);
-        return -EINVAL;
-    }
+	/* Write registers set */
+	if (lm3530_write_reg(als_data, LM3530_ALS_RESISTOR_SELECT,
+			als_data->als_pdata->als_resistor_sel) ||
+	    lm3530_write_reg(als_data, LM3530_ALS_ZB0_REG,
+			als_data->als_pdata->zone_boundary_0) ||
+	    lm3530_write_reg(als_data, LM3530_ALS_ZB1_REG,
+			als_data->als_pdata->zone_boundary_1) ||
+	    lm3530_write_reg(als_data, LM3530_ALS_ZB2_REG,
+			als_data->als_pdata->zone_boundary_2) ||
+	    lm3530_write_reg(als_data, LM3530_ALS_ZB3_REG,
+			als_data->als_pdata->zone_boundary_3) ||
+	    lm3530_write_reg(als_data, LM3530_ALS_Z0T_REG,
+			als_data->als_pdata->zone_target_0) ||
+	    lm3530_write_reg(als_data, LM3530_ALS_Z1T_REG,
+			als_data->als_pdata->zone_target_1) ||
+	    lm3530_write_reg(als_data, LM3530_ALS_Z2T_REG,
+			als_data->als_pdata->zone_target_2) ||
+	    lm3530_write_reg(als_data, LM3530_ALS_Z3T_REG,
+			als_data->als_pdata->zone_target_3) ||
+	    lm3530_write_reg(als_data, LM3530_ALS_Z4T_REG,
+			als_data->als_pdata->zone_target_4)) {
+		pr_err("%s:ALS indoor setting failed\n", __func__);
+		return -EINVAL;
+	}
 
 	return 0;
 }
@@ -273,16 +273,16 @@ static void ld_lm3530_brightness_set(struct led_classdev *led_cdev,
 
 	if (als_data->mode == AUTOMATIC) {
 #ifdef CONFIG_LEDS_SHOLEST
-                /* Set current 26mA */
-                als_data->als_pdata->gen_config =
-                        (als_data->als_pdata->gen_config & 0xE3) | 0x18;
+		/* Set current 26mA */
+		als_data->als_pdata->gen_config =
+			(als_data->als_pdata->gen_config & 0xE3) | 0x18;
 #endif
 		brightness = als_data->als_pdata->gen_config;
         } else {
 #ifdef CONFIG_LEDS_SHOLEST
-                /* Set current 19mA */
-                als_data->als_pdata->gen_config =
-                        (als_data->als_pdata->gen_config & 0xE3) | 0x10;
+		/* Set current 19mA */
+		als_data->als_pdata->gen_config =
+			(als_data->als_pdata->gen_config & 0xE3) | 0x10;
 #endif
 		brightness = als_data->als_pdata->manual_current;
         }
@@ -301,27 +301,27 @@ static void ld_lm3530_brightness_set(struct led_classdev *led_cdev,
 	} else {
 		brightness |= 0x01;
 #ifdef CONFIG_LEDS_SHOLEST
-                if (als_data->led_on == 0) {
-                        /* Set LEDDRV_EN on */
-                        gpio_set_value(LM3530_LEDDRV_EN, 1);
-                        msleep(1);
+		if (als_data->led_on == 0) {
+			/* Set LEDDRV_EN on */
+			gpio_set_value(LM3530_LEDDRV_EN, 1);
+			msleep(1);
 
-                        if (als_data->mode != MANUAL) {
-                                /* Reinitialize lm3530 */
-                                ld_lm3530_init_registers(als_data);
-                                /* Set ALS as indoor mode */
-                                ld_lm3530_switch_als_circumstance(als_data,
-                                                                  ALS_INDOOR);
-                        } else {
-                                /* Restore configurations to disable ALS */
-                                lm3530_write_reg(als_data,
-                                        LM3530_ALS_CONFIG, LM3530_MANUAL_VALUE);
-                                lm3530_write_reg(als_data,
-                                        LM3530_ALS_RESISTOR_SELECT, 0x00);
-                                lm3530_write_reg(als_data,
-                                        LM3530_BRIGHTNESS_RAMP_RATE, 0x00);
-                        }
-                }
+			if (als_data->mode != MANUAL) {
+				/* Reinitialize lm3530 */
+				ld_lm3530_init_registers(als_data);
+				/* Set ALS as indoor mode */
+				ld_lm3530_switch_als_circumstance(als_data,
+								  ALS_INDOOR);
+			} else {
+				/* Restore configurations to disable ALS */
+				lm3530_write_reg(als_data,
+					LM3530_ALS_CONFIG, LM3530_MANUAL_VALUE);
+				lm3530_write_reg(als_data,
+					LM3530_ALS_RESISTOR_SELECT, 0x00);
+				lm3530_write_reg(als_data,
+					LM3530_BRIGHTNESS_RAMP_RATE, 0x00);
+			}
+		}
 #endif
 		if (lm3530_write_reg(als_data, LM3530_GEN_CONFIG, brightness)) {
 			pr_err("%s:writing failed while setting brightness:%d\n",
