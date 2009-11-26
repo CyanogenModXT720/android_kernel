@@ -68,7 +68,7 @@ static void sholest_vibrator_exit(void)
 
 static int sholest_vibrator_power_on(void)
 {
-	regulator_set_voltage(sholest_vibrator_regulator, 3000000, 3000000);
+	regulator_set_voltage(sholest_vibrator_regulator, 1300000, 1300000);
 	return regulator_enable(sholest_vibrator_regulator);
 }
 
