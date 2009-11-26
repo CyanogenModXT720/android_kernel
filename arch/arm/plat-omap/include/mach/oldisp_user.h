@@ -49,6 +49,9 @@
 	_IOWR('V', BASE_VIDIOC_PRIVATE + 14, struct ispprv_run_hardpipe)
 #define VIDIOC_PRIVATE_ISP_CCDC_BAYER_CFG \
    _IOWR('V', BASE_VIDIOC_PRIVATE + 15, struct ispccdc_color_offset)
+#define VIDIOC_PRIVATE_ISP_LSC_WORKAROUND_CFG \
+   _IOW('V', BASE_VIDIOC_PRIVATE + 16, int)
+
 
 /* AE/AWB related structures and flags*/
 

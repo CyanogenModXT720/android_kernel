@@ -496,7 +496,8 @@ static int try_pix_parm(struct omap34xxcam_videodev *vdev,
 			 * Select bigger resolution if it's available
 			 * at same fps.
 			 */
-			if (frmi.width > best_pix_in->width
+			if ((frmi.width > best_pix_in->width ||
+				frmi.height > best_pix_in->height)
 			    && FPS_ABS_DIFF(fps, frmi.discrete)
 			    <= FPS_ABS_DIFF(fps, *best_ival))
 				goto do_it_now;
@@ -1039,8 +1040,10 @@ static int vidioc_s_parm(struct file *file, void *fh, struct v4l2_streamparm *a)
 		return -EINVAL;
 
 	mutex_lock(&vdev->mutex);
+
+	/* If streaming, just change fps, don't try to change resolution */
 	if (vdev->streaming) {
-		rval = -EBUSY;
+		rval = vidioc_int_s_parm(vdev->vdev_sensor, a);
 		goto out;
 	}
 
@@ -1292,9 +1295,9 @@ out:
  * @dev: numeric device identifier.
  * @settings: ptr to a sensor settings structure.
  *
- * This request is passed to the sensor driver based on the bit masked flags field of the
- * settings structure. If the sensor does not support the requested operation, an error is
- * returned.
+ * This request is passed to the sensor driver based on the bit masked flags
+ * field of the settings structure. If the sensor does not support the
+ * requested operation, an error is returned.
  *
  * If the requested device id is not valid, -ENODEV is returned.
  */

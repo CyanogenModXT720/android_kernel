@@ -63,10 +63,18 @@ void hp3a_enable_raw(unsigned long buffer_addr)
 		omap_writel(ALIGN_TO((g_tc.raw_width << 1), 32),
 					ISPCCDC_HSIZE_OFF);
 
+		omap_writel(0 << ISPCCDC_HORZ_INFO_SPH_SHIFT
+		| ((g_tc.raw_width-1) << ISPCCDC_HORZ_INFO_NPH_SHIFT),
+		ISPCCDC_HORZ_INFO);
+
 		/*0 - By default Donot inverse the field identification */
 		omap_writel((omap_readl(ISPCCDC_SDOFST) &
 					(~ISPCCDC_SDOFST_FINV)),
-								ISPCCDC_SDOFST);
+					ISPCCDC_SDOFST);
+
+		omap_writel((g_tc.raw_width << ISPCCDC_HORZ_INFO_SPH_SHIFT) |
+		((g_tc.raw_width-1) << ISPCCDC_HORZ_INFO_NPH_SHIFT),
+		ISPCCDC_HORZ_INFO);
 
 		/*0 - By default one line offset*/
 		omap_writel(omap_readl(ISPCCDC_SDOFST) &

@@ -478,7 +478,7 @@ void MEM_Exit(void)
  *  Purpose:
  *      Flush cache
  */
-void MEM_FlushCache(void *pMemBuf, u32 cBytes, s32 FlushType)
+void MEM_FlushCache(void *pMemBuf, u32 cBytes, u32 FlushType)
 {
 	DBC_Require(cRefs > 0);
 
@@ -500,6 +500,10 @@ void MEM_FlushCache(void *pMemBuf, u32 cBytes, s32 FlushType)
 		dmac_flush_range(pMemBuf, pMemBuf + cBytes);
 		outer_flush_range(__pa((u32)pMemBuf), __pa((u32)pMemBuf +
 				  cBytes));
+	break;
+    /* Writeback and Invalidate all */
+	case PROC_WRBK_INV_ALL:
+		__cpuc_flush_kern_all();
 	break;
 	default:
 		GT_1trace(MEM_debugMask, GT_6CLASS, "MEM_FlushCache: invalid "

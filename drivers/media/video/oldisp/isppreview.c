@@ -756,6 +756,8 @@ int isppreview_config_datapath(enum preview_input input,
 		pcr &= ~(ISPPRV_PCR_SOURCE);
 		pcr &= ~(ISPPRV_PCR_ONESHOT);
 		ispprev_obj.prev_inpfmt = PRV_RAW_CCDC;
+		isppreview_set_inaddr(0);
+		isppreview_config_inlineoffset(0);
 		break;
 	case PRV_RAW_MEM:
 		pcr |= ISPPRV_PCR_SOURCE;
