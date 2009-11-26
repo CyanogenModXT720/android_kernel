@@ -33,7 +33,7 @@
 #define __ASM_ARCH_OMAP_SHOLEST_H
 
 #include <linux/init.h>
-#include "board-sholest-padconf.h"
+#include "board-mapphone-padconf.h"
 
 extern void __init sholest_usb_init(void);
 extern void __init sholest_flash_init(void);
