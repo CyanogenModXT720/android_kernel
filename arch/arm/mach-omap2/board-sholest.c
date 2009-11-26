@@ -533,30 +533,30 @@ static void sholest_als_init(void)
 static struct vkey sholest_touch_vkeys[] = {
 	{
 		.code		= KEY_MENU,
-		.center_x	= 32,
-		.center_y	= 906,
-		.width		= 63,
+		.center_x	= 34,
+		.center_y	= 883,
+		.width		= 68,
 		.height		= 57,
 	},
 	{
 		.code		= KEY_HOME,
-		.center_x	= 168, /* 162 */
-		.center_y	= 906,
-		.width		= 89,
+		.center_x	= 170,
+		.center_y	= 883,
+		.width		= 84,
 		.height		= 57,
 	},
 	{
 		.code		= KEY_BACK,
-		.center_x	= 304, /* 292 */
-		.center_y	= 906,
-		.width		= 89,
+		.center_x	= 312,
+		.center_y	= 883,
+		.width		= 85,
 		.height		= 57,
 	},
 	{
 		.code		= KEY_SEARCH,
-		.center_x	= 439,
-		.center_y	= 906,
-		.width		= 63,
+		.center_x	= 446,
+		.center_y	= 883,
+		.width		= 68,
 		.height		= 57,
 	},
 };
