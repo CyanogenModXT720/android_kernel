@@ -333,8 +333,8 @@ static void hs_work(struct work_struct *work)
 		   CPCAP_BIT_ST_HS_CP_EN);
 	audio_low_power_clear(data_3mm5);
 
-		/* Give PTTS time to settle */
-		mdelay(2);
+	/* Give PTTS time to settle */
+	msleep(20);
 
     cpcap_irq_unmask(data_3mm5->cpcap, CPCAP_IRQ_PTT);
 
@@ -472,6 +472,10 @@ static void hs_handler_tv_out(enum cpcap_irqs irq, void *data)
 		audio_low_power_set(data_3mm5);
 
 		configure_cpcap_irq(NO_DEVICE, data_3mm5);
+
+		/* Turn off analog switch whenever no headset plugged in */
+	    control_analog_switch(CPCAP_GPIO_SWITCH_OFF, data_3mm5);
+
 		send_key_event(data_3mm5, 0);
 
 		cpcap_uc_stop(data_3mm5->cpcap, CPCAP_MACRO_5);
