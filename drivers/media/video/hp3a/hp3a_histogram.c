@@ -132,7 +132,7 @@ static void hp3a_histogram_isr(unsigned long status, isp_vbq_callback_ptr arg1,
 		/* clear internal histogram memory. */
 		for (i = g_tc.hist_bin_size; i--;)
 			omap_writel(0, ISPHIST_DATA);
-		}
+	}
 
 	/* Set memory HW memory address and enable. */
 	omap_writel(0, ISPHIST_ADDR);

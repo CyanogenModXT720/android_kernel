@@ -371,4 +371,5 @@ void unmap_user_memory_from_kernel(struct page **pages, int nr_pages);
 int isp_run_resizer(void *userdata);
 int isp_run_preview(void *userdata);
 
+int isp_lsc_workaround_eanbled(void);
 #endif	/* OMAP_ISP_TOP_H */

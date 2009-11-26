@@ -244,6 +244,18 @@ static struct vcontrol {
 	},
 	{
 		{
+			.id = V4L2_CID_PRIVATE_LENS_CORRECTION,
+			.type = V4L2_CTRL_TYPE_INTEGER,
+			.name = "Lens Correction",
+			.minimum = 0,
+			.maximum = 1,
+			.step = 0,
+			.default_value = 0,
+		},
+		.current_value = 0,
+	},
+	{
+		{
 			.id = V4L2_CID_PRIVATE_SENSOR_ID_REQ,
 			.type = V4L2_CTRL_TYPE_INTEGER,
 			.name = "Sensor ID",
@@ -487,40 +499,43 @@ int ov8810_set_exposure_time(u32 exp_time, struct v4l2_int_device *s,
 		}
 
 		if (exp_time < sensor->exposure.min_exp_time) {
-			dev_err(&client->dev, "Exposure time %d us not within "
-				"the legal range.\n", exp_time);
-			dev_err(&client->dev, "Exposure time must be "
-				"greater than %d us\n",
-				sensor->exposure.min_exp_time);
+
+			printk(KERN_ERR "Exposure time %dms less than regal limit %dms\n",
+					exp_time,
+					sensor->exposure.min_exp_time);
+
 			exp_time = sensor->exposure.min_exp_time;
 		}
 
 		/* OV8810 cannot accept exposure time longer than frame time */
 		if (exp_time > sensor->exposure.fps_max_exp_time) {
-			dev_err(&client->dev, "Exposure time %d us not within "
-				"the legal range.\n", exp_time);
-			dev_err(&client->dev, "Exposure time must be "
-				"less than %d us\n",
-				sensor->exposure.fps_max_exp_time);
+
+			printk(KERN_ERR "Exposure time %dms greater than legal limit %dms\n",
+					exp_time,
+					sensor->exposure.fps_max_exp_time);
+
 			exp_time = sensor->exposure.fps_max_exp_time;
 		}
 
 		/* calc num lines with rounding */
 		num_exp_lines = ((exp_time << 8) + (line_time_q8 >> 1)) /
-			line_time_q8;
+		line_time_q8;
 
 write_aecl:
+
 		/* write number of line times to AEL/H registers */
 		err = ov8810_write_reg(client, OV8810_AECL_H,
 			num_exp_lines >> 8);
 		err |= ov8810_write_reg(client, OV8810_AECL_L,
 			num_exp_lines & 0xFF);
 
-		dev_dbg(&client->dev, "ov8810:set_exposure_time = %d usec, " \
-			"CoarseIntTime = %d, sclk=%d, line_len_pck=%d clks, " \
-			"line_tm = %d/256 us\n",
-			exp_time, num_exp_lines, sensor->clk.sclk,
-			sensor->frame.line_length_pck, line_time_q8);
+		/*~ dev_dbg(&client->dev,
+		"ov8810:set_exposure_time = %d usec, " \
+		~ "CoarseIntTime = %d, sclk=%d, line_len_pck=%d clks, " \
+		~ "line_tm = %d/256 us\n",
+		~ exp_time, num_exp_lines, sensor->clk.sclk,
+		~ sensor->frame.line_length_pck, line_time_q8);*/
+
 
 		/* save results */
 		sensor->exposure.exp_time = exp_time;
@@ -566,18 +581,16 @@ int ov8810_set_gain(u16 linear_gain_Q8, struct v4l2_int_device *s,
 	struct i2c_client *client = sensor->i2c_client;
 
 	if (linear_gain_Q8 < sensor->exposure.min_linear_gain) {
-		dev_err(&client->dev, "Gain=%d out of legal range.\n",
-			linear_gain_Q8);
-		dev_err(&client->dev, "Gain must be greater than %d \n",
-			sensor->exposure.min_linear_gain);
+		printk(KERN_ERR "Gain %d less than regal limit %d\n",
+			   linear_gain_Q8, sensor->exposure.min_linear_gain);
 		linear_gain_Q8 = sensor->exposure.min_linear_gain;
 	}
 
 	if (linear_gain_Q8 > sensor->exposure.max_linear_gain) {
-		dev_err(&client->dev, "Gain=%d out of legal range.\n",
-			linear_gain_Q8);
-		dev_err(&client->dev, "Gain must be less than %d \n",
-			sensor->exposure.max_linear_gain);
+
+		printk(KERN_ERR "Gain %d greater than regal limit %d\n",
+			linear_gain_Q8, sensor->exposure.max_linear_gain);
+
 		linear_gain_Q8 = sensor->exposure.max_linear_gain;
 	}
 
@@ -606,10 +619,12 @@ int ov8810_set_gain(u16 linear_gain_Q8, struct v4l2_int_device *s,
 		anlg_gain_register = anlg_gain_stage_2x | anlg_gain_fraction;
 		dgtl_gain_register = dgtl_gain_stage_2x;
 
-		dev_dbg(&client->dev, "gain =%d/256, angl_gain reg = 0x%x, " \
-			"dgtl_gain_reg = 0x%x\n",
-			linear_gain_Q8, anlg_gain_register,
-			dgtl_gain_register);
+		/*~ dev_dbg(&client->dev,
+			"gain =%d/256, angl_gain reg = 0x%x, " \
+			~ "dgtl_gain_reg = 0x%x\n",
+			~ linear_gain_Q8, anlg_gain_register,
+			~ dgtl_gain_register);*/
+
 
 		err = ov8810_write_reg(client, OV8810_AGCL,
 			anlg_gain_register);
@@ -1035,6 +1050,60 @@ static int ov8810_calc_pclk(struct v4l2_int_device *s)
 	return 0;
 }
 
+static int ov8810_set_lens_correction(u16 enable_lens_correction,
+	struct v4l2_int_device *s, struct vcontrol *lvc)
+{
+	u8 lenc_downsampling;
+	int data, err = 0;
+	struct ov8810_sensor *sensor = s->priv;
+	struct i2c_client *client = sensor->i2c_client;
+
+	if ((current_power_state == V4L2_POWER_ON) || sensor->resuming) {
+		if (enable_lens_correction) {
+			err = ov8810_write_regs(client, len_correction_tbl);
+			/* enable 0x3300[4] */
+			err |= ov8810_read_reg(client, 1,
+				OV8810_ISP_ENBL_0, &data);
+			data |= 0x10;
+			err |= ov8810_write_reg(client,
+				OV8810_ISP_ENBL_0, data);
+
+			/* set downsampling */
+			if (sensor->frame.h_subsample == 3)
+				lenc_downsampling = LENC_8_1_DOWNSAMPLING;
+			else if (sensor->frame.h_subsample == 2)
+				lenc_downsampling = LENC_4_1_DOWNSAMPLING;
+			else if (sensor->frame.h_subsample == 1)
+				lenc_downsampling = LENC_2_1_DOWNSAMPLING;
+			else
+				lenc_downsampling = LENC_1_1_DOWNSAMPLING;
+
+			err |= ov8810_write_reg(client,
+				OV8810_LENC, lenc_downsampling);
+
+			dev_dbg(&client->dev, "enabling lens correction: " \
+				"downsample=0x%x\n", lenc_downsampling);
+
+		} else {  /* disable lens correction */
+			err = ov8810_read_reg(client, 1,
+				OV8810_ISP_ENBL_0, &data);
+			data &= 0xef;
+			err |= ov8810_write_reg(client,
+				OV8810_ISP_ENBL_0, data);
+		}
+	}
+
+	if (err)
+		dev_err(&client->dev, "Error setting lens correction=%d.\n",
+			enable_lens_correction);
+	else {
+		if (lvc)
+			lvc->current_value = enable_lens_correction;
+	}
+
+	return err;
+}
+
 /* Find the best match for a requested image capture size.  The best match
  * is chosen as the nearest match that has the same number or fewer pixels
  * as the requested size, or the smallest image size if the requested size
@@ -1051,9 +1120,12 @@ ov8810_find_size(struct v4l2_int_device *s, unsigned int width,
 	if ((width > ov8810_sizes[SIZE_2M].width) ||
 		(height > ov8810_sizes[SIZE_2M].height))
 		size = SIZE_8M;
+	else if ((width > ov8810_sizes[SIZE_1_5M].width) ||
+		(height > ov8810_sizes[SIZE_1_5M].height))
+		size = SIZE_2M;
 	else if ((width > ov8810_sizes[SIZE_500K].width) ||
 		(height > ov8810_sizes[SIZE_500K].height))
-		size = SIZE_2M;
+		size = SIZE_1_5M;
 	else if ((width > ov8810_sizes[SIZE_125K].width) ||
 		(height > ov8810_sizes[SIZE_125K].height))
 		size = SIZE_500K;
@@ -1105,7 +1177,7 @@ static u32 ov8810_calc_mipiclk(struct v4l2_int_device *s)
  */
 static int ov8810_configure(struct v4l2_int_device *s)
 {
-	enum image_size_ov isize = SIZE_500K;
+	enum image_size_ov isize;
 	int err = 0, i = 0;
 	u32 mipiclk;
 	enum pixel_format_ov pfmt = RAW10;
@@ -1299,6 +1371,13 @@ static int ov8810_configure(struct v4l2_int_device *s)
 			sensor->v4l2_int_device, lvc);
 	}
 
+	i = find_vctrl(V4L2_CID_PRIVATE_LENS_CORRECTION);
+	if (i >= 0) {
+		lvc = &video_control[i];
+		ov8810_set_lens_correction(lvc->current_value,
+			sensor->v4l2_int_device, lvc);
+	}
+
 	/* start streaming */
 	ov8810_write_reg(client, OV8810_IMAGE_SYSTEM, 0x01);
 	sensor->streaming = true;
@@ -1416,6 +1495,9 @@ static int ioctl_g_ctrl(struct v4l2_int_device *s,
 			dev_err(&client->dev, "Failed copy_to_user\n");
 		}
 		break;
+	case V4L2_CID_PRIVATE_LENS_CORRECTION:
+		vc->value = lvc->current_value;
+		break;
 	case V4L2_CID_PRIVATE_SHUTTER_PARAMS:
 		if (copy_to_user((void *)vc->value, &(sensor->shutter),
 				sizeof(sensor->shutter))) {
@@ -1507,6 +1589,9 @@ static int ioctl_s_ctrl(struct v4l2_int_device *s,
 			retval = ov8810_set_flash_next_frame(&flash_params,
 				s, lvc);
 		}
+		break;
+	case V4L2_CID_PRIVATE_LENS_CORRECTION:
+		retval = ov8810_set_lens_correction(vc->value, s, lvc);
 		break;
 	case V4L2_CID_PRIVATE_SHUTTER_PARAMS:
 		retval = copy_from_user(&(sensor->shutter),
@@ -1739,6 +1824,10 @@ static int ioctl_s_parm(struct v4l2_int_device *s,
 		rval = -EINVAL;
 	} else {
 		dev_dbg(&client->dev, "Setting FPS=%d\n", desired_fps);
+		if ((current_power_state == V4L2_POWER_ON) ||
+				sensor->resuming) {
+			rval = ov8810_set_framerate(s, &sensor->timeperframe);
+		}
 	}
 
 	return rval;
@@ -1901,20 +1990,21 @@ static int ioctl_enum_framesizes(struct v4l2_int_device *s,
 }
 
 const struct v4l2_fract ov8810_frameintervals[] = {
-	{ .numerator = 3, .denominator = 3 },
-	{ .numerator = 3, .denominator = 6 },
-	{ .numerator = 3, .denominator = 9 },
-	{ .numerator = 3, .denominator = 12 },
-	{ .numerator = 3, .denominator = 15 },
-	{ .numerator = 3, .denominator = 18 },
-	{ .numerator = 3, .denominator = 21 },  /* SIZE_8M max fps */
-	{ .numerator = 1, .denominator = 10 },
-	{ .numerator = 1, .denominator = 15 },
-	{ .numerator = 1, .denominator = 20 },
-	{ .numerator = 1, .denominator = 21 }, /* SIZE_2M max fps */
-	{ .numerator = 1, .denominator = 25 },
-	{ .numerator = 1, .denominator = 30 }, /* SIZE_500K &
-						SIZE_125K max fps */
+	{ .numerator = 3, .denominator = 3 },   /* 0 */
+	{ .numerator = 3, .denominator = 6 },   /* 1 */
+	{ .numerator = 3, .denominator = 9 },   /* 2 */
+	{ .numerator = 3, .denominator = 12 },  /* 3 */
+	{ .numerator = 3, .denominator = 15 },  /* 4 */
+	{ .numerator = 3, .denominator = 18 },  /* 5 */
+	{ .numerator = 3, .denominator = 21 },  /* 6- SIZE_8M max fps */
+	{ .numerator = 1, .denominator = 10 },  /* 7 */
+	{ .numerator = 1, .denominator = 15 },  /* 8 */
+	{ .numerator = 1, .denominator = 20 },  /* 9 */
+	{ .numerator = 1, .denominator = 21 },  /* 10 - SIZE_2M max fps */
+	{ .numerator = 1, .denominator = 25 },  /* 11 */
+	{ .numerator = 1, .denominator = 26 },  /* 12 - SIZE_1_5M max fps */
+	{ .numerator = 1, .denominator = 30 },  /* 13 - SIZE_500K &
+							SIZE_125K max fps */
 };
 
 static int ioctl_enum_frameintervals(struct v4l2_int_device *s,
@@ -1932,21 +2022,27 @@ static int ioctl_enum_frameintervals(struct v4l2_int_device *s,
 
 	/* Do we already reached all discrete framesizes? */
 
-	if ((frmi->width == ov8810_sizes[3].width) &&
-				(frmi->height == ov8810_sizes[3].height)) {
+	if ((frmi->width == ov8810_sizes[SIZE_8M].width) &&
+			(frmi->height == ov8810_sizes[SIZE_8M].height)) {
 		/* The max framerate supported by SIZE_8M capture is 7 fps
 		 */
 		if (frmi->index > 6)
 			return -EINVAL;
 
-	} else if ((frmi->width == ov8810_sizes[2].width) &&
-				(frmi->height == ov8810_sizes[2].height)) {
+	} else if ((frmi->width == ov8810_sizes[SIZE_2M].width) &&
+			(frmi->height == ov8810_sizes[SIZE_2M].height)) {
 		/* The max framerate supported by SIZE_2M capture 21 fps
 		 */
 		if (frmi->index > 10)
 			return -EINVAL;
-	} else {
+	} else if ((frmi->width == ov8810_sizes[SIZE_1_5M].width) &&
+			(frmi->height == ov8810_sizes[SIZE_1_5M].height)) {
+		/* The max framerate supported by SIZE_1_5M capture 26 fps
+		 */
 		if (frmi->index > 12)
+			return -EINVAL;
+	} else {
+		if (frmi->index > 13)
 			return -EINVAL;
 	}
 
