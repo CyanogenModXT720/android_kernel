@@ -638,6 +638,8 @@ struct cpcap_regacc {
 #define CPCAP_IOCTL_TTA_READ_STATUS \
      _IOWR(0, CPCAP_IOCTL_NUM_TTA_STATUS_GET, enum cpcap_tta_state*)
 
+#define CPCAP_AUDIO_REG_DEBUG
+
 #ifdef __KERNEL__
 struct cpcap_device {
 	struct spi_device	*spi;
@@ -735,6 +737,10 @@ void disable_tta(void);
 void venc_tv_disconnect(void);
 
 int venc_tv_connect(void);
+
+#ifdef CPCAP_AUDIO_REG_DEBUG
+void cpcap_regacc_audio_reg_dump(void);
+#endif
 
 #endif /* __KERNEL__ */
 #endif /* _LINUX_SPI_CPCAP_H */
