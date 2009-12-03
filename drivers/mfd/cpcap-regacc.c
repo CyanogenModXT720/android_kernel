@@ -244,6 +244,11 @@ static const struct {
 	[CPCAP_REG_LMACE]     = {1183, 0xFFF8, 0xFFFF},
 };
 
+#ifdef CPCAP_AUDIO_REG_DEBUG
+static unsigned short
+CPCAP_AUD_CACHE[CPCAP_REG_LVAB-CPCAP_REG_VAUDIOC+1] = { 0 };
+#endif
+
 static int cpcap_spi_access(struct spi_device *spi, u8 *buf,
 			    size_t len)
 {
@@ -348,6 +353,13 @@ int cpcap_regacc_write(struct cpcap_device *cpcap,
 		old_value &= register_info_tbl[reg].rbw_mask;
 		old_value &= ~mask;
 		value |= old_value;
+
+#ifdef CPCAP_AUDIO_REG_DEBUG
+		if (reg >= CPCAP_REG_VAUDIOC && reg <= CPCAP_REG_LVAB)
+			CPCAP_AUD_CACHE[reg - CPCAP_REG_VAUDIOC] =
+					value & register_info_tbl[reg].rbw_mask;
+#endif
+
 		retval = cpcap_config_for_write(spi,
 						register_info_tbl[reg].address,
 						value);
@@ -381,3 +393,20 @@ int cpcap_regacc_init(struct cpcap_device *cpcap)
 
 	return retval;
 }
+
+#ifdef CPCAP_AUDIO_REG_DEBUG
+void cpcap_regacc_audio_reg_dump(void)
+{
+  printk(KERN_INFO
+	"CPCAP_aud:V:%04X C:%04X,%04X S:%04X,%04X In:%04X,%04X Out:%04X,%04X ",
+	CPCAP_AUD_CACHE[0], CPCAP_AUD_CACHE[1], CPCAP_AUD_CACHE[2],
+	CPCAP_AUD_CACHE[3], CPCAP_AUD_CACHE[4], CPCAP_AUD_CACHE[5],
+	CPCAP_AUD_CACHE[6], CPCAP_AUD_CACHE[7], CPCAP_AUD_CACHE[8]
+	);
+  printk(KERN_INFO
+	"Sw:%04X,%04X,%04X  %04X %04X %04X %04X %04X %04X\n",
+	CPCAP_AUD_CACHE[9], CPCAP_AUD_CACHE[10], CPCAP_AUD_CACHE[11],
+	CPCAP_AUD_CACHE[12], CPCAP_AUD_CACHE[13], CPCAP_AUD_CACHE[14],
+	CPCAP_AUD_CACHE[15], CPCAP_AUD_CACHE[16], CPCAP_AUD_CACHE[17]
+}
+#endif
