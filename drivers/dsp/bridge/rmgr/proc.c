@@ -745,6 +745,7 @@ DSP_STATUS PROC_FlushMemory(DSP_HPROCESSOR hProcessor, void *pMpuAddr,
 {
 	/* Keep STATUS here for future additions to this function */
 	DSP_STATUS status = DSP_SOK;
+	enum DSP_FLUSHTYPE FlushMemType = PROC_WRITEBACK_INVALIDATE_MEM;
 	struct PROC_OBJECT *pProcObject = (struct PROC_OBJECT *)hProcessor;
 	DBC_Require(cRefs > 0);
 
@@ -755,7 +756,7 @@ DSP_STATUS PROC_FlushMemory(DSP_HPROCESSOR hProcessor, void *pMpuAddr,
 	if (MEM_IsValidHandle(pProcObject, PROC_SIGNATURE)) {
 		/* Critical section */
 		(void)SYNC_EnterCS(hProcLock);
-		MEM_FlushCache(pMpuAddr, ulSize, ulFlags);
+		MEM_FlushCache(pMpuAddr, ulSize, FlushMemType);
 		(void)SYNC_LeaveCS(hProcLock);
 	} else {
 		status = DSP_EHANDLE;
@@ -1071,7 +1072,7 @@ DSP_STATUS PROC_Load(DSP_HPROCESSOR hProcessor, IN CONST s32 iArgc,
 	struct DCD_MANAGER *hDCDHandle;
 	struct DMM_OBJECT *hDmmMgr;
 	u32 dwExtEnd;
-	u32 uProcId = 0;
+	u32 uProcId;
 #ifdef DEBUG
 	BRD_STATUS uBrdState;
 #endif

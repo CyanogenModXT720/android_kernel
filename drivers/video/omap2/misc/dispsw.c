@@ -263,7 +263,6 @@ static void dispsw_scale(struct dispsw_osi *osi,
 
 #ifdef CONFIG_TVOUT_SHOLEST    
 	case DISPSW_SCALE_FOR_TVOUT:
-		DBG("DISPSW_SCALE_FOR_TVOUT \n");
 		if ( !get_video_status()) {
 			if (osi->lock_aspect_ratio) {
 				tw = (osi->disp_w << shift) / w;
@@ -278,8 +277,7 @@ static void dispsw_scale(struct dispsw_osi *osi,
 				w = osi->disp_w;
 				h = osi->disp_h;
 			}
-			DBG(" info->out_width 11 w= %d \n", w );
-			w = 678; // fixed for TV panel size
+			w = 660; // fixed for TV panel size
 		}
 		break;
  #endif   

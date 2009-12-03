@@ -328,9 +328,6 @@ static void hs_work(struct work_struct *work)
 	cpcap_regacc_write(data_3mm5->cpcap, CPCAP_REG_TXI,
 			(CPCAP_BIT_MB_ON2 | CPCAP_BIT_PTT_CMP_EN),
 			(CPCAP_BIT_MB_ON2 | CPCAP_BIT_PTT_CMP_EN));
-	cpcap_regacc_write(data_3mm5->cpcap, CPCAP_REG_RXOA,
-		   CPCAP_BIT_ST_HS_CP_EN,
-		   CPCAP_BIT_ST_HS_CP_EN);
 	audio_low_power_clear(data_3mm5);
 
 	/* Give PTTS time to settle */
@@ -525,9 +522,6 @@ static void hs_handler(enum cpcap_irqs irq, void *data)
 		cpcap_regacc_write(data_3mm5->cpcap, CPCAP_REG_TXI,
 				   (CPCAP_BIT_MB_ON2 | CPCAP_BIT_PTT_CMP_EN),
 				   (CPCAP_BIT_MB_ON2 | CPCAP_BIT_PTT_CMP_EN));
-		cpcap_regacc_write(data_3mm5->cpcap, CPCAP_REG_RXOA,
-				   CPCAP_BIT_ST_HS_CP_EN,
-				   CPCAP_BIT_ST_HS_CP_EN);
 		audio_low_power_clear(data_3mm5);
 
 		/* Give PTTS time to settle */
