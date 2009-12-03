@@ -777,14 +777,6 @@ static void serial_omap_shutdown(struct uart_port *port)
 
 	DPRINTK("serial_omap_shutdown+%d\n", up->pdev->id);
 
-	if (up->pdev->id != 3) {
-		serial_out(up, UART_LCR, UART_LCR_DLAB);
-		serial_out(up, UART_DLL, 0);
-		serial_out(up, UART_DLM, 0);
-		serial_out(up, UART_LCR, 0);
-		serial_out(up, UART_OMAP_MDR1, OMAP_MDR1_DISABLE);
-	}
-
 	/* 
 	 * If we're using auto-rts then disable it.
 	 */
@@ -813,6 +805,14 @@ static void serial_omap_shutdown(struct uart_port *port)
 		up->port.mctrl &= ~TIOCM_OUT2;
 	serial_omap_set_mctrl(&up->port, (up->port.mctrl & ~TIOCM_RTS));
 	spin_unlock_irqrestore(&up->port.lock, flags);
+
+	if (up->pdev->id == 1) {
+		serial_out(up, UART_LCR, UART_LCR_DLAB);
+		serial_out(up, UART_DLL, 0);
+		serial_out(up, UART_DLM, 0);
+		serial_out(up, UART_LCR, 0);
+		serial_out(up, UART_OMAP_MDR1, OMAP_MDR1_DISABLE);
+	}
 
 	/*
 	 * Disable break condition and FIFOs
@@ -948,7 +948,8 @@ serial_omap_set_termios(struct uart_port *port, struct ktermios *termios,
 
 	if (termios->c_cflag & CRTSCTS)
 #ifdef CONFIG_SERIAL_OMAP3430_HW_FLOW_CONTROL
-		efr |= (port->unused1 << 6);
+		efr |= (((port->unused1 << 6) & UART_EFR_CTS) |
+				(up->restore_autorts ? 0 : UART_EFR_RTS));
 #else
 		efr |= (UART_EFR_CTS | (up->restore_autorts ? 0 : UART_EFR_RTS));
 #endif
@@ -959,15 +960,8 @@ serial_omap_set_termios(struct uart_port *port, struct ktermios *termios,
 
 	serial_out(up, UART_LCR, cval);		/* reset DLAB */
 	up->lcr = cval;				/* Save LCR */
-#if 0
-	scr = (1 << 4);				/* RX_CTS_WU_EN */
-#else
-	scr = 0;
-#endif
 	if (up->use_dma)
-		scr |= (1 << 6) | (1 << 7);	/* TX_TRIG_GRANU1 | RX_TRIG_GRANU1 */
-
-	serial_out(up, UART_OMAP_SCR, scr);
+		serial_out(up, UART_OMAP_SCR, ((1<<6) | (1<<7)));
 
 
 	serial_out(up, UART_LCR, 0xbf);	/* Access EFR */
