@@ -531,7 +531,7 @@ static void hs_handler(enum cpcap_irqs irq, void *data)
 		audio_low_power_clear(data_3mm5);
 
 		/* Give PTTS time to settle */
-		mdelay(2);
+		mdelay(20);
 
 		if (cpcap_irq_sense(data_3mm5->cpcap, CPCAP_IRQ_PTT, 1) <= 0) {
 			/* Headset without mic and MFB is detected. (May also
