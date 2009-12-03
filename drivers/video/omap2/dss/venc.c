@@ -311,6 +311,9 @@ static struct {
 	struct mutex venc_lock;
 	u32 wss_data;
 	struct regulator *vdda_dac_reg;
+#ifdef CONFIG_TVOUT_SHOLEST
+	int enabled;
+#endif
 } venc;
 
 static inline void venc_write_reg(int idx, u32 val)
@@ -557,7 +560,7 @@ void venc_exit(void)
 
 static void venc_power_on(struct omap_dss_device *dssdev)
 {
-	omap_pm_set_min_bus_tput(&dssdev->dev, OCP_INITIATOR_AGENT, 124416*30);
+	omap_pm_set_min_bus_tput(&dssdev->dev, OCP_INITIATOR_AGENT, 124416*10);
 
 	venc_enable_clocks(1);
 
@@ -619,6 +622,9 @@ static int venc_enable_display(struct omap_dss_device *dssdev)
 		goto err;
 	}
 
+#ifdef CONFIG_TVOUT_SHOLEST
+	venc.enabled = 1;
+#endif
 	venc_power_on(dssdev);
 
 	venc.wss_data = 0;
@@ -649,6 +655,9 @@ static void venc_disable_display(struct omap_dss_device *dssdev)
 
 	dssdev->state = OMAP_DSS_DISPLAY_DISABLED;
 end:
+#ifdef CONFIG_TVOUT_SHOLEST
+	venc.enabled = 0;
+#endif
 	mutex_unlock(&venc.venc_lock);
 }
 
@@ -794,35 +803,45 @@ int venc_init_display(struct omap_dss_device *dssdev)
 #ifdef CONFIG_TVOUT_SHOLEST
 int venc_tv_connect(void)
 {
-	int tv_int;
+	int tv_int = 0;
 	int bu_x, bu_y, bu_ctrl;
 
 	DSSDBG("Entered tv_connect()\n");
 
 	mutex_lock(&venc.venc_lock);
 
-	venc_enable_clocks(1);
-
-	bu_x = venc_read_reg(VENC_TVDETGP_INT_START_STOP_X);
-	bu_y = venc_read_reg(VENC_TVDETGP_INT_START_STOP_X);
-	bu_ctrl = venc_read_reg(VENC_GEN_CTRL);
-
-	venc_write_reg(VENC_TVDETGP_INT_START_STOP_X, 0x00140001);
-	venc_write_reg(VENC_TVDETGP_INT_START_STOP_Y, 0x00010001);
-	venc_write_reg(VENC_GEN_CTRL, 0x00010001);
-
-	msleep(10);
-
-	tv_int = gpio_get_value(OMAP_TVINT_GPIO);
-	printk("venc_tv_connect() %d \n", tv_int);
-	if (tv_int == 0)
+	if (venc.enabled)
 	{
-		venc_write_reg(VENC_TVDETGP_INT_START_STOP_X, bu_x);
-		venc_write_reg(VENC_TVDETGP_INT_START_STOP_Y, bu_y);
-		venc_write_reg(VENC_GEN_CTRL, (bu_ctrl & ~1));
+		tv_int = 1;
+		DSSDBG("venc is already enabled \n");
+		bu_ctrl = venc_read_reg(VENC_GEN_CTRL);
+		venc_write_reg(VENC_GEN_CTRL, bu_ctrl);
 	}
+	else
+	{
+		venc_enable_clocks(1);
 
-	venc_enable_clocks(0);
+		bu_x = venc_read_reg(VENC_TVDETGP_INT_START_STOP_X);
+		bu_y = venc_read_reg(VENC_TVDETGP_INT_START_STOP_X);
+		bu_ctrl = venc_read_reg(VENC_GEN_CTRL);
+
+		venc_write_reg(VENC_TVDETGP_INT_START_STOP_X, 0x00140001);
+		venc_write_reg(VENC_TVDETGP_INT_START_STOP_Y, 0x00010001);
+		venc_write_reg(VENC_GEN_CTRL, 0x00010001);
+
+		msleep(10);
+
+		tv_int = gpio_get_value(OMAP_TVINT_GPIO);
+		DSSDBG("venc_tv_connect() %d \n", tv_int);
+		if (tv_int == 0)
+		{
+			venc_write_reg(VENC_TVDETGP_INT_START_STOP_X, bu_x);
+			venc_write_reg(VENC_TVDETGP_INT_START_STOP_Y, bu_y);
+			venc_write_reg(VENC_GEN_CTRL, bu_ctrl);
+		}
+
+		venc_enable_clocks(0);
+	}
 
 	mutex_unlock(&venc.venc_lock);
 
