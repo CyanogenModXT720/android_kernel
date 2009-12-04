@@ -1831,7 +1831,8 @@ static void __exit smscore_module_exit(void)
 	sms_debug("end");
 }
 
-module_init(smscore_module_init);
+/*module_init(smscore_module_init);*/
+late_initcall(smscore_module_init);
 module_exit(smscore_module_exit);
 
 MODULE_DESCRIPTION("Siano MDTV Core module - Version 2.0.1");

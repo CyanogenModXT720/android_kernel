@@ -153,14 +153,14 @@ static struct omap_dss_device sholest_hdtv_device = {
 #ifdef CONFIG_TVOUT_SHOLEST
 static int sholest_panel_enable_tv(struct omap_dss_device *dssdev)
 {
-	printk(KERN_WARNING "Enter sholest_panel_enable_tv\n");
+	printk(KERN_INFO "Enter sholest_panel_enable_tv\n");
 
 	return 0;
 }
 
 static void sholest_panel_disable_tv(struct omap_dss_device *dssdev)
 {
-	printk(KERN_WARNING "Enter sholest_panel_disable_tv\n");
+	printk(KERN_INFO "Enter sholest_panel_disable_tv\n");
 }
 
 static struct omap_dss_device sholest_tvout_device = {
@@ -237,15 +237,15 @@ static struct dispsw_mr_support sholest_dispsw_tv_ntsc = {
 	.dev_name = "tv",
 	.res_name = "ntsc",
 	.dev_timing = {
-    .x_res = 720,
-    .y_res = 482,
-    .pixel_clock = 13500,
-    .hsw = 64,
-    .hfp = 16,
-    .hbp = 58,
-    .vsw = 6,
-    .vfp = 6,
-    .vbp = 31,
+		.x_res = 720,
+		.y_res = 482,
+		.pixel_clock = 13500,
+		.hsw = 64,
+		.hfp = 16,
+		.hbp = 58,
+		.vsw = 6,
+		.vfp = 6,
+		.vbp = 31,
 	},
 	.panel_config = (OMAP_DSS_LCD_TFT|OMAP_DSS_LCD_IVS|OMAP_DSS_LCD_IHS),
 };
@@ -254,15 +254,15 @@ static struct dispsw_mr_support sholest_dispsw_tv_pal = {
 	.dev_name = "tv",
 	.res_name = "pal",
 	.dev_timing = {
-    .x_res = 720,
-    .y_res = 574,
-    .pixel_clock = 13500,
-    .hsw = 64,
-    .hfp = 12,
-    .hbp = 68,
-    .vsw = 5,
-    .vfp = 5,
-    .vbp = 41,
+		.x_res = 720,
+		.y_res = 574,
+		.pixel_clock = 13500,
+		.hsw = 64,
+		.hfp = 12,
+		.hbp = 68,
+		.vsw = 5,
+		.vfp = 5,
+		.vbp = 41,
 	},
 	.panel_config = (OMAP_DSS_LCD_TFT|OMAP_DSS_LCD_IVS|OMAP_DSS_LCD_IHS),
 };
@@ -272,8 +272,8 @@ static struct dispsw_mr_support *sholest_dispsw_resolutions[] = {
 	&sholest_dispsw_hdtv_2,
 	&sholest_dispsw_hdtv_4,
 #ifdef CONFIG_TVOUT_SHOLEST
-  &sholest_dispsw_tv_ntsc,
-  &sholest_dispsw_tv_pal,
+	&sholest_dispsw_tv_ntsc,
+	&sholest_dispsw_tv_pal,
 #endif
 };
 

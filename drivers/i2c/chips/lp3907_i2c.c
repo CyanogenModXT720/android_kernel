@@ -518,7 +518,8 @@ static void __exit lp3907_exit(void)
 	printk(KERN_INFO "LP3907 voltage regulator driver: exit\n");
 }
 
-module_init(lp3907_init);
+/*module_init(lp3907_init);*/
+device_initcall(lp3907_init);
 module_exit(lp3907_exit);
 
 

@@ -478,7 +478,7 @@ void MEM_Exit(void)
  *  Purpose:
  *      Flush cache
  */
-void MEM_FlushCache(void *pMemBuf, u32 cBytes, u32 FlushType)
+void MEM_FlushCache(void *pMemBuf, u32 cBytes, s32 FlushType)
 {
 	DBC_Require(cRefs > 0);
 

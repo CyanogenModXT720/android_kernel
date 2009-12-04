@@ -46,4 +46,5 @@ endif
 
 smsmdtv-objs := $(SMSOBJ)
 
-obj-m := smsmdtv.o
+#obj-m := smsmdtv.o
+obj-$(CONFIG_SMS_SIANO_MDTV_TDMB) := smsmdtv.o

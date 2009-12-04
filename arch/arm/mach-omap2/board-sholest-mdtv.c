@@ -40,6 +40,7 @@ static void sholest_lp3907_exit(void)
 
 static int sholest_lp3907_power_on(void)
 {
+	printk(KERN_INFO "sholest_lp3907_power_on()\n");
 	/* SPI pin control */
 	omap_cfg_reg(F1_34XX_MDTV_INT_ON);
 
@@ -53,6 +54,7 @@ static int sholest_lp3907_power_on(void)
 
 static int sholest_lp3907_power_off(void)
 {
+	printk(KERN_INFO "sholest_lp3907_power_off()\n");
 	/* SPI pin control */
 	omap_cfg_reg(F1_34XX_MDTV_INT_OFF);
 
