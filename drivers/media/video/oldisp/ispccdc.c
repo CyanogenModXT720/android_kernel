@@ -146,6 +146,22 @@ static struct isp_reg ispccdc_reg_list[] = {
 };
 
 /**
+ * isp_lsc_isr - LSC prefetch error interrupt handling.
+ **/
+void isp_lsc_isr(unsigned long status, void  *arg1, void *arg2)
+{
+	unsigned long irqflags = 0;
+
+	if (status & LSC_PRE_ERR) {
+		spin_lock_irqsave(&ispccdc_obj.ispccdc_lock, irqflags);
+		ispccdc_enable_lsc(0);
+		ispccdc_enable_lsc(1);
+		spin_unlock_irqrestore(&ispccdc_obj.ispccdc_lock, irqflags);
+		/* printk(KERN_ERR "isp_sr: LSC_PRE_ERR \n"); */
+	}
+}
+
+/**
  * omap34xx_isp_ccdc_config - Sets CCDC configuration from userspace
  * @userspace_add: Structure containing CCDC configuration sent from userspace.
  *
@@ -286,8 +302,8 @@ int omap34xx_isp_ccdc_config(void *userspace_add)
 			ispccdc_enable_lsc(1);
 		} else if ((ISP_ABS_CCDC_CONFIG_LSC & ccdc_struct->update) ==
 						ISP_ABS_CCDC_CONFIG_LSC) {
-				ispccdc_enable_lsc(0);
-				ccdc_use_lsc = 0;
+			ispccdc_enable_lsc(0);
+			ccdc_use_lsc = 0;
 		}
 		mutex_lock(&ispccdc_obj.ispccdc_mutex);
 		if ((ISP_ABS_TBL_LSC & ccdc_struct->update)
@@ -487,19 +503,22 @@ void ispccdc_enable_lsc(u8 enable)
 		return;
 
 	if (enable) {
-		omap_writel(omap_readl(ISP_CTRL) | ISPCTRL_SBL_SHARED_RPORTB |
-					ISPCTRL_SBL_RD_RAM_EN, ISP_CTRL);
-		omap_writel(omap_readl(ISPCCDC_LSC_CONFIG) | 0x1,
-							ISPCCDC_LSC_CONFIG);
+		omap_writel((omap_readl(ISP_CTRL) |
+					(ISPCTRL_SBL_SHARED_RPORTB |
+					ISPCTRL_SBL_RD_RAM_EN)), ISP_CTRL);
+		omap_writel((omap_readl(ISPCCDC_LSC_CONFIG) |
+					0x1), ISPCCDC_LSC_CONFIG);
 		ispccdc_obj.lsc_en = 1;
 	} else {
-		omap_writel(omap_readl(ISPCCDC_LSC_CONFIG) & 0xFFFE,
-							ISPCCDC_LSC_CONFIG);
+		omap_writel((omap_readl(ISPCCDC_LSC_CONFIG) & ~0x1)
+			, ISPCCDC_LSC_CONFIG);
+		omap_writel((omap_readl(ISP_CTRL)
+			& ~(ISPCTRL_SBL_SHARED_RPORTB |
+					ISPCTRL_SBL_RD_RAM_EN)), ISP_CTRL);
 		ispccdc_obj.lsc_en = 0;
 	}
 }
 EXPORT_SYMBOL(ispccdc_enable_lsc);
-
 
 /**
  * ispccdc_set_crop_offset_dynamic - Store the component order as component offset.
@@ -511,7 +530,6 @@ EXPORT_SYMBOL(ispccdc_enable_lsc);
 void ispccdc_set_crop_offset_dynamic(struct ispccdc_color_offset offset)
 {
 	printk(KERN_INFO "ipsccdc crop offset dyn(%d)\n", offset.offsetcode);
-
 	if (offset.offsetcode > ISPCCDC_INPUT_FMT_GB_RG)
 		offset.offsetcode = 0;
 	ispccdc_set_crop_offset(offset.offsetcode);
@@ -584,6 +602,13 @@ void ispccdc_config_crop(u32 left, u32 top, u32 height, u32 width)
 						ispccdc_obj.ccdcin_hoffset,
 						ispccdc_obj.crop_w,
 						ispccdc_obj.crop_h);
+/*
+	printk("ISP_CCDC: crop (%d-%d-%d-%d)\n",
+			ispccdc_obj.ccdcin_woffset,
+			ispccdc_obj.ccdcin_hoffset,
+			ispccdc_obj.crop_w,
+			ispccdc_obj.crop_h);
+*/
 }
 
 /**
@@ -609,23 +634,22 @@ int ispccdc_config_datapath(enum ccdc_input input, enum ccdc_output output)
 	struct ispccdc_syncif syncif;
 	struct ispccdc_bclamp blkcfg;
 
-	u32 colptn = (ISPCCDC_COLPTN_Gr_Cy << ISPCCDC_COLPTN_CP0PLC0_SHIFT) |
-	(ISPCCDC_COLPTN_R_Ye << ISPCCDC_COLPTN_CP0PLC1_SHIFT) |
-	(ISPCCDC_COLPTN_Gr_Cy << ISPCCDC_COLPTN_CP0PLC2_SHIFT) |
-	(ISPCCDC_COLPTN_R_Ye << ISPCCDC_COLPTN_CP0PLC3_SHIFT) |
-	(ISPCCDC_COLPTN_B_Mg << ISPCCDC_COLPTN_CP1PLC0_SHIFT) |
-	(ISPCCDC_COLPTN_Gb_G << ISPCCDC_COLPTN_CP1PLC1_SHIFT) |
-	(ISPCCDC_COLPTN_B_Mg << ISPCCDC_COLPTN_CP1PLC2_SHIFT) |
-	(ISPCCDC_COLPTN_Gb_G << ISPCCDC_COLPTN_CP1PLC3_SHIFT) |
-	(ISPCCDC_COLPTN_Gr_Cy << ISPCCDC_COLPTN_CP2PLC0_SHIFT) |
-	(ISPCCDC_COLPTN_R_Ye << ISPCCDC_COLPTN_CP2PLC1_SHIFT) |
-	(ISPCCDC_COLPTN_Gr_Cy << ISPCCDC_COLPTN_CP2PLC2_SHIFT) |
-	(ISPCCDC_COLPTN_R_Ye << ISPCCDC_COLPTN_CP2PLC3_SHIFT) |
-	(ISPCCDC_COLPTN_B_Mg << ISPCCDC_COLPTN_CP3PLC0_SHIFT) |
-	(ISPCCDC_COLPTN_Gb_G << ISPCCDC_COLPTN_CP3PLC1_SHIFT) |
-	(ISPCCDC_COLPTN_B_Mg << ISPCCDC_COLPTN_CP3PLC2_SHIFT) |
-	(ISPCCDC_COLPTN_Gb_G << ISPCCDC_COLPTN_CP3PLC3_SHIFT);
-
+   u32 colptn = (ISPCCDC_COLPTN_Gr_Cy << ISPCCDC_COLPTN_CP0PLC0_SHIFT) |
+		(ISPCCDC_COLPTN_R_Ye << ISPCCDC_COLPTN_CP0PLC1_SHIFT) |
+		(ISPCCDC_COLPTN_Gr_Cy << ISPCCDC_COLPTN_CP0PLC2_SHIFT) |
+		(ISPCCDC_COLPTN_R_Ye << ISPCCDC_COLPTN_CP0PLC3_SHIFT) |
+		(ISPCCDC_COLPTN_B_Mg << ISPCCDC_COLPTN_CP1PLC0_SHIFT) |
+		(ISPCCDC_COLPTN_Gb_G << ISPCCDC_COLPTN_CP1PLC1_SHIFT) |
+		(ISPCCDC_COLPTN_B_Mg << ISPCCDC_COLPTN_CP1PLC2_SHIFT) |
+		(ISPCCDC_COLPTN_Gb_G << ISPCCDC_COLPTN_CP1PLC3_SHIFT) |
+		(ISPCCDC_COLPTN_Gr_Cy << ISPCCDC_COLPTN_CP2PLC0_SHIFT) |
+		(ISPCCDC_COLPTN_R_Ye << ISPCCDC_COLPTN_CP2PLC1_SHIFT) |
+		(ISPCCDC_COLPTN_Gr_Cy << ISPCCDC_COLPTN_CP2PLC2_SHIFT) |
+		(ISPCCDC_COLPTN_R_Ye << ISPCCDC_COLPTN_CP2PLC3_SHIFT) |
+		(ISPCCDC_COLPTN_B_Mg << ISPCCDC_COLPTN_CP3PLC0_SHIFT) |
+		(ISPCCDC_COLPTN_Gb_G << ISPCCDC_COLPTN_CP3PLC1_SHIFT) |
+		(ISPCCDC_COLPTN_B_Mg << ISPCCDC_COLPTN_CP3PLC2_SHIFT) |
+		(ISPCCDC_COLPTN_Gb_G << ISPCCDC_COLPTN_CP3PLC3_SHIFT);
 
 	/* CCDC does not convert the image format */
 	if (((input == CCDC_RAW) || (input == CCDC_OTHERS)) &&
@@ -809,8 +833,10 @@ int ispccdc_config_datapath(enum ccdc_input input, enum ccdc_output output)
 
 	ispccdc_obj.ccdc_inpfmt = input;
 	ispccdc_obj.ccdc_outfmt = output;
-		ispccdc_print_status();
-		isp_print_status();
+
+	ispccdc_print_status();
+	isp_print_status();
+
 	return 0;
 }
 EXPORT_SYMBOL(ispccdc_config_datapath);
@@ -1375,15 +1401,31 @@ int ispccdc_config_size(u32 input_w, u32 input_h, u32 output_w, u32 output_h)
 					ISPCCDC_FMT_VERT_FMTLNV_SHIFT),
 					ISPCCDC_FMT_VERT);
 
+	#ifdef CONFIG_VIDEO_OMAP3_HP3A
+		omap_writel(ispccdc_obj.ccdcin_woffset
+						<< ISPCCDC_HORZ_INFO_SPH_SHIFT
+						| ((ispccdc_obj.ccdcout_w - 1)
+						<< ISPCCDC_HORZ_INFO_NPH_SHIFT),
+						ISPCCDC_HORZ_INFO);
+		omap_writel(ispccdc_obj.ccdcin_hoffset
+				<< ISPCCDC_VERT_START_SLV0_SHIFT,
+				ISPCCDC_VERT_START);
+		omap_writel((ispccdc_obj.ccdcout_h - 1) <<
+						ISPCCDC_VERT_LINES_NLV_SHIFT,
+						ISPCCDC_VERT_LINES);
+		ispccdc_config_outlineoffset(ispccdc_obj.ccdcout_w * 2, 0, 0);
+	#else
 		omap_writel(ISPCCDC_HORZ_INFO_RESET, ISPCCDC_HORZ_INFO);
+		omap_writel(0, ISPCCDC_VERT_START);
+		omap_writel(0, ISPCCDC_VERT_LINES);
+	#endif
 
 		omap_writel((ispccdc_obj.ccdcout_w <<
 					ISPCCDC_VP_OUT_HORZ_NUM_SHIFT) |
 					(ispccdc_obj.ccdcout_h <<
 					ISPCCDC_VP_OUT_VERT_NUM_SHIFT),
 					ISPCCDC_VP_OUT);
-
-		omap_writel((((ispccdc_obj.ccdcout_h-1 /*25*/) &
+		omap_writel((((ispccdc_obj.ccdcout_h - 1) &
 					ISPCCDC_VDINT_0_MASK) <<
 					ISPCCDC_VDINT_0_SHIFT) |
 					((50 & ISPCCDC_VDINT_1_MASK) <<
@@ -1439,7 +1481,6 @@ int ispccdc_config_size(u32 input_w, u32 input_h, u32 output_w, u32 output_h)
 					(ispccdc_obj.ccdcout_h <<
 					ISPCCDC_VP_OUT_VERT_NUM_SHIFT),
 					ISPCCDC_VP_OUT);
-
 /* MMS: fix wrong pattern */
 /*
 		omap_writel(0 << ISPCCDC_HORZ_INFO_SPH_SHIFT |
@@ -1452,7 +1493,6 @@ int ispccdc_config_size(u32 input_w, u32 input_h, u32 output_w, u32 output_h)
 					((ispccdc_obj.ccdcout_w - 1) <<
 					ISPCCDC_HORZ_INFO_NPH_SHIFT),
 					ISPCCDC_HORZ_INFO);
-
 		omap_writel(ispccdc_obj.ccdcin_hoffset <<
 					ISPCCDC_VERT_START_SLV0_SHIFT,
 					ISPCCDC_VERT_START);
@@ -1460,12 +1500,11 @@ int ispccdc_config_size(u32 input_w, u32 input_h, u32 output_w, u32 output_h)
 					ISPCCDC_VERT_LINES_NLV_SHIFT,
 					ISPCCDC_VERT_LINES);
 		ispccdc_config_outlineoffset(ispccdc_obj.ccdcout_w * 2, 0, 0);
-		omap_writel((((ispccdc_obj.ccdcout_h-1 /*25*/) &
+		omap_writel((((ispccdc_obj.ccdcout_h - 1) &
 					ISPCCDC_VDINT_0_MASK) <<
 					ISPCCDC_VDINT_0_SHIFT) |
 					((50 & ISPCCDC_VDINT_1_MASK) <<
 					ISPCCDC_VDINT_1_SHIFT), ISPCCDC_VDINT);
-
 	} else if (ispccdc_obj.ccdc_outfmt == CCDC_OTHERS_LSC_MEM) {
 		/* Added by MMS */
 		/* Start with 1 pixel apart */
@@ -1612,15 +1651,18 @@ void ispccdc_enable(u8 enable)
 	if (enable) {
 		if (ccdc_use_lsc && !ispccdc_obj.lsc_en &&
 			((ispccdc_obj.ccdc_inpfmt == CCDC_RAW) ||
-			(ispccdc_obj.ccdc_inpfmt == CCDC_RAW_PATTERN)))
+			(ispccdc_obj.ccdc_inpfmt == CCDC_RAW_PATTERN))) {
 			ispccdc_enable_lsc(1);
-			omap_writel(omap_readl(ISPCCDC_PCR) | (ISPCCDC_PCR_EN),
+		}
+
+		omap_writel(omap_readl(ISPCCDC_PCR) | (ISPCCDC_PCR_EN),
 								ISPCCDC_PCR);
 	} else {
 		omap_writel(omap_readl(ISPCCDC_PCR) & ~(ISPCCDC_PCR_EN),
 								ISPCCDC_PCR);
 	}
-
+	/* write sync */
+	omap_readl(ISPCCDC_PCR);
 }
 EXPORT_SYMBOL(ispccdc_enable);
 

@@ -347,6 +347,9 @@ static int ov8810_sensor_power_set(struct device *dev, enum v4l2_power power)
 			return -EIO;
 		}
 
+		/* Delay 6 msec for vcam to drop (4.7uF to 10uF change) */
+		msleep(6);
+
 		/* Turn off power */
 		if (regulator_vwlan1 != NULL) {
 			regulator_disable(regulator_vwlan1);

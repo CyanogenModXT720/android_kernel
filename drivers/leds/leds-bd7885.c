@@ -77,9 +77,10 @@ static struct miscdevice bd7885_device = {
   .fops = &bd7885_fops,
 };
 
-const static bd7885_cfg bd7885_charege_enalbe_tbl[3] = {
+const static bd7885_cfg bd7885_charege_enalbe_tbl[4] = {
 	{BD7885_DRVCNT_REG, 0x03},
-	{BD7885_RECHG_REG, 0x10},
+	{BD7885_RECHG_REG, 0x11},
+	{BD7885_IPEAKADJ_REG, 0x07},
 	/* must end invalid register */
 	{BD7885_REG_TERM, BD7885_VAL_TERM}
 };

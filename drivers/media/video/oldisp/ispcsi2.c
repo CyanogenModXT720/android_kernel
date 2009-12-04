@@ -47,6 +47,15 @@ static bool update_ctrl;
 static bool uses_videoport;
 
 /**
+ * isp_csia_isr - CSIA interrupt handling.
+ **/
+void isp_csia_isr(unsigned long status, void *arg1, void *arg2)
+{
+	if (status & CSIA)
+		isp_csi2_isr();
+}
+
+/**
  * isp_csi2_complexio_lanes_config - Configuration of CSI2 ComplexIO lanes.
  * @reqcfg: Pointer to structure containing desired lane configuration
  *

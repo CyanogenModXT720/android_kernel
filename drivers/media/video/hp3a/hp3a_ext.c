@@ -71,6 +71,7 @@ void hp3a_stream_on(void)
 	g_tc.frame_count = 0;
 	g_tc.v4l2_streaming = 1;
 	g_tc.raw_cap_sched_count = 0;
+    g_tc.hw_raw_buffer = NULL;
 
 	hp3a_enable_histogram();
 	hp3a_update_hardpipe();

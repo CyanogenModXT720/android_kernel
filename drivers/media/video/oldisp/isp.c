@@ -352,29 +352,6 @@ void isp_release_resources(void)
 /* Flag to check first time of isp_get */
 static int off_mode;
 
-static void isp_lsc_isr(unsigned long status, isp_vbq_callback_ptr arg1,
-			void *arg2)
-{
-	(void) arg1;
-	(void) arg2;
-
-	if (status & LSC_PRE_ERR) {
-		/* printk(KERN_ERR "isp_sr: LSC_PRE_ERR \n"); */
-		ispccdc_enable_lsc(0);
-		ispccdc_enable_lsc(1);
-	}
-}
-
-static void isp_csia_isr(unsigned long status, isp_vbq_callback_ptr arg1,
-			void *arg2)
-{
-	(void) arg1;
-	(void) arg2;
-
-	if (status & CSIA)
-		isp_csi2_isr();
-}
-
 /**
  * isp_set_sgdma_callback - Set Scatter-Gather DMA Callback.
  * @sgdma_state: Pointer to structure with the SGDMA state for each videobuffer
@@ -400,7 +377,8 @@ static int isp_set_sgdma_callback(struct isp_sgdma_state *sgdma_state,
 							sgdma_state->arg);
 		isp_set_callback(CBK_CCDC_VD1, sgdma_state->callback, func_ptr,
 							sgdma_state->arg);
-		isp_set_callback(CBK_LSC_ISR, isp_lsc_isr, NULL, NULL);
+		isp_set_callback(CBK_LSC_ISR, (isp_callback_t)isp_lsc_isr,
+			NULL, NULL);
 	}
 
 	/* isp_set_callback(CBK_SBL_OVF, NULL, NULL, NULL); */
@@ -975,7 +953,8 @@ int isp_configure_interface(struct isp_interface_config *config)
 		isp_csi2_ctx_config_format(0, config->u.csi.format);
 		isp_csi2_ctx_update(0, false);
 
-		isp_set_callback(CBK_CSIA, isp_csia_isr, NULL, NULL);
+		isp_set_callback(CBK_CSIA,
+			(isp_callback_t)isp_csia_isr, NULL, NULL);
 
 		isp_csi2_irq_complexio1_set(1);
 		isp_csi2_irq_status_set(1);
@@ -1081,11 +1060,16 @@ static irqreturn_t omap34xx_isp_isr(int irq, void *ispirq_disp)
 	int i;
 	struct ispirq *irqdis = (struct ispirq *)ispirq_disp;
 	u32 irqstatus;
+	unsigned long irqflags = 0;
+
+	spin_lock_irqsave(&isp_obj.lock, irqflags);
 
 	irqstatus = omap_readl(ISP_IRQ0STATUS);
 	omap_writel(irqstatus, ISP_IRQ0STATUS);
 	/* The following register read is for write sync. */
 	omap_readl(ISP_IRQ0STATUS);
+
+	spin_unlock_irqrestore(&isp_obj.lock, irqflags);
 
 	for (i = 0; i < CBK_END; ++i) {
 		if ((irqstatus & irqdis->irq_events[i]) == \
@@ -1154,16 +1138,16 @@ u32 isp_buf_allocation(void)
 			return -ENOMEM;
 		}
 
-		sglist_alloc = videobuf_vmalloc_to_sg(
-			buff_addr, ISP_BUFFER_MAX_PAGES);
+		sglist_alloc = videobuf_vmalloc_to_sg(buff_addr,
+			ISP_BUFFER_MAX_PAGES);
 		if (!sglist_alloc) {
 			printk(KERN_ERR "ISP_ERR: videobuf_vmalloc_to_sg failed\n");
 			vfree(buff_addr);
 			buff_addr = NULL;
 			return -ENOMEM;
 		}
-		num_sc = dma_map_sg(
-			NULL, sglist_alloc, ISP_BUFFER_MAX_PAGES, 1);
+		num_sc = dma_map_sg(NULL, sglist_alloc,
+			ISP_BUFFER_MAX_PAGES, 1);
 
 		alloc_done = 1;
 	}
@@ -1179,14 +1163,14 @@ u32 isp_buf_mmap(void)
 {
 	if (alloc_done == 1) {
 		if (buff_addr_mapped == 0) {
-			buff_addr_mapped = ispmmu_map_sg(
-				sglist_alloc, ISP_BUFFER_MAX_PAGES);
+			buff_addr_mapped = ispmmu_map_sg(sglist_alloc,
+				ISP_BUFFER_MAX_PAGES);
 			if (!buff_addr_mapped) {
 				printk(KERN_ERR "ISP_ERR: ispmmu_map_sg mapping failed\n");
 				return -ENOMEM;
 			}
 		}
-	}	else {
+	} else {
 		printk(KERN_ERR "ISP_ERR: no buffer allocated for mapping!\n");
 		return -ENOMEM;
 	}
@@ -1210,7 +1194,7 @@ dma_addr_t isp_buf_get(void)
 	dma_addr_t retaddr;
 
 	if (ispmodule_obj.isp_lsc_workaround == 1 && buff_addr_mapped)
-		retaddr = buff_addr_mapped + offset_value;
+			retaddr = buff_addr_mapped + offset_value;
 	else
 		retaddr = 0;
 
@@ -1241,9 +1225,6 @@ void isp_buf_free(void)
  **/
 void isp_start(void)
 {
-	/*printk("###RSZ PCR =0x%x\n", omap_readl(ISPRSZ_PCR));
-	printk("###RSZ CNT =0x%x\n", omap_readl(ISPRSZ_CNT));*/
-
 	if ((ispmodule_obj.isp_pipeline & OMAP_ISP_PREVIEW) &&
 						is_isppreview_enabled())
 		isppreview_enable(1);
@@ -1323,6 +1304,7 @@ void isp_set_buf(struct isp_sgdma_state *sgdma_state)
 						is_isppreview_enabled()) {
 		if (ispmodule_obj.isp_lsc_workaround == 0)
 			isppreview_set_outaddr(sgdma_state->isp_addr);
+
 	} else if (ispmodule_obj.isp_pipeline & OMAP_ISP_CCDC) {
 		ispccdc_set_outaddr(sgdma_state->isp_addr);
 	}
@@ -1348,6 +1330,7 @@ u32 isp_calc_pipeline(struct v4l2_pix_format *pix_input,
 			isppreview_request();
 			ispresizer_request();
 		ispccdc_config_datapath(CCDC_RAW, CCDC_OTHERS_VP);
+
 		if (ispmodule_obj.isp_lsc_workaround == 1) {
 			printk(KERN_ERR "Using ISP workaround!\n");
 			isppreview_config_datapath(PRV_RAW_CCDC, PREVIEW_MEM);
@@ -1366,6 +1349,7 @@ u32 isp_calc_pipeline(struct v4l2_pix_format *pix_input,
 			isppreview_config_datapath(PRV_RAW_CCDC, PREVIEW_RSZ);
 			ispresizer_config_datapath(RSZ_OTFLY_YUV);
 			isppreview_set_outaddr(0);
+			ispccdc_enable_lsc(0);
 		}
 	} else if (pix_input->pixelformat == pix_output->pixelformat) {
 		ispmodule_obj.isp_pipeline = OMAP_ISP_CCDC;
@@ -1439,95 +1423,100 @@ void isp_config_pipeline(struct v4l2_pix_format *pix_input,
  **/
 void isp_vbq_done(unsigned long status, isp_vbq_callback_ptr arg1, void *arg2)
 {
+	unsigned long flags = 0;
 	struct videobuf_buffer *vb = (struct videobuf_buffer *) arg2;
 	int notify = 0;
 	int rval = 0;
-	unsigned long flags;
 
 	switch (status) {
 	case CCDC_VD0:
-   #ifdef CONFIG_VIDEO_OMAP3_HP3A
-      hp3a_ccdc_done();
-   #else
-	  ispccdc_config_shadow_registers();
-   #endif
+#ifdef CONFIG_VIDEO_OMAP3_HP3A
+		hp3a_ccdc_done();
+#else
+		ispccdc_config_shadow_registers();
+#endif
+		spin_lock_irqsave(&isp_obj.isp_temp_buf_lock, flags);
 		if ((ispmodule_obj.isp_pipeline & OMAP_ISP_RESIZER) ||
-			(ispmodule_obj.isp_pipeline & OMAP_ISP_PREVIEW))
+			(ispmodule_obj.isp_pipeline & OMAP_ISP_PREVIEW)) {
+			spin_unlock_irqrestore(&isp_obj.isp_temp_buf_lock,
+				flags);
 			return;
-		else {
-			spin_lock(&isp_obj.isp_temp_buf_lock);
-			if (ispmodule_obj.isp_temp_state != ISP_BUF_INIT) {
-				spin_unlock(&isp_obj.isp_temp_buf_lock);
-				return;
-
-			} else {
-				spin_unlock(&isp_obj.isp_temp_buf_lock);
-				break;
-			}
+		} else if (ispmodule_obj.isp_temp_state != ISP_BUF_INIT) {
+			spin_unlock_irqrestore(&isp_obj.isp_temp_buf_lock,
+				flags);
+			return;
 		}
+		spin_unlock_irqrestore(&isp_obj.isp_temp_buf_lock,
+			flags);
 		break;
 	case CCDC_VD1:
 		if ((ispmodule_obj.isp_pipeline & OMAP_ISP_RESIZER) ||
-			(ispmodule_obj.isp_pipeline & OMAP_ISP_PREVIEW))
-			return;
-		spin_lock(&isp_obj.isp_temp_buf_lock);
-		if (ispmodule_obj.isp_temp_state == ISP_BUF_INIT) {
-			spin_unlock(&isp_obj.isp_temp_buf_lock);
-			ispccdc_enable(0);
+			(ispmodule_obj.isp_pipeline & OMAP_ISP_PREVIEW)) {
 			return;
 		}
-		spin_unlock(&isp_obj.isp_temp_buf_lock);
+		spin_lock_irqsave(&isp_obj.isp_temp_buf_lock, flags);
+		if (ispmodule_obj.isp_temp_state == ISP_BUF_INIT)
+			ispccdc_enable(0);
+		spin_unlock_irqrestore(&isp_obj.isp_temp_buf_lock, flags);
 		return;
-		break;
 	case PREV_DONE:
-		if (is_isppreview_enabled()) {
-			if (ispmodule_obj.isp_pipeline & OMAP_ISP_RESIZER) {
-				spin_lock(&isp_obj.isp_temp_buf_lock);
+#ifdef CONFIG_VIDEO_OMAP3_HP3A
+		hp3a_frame_done();
+#endif
+		if (is_isppreview_enabled() && !ispccdc_busy()) {
+			spin_lock_irqsave(&isp_obj.isp_temp_buf_lock, flags);
+			if (ispmodule_obj.isp_pipeline & OMAP_ISP_RESIZER &&
+				!ispresizer_busy()) {
 				if (!ispmodule_obj.applyCrop &&
 					(ispmodule_obj.isp_temp_state ==
-					 ISP_BUF_INIT))
+					 ISP_BUF_INIT)) {
 					ispresizer_enable(1);
-				spin_unlock(&isp_obj.isp_temp_buf_lock);
-				if (ispmodule_obj.applyCrop &&
-						!ispresizer_busy()) {
+				} else if (ispmodule_obj.applyCrop) {
 					ispresizer_enable(0);
 					ispresizer_applycrop();
 					ispmodule_obj.applyCrop = 0;
 				}
 			}
+			spin_unlock_irqrestore(&isp_obj.isp_temp_buf_lock,
+				flags);
 
+#ifdef CONFIG_VIDEO_OMAP3_HP3A
+			if (!isppreview_busy())
+				isppreview_config_shadow_registers();
+		}
+#else
 			if (!isppreview_busy()) {
 				isppreview_config_shadow_registers();
-#ifdef CONFIG_VIDEO_OMAP3_HP3A
+				isph3a_update_wb();
 			}
-			hp3a_frame_done();
-#else
-			isph3a_update_wb();
 		}
 #endif
-
 		if (ispmodule_obj.isp_pipeline & OMAP_ISP_RESIZER)
 			return;
-		}
+
 		break;
 	case RESZ_DONE:
 		if (is_ispresizer_enabled()) {
-			ispresizer_config_shadow_registers();
-			spin_lock(&isp_obj.isp_temp_buf_lock);
+			spin_lock_irqsave(&isp_obj.isp_temp_buf_lock, flags);
+			if (!ispresizer_busy() && !ispccdc_busy())
+				ispresizer_config_shadow_registers();
+
 			if (ispmodule_obj.isp_temp_state != ISP_BUF_INIT) {
-				spin_unlock(&isp_obj.isp_temp_buf_lock);
+				spin_unlock_irqrestore
+					(&isp_obj.isp_temp_buf_lock, flags);
 				return;
 			}
-			spin_unlock(&isp_obj.isp_temp_buf_lock);
+			spin_unlock_irqrestore(&isp_obj.isp_temp_buf_lock,
+				flags);
 		}
 		break;
 	case HS_VS:
-		spin_lock(&isp_obj.isp_temp_buf_lock);
+		spin_lock_irqsave(&isp_obj.isp_temp_buf_lock, flags);
 		if (ispmodule_obj.isp_temp_state == ISP_BUF_TRAN) {
 			isp_CCDC_VD01_enable();
 			ispmodule_obj.isp_temp_state = ISP_BUF_INIT;
 		}
-		spin_unlock(&isp_obj.isp_temp_buf_lock);
+		spin_unlock_irqrestore(&isp_obj.isp_temp_buf_lock, flags);
 #ifdef CONFIG_VIDEO_OMAP3_HP3A
 		hp3a_ccdc_start();
 #endif
@@ -2090,21 +2079,21 @@ EXPORT_SYMBOL(isp_s_fmt_cap);
  **/
 void isp_config_crop(struct v4l2_pix_format *croppix)
 {
-	u8 crop_scaling_w;
-	u8 crop_scaling_h;
 	unsigned long org_left, num_pix, new_top, new_height;
-
 	struct v4l2_pix_format *pix = croppix;
 
-	crop_scaling_w = (ispmodule_obj.preview_output_width * 10) /
-								pix->width;
-	crop_scaling_h = (ispmodule_obj.preview_output_height * 10) /
-								pix->height;
-
-	cur_rect.left = (ispcroprect.left * crop_scaling_w) / 10;
-	cur_rect.top = (ispcroprect.top * crop_scaling_h) / 10;
-	cur_rect.width = (ispcroprect.width * crop_scaling_w) / 10;
-	cur_rect.height = (ispcroprect.height * crop_scaling_h) / 10;
+	cur_rect.left = (u32)(ispcroprect.left *
+					ispmodule_obj.preview_output_width)/
+					(u32)pix->width;
+	cur_rect.top = (u32)(ispcroprect.top *
+					ispmodule_obj.preview_output_height)/
+					(u32)pix->height;
+	cur_rect.width = (u32)(ispcroprect.width *
+					ispmodule_obj.preview_output_width)/
+					(u32)pix->width;
+	cur_rect.height = (u32)(ispcroprect.height *
+					ispmodule_obj.preview_output_height)/
+					(u32)pix->height;
 
 	if (ispmodule_obj.isp_lsc_workaround == 1) {
 		org_left = cur_rect.left;
@@ -2124,16 +2113,24 @@ void isp_config_crop(struct v4l2_pix_format *croppix)
 		cur_rect.width = ALIGN_NEAR(cur_rect.width, 16);
 
 		offset_value = ((cur_rect.left * 2) + \
-			((ispmodule_obj.preview_output_width) *
-			  2 * cur_rect.top));
+			((ispmodule_obj.preview_output_width) * 2
+			* cur_rect.top));
 	} else {
 		offset_value = 0;
+		cur_rect.width = ALIGN_NEAR(cur_rect.width, 16);
+		cur_rect.height = ALIGN_NEAR(cur_rect.height, 8);
 	}
 
-	ispresizer_trycrop(cur_rect.left, cur_rect.top, cur_rect.width,
+	ispresizer_trycrop(cur_rect.left, cur_rect.top,
+					cur_rect.width,
 					cur_rect.height,
 					ispmodule_obj.resizer_output_width,
 					ispmodule_obj.resizer_output_height);
+
+	ispmodule_obj.applyCrop = 1;
+
+	printk(KERN_ERR "ISP: resizer crop (%d-%d-%d-%d) \n",
+		cur_rect.left, cur_rect.top, cur_rect.width, cur_rect.height);
 
 	return;
 }
@@ -2182,14 +2179,22 @@ int isp_s_crop(struct v4l2_crop *a, struct v4l2_pix_format *pix)
 		goto out;
 	}
 
+	if ((crop->c.left + crop->c.width) == pix->width &&
+		(crop->c.top + crop->c.height) == pix->height) {
+		goto out;
+	}
+
 	ispcroprect.left = crop->c.left;
 	ispcroprect.top = crop->c.top;
 	ispcroprect.width = crop->c.width;
 	ispcroprect.height = crop->c.height;
 
+	printk(KERN_ERR "ISP: isp_s_crop -> crop (%d-%d-%d-%d)\n",
+		ispcroprect.left, ispcroprect.top, ispcroprect.width,
+		ispcroprect.height);
+
 	isp_config_crop(pix);
 
-	ispmodule_obj.applyCrop = 1;
 out:
 	return rval;
 }

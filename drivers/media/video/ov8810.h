@@ -141,7 +141,7 @@
 #define OV8810_DVP_CTRL08			0x3508
 #define OV8810_DVP_CTRL0E			0x350E
 
-/* len correction */
+/* lens correction */
 #define LENC_1_1_DOWNSAMPLING 0x02
 #define LENC_2_1_DOWNSAMPLING 0x07
 #define LENC_4_1_DOWNSAMPLING 0x0b
@@ -540,7 +540,7 @@ const static struct ov8810_reg ov8810_common[OV_NUM_IMAGE_SIZES][150] = {
 		{0x3020, 0x03},	/* 30.0 fps, 10ms blanking */
 		{0x3021, 0x58},	/* 30.0 fps, 10ms blanking */
 		{0x3022, 0x09},
-		{0x3023, 0x08},
+		{0x3023, 0x28},
 		{0x3024, 0x00},
 		{0x3025, 0x00},
 		{0x3026, 0x00},

@@ -219,4 +219,5 @@ void ispccdc_set_crop_offset_dynamic(struct ispccdc_color_offset offset);
 
 void ispccdc_set_crop_offset(enum ispccdc_raw_fmt);
 
+void isp_lsc_isr(unsigned long status, void *arg1, void *arg2);
 #endif		/* OMAP_ISP_CCDC_H */

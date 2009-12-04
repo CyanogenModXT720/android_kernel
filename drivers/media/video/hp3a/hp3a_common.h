@@ -287,6 +287,7 @@ struct hp3a_context {
 	struct hp3a_internal_buffer *histogram_buffer;
 	struct hp3a_internal_buffer *af_buffer;
 	struct hp3a_internal_buffer *raw_buffer;
+    struct hp3a_internal_buffer *hw_raw_buffer;
 };
 
 /**

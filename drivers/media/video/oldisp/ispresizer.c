@@ -387,7 +387,7 @@ int ispresizer_try_size(u32 *input_width, u32 *input_height, u32 *output_w,
 		if (rsz < MINIMUM_RESIZE_VALUE) {
 			rsz = MINIMUM_RESIZE_VALUE;
 			*output_h = (((input_h - 4) * 256) / rsz) + 1;
-			printk(KERN_INFO "%s: using output_h %d instead\n",
+			printk(KERN_INFO "%s: using output_h %d instead (1)\n",
 			       __func__, *output_h);
 		}
 	} else {
@@ -397,7 +397,7 @@ int ispresizer_try_size(u32 *input_width, u32 *input_height, u32 *output_w,
 		if (rsz > MAXIMUM_RESIZE_VALUE) {
 			rsz = MAXIMUM_RESIZE_VALUE;
 			*output_h = (((input_h - 7) * 256) / rsz) + 1;
-			printk(KERN_INFO "%s: using output_h %d instead\n",
+			printk(KERN_INFO "%s: using output_h %d instead (2)\n",
 			       __func__, *output_h);
 		}
 	}
@@ -509,8 +509,8 @@ int ispresizer_config_size(u32 input_w, u32 input_h, u32 output_w,
 		if (buff_addr_lsc_wa) {
 			/* Set Resizer input address and offset adderss */
 			ispresizer_set_inaddr(buff_addr_lsc_wa);
-			ispresizer_config_inlineoffset(
-				omap_readl(ISPPRV_WADD_OFFSET));
+			ispresizer_config_inlineoffset
+						map_readl(ISPPRV_WADD_OFFSET));
 		}
 	}
 
@@ -560,8 +560,8 @@ int ispresizer_config_size(u32 input_w, u32 input_h, u32 output_w,
 						ISPRSZ_CNT);
 
 	/* mutex_unlock(&ispres_obj.ispres_mutex); */
-
-    ispresizer_write_filter_coef();
+	if (!ispresizer_busy())
+		ispresizer_write_filter_coef();
 
     ispresizer_config_outlineoffset(output_w*2);
     DPRINTK_ISPRESZ("ispresizer_config_size()-\n");
@@ -577,13 +577,22 @@ EXPORT_SYMBOL(ispresizer_config_size);
  **/
 void ispresizer_enable(u8 enable)
 {
-	int val;
+	u32 val;
 	DPRINTK_ISPRESZ("+ispresizer_enable()+\n");
-	if (enable)
-		val = (((omap_readl(ISPRSZ_PCR)) & 0x2) | ISPRSZ_PCR_ENABLE);
-	else
-		val = (omap_readl(ISPRSZ_PCR) & ~ISPRSZ_PCR_ENABLE);
-	omap_writel(val, ISPRSZ_PCR);
+	val = omap_readl(ISPRSZ_PCR);
+	if (enable) {
+		if (!(val & ISPRSZ_PCR_ENABLE)) {
+			omap_writel((val | ISPRSZ_PCR_ONESHOT
+						| ISPRSZ_PCR_ENABLE),
+						ISPRSZ_PCR);
+			/* write sync */
+			omap_readl(ISPRSZ_PCR);
+		}
+	} else if (val & ISPRSZ_PCR_ENABLE) {
+		omap_writel((val & ~ISPRSZ_PCR_ENABLE), ISPRSZ_PCR);
+		/* write sync */
+		omap_readl(ISPRSZ_PCR);
+	}
 	DPRINTK_ISPRESZ("+ispresizer_enable()-\n");
 }
 EXPORT_SYMBOL(ispresizer_enable);
@@ -727,79 +736,74 @@ void ispresizer_write_filter_coef(void)
 	int i, j;
 	DPRINTK_ISPRESZ("ispresizer_write_filter_coef\n");
 
-	if (ispresizer_busy() == 0) {
-		if (ispres_obj.h_resz <= MID_RESIZE_VALUE) {
-			j = 0;
-			for (i = 0; i < 16; i++) {
-				omap_writel((ispres_obj.coeflist.
-						h_filter_coef_4tap[j] <<
-						ISPRSZ_HFILT10_COEF0_SHIFT) |
-						(ispres_obj.coeflist.
-						h_filter_coef_4tap[j + 1] <<
-						ISPRSZ_HFILT10_COEF1_SHIFT),
-						ISPRSZ_HFILT10 + (i * 0x04));
-				j += 2;
-			}
-		} else {
-			j = 0;
-			for (i = 0; i < 16; i++) {
-				if ((i + 1) % 4 == 0) {
-					omap_writel((ispres_obj.coeflist.
-						h_filter_coef_7tap[j] <<
-						ISPRSZ_HFILT10_COEF0_SHIFT),
-						ISPRSZ_HFILT10 + (i * 0x04));
-					j += 1;
-				} else {
-					omap_writel((ispres_obj.coeflist.
-						h_filter_coef_7tap[j] <<
-						ISPRSZ_HFILT10_COEF0_SHIFT) |
-						(ispres_obj.coeflist.
-						h_filter_coef_7tap[j+1] <<
-						ISPRSZ_HFILT10_COEF1_SHIFT),
-						ISPRSZ_HFILT10 + (i * 0x04));
-
-					j += 2;
-				}
-			}
+	if (ispres_obj.h_resz <= MID_RESIZE_VALUE) {
+		j = 0;
+		for (i = 0; i < 16; i++) {
+			omap_writel((ispres_obj.coeflist.
+					h_filter_coef_4tap[j] <<
+					ISPRSZ_HFILT10_COEF0_SHIFT) |
+					(ispres_obj.coeflist.
+					h_filter_coef_4tap[j + 1] <<
+					ISPRSZ_HFILT10_COEF1_SHIFT),
+					ISPRSZ_HFILT10 + (i * 0x04));
+			j += 2;
 		}
-		if (ispres_obj.v_resz <= MID_RESIZE_VALUE) {
-			j = 0;
-			for (i = 0; i < 16; i++) {
-				omap_writel((ispres_obj.coeflist.
-						v_filter_coef_4tap[j] <<
-						ISPRSZ_VFILT10_COEF0_SHIFT) |
-						(ispres_obj.coeflist.
-						v_filter_coef_4tap[j + 1] <<
-						ISPRSZ_VFILT10_COEF1_SHIFT),
-						ISPRSZ_VFILT10 + (i * 0x04));
-				j += 2;
-			}
-		} else {
-			j = 0;
-			for (i = 0; i < 16; i++) {
-				if ((i + 1) % 4 == 0) {
-					omap_writel((ispres_obj.coeflist.
-						v_filter_coef_7tap[j] <<
-						ISPRSZ_VFILT10_COEF0_SHIFT),
-						ISPRSZ_VFILT10 + (i * 0x04));
-					j += 1;
-				} else {
-					omap_writel((ispres_obj.coeflist.
-						v_filter_coef_7tap[j] <<
-						ISPRSZ_VFILT10_COEF0_SHIFT) |
-						(ispres_obj.coeflist.
-						v_filter_coef_7tap[j+1] <<
-						ISPRSZ_VFILT10_COEF1_SHIFT),
-						ISPRSZ_VFILT10 + (i * 0x04));
-					j += 2;
-				}
-			}
-		}
-
-		need_to_write_filter_coefs = 0;
 	} else {
-		DPRINTK_ISPRESZ("Resizer busy when programming filter coefs\n");
+		j = 0;
+		for (i = 0; i < 16; i++) {
+			if ((i + 1) % 4 == 0) {
+				omap_writel((ispres_obj.coeflist.
+					h_filter_coef_7tap[j] <<
+					ISPRSZ_HFILT10_COEF0_SHIFT),
+					ISPRSZ_HFILT10 + (i * 0x04));
+				j += 1;
+			} else {
+				omap_writel((ispres_obj.coeflist.
+					h_filter_coef_7tap[j] <<
+					ISPRSZ_HFILT10_COEF0_SHIFT) |
+					(ispres_obj.coeflist.
+					h_filter_coef_7tap[j+1] <<
+					ISPRSZ_HFILT10_COEF1_SHIFT),
+					ISPRSZ_HFILT10 + (i * 0x04));
+				j += 2;
+			}
+		}
 	}
+	if (ispres_obj.v_resz <= MID_RESIZE_VALUE) {
+		j = 0;
+		for (i = 0; i < 16; i++) {
+			omap_writel((ispres_obj.coeflist.
+					v_filter_coef_4tap[j] <<
+					ISPRSZ_VFILT10_COEF0_SHIFT) |
+					(ispres_obj.coeflist.
+					v_filter_coef_4tap[j + 1] <<
+					ISPRSZ_VFILT10_COEF1_SHIFT),
+					ISPRSZ_VFILT10 + (i * 0x04));
+			j += 2;
+		}
+	} else {
+		j = 0;
+		for (i = 0; i < 16; i++) {
+			if ((i + 1) % 4 == 0) {
+				omap_writel((ispres_obj.coeflist.
+					v_filter_coef_7tap[j] <<
+					ISPRSZ_VFILT10_COEF0_SHIFT),
+					ISPRSZ_VFILT10 + (i * 0x04));
+				j += 1;
+			} else {
+				omap_writel((ispres_obj.coeflist.
+					v_filter_coef_7tap[j] <<
+					ISPRSZ_VFILT10_COEF0_SHIFT) |
+					(ispres_obj.coeflist.
+					v_filter_coef_7tap[j+1] <<
+					ISPRSZ_VFILT10_COEF1_SHIFT),
+					ISPRSZ_VFILT10 + (i * 0x04));
+				j += 2;
+			}
+		}
+	}
+
+	need_to_write_filter_coefs = 0;
 }
 EXPORT_SYMBOL(ispresizer_write_filter_coef);
 
@@ -814,6 +818,7 @@ int ispresizer_config_inlineoffset(u32 offset)
 	DPRINTK_ISPRESZ("ispresizer_config_inlineoffset()+\n");
 	if (offset%32)
 		return -EINVAL;
+
 	omap_writel(offset << ISPRSZ_SDR_INOFF_OFFSET_SHIFT, ISPRSZ_SDR_INOFF);
 	DPRINTK_ISPRESZ("ispresizer_config_inlineoffset()-\n");
 	return 0;
@@ -831,6 +836,7 @@ int ispresizer_set_inaddr(u32 addr)
 	DPRINTK_ISPRESZ("ispresizer_set_inaddr()+\n");
 	if (addr%32)
 		return -EINVAL;
+
 	omap_writel(addr << ISPRSZ_SDR_INADD_ADDR_SHIFT, ISPRSZ_SDR_INADD);
 	DPRINTK_ISPRESZ("ispresizer_set_inaddr()-\n");
 	return 0;

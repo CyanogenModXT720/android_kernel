@@ -67,10 +67,6 @@
 #define ISP_PING_PONG_BUF_SIZE          0x480BC078
 
 /* CCDC module register offset */
-#define ISPCCDC_PID                     0x480BC600
-#define ISPCCDC_PCR                     0x480BC604
-
-/* CCDC module register offset */
 
 #define ISPCCDC_PID                     0x480BC600
 #define ISPCCDC_PCR                     0x480BC604

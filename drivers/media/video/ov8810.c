@@ -13,11 +13,10 @@
  * kind, whether express or implied.
  */
 
-#define DEBUG
-
 #include <linux/i2c.h>
 #include <linux/delay.h>
 #include <media/v4l2-int-device.h>
+#include <mach/resource.h>
 #include "ov8810.h"
 #include "oldomap34xxcam.h"
 #include "oldisp/isp.h"
@@ -27,6 +26,7 @@
 #define MOD_NAME "OV8810: "
 
 #define I2C_M_WR 0
+#define VDD1_LOCK_VAL 0x5
 
 /* OV8810 clock related parameters */
 struct ov8810_clk_params {
@@ -84,7 +84,9 @@ struct ov8810_shutter_params {
 struct ov8810_exp_params {
 	u32 exp_time;
 	u32 line_time;
-	u16 num_exp_lines;
+	u16 coarse_int_tm;
+	u16 analog_gain;
+	u16 digital_gain;
 	u16 min_exp_time;
 	u32 fps_max_exp_time;
 	u32 abs_max_exp_time;
@@ -155,6 +157,7 @@ static struct ov8810_sensor ov8810 = {
 
 static struct i2c_driver ov8810sensor_i2c_driver;
 static enum v4l2_power current_power_state = V4L2_POWER_OFF;
+static struct device *ov_dev;
 
 /* List of image formats supported by OV8810 sensor */
 const static struct v4l2_fmtdesc ov8810_formats[] = {
@@ -483,7 +486,7 @@ int ov8810_set_exposure_time(u32 exp_time, struct v4l2_int_device *s,
 							struct vcontrol *lvc)
 {
 	/* Inputs exp_time in usec */
-	u16 num_exp_lines;
+	u16 coarse_int_tm;
 	int err = 0;
 	struct ov8810_sensor *sensor = s->priv;
 	struct i2c_client *client = sensor->i2c_client;
@@ -494,52 +497,50 @@ int ov8810_set_exposure_time(u32 exp_time, struct v4l2_int_device *s,
 		/* Check for FREX (frame mode) setup case */
 		if (sensor->shutter.type == MECH_SHUTTER_TYPE) {
 			/* max out AECL to insure longer than 1 frame */
-			num_exp_lines = 0xFFFF;
+			coarse_int_tm = 0xFFFF;
 			goto write_aecl;
 		}
 
 		if (exp_time < sensor->exposure.min_exp_time) {
-
-			printk(KERN_ERR "Exposure time %dms less than regal limit %dms\n",
-					exp_time,
-					sensor->exposure.min_exp_time);
+			printk(KERN_ERR "Exposure time %dms is less " \
+				"than regal limit %dms\n",
+				exp_time, sensor->exposure.min_exp_time);
 
 			exp_time = sensor->exposure.min_exp_time;
 		}
 
 		/* OV8810 cannot accept exposure time longer than frame time */
 		if (exp_time > sensor->exposure.fps_max_exp_time) {
-
-			printk(KERN_ERR "Exposure time %dms greater than legal limit %dms\n",
-					exp_time,
-					sensor->exposure.fps_max_exp_time);
+			printk(KERN_ERR "Exposure time %dms is greater " \
+				"than legal limit %dms\n",
+				exp_time, sensor->exposure.fps_max_exp_time);
 
 			exp_time = sensor->exposure.fps_max_exp_time;
 		}
 
 		/* calc num lines with rounding */
-		num_exp_lines = ((exp_time << 8) + (line_time_q8 >> 1)) /
+		coarse_int_tm = ((exp_time << 8) + (line_time_q8 >> 1)) /
 		line_time_q8;
 
 write_aecl:
 
-		/* write number of line times to AEL/H registers */
-		err = ov8810_write_reg(client, OV8810_AECL_H,
-			num_exp_lines >> 8);
-		err |= ov8810_write_reg(client, OV8810_AECL_L,
-			num_exp_lines & 0xFF);
+		if (coarse_int_tm != sensor->exposure.coarse_int_tm) {
+			/* write number of line times to AEL/H registers */
+			err = ov8810_write_reg(client, OV8810_AECL_H,
+				coarse_int_tm >> 8);
+			err |= ov8810_write_reg(client, OV8810_AECL_L,
+				coarse_int_tm & 0xFF);
 
-		/*~ dev_dbg(&client->dev,
-		"ov8810:set_exposure_time = %d usec, " \
-		~ "CoarseIntTime = %d, sclk=%d, line_len_pck=%d clks, " \
-		~ "line_tm = %d/256 us\n",
-		~ exp_time, num_exp_lines, sensor->clk.sclk,
-		~ sensor->frame.line_length_pck, line_time_q8);*/
+			dev_dbg(&client->dev, "ov8810:set_exposure_time = " \
+				"%d usec, CoarseIntTime = %d, sclk=%d, " \
+				"line_len_pck=%d clks, line_tm = %d/256 us\n",
+				exp_time, coarse_int_tm, sensor->clk.sclk,
+				sensor->frame.line_length_pck, line_time_q8);
 
-
-		/* save results */
-		sensor->exposure.exp_time = exp_time;
-		sensor->exposure.num_exp_lines = num_exp_lines;
+			/* save results */
+			sensor->exposure.exp_time = exp_time;
+			sensor->exposure.coarse_int_tm = coarse_int_tm;
+		}
 	}
 
 	if (err)
@@ -619,17 +620,23 @@ int ov8810_set_gain(u16 linear_gain_Q8, struct v4l2_int_device *s,
 		anlg_gain_register = anlg_gain_stage_2x | anlg_gain_fraction;
 		dgtl_gain_register = dgtl_gain_stage_2x;
 
-		/*~ dev_dbg(&client->dev,
-			"gain =%d/256, angl_gain reg = 0x%x, " \
-			~ "dgtl_gain_reg = 0x%x\n",
-			~ linear_gain_Q8, anlg_gain_register,
-			~ dgtl_gain_register);*/
+		if (sensor->exposure.analog_gain != anlg_gain_register) {
+			err = ov8810_write_reg(client, OV8810_AGCL,
+				anlg_gain_register);
 
+			dev_dbg(&client->dev, "gain =%d/256, " \
+				"angl_gain reg = 0x%x\n",
+				linear_gain_Q8, anlg_gain_register);
+		}
 
-		err = ov8810_write_reg(client, OV8810_AGCL,
-			anlg_gain_register);
-		err = ov8810_write_reg(client, OV8810_DIG_GAIN,
-			dgtl_gain_register);
+		if (sensor->exposure.digital_gain != dgtl_gain_register) {
+			err = ov8810_write_reg(client, OV8810_DIG_GAIN,
+				dgtl_gain_register);
+
+			dev_dbg(&client->dev, "gain =%d/256, "
+				"dgtl_gain_reg = 0x%x\n",
+				linear_gain_Q8, dgtl_gain_register);
+		}
 	}
 
 	if (err) {
@@ -643,11 +650,22 @@ int ov8810_set_gain(u16 linear_gain_Q8, struct v4l2_int_device *s,
 	return err;
 }
 
+static int ov8810_init_exposure_params(struct v4l2_int_device *s)
+{
+	struct ov8810_sensor *sensor = s->priv;
+
+	/* flag current exp_time & gain values as invalid */
+	sensor->exposure.analog_gain = 0;
+	sensor->exposure.digital_gain = 0;
+	sensor->exposure.coarse_int_tm = 0;
+
+	return 0;
+}
+
 /**
  * ov8810_set_framerate - Sets framerate by adjusting frame_length_lines reg.
  * @s: pointer to standard V4L2 device structure
  * @fper: frame period numerator and denominator in seconds
- * @iframe: enum value corresponding to frame type (size & fps)
  *
  * The maximum exposure time is also updated since it is affected by the
  * frame rate.
@@ -692,7 +710,7 @@ static int ov8810_set_framerate(struct v4l2_int_device *s,
 	sensor->exposure.fps_max_exp_time = (line_time_q8 *
 		(sensor->frame.frame_length_lines - 8)) >> 8;
 	sensor->exposure.abs_max_exp_time = (line_time_q8 *
-				     (OV8810_MAX_FRAME_LENGTH_LINES - 1)) >> 8;
+				     (OV8810_MAX_FRAME_LENGTH_LINES - 8)) >> 8;
 
 	/* Update Exposure Time */
 	i = find_vctrl(V4L2_CID_EXPOSURE);
@@ -871,7 +889,7 @@ int ov8810_start_mech_shutter_capture(
 			struct ov8810_shutter_params *shutter_params,
 			struct v4l2_int_device *s, struct vcontrol *lvc)
 {
-	u16 Tr_lines = 1, Tfrex_lines, Tfe2v_lines, addvs_lines;
+	u16 Tr_lines = 1, Tfrex_lines, Tfe2v_lines, addvs_lines = 0;
 	int err = -EINVAL;
 	int adjusted_exp_time;
 	struct ov8810_sensor *sensor = s->priv;
@@ -917,14 +935,6 @@ int ov8810_start_mech_shutter_capture(
 	Tfe2v_lines = (((shutter_params->delay_time << 8) +
 		(line_time_q8 >> 1)) / line_time_q8);
 
-	/* Set ADDVS lines */
-	addvs_lines = Tfrex_lines + Tfe2v_lines;
-
-	err |= ov8810_write_reg(client, OV8810_ADDVS_H,
-		((addvs_lines >> 8) & 0xFF));
-	err |= ov8810_write_reg(client, OV8810_ADDVS_L,
-		((addvs_lines) & 0xFF));
-
 	dev_dbg(&client->dev, "start_mech_shutter_capture:  " \
 		"expT=%dus, line_time_q8=%dus/256, " \
 		"shutter_dly=%dus Tfrex_lines=%d, " \
@@ -935,7 +945,7 @@ int ov8810_start_mech_shutter_capture(
 
 	/*
 	 * start FREX capture & MIPI output simultaneously
-	*/
+	 */
 	/* enable group latch */
 	err |= ov8810_write_reg(client, 0x30B7, 0x88);
 	/* turn on MIPI output */
@@ -1058,8 +1068,12 @@ static int ov8810_set_lens_correction(u16 enable_lens_correction,
 	struct ov8810_sensor *sensor = s->priv;
 	struct i2c_client *client = sensor->i2c_client;
 
+	/* Lock VDD1 - Temporary workaround for	720p mode only !!!*/
+
 	if ((current_power_state == V4L2_POWER_ON) || sensor->resuming) {
 		if (enable_lens_correction) {
+			resource_request("vdd1_opp", ov_dev,
+							VDD1_LOCK_VAL);
 			err = ov8810_write_regs(client, len_correction_tbl);
 			/* enable 0x3300[4] */
 			err |= ov8810_read_reg(client, 1,
@@ -1090,6 +1104,9 @@ static int ov8810_set_lens_correction(u16 enable_lens_correction,
 			data &= 0xef;
 			err |= ov8810_write_reg(client,
 				OV8810_ISP_ENBL_0, data);
+
+			/* release resource lock */
+			resource_release("vdd1_opp", ov_dev);
 		}
 	}
 
@@ -1276,9 +1293,10 @@ static int ov8810_configure(struct v4l2_int_device *s)
 	sensor->width = pix->width;
 	sensor->height = pix->height;
 
-	/* Update sensor clk and frame parms */
+	/* Update sensor clk, frame, & exposure parms */
 	ov8810_calc_pclk(s);
 	ov8810_update_frame_params(s);
+	ov8810_init_exposure_params(s);
 
 	/* Setting of frame rate */
 	err = ov8810_set_framerate(s, &sensor->timeperframe);
@@ -1597,6 +1615,10 @@ static int ioctl_s_ctrl(struct v4l2_int_device *s,
 		retval = copy_from_user(&(sensor->shutter),
 				(struct ov8810_shutter_params *)vc->value,
 				sizeof(struct ov8810_shutter_params));
+		dev_dbg(&client->dev, "SHUTTER_PARAMS IOCTL write-" \
+			"exp_time=%d, delay_time=%d, type=%d\n",
+			sensor->shutter.exp_time, sensor->shutter.delay_time,
+			sensor->shutter.type);
 		break;
 	case V4L2_CID_PRIVATE_START_MECH_SHUTTER_CAPTURE:
 		retval = ov8810_start_mech_shutter_capture(

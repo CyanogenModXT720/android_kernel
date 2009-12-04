@@ -237,6 +237,7 @@ void isp_csi2_isr(void);
 int isp_csi2_reset(void);
 void isp_csi2_enable(int enable);
 void isp_csi2_regdump(void);
+void isp_csia_isr(unsigned long status, void *arg1, void *arg2);
 
 #endif	/* OMAP_ISP_CSI2_H */
 
