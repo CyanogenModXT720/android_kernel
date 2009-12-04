@@ -509,7 +509,7 @@ int ispresizer_config_size(u32 input_w, u32 input_h, u32 output_w,
 		if (buff_addr_lsc_wa) {
 			/* Set Resizer input address and offset adderss */
 			ispresizer_set_inaddr(buff_addr_lsc_wa);
-			ispresizer_config_inlineoffseti(
+			ispresizer_config_inlineoffset(
 						map_readl(ISPPRV_WADD_OFFSET));
 		}
 	}
