@@ -1293,10 +1293,15 @@ static void sholest_pm_init(void)
 	omap3_set_prm_setup_vc(&sholest_prm_setup);
 	omap3_voltagescale_vcbypass_setup(sholest_voltagescale_vcbypass);
 
+    /* Set CPCAP SW1/SW2 I2C CNTL Reg to 0x45(PSM/PSM mode, VPLL enabled) to
+	 * avoid extra current drain in active case before hit RET once*/
+
 	/* Initialize CPCAP SW1&SW2 OPP1&OPP2 registers */
 	/* SW1, OPP1 for RET Voltage --- 1.0V,
 	 * OPP2 for ON Voltge --- 1.225V(OPP3)
 	 */
+	omap3_bypass_cmd(SHOLEST_R_SRI2C_SLAVE_ADDR_SA0,
+				SHOLEST_R_SMPS_VOL_CNTL_CMDRA0, 0x45);
 	omap3_bypass_cmd(SHOLEST_R_SRI2C_SLAVE_ADDR_SA0,
 				R_SMPS_VOL_OPP1_RA0, 0x20);
 	omap3_bypass_cmd(SHOLEST_R_SRI2C_SLAVE_ADDR_SA0,
@@ -1305,6 +1310,8 @@ static void sholest_pm_init(void)
 	/* SW2, OPP1 for RET Voltage --- 1.0V,
 	 * OPP2 for ON Voltge --- 1.175V(OPP3)
 	 */
+	omap3_bypass_cmd(SHOLEST_R_SRI2C_SLAVE_ADDR_SA1,
+				SHOLEST_R_SMPS_VOL_CNTL_CMDRA1, 0x45);
 	omap3_bypass_cmd(SHOLEST_R_SRI2C_SLAVE_ADDR_SA1,
 				R_SMPS_VOL_OPP1_RA1, 0x20);
 	omap3_bypass_cmd(SHOLEST_R_SRI2C_SLAVE_ADDR_SA1,
