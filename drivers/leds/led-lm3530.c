@@ -200,11 +200,11 @@ static int ld_lm3530_switch_als_circumstance(struct lm3530_data *als_data,
 	switch (set_als) {
 	case ALS_INDOOR:
 		/* Set ALS configuration for Indoor mode */
-		als_data->als_pdata->als_resistor_sel = 0x31;
-		als_data->als_pdata->zone_boundary_0  = 0x04;
-		als_data->als_pdata->zone_boundary_1  = 0x18;
-		als_data->als_pdata->zone_boundary_2  = 0x2B;
-		als_data->als_pdata->zone_boundary_3  = 0x58;
+		als_data->als_pdata->als_resistor_sel = 0x41;
+		als_data->als_pdata->zone_boundary_0  = 0x02;
+		als_data->als_pdata->zone_boundary_1  = 0x0A;
+		als_data->als_pdata->zone_boundary_2  = 0x12;
+		als_data->als_pdata->zone_boundary_3  = 0x25;
 		als_data->als_pdata->zone_target_0    = 0x19;
 		als_data->als_pdata->zone_target_1    = 0x31;
 		als_data->als_pdata->zone_target_2    = 0x31;
@@ -215,7 +215,7 @@ static int ld_lm3530_switch_als_circumstance(struct lm3530_data *als_data,
 		break;
 	case ALS_OUTDOOR:
 		/* Set ALS configuration for Outdoor mode */
-		als_data->als_pdata->als_resistor_sel = 0xC6;
+		als_data->als_pdata->als_resistor_sel = 0xC2;
 		als_data->als_pdata->zone_boundary_0  = 0x08;
 		als_data->als_pdata->zone_boundary_1  = 0x39;
 		als_data->als_pdata->zone_boundary_2  = 0x86;
@@ -323,7 +323,9 @@ static void ld_lm3530_brightness_set(struct led_classdev *led_cdev,
 			}
 		}
 #endif
-		pr_info("%s:LM3530_GEN_CONFIG=%x\n", __func__, brightness);
+		if (lm3530_debug)
+			pr_info("%s:LM3530_GEN_CONFIG=%x\n",
+				__func__, brightness);
 		if (lm3530_write_reg(als_data, LM3530_GEN_CONFIG, brightness)) {
 			pr_err("%s:writing failed while setting brightness:%d\n",
 				__func__, error);
