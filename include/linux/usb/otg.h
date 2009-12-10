@@ -129,6 +129,10 @@ otg_start_srp(struct otg_transceiver *otg)
 	return otg->start_srp(otg);
 }
 
+#ifdef CONFIG_TTA_CHARGER
+extern void enable_musb_int(void);
+extern void disable_musb_int(void);
+#endif
 
 /* for OTG controller drivers (and maybe other stuff) */
 extern int usb_bus_start_enum(struct usb_bus *bus, unsigned port_num);

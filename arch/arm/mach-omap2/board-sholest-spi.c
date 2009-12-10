@@ -403,6 +403,34 @@ static void ac_changed(struct power_supply *ac,
 	}
 }
 
+#ifdef CONFIG_TTA_CHARGER
+static void tta_changed(struct power_supply *tta,
+			struct cpcap_batt_tta_data *tta_state)
+{
+	static char requested;
+	int ret = 0;
+
+	if (!tta || !tta_state)
+		return;
+
+	if (tta_state->online) {
+		/* To reduce OMAP Vdd1 DC/DC converter output voltage dips as
+		* much as possible, limit Vdd1 to OPP3-OPP5 when the phone is
+		* connected to a charger. */
+		if (!requested)
+			ret = resource_request("vdd1_opp", tta->dev, VDD1_OPP3);
+
+		if (!ret)
+			requested = 1;
+	} else if (requested) {
+		ret = resource_release("vdd1_opp", tta->dev);
+
+		if (!ret)
+			requested = 0;
+	}
+}
+#endif
+
 static void batt_changed(struct power_supply *batt,
 			 struct cpcap_batt_data *batt_state)
 {
@@ -435,6 +463,9 @@ static struct cpcap_platform_data sholest_cpcap_data = {
 	.regulator_init = cpcap_regulator,
 	.adc_ato = &sholest_cpcap_adc_ato,
 	.ac_changed = NULL,
+#ifdef CONFIG_TTA_CHARGER
+	.tta_changed = NULL,
+#endif
 	.batt_changed = batt_changed,
 	.usb_changed = NULL,
     .barrel_capability = BARREL_CAP_NONE,

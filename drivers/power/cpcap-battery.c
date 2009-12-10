@@ -123,10 +123,16 @@ static const unsigned short lighting_bits[CPCAP_REGACC_LEN_LREG] =
 struct cpcap_batt_ps {
 	struct power_supply batt;
 	struct power_supply ac;
+#ifdef CONFIG_TTA_CHARGER
+	struct power_supply tta;
+#endif
 	struct power_supply usb;
 	struct cpcap_device *cpcap;
 	struct cpcap_batt_data batt_state;
 	struct cpcap_batt_ac_data ac_state;
+#ifdef CONFIG_TTA_CHARGER
+	struct cpcap_batt_tta_data tta_state;
+#endif
 	struct cpcap_batt_usb_data usb_state;
 	struct cpcap_adc_request req;
 	struct mutex lock;
@@ -165,6 +171,13 @@ static enum power_supply_property cpcap_batt_ac_props[] =
 {
 	POWER_SUPPLY_PROP_ONLINE
 };
+
+#ifdef CONFIG_TTA_CHARGER
+static enum power_supply_property cpcap_batt_tta_props[] =
+{
+  POWER_SUPPLY_PROP_ONLINE
+};
+#endif
 
 static enum power_supply_property cpcap_batt_usb_props[] =
 {
@@ -547,6 +560,28 @@ static int cpcap_batt_ioctl(struct inode *inode,
 	return ret;
 }
 
+#ifdef CONFIG_TTA_CHARGER
+static int cpcap_batt_tta_get_property(struct power_supply *psy,
+					enum power_supply_property psp,
+					union power_supply_propval *val)
+{
+  int ret = 0;
+  struct cpcap_batt_ps *sply = container_of(psy, struct cpcap_batt_ps,
+					tta);
+
+  switch (psp) {
+  case POWER_SUPPLY_PROP_ONLINE:
+    val->intval = sply->tta_state.online;
+    break;
+  default:
+    ret = -EINVAL;
+    break;
+  }
+
+  return ret;
+}
+#endif
+
 static int cpcap_batt_ac_get_property(struct power_supply *psy,
 				      enum power_supply_property psp,
 				      union power_supply_propval *val)
@@ -688,6 +723,14 @@ static int cpcap_batt_probe(struct platform_device *pdev)
 	sply->ac.name = "ac";
 	sply->ac.type = POWER_SUPPLY_TYPE_MAINS;
 
+#ifdef CONFIG_TTA_CHARGER
+	sply->tta.properties = cpcap_batt_tta_props;
+	sply->tta.num_properties = ARRAY_SIZE(cpcap_batt_tta_props);
+	sply->tta.get_property = cpcap_batt_tta_get_property;
+	sply->tta.name = "tta";
+	sply->tta.type = POWER_SUPPLY_TYPE_MAINS;
+#endif
+
 	sply->usb.properties = cpcap_batt_usb_props;
 	sply->usb.num_properties = ARRAY_SIZE(cpcap_batt_usb_props);
 	sply->usb.get_property = cpcap_batt_usb_get_property;
@@ -703,6 +746,11 @@ static int cpcap_batt_probe(struct platform_device *pdev)
 	ret = power_supply_register(&pdev->dev, &sply->usb);
 	if (ret)
 		goto unregbatt_exit;
+#ifdef CONFIG_TTA_CHARGER
+	ret = power_supply_register(&pdev->dev, &sply->tta);
+	if (ret)
+		goto unregusb_exit;
+#endif
 	platform_set_drvdata(pdev, sply);
 	sply->cpcap->battdata = sply;
 	cpcap_batt_sply = sply;
@@ -790,6 +838,9 @@ static int cpcap_batt_remove(struct platform_device *pdev)
 	power_supply_unregister(&sply->batt);
 	power_supply_unregister(&sply->ac);
 	power_supply_unregister(&sply->usb);
+#ifdef CONFIG_TTA_CHARGER
+	power_supply_unregister(&sply->tta);
+#endif
 	misc_deregister(&batt_dev);
 	cpcap_irq_free(sply->cpcap, CPCAP_IRQ_VBUSOV);
 	cpcap_irq_free(sply->cpcap, CPCAP_IRQ_BATTDETB);
@@ -841,6 +892,24 @@ static int cpcap_batt_resume(struct platform_device *pdev)
 
 	return 0;
 }
+
+#ifdef CONFIG_TTA_CHARGER
+void cpcap_batt_set_tta_prop(struct cpcap_device *cpcap, int online)
+{
+	struct cpcap_batt_ps *sply = cpcap->battdata;
+	struct spi_device *spi = cpcap->spi;
+	struct cpcap_platform_data *data = spi->controller_data;
+
+	if (sply != NULL) {
+		sply->tta_state.online = online;
+		power_supply_changed(&sply->tta);
+
+		if (data->tta_changed)
+			data->tta_changed(&sply->tta, &sply->tta_state);
+	}
+}
+EXPORT_SYMBOL(cpcap_batt_set_tta_prop);
+#endif
 
 void cpcap_batt_set_ac_prop(struct cpcap_device *cpcap, int online)
 {
