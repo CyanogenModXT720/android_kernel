@@ -303,6 +303,9 @@ static DEFINE_SPINLOCK(audio_write_lock);
 static struct wake_lock mcbsp_wakelock;
 #endif
 
+/* hdmi cpcap mute */
+static int backup_current_stdac_mode = CPCAP_AUDIO_STDAC_OFF;
+
 #ifdef MCBSP_WRAPPER
 
 static void omap2_mcbsp_rx_dma_callback(int lch, unsigned short ch_status,
@@ -1598,6 +1601,8 @@ static int audio_stdac_open(struct inode *inode, struct file *file)
 		TRY(error = audio_configure_ssi(inode, file))
 
 		cpcap_audio_state.stdac_mode = CPCAP_AUDIO_STDAC_ON;
+		/* hdmi cpcap mute */
+		backup_current_stdac_mode = CPCAP_AUDIO_STDAC_ON;
 
 		map_audioic_speakers();
 		cpcap_audio_set_audio_state(&cpcap_audio_state);
@@ -1621,6 +1626,8 @@ static int audio_stdac_release(struct inode *inode, struct file *file)
 		state.stdac_out_stream = NULL;
 
 		cpcap_audio_state.stdac_mode = CPCAP_AUDIO_STDAC_OFF;
+		/* hdmi cpcap mute */
+		backup_current_stdac_mode = CPCAP_AUDIO_STDAC_OFF;
 		cpcap_audio_state.stdac_mute = CPCAP_AUDIO_STDAC_MUTE;
 
 		cpcap_audio_state.stdac_primary_speaker = CPCAP_AUDIO_OUT_NONE;
@@ -1845,6 +1852,32 @@ static int audio_ioctl(struct inode *inode, struct file *file,
 			break;
 		}
 /* FM radio End */
+
+	/* hdmi cpcap mute [ */
+	case SOUND_MIXER_HDMI_CPCAP_MUTE:
+	{
+		if (state.stdac_out_stream != NULL) {
+			AUDIO_LEVEL1_LOG("SOUND_MIXER_HDMI_CPCAP_MUTE\n");
+			backup_current_stdac_mode = cpcap_audio_state.stdac_mode;
+			cpcap_audio_state.stdac_mode = CPCAP_AUDIO_STDAC_CLOCK_ONLY;
+			
+			cpcap_audio_set_audio_state(&cpcap_audio_state);
+		}
+		break;
+	}
+
+	case SOUND_MIXER_HDMI_CPCAP_UNMUTE:
+	{
+		if (state.stdac_out_stream != NULL) {
+			AUDIO_LEVEL1_LOG("SOUND_MIXER_HDMI_CPCAP_UNMUTE\n");
+			cpcap_audio_state.stdac_mode = backup_current_stdac_mode;
+
+			cpcap_audio_set_audio_state(&cpcap_audio_state);
+		}
+		break;	
+	}
+	/* ] hdmi cpcap mute */
+	
 	case SOUND_MIXER_RECSRC:
 	{
 		int mic;
