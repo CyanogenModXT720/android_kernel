@@ -147,7 +147,12 @@ int omap34xxcam_update_vbq(struct videobuf_buffer *vb)
 	struct isp_af_xtrastats af_xtrastats;
 #endif
 
+#ifdef CONFIG_VIDEO_OMAP3_HP3A
+	ktime_get_ts((struct timespec *)&vb->ts);
+#else
 	do_gettimeofday(&vb->ts);
+#endif
+
 	vb->field_count = atomic_add_return(2, &fh->field_count);
 	vb->state = VIDEOBUF_DONE;
 #ifndef CONFIG_VIDEO_OMAP3_HP3A

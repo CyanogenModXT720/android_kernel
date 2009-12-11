@@ -503,17 +503,16 @@ void ispccdc_enable_lsc(u8 enable)
 		return;
 
 	if (enable) {
-		omap_writel((omap_readl(ISP_CTRL) |
-					(ISPCTRL_SBL_SHARED_RPORTB |
+		omap_writel((omap_readl(ISP_CTRL) | (ISPCTRL_SBL_SHARED_RPORTB |
 					ISPCTRL_SBL_RD_RAM_EN)), ISP_CTRL);
-		omap_writel((omap_readl(ISPCCDC_LSC_CONFIG) |
-					0x1), ISPCCDC_LSC_CONFIG);
+		omap_writel((omap_readl(ISPCCDC_LSC_CONFIG) | 0x1),
+			ISPCCDC_LSC_CONFIG);
 		ispccdc_obj.lsc_en = 1;
 	} else {
-		omap_writel((omap_readl(ISPCCDC_LSC_CONFIG) & ~0x1)
-			, ISPCCDC_LSC_CONFIG);
-		omap_writel((omap_readl(ISP_CTRL)
-			& ~(ISPCTRL_SBL_SHARED_RPORTB |
+		omap_writel((omap_readl(ISPCCDC_LSC_CONFIG) & ~0x1),
+			ISPCCDC_LSC_CONFIG);
+		omap_writel((omap_readl(ISP_CTRL) &
+					~(ISPCTRL_SBL_SHARED_RPORTB |
 					ISPCTRL_SBL_RD_RAM_EN)), ISP_CTRL);
 		ispccdc_obj.lsc_en = 0;
 	}
@@ -602,13 +601,6 @@ void ispccdc_config_crop(u32 left, u32 top, u32 height, u32 width)
 						ispccdc_obj.ccdcin_hoffset,
 						ispccdc_obj.crop_w,
 						ispccdc_obj.crop_h);
-/*
-	printk("ISP_CCDC: crop (%d-%d-%d-%d)\n",
-			ispccdc_obj.ccdcin_woffset,
-			ispccdc_obj.ccdcin_hoffset,
-			ispccdc_obj.crop_w,
-			ispccdc_obj.crop_h);
-*/
 }
 
 /**
@@ -1537,7 +1529,7 @@ int ispccdc_config_size(u32 input_w, u32 input_h, u32 output_w, u32 output_h)
 		/*Configure the HSIZE_OFF with output buffer width*/
 
 		ispccdc_config_outlineoffset((ispccdc_obj.ccdcout_w * 2), 0, 0);
-		omap_writel((((ispccdc_obj.ccdcout_h - 1 /*25*/)
+		omap_writel((((ispccdc_obj.ccdcout_h - 1)
 				& ISPCCDC_VDINT_0_MASK)
 				<< ISPCCDC_VDINT_0_SHIFT)
 				| (((50) &  ISPCCDC_VDINT_1_MASK)
@@ -1654,7 +1646,7 @@ void ispccdc_enable(u8 enable)
 			(ispccdc_obj.ccdc_inpfmt == CCDC_RAW_PATTERN))) {
 			ispccdc_enable_lsc(1);
 		}
-
+		omap_writel(CCDC_VD0|CCDC_VD1, ISP_IRQ0STATUS);
 		omap_writel(omap_readl(ISPCCDC_PCR) | (ISPCCDC_PCR_EN),
 								ISPCCDC_PCR);
 	} else {

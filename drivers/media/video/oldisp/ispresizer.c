@@ -286,9 +286,14 @@ int ispresizer_config_datapath(enum ispresizer_input input)
 	omap_writel(cnt, ISPRSZ_CNT);
 	mutex_unlock(&ispres_obj.ispres_mutex);
 
+	/* Use bilinear interpolation for upsampling per TRM */
+	if (ispres_obj.outputwidth > ispres_obj.inputwidth)
+		ispresizer_enable_cbilin(1);
+	else
+		ispresizer_enable_cbilin(0);
+
 	ispresizer_config_ycpos(0);
 	ispresizer_config_filter_coef(&ispreszdefcoef);
-	ispresizer_enable_cbilin(0);
 	ispresizer_config_luma_enhance(&ispreszdefaultyenh);
 	DPRINTK_ISPRESZ("ispresizer_config_datapath()-\n");
 	return 0;
@@ -509,8 +514,8 @@ int ispresizer_config_size(u32 input_w, u32 input_h, u32 output_w,
 		if (buff_addr_lsc_wa) {
 			/* Set Resizer input address and offset adderss */
 			ispresizer_set_inaddr(buff_addr_lsc_wa);
-			ispresizer_config_inlineoffset(
-						omap_readl(ISPPRV_WADD_OFFSET));
+			ispresizer_config_inlineoffset
+				(omap_readl(ISPPRV_WADD_OFFSET));
 		}
 	}
 
@@ -582,9 +587,9 @@ void ispresizer_enable(u8 enable)
 	val = omap_readl(ISPRSZ_PCR);
 	if (enable) {
 		if (!(val & ISPRSZ_PCR_ENABLE)) {
-			omap_writel((val | ISPRSZ_PCR_ONESHOT
-						| ISPRSZ_PCR_ENABLE),
-						ISPRSZ_PCR);
+			omap_writel(RESZ_DONE, ISP_IRQ0STATUS);
+			omap_writel((val | ISPRSZ_PCR_ONESHOT |
+				ISPRSZ_PCR_ENABLE), ISPRSZ_PCR);
 			/* write sync */
 			omap_readl(ISPRSZ_PCR);
 		}
