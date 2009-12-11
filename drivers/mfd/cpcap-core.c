@@ -147,14 +147,6 @@ static struct platform_device cpcap_rtc_device = {
 	.dev.platform_data = NULL,
 };
 
-#ifdef CONFIG_TTA_CHARGER
-static struct platform_device cpcap_tta_det_device = {
-  .name           = "cpcap_tta_charger",
-  .id             = -1,
-  .dev.platform_data = NULL,
-};
-#endif
-
 #ifdef CONFIG_LEDS_AF_LED
 struct platform_device cpcap_af_led = {
 	.name		= LD_AF_LED_DEV,
@@ -183,9 +175,6 @@ static struct platform_device *cpcap_devices[] = {
 #endif
 	&cpcap_3mm5_device,
 	&cpcap_rtc_device,
-#ifdef CONFIG_TTA_CHARGER
-	&cpcap_tta_det_device,
-#endif
 #ifdef CONFIG_LEDS_AF_LED
 	&cpcap_af_led,
 #endif
@@ -514,6 +503,46 @@ static int adc_ioctl(unsigned int cmd, unsigned long arg)
 	return retval;
 }
 
+#ifdef CONFIG_TTA_CHARGER
+static int tta_ioctl(unsigned int cmd, unsigned long arg)
+{
+  int retval = 0;
+
+  switch (cmd) {
+  case CPCAP_IOCTL_TTA_READ_STATUS:
+    {
+	unsigned char gpio_val;
+	enum cpcap_tta_state state;
+	disable_tta();
+	enable_tta();
+	mdelay(10);
+	gpio_val = value_of_gpio34();
+
+	if (!gpio_val)
+		state = TTA_DETECTED;
+	else
+		state = TTA_NOT_DETECTED;
+
+	if (copy_to_user((void *)arg,
+			(void *)&state, sizeof(state)))
+		retval = -EFAULT;
+
+    }
+    break;
+  case CPCAP_IOCTL_TTA_REDETECT:
+	disable_tta();
+	enable_tta();
+	force_to_detect_tta();
+    break;
+
+  default:
+    return -EINVAL;
+    break;
+  }
+  return retval;
+}
+#endif
+
 #if defined(CONFIG_LEDS_FLASH_RESET)
 int cpcap_direct_misc_write(unsigned short reg, unsigned short value,\
 						unsigned short mask)
@@ -542,7 +571,12 @@ static int ioctl(struct inode *inode,
 	    (cmd_num < CPCAP_IOCTL_NUM_ADC__END)) {
 		retval = adc_ioctl(cmd, arg);
 	}
-
+#ifdef CONFIG_TTA_CHARGER
+	if ((cmd_num > CPCAP_IOCTL_NUM_TTA__START) &&
+	(cmd_num < CPCAP_IOCTL_NUM_TTA__END)) {
+		retval = tta_ioctl(cmd, arg);
+	}
+#endif
 	return retval;
 }
 

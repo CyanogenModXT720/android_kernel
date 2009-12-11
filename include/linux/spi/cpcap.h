@@ -307,6 +307,7 @@ enum {
 
 	CPCAP_IOCTL_NUM_TTA__START,
 	CPCAP_IOCTL_NUM_TTA_STATUS_GET,
+	CPCAP_IOCTL_NUM_TTA_REDETECT,
 	CPCAP_IOCTL_NUM_TTA__END,
 };
 
@@ -514,6 +515,12 @@ struct cpcap_batt_ac_data {
 	int online;
 };
 
+#ifdef CONFIG_TTA_CHARGER
+struct cpcap_batt_tta_data {
+  int online;
+};
+#endif
+
 struct cpcap_batt_usb_data {
 	int online;
 	int current_now;
@@ -534,6 +541,10 @@ struct cpcap_platform_data {
 
 	void (*ac_changed)(struct power_supply *,
 			   struct cpcap_batt_ac_data *);
+#ifdef CONFIG_TTA_CHARGER
+	void (*tta_changed)(struct power_supply *,
+			   struct cpcap_batt_tta_data *);
+#endif
 	void (*batt_changed)(struct power_supply *,
 			     struct cpcap_batt_data *);
 	void (*usb_changed)(struct power_supply *,
@@ -640,6 +651,9 @@ struct cpcap_regacc {
 
 #define CPCAP_AUDIO_REG_DEBUG
 
+#define CPCAP_IOCTL_TTA_REDETECT \
+       _IOWR(0, CPCAP_IOCTL_NUM_TTA_REDETECT, unsigned int)
+
 #ifdef __KERNEL__
 struct cpcap_device {
 	struct spi_device	*spi;
@@ -711,6 +725,10 @@ void cpcap_adc_phase(struct cpcap_device *cpcap, struct cpcap_adc_phase *phase);
 
 void cpcap_batt_set_ac_prop(struct cpcap_device *cpcap, int online);
 
+#ifdef CONFIG_TTA_CHARGER
+void cpcap_batt_set_tta_prop(struct cpcap_device *cpcap, int online);
+#endif
+
 void cpcap_batt_set_usb_prop_online(struct cpcap_device *cpcap, int online,
 				    enum cpcap_batt_usb_model model);
 
@@ -732,6 +750,8 @@ int cpcap_direct_misc_write(unsigned short reg, unsigned short value,\
 #ifdef CONFIG_TTA_CHARGER
 void enable_tta(void);
 void disable_tta(void);
+void force_to_detect_tta(void);
+unsigned char value_of_gpio34(void);
 #endif
 
 void venc_tv_disconnect(void);

@@ -112,6 +112,7 @@
 #include "davinci.h"
 #endif
 
+struct musb   *musb_misc;
 
 
 unsigned musb_debug;
@@ -1500,6 +1501,24 @@ static irqreturn_t generic_interrupt(int irq, void *__hci)
 #define generic_interrupt	NULL
 #endif
 
+#ifdef CONFIG_TTA_CHARGER
+void enable_musb_int(void)
+{
+  u8 value;
+  value = musb_readb(musb_misc->mregs, MUSB_INTRUSB);
+  value &= ~MUSB_INTR_SESSREQ;
+  musb_writeb(musb_misc->mregs, MUSB_INTRUSB, value);
+  musb_writeb(musb_misc->mregs, MUSB_INTRUSBE, 0xf7);
+}
+EXPORT_SYMBOL(enable_musb_int);
+
+void disable_musb_int(void)
+{
+  musb_writeb(musb_misc->mregs, MUSB_INTRUSBE, 0);
+}
+EXPORT_SYMBOL(disable_musb_int);
+#endif
+
 /*
  * handle all the irqs defined by the HDRC core. for now we expect:  other
  * irq sources (phy, dma, etc) will be handled first, musb->int_* values
@@ -2052,6 +2071,8 @@ bad_config:
 			musb_readb(musb->mregs, MUSB_DEVCTL));
 
 	}
+
+  musb_misc = musb;
 
 #ifdef CONFIG_SYSFS
 	status = device_create_file(dev, &dev_attr_mode);
