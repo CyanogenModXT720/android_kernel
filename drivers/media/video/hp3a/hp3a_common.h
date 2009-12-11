@@ -43,7 +43,7 @@
 #define  AND_REG(x, v)		(x &= (u32)v)
 
 /* hp3a specific default values. */
-#define  MIN_RAW_CAPTURE_INTERVAL	2
+#define  MIN_RAW_CAPTURE_INTERVAL	1
 #define  MAX_STAT_BUFFERS_PER_FRAME	3
 
 enum {
@@ -287,7 +287,6 @@ struct hp3a_context {
 	struct hp3a_internal_buffer *histogram_buffer;
 	struct hp3a_internal_buffer *af_buffer;
 	struct hp3a_internal_buffer *raw_buffer;
-    struct hp3a_internal_buffer *hw_raw_buffer;
 };
 
 /**

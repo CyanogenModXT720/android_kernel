@@ -38,7 +38,7 @@ static struct hp3a_reg isp_raw_regs[] = {
 void hp3a_enable_raw(unsigned long buffer_addr)
 {
 	if (likely(buffer_addr != 0)) {
-		if (likely(g_tc.isp_ctx_saved == 0)) {
+		if (g_tc.isp_ctx_saved == 0) {
 			/* Save ISP registers. */
 			hp3a_read_ispregs(isp_raw_regs);
 			g_tc.isp_ctx_saved = 1;

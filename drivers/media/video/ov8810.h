@@ -114,6 +114,18 @@
 #define OV8810_FRM_LEN_LINES_L			0x3021
 #define OV8810_LINE_LEN_PCK_H			0x3022
 #define OV8810_LINE_LEN_PCK_L			0x3023
+#define OV8810_X_ADDR_START_H			0x3024
+#define OV8810_X_ADDR_START_L			0x3025
+#define OV8810_Y_ADDR_START_H			0x3026
+#define OV8810_Y_ADDR_START_L			0x3027
+#define OV8810_X_ADDR_END_H			0x3028
+#define OV8810_X_ADDR_END_L			0x3029
+#define OV8810_Y_ADDR_END_H			0x302A
+#define OV8810_Y_ADDR_END_L			0x302B
+#define OV8810_X_OUTPUT_SIZE_H			0x302C
+#define OV8810_X_OUTPUT_SIZE_L			0x302D
+#define OV8810_Y_OUTPUT_SIZE_H			0x302E
+#define OV8810_Y_OUTPUT_SIZE_L			0x302F
 #define OV8810_RESERVED_3058			0x3058
 #define OV8810_IO_CTRL2				0x30B2
 #define OV8810_DSIO0				0x30B3
@@ -133,6 +145,11 @@
 #define OV8810_FRS7				0x30EB
 #define OV8810_IMAGE_SYSTEM			0x30FA
 #define OV8810_IMAGE_TRANSFORM			0x30F8
+#define OV8810_IMAGE_TRANSFORM_HSUB_MASK (0x3)
+#define OV8810_IMAGE_TRANSFORM_VSUB_SHIFT 2
+#define OV8810_IMAGE_TRANSFORM_VSUB_MASK (0x3 << \
+	OV8810_IMAGE_TRANSFORM_VSUB_SHIFT)
+#define OV8810_GROUP_WR			0x30FF
 #define OV8810_ISP_ENBL_0			0x3300
 #define OV8810_CBAR	 			0x3303
 #define OV8810_DIG_GAIN 			0x3309
@@ -141,7 +158,7 @@
 #define OV8810_DVP_CTRL08			0x3508
 #define OV8810_DVP_CTRL0E			0x350E
 
-/* lens correction */
+/* len correction */
 #define LENC_1_1_DOWNSAMPLING 0x02
 #define LENC_2_1_DOWNSAMPLING 0x07
 #define LENC_4_1_DOWNSAMPLING 0x0b
@@ -314,6 +331,69 @@ struct capture_size_ov {
 	unsigned long height;
 };
 
+/**
+ * struct ov8810_clk_settings - struct for storage of sensor
+ * clock settings
+ * @pll_mult: pll multiplier
+ * @pll_pre_div: pre pll divider
+ * @vt_sys_div: video system clock divider
+ * @op_pix_div: output pixel clock divider
+ * @op_sys_div: output system clock divider
+ * @div8: pixel bit divider
+ * @rp_clk_div: video pixel clock divider
+ */
+struct ov8810_clk_settings {
+	u16 pll_mult;
+	u16 pll_pre_div;
+	u16 vt_sys_div;
+	u16 op_sys_div;
+	u16 op_pix_div;
+	u16 div8;
+	u16 rp_clk_div;
+};
+
+/**
+ * struct ov8810_frame_settings - struct for storage of sensor
+ * frame settings
+ * @frame_len_lines: number of lines in frame
+ * @line_len_pck: number of pixels in line
+ */
+struct ov8810_frame_settings {
+	u16	frame_len_lines_min;
+	u16	frame_len_lines;
+	u16	line_len_pck;
+	u16	x_addr_start;
+	u16	x_addr_end;
+	u16	y_addr_start;
+	u16	y_addr_end;
+	u16	x_output_size;
+	u16	y_output_size;
+	u8 v_subsample;
+	u8 h_subsample;
+};
+
+/**
+ * struct ov8810_mipi_settings - struct for storage of sensor
+ * initial exposure settings
+ * @coarse_int_tm: coarse resolution interval time (line times)
+ * @fine_int_tm: fine resolution interval time (pixel times)
+ */
+struct ov8810_mipi_settings {
+	u16	num_data_lanes;
+	u16	hs_settle_lower;
+	u16	hs_settle_upper;
+};
+
+/**
+ * struct ov8810_sensor_settings - struct for storage of
+ * sensor settings.
+ */
+struct ov8810_sensor_settings {
+	struct ov8810_clk_settings clk;
+	struct ov8810_frame_settings frame;
+	struct ov8810_mipi_settings mipi;
+};
+
 /* Array of image sizes supported by OV8810.  These must be ordered from
  * smallest image size to largest.
  */
@@ -350,13 +430,6 @@ const static struct ov8810_reg ov8810_common[OV_NUM_IMAGE_SIZES][150] = {
 	{
 		{0x3100, 0x06},
 		{0x30fa, 0x00},
-		{0x300f, 0x04},
-		{0x300e, 0x05},
-		{0x3010, 0x28},
-		{0x3011, 0x22},
-		{0x3000, 0x30},
-		{0x3002, 0x09},
-		{0x3003, 0xb2},
 		{0x3302, 0x20},
 		{0x30b2, 0x10},
 		{0x30a0, 0x40},
@@ -377,23 +450,7 @@ const static struct ov8810_reg ov8810_common[OV_NUM_IMAGE_SIZES][150] = {
 		{0x30b3, 0x0a},
 		{0x33e5, 0x02},
 		{0x30f8, 0x4f},
-		{0x3020, 0x01},	/* 30 fps, 10ms blanking */
-		{0x3021, 0x89},	/* 30 fps, 10ms blanking */
-		{0x3022, 0x11},	/* insert dummy */
-		{0x3023, 0xE0},
-		{0x3024, 0x00},
-		{0x3025, 0x00},
 		{0x307e, 0x00},
-		{0x3026, 0x00},
-		{0x3027, 0x00},
-		{0x3028, 0x0d},
-		{0x3029, 0x1f},
-		{0x302a, 0x09},
-		{0x302b, 0x9f},
-		{0x302c, 0x01},
-		{0x302d, 0x98},
-		{0x302e, 0x01},
-		{0x302f, 0x32},
 		{0x3058, 0x01},
 		{0x3059, 0xa0},
 		{0x3068, 0x08},
@@ -442,7 +499,6 @@ const static struct ov8810_reg ov8810_common[OV_NUM_IMAGE_SIZES][150] = {
 		{0x306a, 0x05},
 		{0x3090, 0x36},
 		{0x333e, 0x00},
-		{0x3000, 0x7f},
 		{0x3087, 0x41},
 		{0x3072, 0x0d},
 		{0x3319, 0x04},
@@ -458,9 +514,6 @@ const static struct ov8810_reg ov8810_common[OV_NUM_IMAGE_SIZES][150] = {
 		{0x3347, 0x00},
 		{0x3100, 0x88},
 		{0x3101, 0x77},
-		{0x300e, 0x24},
-		{0x300e, 0x05},
-		{0x300f, 0x04},
 		{0x3092, 0x00},
 		{0x30f0, 0x10},
 		{0x30f1, 0x56},
@@ -473,16 +526,6 @@ const static struct ov8810_reg ov8810_common[OV_NUM_IMAGE_SIZES][150] = {
 		{0x3013, 0x00},	/* AEC/AGC off */
 		{0x3300, 0x81},	/* all ISP except BLC off */
 		{0x3320, 0xc2},	/* AWB use manual 1x gain */
-		{0x3000, 0x0f},	/* 2x analog gain */
-		{0x3002, 0x01},	/* max exposure line */
-		{0x3003, 0x57},
-		{0x300e, 0x25},	/* 2-lane, RAW 10, PCLK = 13.5MHz,
-					MIPI_PCLK = 1.25x13.5 = 16.9MHz,
-					MIPI_CLK = 67.5MHz,
-					MCLK = 27Mhz, 30fps */
-		{0x300f, 0x84},
-		{0x3010, 0x2c},
-		{0x3011, 0x22},
 		{0x30e7, 0x41},	/* active lo FREX */
 
 		/* TEMP - turn on 50-60Hz Detection */
@@ -510,13 +553,6 @@ const static struct ov8810_reg ov8810_common[OV_NUM_IMAGE_SIZES][150] = {
 	{
 		{0x3100, 0x06},
 		{0x30fa, 0x00},
-		{0x300f, 0x04},
-		{0x300e, 0x05},
-		{0x3010, 0x28},
-		{0x3011, 0x22},
-		{0x3000, 0x30},
-		{0x3002, 0x09},
-		{0x3003, 0xb2},
 		{0x3302, 0x20},
 		{0x30b2, 0x10},
 		{0x30a0, 0x40},
@@ -537,22 +573,6 @@ const static struct ov8810_reg ov8810_common[OV_NUM_IMAGE_SIZES][150] = {
 		{0x30b3, 0x09},
 		{0x33e5, 0x01},
 		{0x30f8, 0x4a},
-		{0x3020, 0x03},	/* 30.0 fps, 10ms blanking */
-		{0x3021, 0x58},	/* 30.0 fps, 10ms blanking */
-		{0x3022, 0x09},
-		{0x3023, 0x28},
-		{0x3024, 0x00},
-		{0x3025, 0x00},
-		{0x3026, 0x00},
-		{0x3027, 0x00},
-		{0x3028, 0x0c},
-		{0x3029, 0xef},
-		{0x302a, 0x09},
-		{0x302b, 0x9f},
-		{0x302c, 0x03},
-		{0x302d, 0x30},
-		{0x302e, 0x02},
-		{0x302f, 0x64},
 		{0x3058, 0x01},
 		{0x3059, 0xa0},
 		{0x3068, 0x08},
@@ -601,7 +621,6 @@ const static struct ov8810_reg ov8810_common[OV_NUM_IMAGE_SIZES][150] = {
 		{0x306a, 0x05},
 		{0x3090, 0x36},
 		{0x333e, 0x00},
-		{0x3000, 0x7f},
 		{0x3087, 0x41},
 		{0x3072, 0x0d},
 		{0x3319, 0x04},
@@ -617,9 +636,6 @@ const static struct ov8810_reg ov8810_common[OV_NUM_IMAGE_SIZES][150] = {
 		{0x3347, 0x00},
 		{0x3100, 0x88},
 		{0x3101, 0x77},
-		{0x300e, 0x24},
-		{0x300e, 0x05},
-		{0x300f, 0x04},
 		{0x3092, 0x00},
 		{0x30f0, 0x10},
 		{0x30f1, 0x56},
@@ -632,16 +648,6 @@ const static struct ov8810_reg ov8810_common[OV_NUM_IMAGE_SIZES][150] = {
 		{0x3013, 0x00},	/* AEC/AGC off */
 		{0x3300, 0x81},	/* all ISP except BLC off */
 		{0x3320, 0xc2},	/* AWB use manual 1x gain */
-		{0x3000, 0x0f},	/* 2x analog gain */
-		{0x3002, 0x02},	/* max exposure line */
-		{0x3003, 0x89},
-		{0x300e, 0x25},	/* 2-lane, RAW 10, PCLK = 29.7MHz,
-					MIPI_PCLK = 1.25x29.7 = 37.1MHz,
-					MIPI_CLK = 148.5MHz,
-					MCLK = 27Mhz, 30fps */
-		{0x300f, 0x44},
-		{0x3010, 0x2c},
-		{0x3011, 0x22},
 		{0x30e7, 0x41},	/* active lo FREX */
 
 		/* TEMP - turn on 50-60Hz Detection */
@@ -669,13 +675,6 @@ const static struct ov8810_reg ov8810_common[OV_NUM_IMAGE_SIZES][150] = {
 	{
 		{0x3100, 0x06},
 		{0x30fa, 0x00},
-		{0x300f, 0x04},
-		{0x300e, 0x05},
-		{0x3010, 0x28},
-		{0x3011, 0x22},
-		{0x3000, 0x30},
-		{0x3002, 0x09},
-		{0x3003, 0xb2},
 		{0x3302, 0x20},
 		{0x30b2, 0x10},
 		{0x30a0, 0x40},
@@ -696,23 +695,7 @@ const static struct ov8810_reg ov8810_common[OV_NUM_IMAGE_SIZES][150] = {
 		{0x30b3, 0x08},
 		{0x33e5, 0x00},
 		{0x30f8, 0x45},
-		{0x302c, 0x06},
-		{0x302d, 0x60},
-		{0x302e, 0x03},
-		{0x302f, 0x96},
-		{0x3020, 0x04},	/* 26.0 fps, 10ms blanking */
-		{0x3021, 0xdc},	/* 26.0 fps, 10ms blanking */
-		{0x3022, 0x09},
-		{0x3023, 0x20},
-		{0x3024, 0x00},
-		{0x3025, 0x04},
 		{0x307e, 0x00},
-		{0x3026, 0x01},
-		{0x3027, 0x2e},
-		{0x3028, 0x0c},
-		{0x3029, 0xdb},
-		{0x302a, 0x08},
-		{0x302b, 0x71},
 		{0x3058, 0x01},
 		{0x3059, 0xa0},
 		{0x3068, 0x08},
@@ -761,7 +744,6 @@ const static struct ov8810_reg ov8810_common[OV_NUM_IMAGE_SIZES][150] = {
 		{0x306a, 0x05},
 		{0x3090, 0x36},
 		{0x333e, 0x00},
-		{0x3000, 0x7f},
 		{0x3087, 0x41},
 		{0x3072, 0x0d},
 		{0x3319, 0x04},
@@ -777,9 +759,6 @@ const static struct ov8810_reg ov8810_common[OV_NUM_IMAGE_SIZES][150] = {
 		{0x3347, 0x00},
 		{0x3100, 0x88},
 		{0x3101, 0x77},
-		{0x300e, 0x24},
-		{0x300e, 0x05},
-		{0x300f, 0x04},
 		{0x3092, 0x00},
 		{0x30f0, 0x10},
 		{0x30f1, 0x56},
@@ -792,16 +771,6 @@ const static struct ov8810_reg ov8810_common[OV_NUM_IMAGE_SIZES][150] = {
 		{0x3013, 0x00},	/* AEC/AGC off */
 		{0x3300, 0x81},	/* all ISP except BLC off */
 		{0x3320, 0xc2},	/* AWB use manual 1x gain */
-		{0x3000, 0x0f},	/* 2x analog gain */
-		{0x3002, 0x04},	/* max exposure line */
-		{0x3003, 0xed},
-		{0x300e, 0x25},	/* 2-lane, RAW 10, PCLK = 75.6MHz,
-					MIPI_PCLK = 1.25x75.6 = 94.5MHz,
-					MIPI_CLK = 312MHz,
-					MCLK = 27Mhz, 26fps */
-		{0x300f, 0x24},
-		{0x3010, 0x38},
-		{0x3011, 0x22},
 		{0x30e7, 0x41},  /* active lo FREX */
 
 		/* TEMP - turn on 50-60Hz Detection */
@@ -829,13 +798,6 @@ const static struct ov8810_reg ov8810_common[OV_NUM_IMAGE_SIZES][150] = {
 	{
 		{0x3100, 0x06},
 		{0x30fa, 0x00},
-		{0x300f, 0x04},
-		{0x300e, 0x05},
-		{0x3010, 0x28},
-		{0x3011, 0x22},
-		{0x3000, 0x30},
-		{0x3002, 0x09},
-		{0x3003, 0xb2},
 		{0x3302, 0x20},
 		{0x30b2, 0x10},
 		{0x30a0, 0x40},
@@ -856,23 +818,7 @@ const static struct ov8810_reg ov8810_common[OV_NUM_IMAGE_SIZES][150] = {
 		{0x30b3, 0x08},
 		{0x33e5, 0x00},
 		{0x30f8, 0x45},
-		{0x302c, 0x06},
-		{0x302d, 0x60},
-		{0x302e, 0x04},
-		{0x302f, 0xc8},
-		{0x3020, 0x06},	/* 21.0 fps, 10ms blanking */
-		{0x3021, 0x10},	/* 21.0 fps, 10ms blanking */
-		{0x3022, 0x09},
-		{0x3023, 0x10},
-		{0x3024, 0x00},
-		{0x3025, 0x00},
 		{0x307e, 0x00},
-		{0x3026, 0x00},
-		{0x3027, 0x00},
-		{0x3028, 0x0c},
-		{0x3029, 0xdf},
-		{0x302a, 0x09},
-		{0x302b, 0x9f},
 		{0x3058, 0x01},
 		{0x3059, 0xa0},
 		{0x3068, 0x08},
@@ -921,7 +867,6 @@ const static struct ov8810_reg ov8810_common[OV_NUM_IMAGE_SIZES][150] = {
 		{0x306a, 0x05},
 		{0x3090, 0x36},
 		{0x333e, 0x00},
-		{0x3000, 0x7f},
 		{0x3087, 0x41},
 		{0x3072, 0x0d},
 		{0x3319, 0x04},
@@ -937,9 +882,6 @@ const static struct ov8810_reg ov8810_common[OV_NUM_IMAGE_SIZES][150] = {
 		{0x3347, 0x00},
 		{0x3100, 0x88},
 		{0x3101, 0x77},
-		{0x300e, 0x24},
-		{0x300e, 0x05},
-		{0x300f, 0x04},
 		{0x3092, 0x00},
 		{0x30f0, 0x10},
 		{0x30f1, 0x56},
@@ -952,16 +894,6 @@ const static struct ov8810_reg ov8810_common[OV_NUM_IMAGE_SIZES][150] = {
 		{0x3013, 0x00},	/* AEC/AGC off */
 		{0x3300, 0x81},	/* all ISP except BLC off */
 		{0x3320, 0xc2},	/* AWB use manual 1x gain */
-		{0x3000, 0x0f},	/* 2x analog gain */
-		{0x3002, 0x04},	/* max exposure line */
-		{0x3003, 0xed},
-		{0x300e, 0x25},	/* 2-lane, RAW 10, PCLK = 75.6MHz,
-					MIPI_PCLK = 1.25x75.6 = 94.5MHz,
-					MIPI_CLK = 312MHz,
-					MCLK = 27Mhz, 21fps */
-		{0x300f, 0x24},
-		{0x3010, 0x38},
-		{0x3011, 0x22},
 		{0x30e7, 0x41},	/* active lo FREX */
 
 		/* TEMP - turn on 50-60Hz Detection */
@@ -989,13 +921,6 @@ const static struct ov8810_reg ov8810_common[OV_NUM_IMAGE_SIZES][150] = {
 	{
 		{0x3100, 0x06},
 		{0x30fa, 0x00},
-		{0x300f, 0x04},
-		{0x300e, 0x05},
-		{0x3010, 0x28},
-		{0x3011, 0x22},
-		{0x3000, 0x30},
-		{0x3002, 0x09},
-		{0x3003, 0xb2},
 		{0x3302, 0x20},
 		{0x30b2, 0x10},
 		{0x30a0, 0x40},
@@ -1016,23 +941,7 @@ const static struct ov8810_reg ov8810_common[OV_NUM_IMAGE_SIZES][150] = {
 		{0x30b3, 0x08},
 		{0x33e5, 0x00},
 		{0x30f8, 0x40},
-		{0x302c, 0x0c},
-		{0x302d, 0xc0},
-		{0x302e, 0x09},
-		{0x302f, 0x90},
-		{0x3020, 0x09},	/* 7.685 fps */
-		{0x3021, 0xb4},	/* 7.685 fps */
-		{0x3022, 0x0f},
-		{0x3023, 0x78},
-		{0x3024, 0x00},
-		{0x3025, 0x00},
 		{0x307e, 0x00},
-		{0x3026, 0x00},
-		{0x3027, 0x00},
-		{0x3028, 0x0c},
-		{0x3029, 0xdf},
-		{0x302a, 0x09},
-		{0x302b, 0x9f},
 		{0x3058, 0x01},
 		{0x3059, 0xa0},
 		{0x3068, 0x08},
@@ -1083,7 +992,6 @@ const static struct ov8810_reg ov8810_common[OV_NUM_IMAGE_SIZES][150] = {
 		{0x306a, 0x05},
 		{0x3090, 0x36},
 		{0x333e, 0x00},
-		{0x3000, 0x7f},
 		{0x3087, 0x41},
 		{0x3305, 0xa0},
 		{0x3072, 0x01},
@@ -1099,7 +1007,6 @@ const static struct ov8810_reg ov8810_common[OV_NUM_IMAGE_SIZES][150] = {
 		{0x3347, 0x00},
 		{0x3100, 0x88},
 		{0x3101, 0x77},
-		{0x300f, 0x04},
 		{0x3092, 0x00},
 		{0x30f0, 0x10},
 		{0x30f1, 0x56},
@@ -1112,37 +1019,7 @@ const static struct ov8810_reg ov8810_common[OV_NUM_IMAGE_SIZES][150] = {
 		{0x3013, 0x00},	/* AEC/AGC, off */
 		{0x3300, 0x83},	/* all, ISP, except BLC, off */
 		{0x3320, 0xc2},	/* AWB, use, manual, 1x, gain */
-		{0x3000, 0x0f},	/* 2x, analog, gain */
-		{0x3002, 0x09},	/* max, exposure, line */
-		{0x3003, 0xb2},
-		{0x300e, 0x25},	/* 2-lane, RAW, 10, PCLK = 75.6MHz,
-					MIPI_PCLK = 1.25x75.6 = 94.5MHz,
-					MIPI_CLK = 312MHz,
-					MCLK = 27Mhz, 7.685fps */
-		{0x300f, 0x24},
-		{0x3010, 0x38},
-		{0x3011, 0x22},
 		{0x30e7, 0x41},	/* active lo FREX */
-
-		/* TEMP - turn on 50-60Hz Detection */
-		{0x3014, 0x40},
-		{0x304c, 0x0c},
-		{0x30a4, 0x00},
-		{0x30ad, 0x04},
-		{0x3040, 0x00},
-		{0x3041, 0x34},
-		{0x3044, 0x28},
-		{0x3045, 0x98},
-		{0x3046, 0x00},
-		{0x3047, 0x00},
-		{0x3048, 0x01},
-		{0x3049, 0xc2},
-		{0x304e, 0x02},
-		{0x304a, 0xaf},	/* 27Mhz */
-		{0x304b, 0xc8},	/* 27Mhz */
-		/* read 303d[0], 1=50hz, 0=60hz */
-		/* END TEMP */
-
 		{OV8810_REG_TERM, OV8810_VAL_TERM},
 	},
 };

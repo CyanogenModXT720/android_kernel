@@ -29,29 +29,11 @@
 #define VDD1_LOCK_VAL 0x5
 
 /* OV8810 clock related parameters */
-struct ov8810_clk_params {
+struct ov8810_clk_freqs {
 	u32 xclk;
 	u32 sclk;
 	u32 pclk;
 	u32 mipiclk;
-	u16 pll_mult;
-	u16 pll_pre_div;
-	u16 vt_sys_div;
-	u16 op_sys_div;
-	u16 op_pix_div;
-	u16 div8;
-	u16 rp_clk_div;
-	u16 num_mipi_lanes;
-};
-
-/* OV8810 image frame parameters */
-struct ov8810_frame_params {
-	u16 line_length_pck;
-	u16 frame_length_lines;
-	u16 line_length_pck_min;
-	u16 frame_length_lines_min;
-	u8 v_subsample;
-	u8 h_subsample;
 };
 
 struct ov8810_sensor_id {
@@ -128,8 +110,7 @@ struct ov8810_sensor {
 	int state;
 	bool resuming;
 	bool streaming;
-	struct ov8810_clk_params clk;
-	struct ov8810_frame_params frame;
+	struct ov8810_clk_freqs freq;
 	struct ov8810_sensor_id sensor_id;
 	struct ov8810_flash_params flash;
 	struct ov8810_shutter_params shutter;
@@ -147,7 +128,7 @@ static struct ov8810_sensor ov8810 = {
 		.mfr = 0
 	},
 	.state = SENSOR_NOT_DETECTED,
-	.clk = {
+	.freq = {
 		.xclk = OV8810_XCLK_MIN,
 	},
 	.shutter = {
@@ -186,6 +167,174 @@ const static struct ov8810_reg ov8810_strobe_trigger_reg[] = {
     {0x30e7 , 0x03},
     {0x30e8 , 0x80},
     {OV8810_REG_TERM, OV8810_VAL_TERM},
+};
+
+static struct ov8810_sensor_settings sensor_settings[] = {
+
+	/* SIZE_125K */
+		/* 2-lane, RAW 10, PCLK = 13.5MHz, MIPI_CLK = 67.5MHz,
+		MIPI_PCLK = 1.25x13.5 = 16.9MHz,
+		MCLK = 27Mhz, FPS = 30, Blanking = 10msec */
+	{
+		.clk = {
+			.pll_mult = 44,
+			.pll_pre_div = 2,
+			.vt_sys_div = 2,
+			.op_sys_div = 8,
+			.op_pix_div = 4,
+			.div8 = 5,
+			.rp_clk_div = 4,
+		},
+		.frame = {
+			.frame_len_lines_min = 433,
+			.line_len_pck = 4576,
+			.x_addr_start = 0,
+			.x_addr_end = 3359,
+			.y_addr_start = 0,
+			.y_addr_end = 2463,
+			.x_output_size = 408,
+			.y_output_size = 306,
+			.v_subsample = 8,
+			.h_subsample = 8,
+		},
+		.mipi = {
+			.num_data_lanes = 2,
+			.hs_settle_lower = 5,
+			.hs_settle_upper = 14,
+		},
+	},
+
+	/* SIZE_500K */
+		/* 2-lane, RAW 10, PCLK = 29.7MHz, MIPI_CLK = 148.5MHz,
+		   MIPI_PCLK = 1.25x29.7 = 37.1MHz,
+		   MCLK = 27Mhz, FPS = 30, Blanking = 10msec */
+	{
+		.clk = {
+			.pll_mult = 44,
+			.pll_pre_div = 2,
+			.vt_sys_div = 2,
+			.op_sys_div = 4,
+			.op_pix_div = 4,
+			.div8 = 5,
+			.rp_clk_div = 2,
+		},
+		.frame = {
+			.frame_len_lines_min = 845,
+			.line_len_pck = 2344,
+			.x_addr_start = 0,
+			.x_addr_end = 3311,
+			.y_addr_start = 0,
+			.y_addr_end = 2463,
+			.x_output_size = 816,
+			.y_output_size = 612,
+			.v_subsample = 4,
+			.h_subsample = 4,
+		},
+		.mipi = {
+			.num_data_lanes = 2,
+				.hs_settle_lower = 7,
+				.hs_settle_upper = 21,
+		},
+	},
+
+	/* SIZE_1_5M */
+		/* 2-lane, RAW 10, PCLK = 75.6MHz, MIPI_CLK = 312MHz,
+		   MIPI_PCLK = 1.25x75.6 = 94.5MHz,
+		   MCLK = 27Mhz, FPS = 26, Blanking = 10ms */
+	{
+		.clk = {
+			.pll_mult = 56,
+			.pll_pre_div = 2,
+			.vt_sys_div = 2,
+			.op_sys_div = 2,
+			.op_pix_div = 4,
+			.div8 = 5,
+			.rp_clk_div = 1,
+		},
+		.frame = {
+			.frame_len_lines_min = 1244,
+			.line_len_pck = 2336,
+			.x_addr_start = 4,
+			.x_addr_end = 3291,
+			.y_addr_start = 302,
+			.y_addr_end = 2161,
+			.x_output_size = 1632,
+			.y_output_size = 918,
+			.v_subsample = 2,
+			.h_subsample = 2,
+		},
+		.mipi = {
+			.num_data_lanes = 2,
+				.hs_settle_lower = 14,
+				.hs_settle_upper = 44,
+		},
+	},
+
+	/* SIZE_2M */
+		/* 2-lane, RAW 10, PCLK = 75.6MHz, MIPI_CLK = 312MHz,
+		   MIPI_PCLK = 1.25x75.6 = 94.5MHz,
+		   MCLK = 27Mhz, FPS = 21, Blanking = 10ms */
+	{
+		.clk = {
+			.pll_mult = 56,
+			.pll_pre_div = 2,
+			.vt_sys_div = 2,
+			.op_sys_div = 2,
+			.op_pix_div = 4,
+			.div8 = 5,
+			.rp_clk_div = 1,
+		},
+		.frame = {
+			.frame_len_lines_min = 1552,
+			.line_len_pck = 2320,
+			.x_addr_start = 0,
+			.x_addr_end = 3295,
+			.y_addr_start = 0,
+			.y_addr_end = 2463,
+			.x_output_size = 1632,
+			.y_output_size = 1224,
+			.v_subsample = 2,
+			.h_subsample = 2,
+		},
+		.mipi = {
+			.num_data_lanes = 2,
+				.hs_settle_lower = 14,
+				.hs_settle_upper = 44,
+		},
+	},
+
+	/* SIZE_8M */
+		/* 2-lane, RAW, 10, PCLK = 75.6MHz, MIPI_CLK = 312MHz,
+		   MIPI_PCLK = 1.25x75.6 = 94.5MHz,
+		   MCLK = 27Mhz, FPS = 7.685, Blanking = 2ms */
+	{
+		.clk = {
+			.pll_mult = 56,
+			.pll_pre_div = 2,
+			.vt_sys_div = 2,
+			.op_sys_div = 2,
+			.op_pix_div = 4,
+			.div8 = 5,
+			.rp_clk_div = 1,
+		},
+		.frame = {
+			.frame_len_lines_min = 2484,
+			.line_len_pck = 3960,
+			.x_addr_start = 0,
+			.x_addr_end = 3295,
+			.y_addr_start = 0,
+			.y_addr_end = 2463,
+			.x_output_size = 3264,
+			.y_output_size = 2448,
+			.v_subsample = 1,
+			.h_subsample = 1,
+		},
+		.mipi = {
+			.num_data_lanes = 2,
+				.hs_settle_lower = 14,
+				.hs_settle_upper = 44,
+		},
+	}
 };
 
 /*
@@ -483,13 +632,14 @@ static int ov8810_write_regs(struct i2c_client *client,
  * returned.
  */
 int ov8810_set_exposure_time(u32 exp_time, struct v4l2_int_device *s,
-							struct vcontrol *lvc)
+				struct vcontrol *lvc, enum image_size_ov isize)
 {
 	/* Inputs exp_time in usec */
 	u16 coarse_int_tm;
 	int err = 0;
 	struct ov8810_sensor *sensor = s->priv;
 	struct i2c_client *client = sensor->i2c_client;
+	struct ov8810_sensor_settings *ss = &sensor_settings[isize];
 	u32 line_time_q8 = sensor->exposure.line_time;
 
 	if ((current_power_state == V4L2_POWER_ON) || sensor->resuming) {
@@ -520,7 +670,7 @@ int ov8810_set_exposure_time(u32 exp_time, struct v4l2_int_device *s,
 
 		/* calc num lines with rounding */
 		coarse_int_tm = ((exp_time << 8) + (line_time_q8 >> 1)) /
-		line_time_q8;
+			line_time_q8;
 
 write_aecl:
 
@@ -534,8 +684,8 @@ write_aecl:
 			dev_dbg(&client->dev, "ov8810:set_exposure_time = " \
 				"%d usec, CoarseIntTime = %d, sclk=%d, " \
 				"line_len_pck=%d clks, line_tm = %d/256 us\n",
-				exp_time, coarse_int_tm, sensor->clk.sclk,
-				sensor->frame.line_length_pck, line_time_q8);
+				exp_time, coarse_int_tm, sensor->freq.sclk,
+				ss->frame.line_len_pck, line_time_q8);
 
 			/* save results */
 			sensor->exposure.exp_time = exp_time;
@@ -553,7 +703,6 @@ write_aecl:
 
 	return err;
 }
-
 
 /**
  * ov8810_set_gain - sets sensor analog & digital gain per input value
@@ -583,12 +732,12 @@ int ov8810_set_gain(u16 linear_gain_Q8, struct v4l2_int_device *s,
 
 	if (linear_gain_Q8 < sensor->exposure.min_linear_gain) {
 		printk(KERN_ERR "Gain %d less than regal limit %d\n",
-			   linear_gain_Q8, sensor->exposure.min_linear_gain);
+			linear_gain_Q8, sensor->exposure.min_linear_gain);
+
 		linear_gain_Q8 = sensor->exposure.min_linear_gain;
 	}
 
 	if (linear_gain_Q8 > sensor->exposure.max_linear_gain) {
-
 		printk(KERN_ERR "Gain %d greater than regal limit %d\n",
 			linear_gain_Q8, sensor->exposure.max_linear_gain);
 
@@ -663,7 +812,7 @@ static int ov8810_init_exposure_params(struct v4l2_int_device *s)
 }
 
 /**
- * ov8810_set_framerate - Sets framerate by adjusting frame_length_lines reg.
+ * ov8810_set_framerate - Sets framerate by adjusting frame_len_lines reg.
  * @s: pointer to standard V4L2 device structure
  * @fper: frame period numerator and denominator in seconds
  *
@@ -671,19 +820,20 @@ static int ov8810_init_exposure_params(struct v4l2_int_device *s)
  * frame rate.
  **/
 static int ov8810_set_framerate(struct v4l2_int_device *s,
-			struct v4l2_fract *fper)
+			struct v4l2_fract *fper, enum image_size_ov isize)
 {
-	u8 lut[4] = {1, 1, 2, 4}, skip_factor;
+	u8 lut[9] = {1, 1, 1, 1, 2, 2, 2, 2, 4}, skip_factor;
 	u32 frame_length_lines, line_time_q8;
 	int err = 0, i = 0;
 	struct ov8810_sensor *sensor = s->priv;
 	struct i2c_client *client = sensor->i2c_client;
 	struct vcontrol *lvc = NULL;
+	struct ov8810_sensor_settings *ss = &sensor_settings[isize];
 
-	skip_factor = lut[sensor->frame.h_subsample];
+	skip_factor = lut[ss->frame.h_subsample];
 	line_time_q8 = /* usec's (q8) */
-		((((u32)sensor->frame.line_length_pck * 1000) << 8) /
-		(sensor->clk.pclk / 1000) / skip_factor);
+		((((u32)ss->frame.line_len_pck * 1000) << 8) /
+		(sensor->freq.pclk / 1000) / skip_factor);
 
 	frame_length_lines = (((u32)fper->numerator * 1000000 * 256 /
 			       fper->denominator)) / line_time_q8;
@@ -691,8 +841,8 @@ static int ov8810_set_framerate(struct v4l2_int_device *s,
 	/* Range check frame_length_lines */
 	if (frame_length_lines > OV8810_MAX_FRAME_LENGTH_LINES)
 		frame_length_lines = OV8810_MAX_FRAME_LENGTH_LINES;
-	else if (frame_length_lines < sensor->frame.frame_length_lines_min)
-		frame_length_lines = sensor->frame.frame_length_lines_min;
+	else if (frame_length_lines < ss->frame.frame_len_lines_min)
+		frame_length_lines = ss->frame.frame_len_lines_min;
 
 	/* Write new frame length to sensor */
 	ov8810_write_reg(client, OV8810_FRM_LEN_LINES_H,
@@ -701,16 +851,16 @@ static int ov8810_set_framerate(struct v4l2_int_device *s,
 		frame_length_lines  & 0xFF);
 
 	/* Save results */
-	sensor->frame.frame_length_lines = frame_length_lines;
+	ss->frame.frame_len_lines = frame_length_lines;
 	sensor->exposure.line_time = line_time_q8;
 	/* min_exposure_time = (ss->exposure.fine_int_tm * 1000000 /
-		(current_clk.vt_pix_clk)) + 1; */
+		(sensor->freq.vt_pix_clk)) + 1; */
 	/* use line time for min until LAEC turned on - GVH */
 	sensor->exposure.min_exp_time = line_time_q8 >> 8;
 	sensor->exposure.fps_max_exp_time = (line_time_q8 *
-		(sensor->frame.frame_length_lines - 8)) >> 8;
+		(ss->frame.frame_len_lines - 8)) >> 8;
 	sensor->exposure.abs_max_exp_time = (line_time_q8 *
-				     (OV8810_MAX_FRAME_LENGTH_LINES - 8)) >> 8;
+		(OV8810_MAX_FRAME_LENGTH_LINES - 8)) >> 8;
 
 	/* Update Exposure Time */
 	i = find_vctrl(V4L2_CID_EXPOSURE);
@@ -720,10 +870,10 @@ static int ov8810_set_framerate(struct v4l2_int_device *s,
 		lvc->qc.minimum = sensor->exposure.min_exp_time;
 		lvc->qc.maximum = sensor->exposure.fps_max_exp_time;
 
-		ov8810_set_exposure_time(lvc->current_value, s, lvc);
+		ov8810_set_exposure_time(lvc->current_value, s, lvc, isize);
 	}
 
-	v4l_info(client, "OV8810 Set Framerate: fper=%d/%d, " \
+	dev_dbg(&client->dev, "OV8810 Set Framerate: fper=%d/%d, " \
 		"frame_len_lines=%d, fps_max_expT=%dus, " \
 		"abs_max_expT=%dus, line_tm=%d/256, " \
 		"skip_factor=%d\n",
@@ -890,10 +1040,12 @@ int ov8810_start_mech_shutter_capture(
 			struct v4l2_int_device *s, struct vcontrol *lvc)
 {
 	u16 Tr_lines = 1, Tfrex_lines, Tfe2v_lines, addvs_lines = 0;
+	u16 data = 0;
 	int err = -EINVAL;
 	int adjusted_exp_time;
 	struct ov8810_sensor *sensor = s->priv;
 	struct i2c_client *client = sensor->i2c_client;
+	struct ov8810_sensor_settings *ss = &sensor_settings[sensor->isize];
 	u32 line_time_q8 = sensor->exposure.line_time;
 
 	dev_dbg(&client->dev, "expTime=%dus, shutter delay=%dus, " \
@@ -947,50 +1099,32 @@ int ov8810_start_mech_shutter_capture(
 	 * start FREX capture & MIPI output simultaneously
 	 */
 	/* enable group latch */
-	err |= ov8810_write_reg(client, 0x30B7, 0x88);
+	err |= ov8810_write_reg(client, OV8810_FRS0, 0x88);
+
 	/* turn on MIPI output */
-	err |= ov8810_write_reg(client, OV8810_MIPI_CTRL0B, 0x0C);
+	if (ss->mipi.num_data_lanes == 2)
+		data = 0;
+	else if (ss->mipi.num_data_lanes == 1)
+		data = OV8810_MIPI_CTRL0B_DSBL_DATA_LANE_2_MASK;
+	else
+		data = OV8810_MIPI_CTRL0B_DSBL_DATA_LANE_1_MASK |
+			OV8810_MIPI_CTRL0B_DSBL_DATA_LANE_2_MASK;
+
+	err |= ov8810_write_reg(client, OV8810_MIPI_CTRL0B, 0x0C | data);
+
 	/* do frame trigger */
 	err |= ov8810_write_reg(client, OV8810_FRS7, 0x01);
+
 	/* disable group latch */
-	err |= ov8810_write_reg(client, 0x30B7, 0x80);
+	err |= ov8810_write_reg(client, OV8810_FRS0, 0x80);
+
 	/* trigger group latch in the coming V-blank */
-	err |= ov8810_write_reg(client, 0x30FF, 0xFF);
+	err |= ov8810_write_reg(client, OV8810_GROUP_WR, 0xFF);
 
 	if (err)
 		dev_err(&client->dev, "Error setting mech shutter registers\n");
 
 	return err;
-}
-
-/*
- * Update Image Frame Parameters.
- */
-static int ov8810_update_frame_params(struct v4l2_int_device *s)
-{
-	struct ov8810_sensor *sensor = s->priv;
-	struct i2c_client *client = sensor->i2c_client;
-	u32 val;
-
-	ov8810_read_reg(client, 1, OV8810_FRM_LEN_LINES_L, &val);
-	sensor->frame.frame_length_lines = val & 0xFF;
-	ov8810_read_reg(client, 1, OV8810_FRM_LEN_LINES_H, &val);
-	sensor->frame.frame_length_lines |= (val & 0xFF) << 8;
-
-	ov8810_read_reg(client, 1, OV8810_LINE_LEN_PCK_L, &val);
-	sensor->frame.line_length_pck = val & 0xFF;
-	ov8810_read_reg(client, 1, OV8810_LINE_LEN_PCK_H, &val);
-	sensor->frame.line_length_pck |= (val & 0xFF) << 8;
-
-	ov8810_read_reg(client, 1, OV8810_IMAGE_TRANSFORM, &val);
-	sensor->frame.v_subsample = (val >> 2) & 0x3;
-	sensor->frame.h_subsample = val & 0x3;
-
-	/* Initial parameters are used as the minimum values */
-	sensor->frame.frame_length_lines_min = sensor->frame.frame_length_lines;
-	sensor->frame.line_length_pck_min = sensor->frame.line_length_pck;
-
-	return 0;
 }
 
 /*
@@ -1004,76 +1138,49 @@ static int ov8810_update_frame_params(struct v4l2_int_device *s)
  *    are integers. The numerator is multipllied by 2 in the Pclk
  *    calculation to compensate.
  */
-static int ov8810_calc_pclk(struct v4l2_int_device *s)
+static int ov8810_calc_pclk(struct v4l2_int_device *s,
+	enum image_size_ov isize)
 {
 	struct ov8810_sensor *sensor = s->priv;
 	struct i2c_client *client = sensor->i2c_client;
-	u32 val;
-	u8 lut1[16] = {1, 1, 2, 2, 4, 4, 4, 4, 8, 8, 8, 8, 8, 8, 8, 8};
-	u8 lut2[8] = {1, 1, 1, 1, 4, 5, 6, 6};
-	u8 lut3[4] = {1, 2, 4, 8};
+	struct ov8810_sensor_settings *ss = &sensor_settings[isize];
 
-	ov8810_read_reg(client, 1, OV8810_R_PLL1, &val);
-	sensor->clk.vt_sys_div = lut1[((val & OV8810_R_PLL1_VT_SYS_DIV_MASK) >>
-		OV8810_R_PLL1_VT_SYS_DIV_SHIFT)];
+	sensor->freq.sclk = sensor->freq.xclk * ss->clk.pll_mult /
+				ss->clk.pll_pre_div / ss->clk.div8 /
+				ss->clk.vt_sys_div;
 
-	sensor->clk.div8 = lut2[val & OV8810_R_PLL1_DIV8_MASK];
-
-	ov8810_read_reg(client, 1, OV8810_R_PLL2, &val);
-	sensor->clk.op_sys_div = lut1[((val & OV8810_R_PLL2_OP_SYS_DIV_MASK) >>
-		OV8810_R_PLL2_OP_SYS_DIV_SHIFT)];
-	sensor->clk.op_pix_div = lut1[val & OV8810_R_PLL2_OP_PIX_DIV_MASK];
-
-	ov8810_read_reg(client, 1, OV8810_MIPI_CTRL0B, &val);
-	if ((val & OV8810_MIPI_CTRL0B_DSBL_DATA_LANE_1_MASK) &&
-			(val & OV8810_MIPI_CTRL0B_DSBL_DATA_LANE_2_MASK))
-		sensor->clk.num_mipi_lanes = 0;
-	else if ((val & OV8810_MIPI_CTRL0B_DSBL_DATA_LANE_1_MASK) ||
-			(val & OV8810_MIPI_CTRL0B_DSBL_DATA_LANE_2_MASK))
-		sensor->clk.num_mipi_lanes = 1;
-	else
-		sensor->clk.num_mipi_lanes = 2;
-
-	ov8810_read_reg(client, 1, OV8810_R_PLL3, &val);
-	sensor->clk.pll_mult = val & OV8810_R_PLL3_PLL_MULT_MASK;
-
-	ov8810_read_reg(client, 1, OV8810_R_PLL4, &val);
-	sensor->clk.pll_pre_div = lut1[val & OV8810_R_PLL4_PRE_DIV_MASK];
-
-	ov8810_read_reg(client, 1, OV8810_DSIO0, &val);
-	sensor->clk.rp_clk_div = lut3[val & OV8810_DSIO0_RPCLK_DIV_MASK];
-
-	sensor->clk.sclk = sensor->clk.xclk * sensor->clk.pll_mult /
-				sensor->clk.pll_pre_div / sensor->clk.div8 /
-				sensor->clk.vt_sys_div;
-
-	sensor->clk.pclk = sensor->clk.sclk / sensor->clk.rp_clk_div;
+	sensor->freq.pclk = sensor->freq.sclk / ss->clk.rp_clk_div;
 
 	dev_dbg(&client->dev, "ov8810_calc_pclk: vt_sys_div=%d, div8=%d, " \
 		"op_sys_div=%d, op_pix_div=%d, pll_mult=%d, pll_pre_div=%d, " \
 		"rp_clk_div=%d, sclk=%d, pclk=%d, # lanes=%d\n",
-		sensor->clk.vt_sys_div, sensor->clk.div8,
-		sensor->clk.op_sys_div, sensor->clk.op_pix_div,
-		sensor->clk.pll_mult, sensor->clk.pll_pre_div,
-		sensor->clk.rp_clk_div, sensor->clk.sclk, sensor->clk.pclk,
-		sensor->clk.num_mipi_lanes);
+		ss->clk.vt_sys_div, ss->clk.div8,
+		ss->clk.op_sys_div, ss->clk.op_pix_div,
+		ss->clk.pll_mult, ss->clk.pll_pre_div,
+		ss->clk.rp_clk_div, sensor->freq.sclk, sensor->freq.pclk,
+		ss->mipi.num_data_lanes);
 	return 0;
 }
 
+/*
+ * Set Lens Correction
+ */
 static int ov8810_set_lens_correction(u16 enable_lens_correction,
-	struct v4l2_int_device *s, struct vcontrol *lvc)
+	struct v4l2_int_device *s, struct vcontrol *lvc,
+	enum image_size_ov isize)
 {
 	u8 lenc_downsampling;
 	int data, err = 0;
 	struct ov8810_sensor *sensor = s->priv;
 	struct i2c_client *client = sensor->i2c_client;
-
-	/* Lock VDD1 - Temporary workaround for	720p mode only !!!*/
+	struct ov8810_sensor_settings *ss = &sensor_settings[isize];
 
 	if ((current_power_state == V4L2_POWER_ON) || sensor->resuming) {
 		if (enable_lens_correction) {
-			resource_request("vdd1_opp", ov_dev,
-							VDD1_LOCK_VAL);
+			/* Lock VDD1 - Temporary workaround for 720p
+			   mode only !!!*/
+			resource_request("vdd1_opp", ov_dev, VDD1_LOCK_VAL);
+
 			err = ov8810_write_regs(client, len_correction_tbl);
 			/* enable 0x3300[4] */
 			err |= ov8810_read_reg(client, 1,
@@ -1083,11 +1190,11 @@ static int ov8810_set_lens_correction(u16 enable_lens_correction,
 				OV8810_ISP_ENBL_0, data);
 
 			/* set downsampling */
-			if (sensor->frame.h_subsample == 3)
+			if (ss->frame.h_subsample == 8)
 				lenc_downsampling = LENC_8_1_DOWNSAMPLING;
-			else if (sensor->frame.h_subsample == 2)
+			else if (ss->frame.h_subsample == 4)
 				lenc_downsampling = LENC_4_1_DOWNSAMPLING;
-			else if (sensor->frame.h_subsample == 1)
+			else if (ss->frame.h_subsample == 2)
 				lenc_downsampling = LENC_2_1_DOWNSAMPLING;
 			else
 				lenc_downsampling = LENC_1_1_DOWNSAMPLING;
@@ -1169,20 +1276,123 @@ static int ov8810_set_virtual_id(struct i2c_client *client, u32 id)
 /*
  * Calculates the MIPIClk.
  */
-static u32 ov8810_calc_mipiclk(struct v4l2_int_device *s)
+static u32 ov8810_calc_mipiclk(struct v4l2_int_device *s,
+	enum image_size_ov isize)
 {
 	struct ov8810_sensor *sensor = s->priv;
 	struct i2c_client *client = sensor->i2c_client;
+	struct ov8810_sensor_settings *ss = &sensor_settings[isize];
 
-	sensor->clk.mipiclk = (sensor->clk.xclk * sensor->clk.pll_mult) /
-		(sensor->clk.pll_pre_div * sensor->clk.op_sys_div);
+	sensor->freq.mipiclk = (sensor->freq.xclk * ss->clk.pll_mult) /
+		(ss->clk.pll_pre_div * ss->clk.op_sys_div);
 
 	dev_dbg(&client->dev, "ov8810: mipiclk=%u  pre_divider=%u  " \
 		"multiplier=%u  op_sys_div=%u\n",
-		sensor->clk.mipiclk, sensor->clk.pll_pre_div,
-		sensor->clk.pll_mult, sensor->clk.op_sys_div);
+		sensor->freq.mipiclk, ss->clk.pll_pre_div,
+		ss->clk.pll_mult, ss->clk.op_sys_div);
 
-	return sensor->clk.mipiclk;
+	return sensor->freq.mipiclk;
+}
+
+/**
+ * ov8810_configure_frame - Setup the frame, clock and exposure parmas in the
+ * sensor_settings array.
+ *
+ * @s: pointer to standard V4L2 device structure
+ * @isize: current image size
+ *
+ * The sensor_settings is a common list used by all image sizes & frame
+ * rates that is filled in by this routine.
+ */
+int ov8810_configure_frame(struct v4l2_int_device *s,
+			    enum image_size_ov isize)
+{
+	u8 lut[9] = { 0, 0, 1, 1, 2, 2, 2, 2, 3 };
+	int err = 0;
+	struct ov8810_sensor *sensor = s->priv;
+	struct i2c_client *client = to_i2c_client(sensor->dev);
+	struct ov8810_sensor_settings *ss = &sensor_settings[isize];
+
+	err |= ov8810_write_reg(client, OV8810_DSIO0,
+		(lut[ss->clk.rp_clk_div] & OV8810_DSIO0_RPCLK_DIV_MASK) | 0x8);
+
+	err |= ov8810_write_reg(client, OV8810_R_PLL1,
+		 (ss->clk.div8 & OV8810_R_PLL1_DIV8_MASK) |
+		((ss->clk.vt_sys_div << OV8810_R_PLL1_VT_SYS_DIV_SHIFT) &
+		  OV8810_R_PLL1_VT_SYS_DIV_MASK));
+
+	err |= ov8810_write_reg(client, OV8810_R_PLL4,
+		 (ss->clk.pll_pre_div & OV8810_R_PLL4_PRE_DIV_MASK) | 0x20);
+
+	err |= ov8810_write_reg(client, OV8810_R_PLL3,
+		 ss->clk.pll_mult & OV8810_R_PLL3_PLL_MULT_MASK);
+
+	err |= ov8810_write_reg(client, OV8810_R_PLL2,
+		 (ss->clk.op_pix_div & OV8810_R_PLL2_OP_PIX_DIV_MASK) |
+		((ss->clk.op_sys_div << OV8810_R_PLL2_OP_SYS_DIV_SHIFT) &
+		  OV8810_R_PLL2_OP_SYS_DIV_MASK));
+
+	err |= ov8810_write_reg(client, OV8810_X_OUTPUT_SIZE_H,
+		 (ss->frame.x_output_size >> 8) & 0xFF);
+
+	err |= ov8810_write_reg(client, OV8810_X_OUTPUT_SIZE_L,
+		 ss->frame.x_output_size & 0xFF);
+
+	err |= ov8810_write_reg(client, OV8810_Y_OUTPUT_SIZE_H,
+		 (ss->frame.y_output_size >> 8) & 0xFF);
+
+	err |= ov8810_write_reg(client, OV8810_Y_OUTPUT_SIZE_L,
+		 ss->frame.y_output_size & 0xFF);
+
+	err |= ov8810_write_reg(client, OV8810_X_ADDR_START_H,
+		 (ss->frame.x_addr_start >> 8) & 0xFF);
+
+	err |= ov8810_write_reg(client, OV8810_X_ADDR_START_L,
+		 ss->frame.x_addr_start & 0xFF);
+
+	err |= ov8810_write_reg(client, OV8810_Y_ADDR_START_H,
+		 (ss->frame.y_addr_start >> 8) & 0xFF);
+
+	err |= ov8810_write_reg(client, OV8810_Y_ADDR_START_L,
+		 ss->frame.y_addr_start & 0xFF);
+
+	err |= ov8810_write_reg(client, OV8810_X_ADDR_END_H,
+		 (ss->frame.x_addr_end >> 8) & 0xFF);
+
+	err |= ov8810_write_reg(client, OV8810_X_ADDR_END_L,
+		 ss->frame.x_addr_end & 0xFF);
+
+	err |= ov8810_write_reg(client, OV8810_Y_ADDR_END_H,
+		 (ss->frame.y_addr_end >> 8) & 0xFF);
+
+	err |= ov8810_write_reg(client, OV8810_Y_ADDR_END_L,
+		 ss->frame.y_addr_end & 0xFF);
+
+	err |= ov8810_write_reg(client, OV8810_FRM_LEN_LINES_H,
+		 (ss->frame.frame_len_lines_min >> 8) & 0xFF);
+
+	err |= ov8810_write_reg(client, OV8810_FRM_LEN_LINES_L,
+		 ss->frame.frame_len_lines_min & 0xFF);
+	ss->frame.frame_len_lines = ss->frame.frame_len_lines_min;
+
+	err |= ov8810_write_reg(client, OV8810_LINE_LEN_PCK_H,
+		 (ss->frame.line_len_pck >> 8) & 0xFF);
+
+	err |= ov8810_write_reg(client, OV8810_LINE_LEN_PCK_L,
+		 ss->frame.line_len_pck & 0xFF);
+
+	err |= ov8810_write_reg(client, OV8810_IMAGE_TRANSFORM,
+		 ((lut[ss->frame.v_subsample] <<
+		 OV8810_IMAGE_TRANSFORM_VSUB_SHIFT) &
+		 OV8810_IMAGE_TRANSFORM_VSUB_MASK) |
+		 (lut[ss->frame.h_subsample] &
+		 OV8810_IMAGE_TRANSFORM_HSUB_MASK) | 0x40);
+
+	sensor->isize = isize;
+	if (err)
+		return -EIO;
+	else
+		return 0;
 }
 
 /*
@@ -1195,14 +1405,10 @@ static u32 ov8810_calc_mipiclk(struct v4l2_int_device *s)
 static int ov8810_configure(struct v4l2_int_device *s)
 {
 	enum image_size_ov isize;
+	u16 data = 0;
 	int err = 0, i = 0;
 	u32 mipiclk;
 	enum pixel_format_ov pfmt = RAW10;
-	u32 min_hs_zero_nui, min_hs_zero, min_hs_zero_total;
-	u32 min_hs_prepare_nui, min_hs_prepare, min_hs_prepare_total;
-	u32 max_hs_prepare_nui, max_hs_prepare, max_hs_prepare_total;
-	u32 ubound_hs_settle, lbound_hs_settle;
-	u32 val;
 	struct ov8810_sensor *sensor = s->priv;
 	struct v4l2_pix_format *pix = &sensor->pix;
 	struct i2c_client *client = sensor->i2c_client;
@@ -1266,7 +1472,15 @@ static int ov8810_configure(struct v4l2_int_device *s)
 			return err;
 	} else {
 		/* Enable MIPI output */
-		err = ov8810_write_reg(client, OV8810_MIPI_CTRL0B, 0x0c);
+		if (sensor_settings[isize].mipi.num_data_lanes == 2)
+			data = 0;
+		else if (sensor_settings[isize].mipi.num_data_lanes == 1)
+			data = OV8810_MIPI_CTRL0B_DSBL_DATA_LANE_2_MASK;
+		else
+			data = OV8810_MIPI_CTRL0B_DSBL_DATA_LANE_1_MASK |
+				OV8810_MIPI_CTRL0B_DSBL_DATA_LANE_2_MASK;
+
+		err = ov8810_write_reg(client, OV8810_MIPI_CTRL0B, 0x0c | data);
 		if (err)
 			return err;
 	}
@@ -1293,61 +1507,29 @@ static int ov8810_configure(struct v4l2_int_device *s)
 	sensor->width = pix->width;
 	sensor->height = pix->height;
 
-	/* Update sensor clk, frame, & exposure parms */
-	ov8810_calc_pclk(s);
-	ov8810_update_frame_params(s);
+	/* Update sensor clk, frame, & exposure params */
+	ov8810_calc_pclk(s, isize);
 	ov8810_init_exposure_params(s);
-
-	/* Setting of frame rate */
-	err = ov8810_set_framerate(s, &sensor->timeperframe);
+	err = ov8810_configure_frame(s, isize);
 	if (err)
 		return err;
 
-	mipiclk = ov8810_calc_mipiclk(s);
+	/* Setting of frame rate */
+	err = ov8810_set_framerate(s, &sensor->timeperframe, isize);
+	if (err)
+		return err;
 
-	/* Calculate Valid bounds for High speed settle timing in UIs */
-	ov8810_read_reg(client, 1, OV8810_MIPI_CTRL14, &val);
-	min_hs_zero_nui = ((val & OV8810_MIPI_CTRL14_MIN_HS_ZERO_NUI_MASK) >>
-				OV8810_MIPI_CTRL14_MIN_HS_ZERO_NUI_SHIFT);
-	min_hs_zero = ((val & OV8810_MIPI_CTRL14_MIN_HS_ZERO_H_MASK) << 8);
-	ov8810_read_reg(client, 1, OV8810_MIPI_CTRL15, &val);
-	min_hs_zero |= (val & OV8810_MIPI_CTRL15_MIN_HS_ZERO_L_MASK);
-	min_hs_zero_total = ((min_hs_zero_nui * 1000000) / (mipiclk / 1000)) +
-				min_hs_zero;
-
-	ov8810_read_reg(client, 1, OV8810_MIPI_CTRL24, &val);
-	min_hs_prepare_nui = ((val &
-				OV8810_MIPI_CTRL24_MIN_HS_PREPARE_NUI_MASK) >>
-				OV8810_MIPI_CTRL24_MIN_HS_PREPARE_NUI_SHIFT);
-	min_hs_prepare = ((val &
-				OV8810_MIPI_CTRL24_MIN_HS_PREPARE_H_MASK) << 8);
-	ov8810_read_reg(client, 1, OV8810_MIPI_CTRL25, &val);
-	min_hs_prepare |= (val & OV8810_MIPI_CTRL25_MIN_HS_PREPARE_L_MASK);
-	min_hs_prepare_total = ((min_hs_prepare_nui * 1000000) /
-				(mipiclk / 1000)) + min_hs_prepare;
-
-	ov8810_read_reg(client, 1, OV8810_MIPI_CTRL26, &val);
-	max_hs_prepare_nui = ((val &
-				OV8810_MIPI_CTRL26_MAX_HS_PREPARE_NUI_MASK) >>
-				OV8810_MIPI_CTRL26_MAX_HS_PREPARE_NUI_SHIFT);
-	max_hs_prepare = ((val &
-				OV8810_MIPI_CTRL26_MAX_HS_PREPARE_H_MASK) << 8);
-	ov8810_read_reg(client, 1, OV8810_MIPI_CTRL27, &val);
-	max_hs_prepare |= (val & OV8810_MIPI_CTRL27_MAX_HS_PREPARE_L_MASK);
-	max_hs_prepare_total = ((max_hs_prepare_nui * 1000000) /
-				(mipiclk / 1000)) + max_hs_prepare;
-
-	ubound_hs_settle = ((min_hs_zero_total + min_hs_prepare_total) *
-				((mipiclk >> 1) / 1000000)) / 1000;
-	lbound_hs_settle = (max_hs_prepare_total * ((mipiclk >> 1) /
-				1000000)) / 1000;
+	mipiclk = ov8810_calc_mipiclk(s, isize);
 
 	dev_dbg(&client->dev, "OV8810: mipiclk = %d, lbound_hs_settle = %d, " \
-		"ubound_hs_settle = %d \n", mipiclk, lbound_hs_settle,
-		ubound_hs_settle);
+		"ubound_hs_settle = %d \n", mipiclk,
+		sensor_settings[isize].mipi.hs_settle_lower,
+		sensor_settings[isize].mipi.hs_settle_upper);
 
 	/* Send settings to ISP-CSI2 Receiver PHY */
-	isp_csi2_calc_phy_cfg0(mipiclk, lbound_hs_settle, ubound_hs_settle);
+	isp_csi2_calc_phy_cfg0(mipiclk,
+		sensor_settings[isize].mipi.hs_settle_lower,
+		sensor_settings[isize].mipi.hs_settle_upper);
 
 	/* Set sensors virtual channel*/
 	ov8810_set_virtual_id(client, OV8810_CSI2_VIRTUAL_ID);
@@ -1360,7 +1542,7 @@ static int ov8810_configure(struct v4l2_int_device *s)
 	if (i >= 0) {
 		lvc = &video_control[i];
 		ov8810_set_exposure_time(lvc->current_value,
-			sensor->v4l2_int_device, lvc);
+			sensor->v4l2_int_device, lvc, isize);
 	}
 
 	/* Set initial gain */
@@ -1393,7 +1575,7 @@ static int ov8810_configure(struct v4l2_int_device *s)
 	if (i >= 0) {
 		lvc = &video_control[i];
 		ov8810_set_lens_correction(lvc->current_value,
-			sensor->v4l2_int_device, lvc);
+			sensor->v4l2_int_device, lvc, isize);
 	}
 
 	/* start streaming */
@@ -1592,7 +1774,8 @@ static int ioctl_s_ctrl(struct v4l2_int_device *s,
 
 	switch (vc->id) {
 	case V4L2_CID_EXPOSURE:
-		retval = ov8810_set_exposure_time(vc->value, s, lvc);
+		retval = ov8810_set_exposure_time(vc->value, s, lvc,
+			sensor->isize);
 		break;
 	case V4L2_CID_GAIN:
 		retval = ov8810_set_gain(vc->value, s, lvc);
@@ -1609,7 +1792,8 @@ static int ioctl_s_ctrl(struct v4l2_int_device *s,
 		}
 		break;
 	case V4L2_CID_PRIVATE_LENS_CORRECTION:
-		retval = ov8810_set_lens_correction(vc->value, s, lvc);
+		retval = ov8810_set_lens_correction(vc->value, s, lvc,
+			sensor->isize);
 		break;
 	case V4L2_CID_PRIVATE_SHUTTER_PARAMS:
 		retval = copy_from_user(&(sensor->shutter),
@@ -1848,7 +2032,8 @@ static int ioctl_s_parm(struct v4l2_int_device *s,
 		dev_dbg(&client->dev, "Setting FPS=%d\n", desired_fps);
 		if ((current_power_state == V4L2_POWER_ON) ||
 				sensor->resuming) {
-			rval = ov8810_set_framerate(s, &sensor->timeperframe);
+			rval = ov8810_set_framerate(s, &sensor->timeperframe,
+				sensor->isize);
 		}
 	}
 
@@ -1898,7 +2083,7 @@ static int ioctl_g_priv(struct v4l2_int_device *s, void *p)
 	}
 
 	if (on == V4L2_POWER_ON) {
-		isp_set_xclk(sensor->clk.xclk, OV8810_USE_XCLKA);
+		isp_set_xclk(sensor->freq.xclk, OV8810_USE_XCLKA);
 		/* set streaming off, standby */
 		ov8810_write_reg(c, OV8810_IMAGE_SYSTEM, 0x00);
 	} else {
@@ -2018,14 +2203,15 @@ const struct v4l2_fract ov8810_frameintervals[] = {
 	{ .numerator = 3, .denominator = 12 },  /* 3 */
 	{ .numerator = 3, .denominator = 15 },  /* 4 */
 	{ .numerator = 3, .denominator = 18 },  /* 5 */
-	{ .numerator = 3, .denominator = 21 },  /* 6- SIZE_8M max fps */
-	{ .numerator = 1, .denominator = 10 },  /* 7 */
-	{ .numerator = 1, .denominator = 15 },  /* 8 */
-	{ .numerator = 1, .denominator = 20 },  /* 9 */
-	{ .numerator = 1, .denominator = 21 },  /* 10 - SIZE_2M max fps */
-	{ .numerator = 1, .denominator = 25 },  /* 11 */
-	{ .numerator = 1, .denominator = 26 },  /* 12 - SIZE_1_5M max fps */
-	{ .numerator = 1, .denominator = 30 },  /* 13 - SIZE_500K &
+	{ .numerator = 3, .denominator = 21 },  /* 6 */
+	{ .numerator = 3, .denominator = 24 },  /* 7- SIZE_8M max fps */
+	{ .numerator = 1, .denominator = 10 },  /* 8 */
+	{ .numerator = 1, .denominator = 15 },  /* 9 */
+	{ .numerator = 1, .denominator = 20 },  /* 10 */
+	{ .numerator = 1, .denominator = 21 },  /* 11 - SIZE_2M max fps */
+	{ .numerator = 1, .denominator = 25 },  /* 12 */
+	{ .numerator = 1, .denominator = 26 },  /* 13 - SIZE_1_5M max fps */
+	{ .numerator = 1, .denominator = 30 },  /* 14 - SIZE_500K &
 							SIZE_125K max fps */
 };
 
@@ -2048,23 +2234,23 @@ static int ioctl_enum_frameintervals(struct v4l2_int_device *s,
 			(frmi->height == ov8810_sizes[SIZE_8M].height)) {
 		/* The max framerate supported by SIZE_8M capture is 7 fps
 		 */
-		if (frmi->index > 6)
+		if (frmi->index > 7)
 			return -EINVAL;
 
 	} else if ((frmi->width == ov8810_sizes[SIZE_2M].width) &&
 			(frmi->height == ov8810_sizes[SIZE_2M].height)) {
 		/* The max framerate supported by SIZE_2M capture 21 fps
 		 */
-		if (frmi->index > 10)
+		if (frmi->index > 11)
 			return -EINVAL;
 	} else if ((frmi->width == ov8810_sizes[SIZE_1_5M].width) &&
 			(frmi->height == ov8810_sizes[SIZE_1_5M].height)) {
 		/* The max framerate supported by SIZE_1_5M capture 26 fps
 		 */
-		if (frmi->index > 12)
+		if (frmi->index > 13)
 			return -EINVAL;
 	} else {
-		if (frmi->index > 13)
+		if (frmi->index > 14)
 			return -EINVAL;
 	}
 
