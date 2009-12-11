@@ -438,6 +438,11 @@ static void hs_work(struct work_struct *work)
 	}
 
 	switch_set_state(&data_3mm5->sdev, new_state);
+
+	/* LIBtt53617, LIBtt53952*/
+	if (data_3mm5->cpcap->h2w_new_state)
+		data_3mm5->cpcap->h2w_new_state(new_state);
+		
 	dev_info(&data_3mm5->cpcap->spi->dev, "New Accessory state: %d\n",
 		 new_state);
 }
