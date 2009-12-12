@@ -560,8 +560,9 @@ void venc_exit(void)
 
 static void venc_power_on(struct omap_dss_device *dssdev)
 {
+#ifdef CONFIG_TVOUT_SHOLEST
 	omap_pm_set_min_bus_tput(&dssdev->dev, OCP_INITIATOR_AGENT, 124416*10);
-
+#endif
 	venc_enable_clocks(1);
 
 	venc_reset();
@@ -606,7 +607,9 @@ static void venc_power_off(struct omap_dss_device *dssdev)
 
 	venc_enable_clocks(0);
 
+#ifdef CONFIG_TVOUT_SHOLEST
 	omap_pm_set_min_bus_tput(&dssdev->dev, OCP_INITIATOR_AGENT, 0);
+#endif
 }
 
 static int venc_enable_display(struct omap_dss_device *dssdev)
@@ -806,16 +809,16 @@ int venc_tv_connect(void)
 	int tv_int = 0;
 	int bu_x, bu_y, bu_ctrl;
 
-	DSSDBG("Entered tv_connect()\n");
+	DSSDBG("tv_connect\n");
 
 	mutex_lock(&venc.venc_lock);
 
 	if (venc.enabled)
 	{
-		tv_int = 1;
-		DSSDBG("venc is already enabled \n");
 		bu_ctrl = venc_read_reg(VENC_GEN_CTRL);
-		venc_write_reg(VENC_GEN_CTRL, bu_ctrl);
+		venc_write_reg(VENC_GEN_CTRL, (bu_ctrl & ~(0x00010001)));
+		msleep(10);
+		tv_int = 1;
 	}
 	else
 	{
@@ -827,18 +830,16 @@ int venc_tv_connect(void)
 
 		venc_write_reg(VENC_TVDETGP_INT_START_STOP_X, 0x00140001);
 		venc_write_reg(VENC_TVDETGP_INT_START_STOP_Y, 0x00010001);
-		venc_write_reg(VENC_GEN_CTRL, 0x00010001);
+		venc_write_reg(VENC_GEN_CTRL, (bu_ctrl | 0x00010001));
 
 		msleep(10);
 
 		tv_int = gpio_get_value(OMAP_TVINT_GPIO);
-		DSSDBG("venc_tv_connect() %d \n", tv_int);
-		if (tv_int == 0)
-		{
-			venc_write_reg(VENC_TVDETGP_INT_START_STOP_X, bu_x);
-			venc_write_reg(VENC_TVDETGP_INT_START_STOP_Y, bu_y);
-			venc_write_reg(VENC_GEN_CTRL, bu_ctrl);
-		}
+		DSSDBG("level of tvint is %d \n", tv_int);
+
+		venc_write_reg(VENC_TVDETGP_INT_START_STOP_X, bu_x);
+		venc_write_reg(VENC_TVDETGP_INT_START_STOP_Y, bu_y);
+		venc_write_reg(VENC_GEN_CTRL, (bu_ctrl & ~(0x00010001)));
 
 		venc_enable_clocks(0);
 	}
@@ -851,7 +852,7 @@ EXPORT_SYMBOL(venc_tv_connect);
 
 void venc_tv_disconnect(void)
 {
-    printk(KERN_INFO "Entered tv_disconnect()\n");
+	DSSDBG("tv_disconnect\n");
 }
 EXPORT_SYMBOL(venc_tv_disconnect);
 #endif
