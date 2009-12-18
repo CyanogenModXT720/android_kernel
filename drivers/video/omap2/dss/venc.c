@@ -584,6 +584,7 @@ static void venc_power_on(struct omap_dss_device *dssdev)
 			dssdev->panel.timings.y_res/2);
 
 	regulator_enable(venc.vdda_dac_reg);
+
 #ifdef CONFIG_TVOUT_SHOLEST
 	regulator_set_voltage(venc.vdda_dac_reg, 1800000, 1800000);
 #endif
@@ -806,22 +807,15 @@ int venc_init_display(struct omap_dss_device *dssdev)
 #ifdef CONFIG_TVOUT_SHOLEST
 int venc_tv_connect(void)
 {
-	int tv_int = 0;
+	int tv_int = 1;
 	int bu_x, bu_y, bu_ctrl;
 
 	DSSDBG("tv_connect\n");
 
-	mutex_lock(&venc.venc_lock);
+	if (venc.enabled == 0)
+	{
+		mutex_lock(&venc.venc_lock);	
 
-	if (venc.enabled)
-	{
-		bu_ctrl = venc_read_reg(VENC_GEN_CTRL);
-		venc_write_reg(VENC_GEN_CTRL, (bu_ctrl & ~(0x00010001)));
-		msleep(10);
-		tv_int = 1;
-	}
-	else
-	{
 		venc_enable_clocks(1);
 
 		bu_x = venc_read_reg(VENC_TVDETGP_INT_START_STOP_X);
@@ -842,9 +836,9 @@ int venc_tv_connect(void)
 		venc_write_reg(VENC_GEN_CTRL, (bu_ctrl & ~(0x00010001)));
 
 		venc_enable_clocks(0);
-	}
 
-	mutex_unlock(&venc.venc_lock);
+		mutex_unlock(&venc.venc_lock);
+	}
 
 	return tv_int;
 }
@@ -852,7 +846,13 @@ EXPORT_SYMBOL(venc_tv_connect);
 
 void venc_tv_disconnect(void)
 {
+	int bu_ctrl;
+
 	DSSDBG("tv_disconnect\n");
+
+	bu_ctrl = venc_read_reg(VENC_GEN_CTRL);
+	venc_write_reg(VENC_GEN_CTRL, (bu_ctrl & ~(0x00010001)));
+
 }
 EXPORT_SYMBOL(venc_tv_disconnect);
 #endif
