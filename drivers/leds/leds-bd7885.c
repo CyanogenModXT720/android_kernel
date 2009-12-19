@@ -251,22 +251,23 @@ static int bd7885_io_init(void)
 }
 
 #if defined(CONFIG_LEDS_BU9847)
-static int bd7885_quench_level_set(
-	struct i2c_client *client,
-	unsigned char level)
+static int bd7885_quench_level_set(struct i2c_client *client,
+    unsigned char level)
 {
     int ret = 0;
 
-    /*Quench level is from 1 to 31 if bypassing bu9847.*/
-    if ((level < 1) || (level > 31))
-	return -EFAULT;
+	printk(KERN_INFO "%s bd7885_quench_level_set: level  \n");
 
-    ret = bd7885_reg_write(client, BD7885_QUENCHADJ_REG, \
-		level << BD7885_VSTOPADJ_SHIFT);
+    /*Quench level is from 1 to 12 if using bu9847.*/
+    if ((level < 1) || (level > 12))
+		return -1;
+
+    ret = bd7885_reg_write(client, BD7885_QUENCHADJ_REG,
+    bu9847_reg_info_tbl[BU9847_QCHC1_REG + level - 1]);
 
     if (ret != 0) {
-	printk(KERN_ERR "bd7885_quench_level_set failed\n");
-	return -EFAULT;
+		printk(KERN_ERR "bd7885_quench_level_set failed\n");
+		return -1;
     }
 
     return 0;
@@ -564,6 +565,11 @@ static int bd7885_ioctl(struct inode *inode, struct file *file, unsigned int cmd
 
        /*Apply VSTOPADJ & PTR value to Xenon flash.*/
 #if defined(CONFIG_LEDS_BU9847)
+	   /*Quench level fetch from EEPROM.*/
+		   error = bu9847_fetch_regs();
+		   if (error != 0)
+				return error;
+
        /*Quench level fetch from EEPROM.*/
        if (rwbuf != 0) {
 		/*Enable PCNT_EN*/

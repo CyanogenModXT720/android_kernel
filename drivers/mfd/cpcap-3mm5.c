@@ -614,7 +614,9 @@ static irqreturn_t tvint_irq(int irq, void *data)
 
 	present = gpio_get_value(irq_to_gpio(tvint->tvint_irq));
 
+	printk(KERN_INFO "present=%d, is_tv_enabled=%d\n", present, data_3mm5->is_tv_enabled);
 	if ((present == 0) && (data_3mm5->is_tv_enabled == 1)) {
+		venc_tv_disconnect();
 		disable_irq(tvint->tvint_irq);
 		data_3mm5->is_tv_enabled = 0;
 		schedule_work(&data_3mm5->tvint_work_queue);
