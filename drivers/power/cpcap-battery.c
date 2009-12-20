@@ -728,7 +728,7 @@ static int cpcap_batt_probe(struct platform_device *pdev)
 	sply->tta.num_properties = ARRAY_SIZE(cpcap_batt_tta_props);
 	sply->tta.get_property = cpcap_batt_tta_get_property;
 	sply->tta.name = "tta";
-	sply->tta.type = POWER_SUPPLY_TYPE_UPS;
+	sply->tta.type = POWER_SUPPLY_TYPE_TTA;
 #endif
 
 	sply->usb.properties = cpcap_batt_usb_props;
