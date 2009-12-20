@@ -256,8 +256,6 @@ static int bd7885_quench_level_set(struct i2c_client *client,
 {
     int ret = 0;
 
-	printk(KERN_INFO "%s bd7885_quench_level_set: level  \n");
-
     /*Quench level is from 1 to 12 if using bu9847.*/
     if ((level < 1) || (level > 12))
 		return -1;

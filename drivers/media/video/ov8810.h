@@ -288,6 +288,8 @@
  */
 /* ------------------------------------------------------ */
 
+int ov8810_write_reg(struct i2c_client *client, u16 reg, u8 val);
+
 /* Exposure time values */
 #define DEF_MIN_EXPOSURE	250
 #define DEF_MAX_EXPOSURE	128000
@@ -1193,7 +1195,8 @@ const static struct ov8810_reg ov8810_mech_shutter[] = {
 
 struct ov8810_platform_data {
 	/* Set power state, zero is off, non-zero is on. */
-	int (*power_set)(struct device *dev, enum v4l2_power power);
+	int (*power_set)(struct device *dev, struct i2c_client *i2c_client,\
+					enum v4l2_power power);
 	/* Default registers written after power-on or reset. */
 	const struct ov8810_reg *default_regs;
 	int (*ifparm)(struct v4l2_ifparm *p);
