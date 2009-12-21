@@ -173,6 +173,13 @@ unsigned char value_of_gpio34(void)
   return gpio_get_value(SHOLEST_TTA_CHRG_DET_N_GPIO);
 }
 EXPORT_SYMBOL(value_of_gpio34);
+
+void disable_tta_irq(void)
+{
+  disable_irq(gpio_to_irq(SHOLEST_TTA_CHRG_DET_N_GPIO));
+}
+EXPORT_SYMBOL(disable_tta_irq);
+
 #endif
 
 static int get_sense(struct cpcap_usb_det_data *data)

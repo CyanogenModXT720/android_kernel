@@ -304,7 +304,8 @@ static struct isp_interface_config ov8810_if_config = {
 	.u.csi.format = V4L2_PIX_FMT_SGRBG10,
 };
 
-static int ov8810_sensor_power_set(struct device *dev, enum v4l2_power power)
+static int ov8810_sensor_power_set(struct device *dev, \
+	struct i2c_client *i2c_client, enum v4l2_power power)
 {
 
 #if defined (CONFIG_VIDEO_MIPI_INTERFACE)
@@ -413,7 +414,10 @@ static int ov8810_sensor_power_set(struct device *dev, enum v4l2_power power)
 #endif
 
 		if ((previous_power == V4L2_POWER_OFF) && (regulator_poweron == 0)){
-			/* Power Up Sequence */
+
+			/* Disable Interface. */
+			isp_csi2_ctrl_config_if_enable(false);
+			isp_csi2_ctrl_update(false);
 
 			/* Configure pixel clock divider (here?) */
 			omap_writel(OMAP_MCAM_SRC_DIV, 0x48004f40);
@@ -458,10 +462,8 @@ static int ov8810_sensor_power_set(struct device *dev, enum v4l2_power power)
 				return -EIO;
 			}
 
-			mdelay(10);
-		}
+			mdelay(5);
 
-		if ((previous_power == V4L2_POWER_OFF) && (regulator_poweron == 0)){
 			/* Request and configure gpio pins */
 			if (gpio_request(GPIO_OV8810_STANDBY,
 						"ov8810 camera standby") != 0)
@@ -498,7 +500,18 @@ static int ov8810_sensor_power_set(struct device *dev, enum v4l2_power power)
 			 * Datasheet says 2400 xclks. At 6 MHz, 400 usec is
 			 * enough
 			 */
-			mdelay(10);
+			mdelay(5);
+
+			ov8810_write_reg(i2c_client, OV8810_IMAGE_SYSTEM, 0x00);
+
+			pr_err("%s: OV8810 streaming off.\n",
+					__func__);
+
+#if defined(CONFIG_VIDEO_MIPI_INTERFACE)
+			/* Enable Interface. */
+			isp_csi2_ctrl_config_if_enable(true);
+			isp_csi2_ctrl_update(false);
+#endif
 
                      /*Set regulator turned on.*/
 			/*regulator_poweron = 1;*/
@@ -529,13 +542,13 @@ struct ov8810_platform_data sholest_ov8810_platform_data = {
 void sholest_camera_lines_safe_mode(void)
 {
 	omap_writew(0x0704, 0x4800207C);
-	omap_writew(0x0704, 0x480020D0);
+	/*omap_writew(0x0704, 0x480020D0);*/
 }
 
 void sholest_camera_lines_func_mode(void)
 {
 	omap_writew(0x0704, 0x4800207C);
-	omap_writew(0x061C, 0x480020D0);
+	/*omap_writew(0x061C, 0x480020D0);*/
 }
 
 void __init sholest_camera_init(void)

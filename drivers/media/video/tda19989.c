@@ -70,7 +70,7 @@ struct tda19989_data {
 #ifdef TDA19989_CEC_AVAILABLE
 	struct regulator *cec_regulator;
 #endif
-	int cec_use_reg;
+	bool cec_use_reg;
 };
 
 static struct tda19989_data *gDev;
@@ -139,6 +139,12 @@ static int i2cTda19989_write(struct i2cMsgArg *pArg)
 			pData++;
 		}
 	}
+#ifdef TDA19989_CEC_AVAILABLE
+	if (pArg->slaveAddr == 0x34)
+	{
+		mdelay(2);
+	}
+#endif
 	return ((rc == 0) ? 0 : -EFAULT);
 }
 
@@ -219,7 +225,7 @@ static int cec_calibration(void)
 	return rc;
 }
 
-static int cec_regulator_enable(int en)
+static int cec_regulator_enable(bool en)
 {
 	int rc = 0;
 	int reg_en;
@@ -228,18 +234,16 @@ static int cec_regulator_enable(int en)
 	if (en) {
 		if (!reg_en) {
 			if (regulator_enable(gDev->cec_regulator) < 0) {
-				printk(KERN_ERR "tda19989 regulator_enable failed\n");
+				printk(KERN_ERR "cec regulator enable failed\n");
 				rc = -1;
 			}
-			regulator_set_voltage(gDev->cec_regulator,
-							3300000, 3300000);
 		} else {
-			printk(KERN_DEBUG "Already Regulator is set\n");
+			printk(KERN_DEBUG "already regulator is set\n");
 		}
 	} else {
 		if (reg_en && gpio_get_value(MMC_DETECT_GPIO_NUM)) {
 			if (regulator_disable(gDev->cec_regulator) < 0) {
-				printk(KERN_ERR "tda19989 regulator_disable failed\n");
+				printk(KERN_ERR "cec regulator disable failed\n");
 				rc = -1;
 			}
 		} else {
@@ -252,7 +256,7 @@ static int cec_regulator_enable(int en)
 
 int hdmiCec_useReg(void)
 {
-    return gDev->cec_use_reg;
+    return (int)gDev->cec_use_reg;
 }
 EXPORT_SYMBOL(hdmiCec_useReg);
 
@@ -308,7 +312,7 @@ static int tda19989_open(struct inode *inode, struct file *filp)
 #ifdef TDA19989_CEC_AVAILABLE
 	gDev->cec_regulator = regulator_get(NULL, "vwlan2");
 	if (IS_ERR(gDev->cec_regulator)) {
-		printk(KERN_ERR "tda19989 get regulator failed\n");
+		printk(KERN_ERR "cec get regulator failed\n");
 		rc = -ENODEV;
 		goto failed_irq;
 	}
@@ -484,13 +488,13 @@ static int tda19989_ioctl(struct inode *inode, struct file *filp,
 	case TDA19989_CEC_CAL_TIME:
 		rc = cec_calibration();
 		if (rc != 0) {
-			printk(KERN_ERR	"tda19989 CEC cal error (%d)\n", rc);
+			printk(KERN_ERR	"cec calibration error (%d)\n", rc);
 			rc = -EFAULT;
 		}
 		break;
 	case TDA19989_CEC_REG_ENABLE:
 		if (copy_from_user(&en, (int *)arg, sizeof(en))) {
-			printk(KERN_ERR	"tda19989: CEC Pull-up pwr copy from error\n");
+			printk(KERN_ERR	"cec pull-up pwr copy from error\n");
 			rc = -EFAULT;
 			break;
 		}
@@ -639,15 +643,13 @@ static int tda19989_remove(struct platform_device *pdev)
 #if defined(CONFIG_PM)
 static int tda19989_suspend(struct platform_device *pdev, pm_message_t event)
 {
-	printk(KERN_DEBUG "tda19989_suspend\n");
-	/*need to check how to control tda19989 power state*/
+	/*printk(KERN_DEBUG "tda19989_suspend\n");*/
 	return 0;
 }
 
 static int tda19989_resume(struct platform_device *pdev)
 {
-	printk(KERN_DEBUG "tda19989_resume\n");
-	/*need to check how to control tda19989 power state*/
+	/*printk(KERN_DEBUG "tda19989_resume\n");*/
 	return 0;
 }
 #endif

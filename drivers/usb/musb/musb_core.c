@@ -112,8 +112,10 @@
 #include "davinci.h"
 #endif
 
+#ifdef CONFIG_TTA_CHARGER
 struct musb   *musb_misc;
-
+int nIrq_misc;
+#endif
 
 unsigned musb_debug;
 module_param_named(debug, musb_debug, uint, S_IRUGO | S_IWUSR);
@@ -1508,13 +1510,13 @@ void enable_musb_int(void)
   value = musb_readb(musb_misc->mregs, MUSB_INTRUSB);
   value &= ~MUSB_INTR_SESSREQ;
   musb_writeb(musb_misc->mregs, MUSB_INTRUSB, value);
-  musb_writeb(musb_misc->mregs, MUSB_INTRUSBE, 0xf7);
+  enable_irq(nIrq_misc);
 }
 EXPORT_SYMBOL(enable_musb_int);
 
 void disable_musb_int(void)
 {
-  musb_writeb(musb_misc->mregs, MUSB_INTRUSBE, 0);
+  disable_irq(nIrq_misc);
 }
 EXPORT_SYMBOL(disable_musb_int);
 #endif
@@ -2072,7 +2074,10 @@ bad_config:
 
 	}
 
+#ifdef CONFIG_TTA_CHARGER
   musb_misc = musb;
+  nIrq_misc = nIrq;
+#endif
 
 #ifdef CONFIG_SYSFS
 	status = device_create_file(dev, &dev_attr_mode);

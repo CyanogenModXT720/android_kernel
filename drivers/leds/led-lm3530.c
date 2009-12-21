@@ -200,11 +200,11 @@ static int ld_lm3530_switch_als_circumstance(struct lm3530_data *als_data,
 	switch (set_als) {
 	case ALS_INDOOR:
 		/* Set ALS configuration for Indoor mode */
-		als_data->als_pdata->als_resistor_sel = 0x41;
-		als_data->als_pdata->zone_boundary_0  = 0x02;
-		als_data->als_pdata->zone_boundary_1  = 0x0A;
-		als_data->als_pdata->zone_boundary_2  = 0x12;
-		als_data->als_pdata->zone_boundary_3  = 0x25;
+		als_data->als_pdata->als_resistor_sel = 0x31;
+		als_data->als_pdata->zone_boundary_0  = 0x04;
+		als_data->als_pdata->zone_boundary_1  = 0x18;
+		als_data->als_pdata->zone_boundary_2  = 0x2B;
+		als_data->als_pdata->zone_boundary_3  = 0x58;
 		als_data->als_pdata->zone_target_0    = 0x19;
 		als_data->als_pdata->zone_target_1    = 0x31;
 		als_data->als_pdata->zone_target_2    = 0x31;
@@ -268,6 +268,7 @@ static void ld_lm3530_brightness_set(struct led_classdev *led_cdev,
 	int brightness = 0;
 	int error = 0;
 	int old_led_on;
+    int config;
 	struct lm3530_data *als_data =
 	    container_of(led_cdev, struct lm3530_data, led_dev);
 
@@ -306,20 +307,27 @@ static void ld_lm3530_brightness_set(struct led_classdev *led_cdev,
 			gpio_set_value(LM3530_LEDDRV_EN, 1);
 			msleep(1);
 
-			if (als_data->mode != MANUAL) {
-				/* Reinitialize lm3530 */
-				ld_lm3530_init_registers(als_data);
+			/* Reinitialize lm3530 */
+			ld_lm3530_init_registers(als_data);
+
+			if (als_data->mode == AUTOMATIC) {
 				/* Set ALS as indoor mode */
 				ld_lm3530_switch_als_circumstance(als_data,
 								  ALS_INDOOR);
 			} else {
 				/* Restore configurations to disable ALS */
+				config = LM3530_MANUAL_VALUE;
+				if (als_data->mode != MANUAL)
+					config |= LM3530_SENSOR_ENABLE;
+				lm3530_write_reg(als_data, LM3530_ALS_CONFIG,
+						 config);
 				lm3530_write_reg(als_data,
-					LM3530_ALS_CONFIG, LM3530_MANUAL_VALUE);
+						 LM3530_ALS_RESISTOR_SELECT,
+						 0x00);
+				/* Set ramp rate for manual mode */
 				lm3530_write_reg(als_data,
-					LM3530_ALS_RESISTOR_SELECT, 0x00);
-				lm3530_write_reg(als_data,
-					LM3530_BRIGHTNESS_RAMP_RATE, 0x00);
+						 LM3530_BRIGHTNESS_RAMP_RATE,
+						 LM3530_MANUAL_RAMP_RATE_VALUE);
 			}
 		}
 #endif
@@ -404,6 +412,17 @@ static ssize_t ld_lm3530_als_store(struct device *dev, struct device_attribute
 			als_data->mode = -1;
 			return -1;
 		}
+#ifdef CONFIG_LEDS_SHOLEST
+		/* Restore ramp rate for automatic ALS mode */
+		error = lm3530_write_reg(als_data,
+					 LM3530_BRIGHTNESS_RAMP_RATE,
+					 als_data->als_pdata->brightness_ramp);
+		if (error) {
+			pr_err("%s:Failed to restore ramp rate %d\n",
+			       __func__, error);
+			return -1;
+		}
+#endif
 		als_data->mode = AUTOMATIC;
 	} else {
 		als_data->mode = mode_value;
@@ -435,6 +454,17 @@ static ssize_t ld_lm3530_als_store(struct device *dev, struct device_attribute
 			       __func__, error);
 			return -1;
 		}
+#ifdef CONFIG_LEDS_SHOLEST
+		/* Set ramp rate for manual mode */
+		error = lm3530_write_reg(als_data,
+					 LM3530_BRIGHTNESS_RAMP_RATE,
+					 LM3530_MANUAL_RAMP_RATE_VALUE);
+		if (error) {
+			pr_err("%s:Failed to restore ramp rate %d\n",
+			       __func__, error);
+		return -1;
+	}
+#endif
 	}
 
 	if (mode_value != MANUAL) {
