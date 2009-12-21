@@ -1252,23 +1252,23 @@ void isp_stop()
 	omapisp_unset_callback();
 	ispccdc_enable_lsc(0);
 	ispccdc_enable(0);
-	while (ispccdc_busy() && (timeout < 100)) {
+	while (ispccdc_busy() && (timeout < 1000)) {
 		timeout++;
-		mdelay(10);
+		msleep(1);
 	}
 
 	timeout = 0;
 	isppreview_enable(0);
-	while (isppreview_busy() && (timeout < 100)) {
+	while (isppreview_busy() && (timeout < 1000)) {
 		timeout++;
-		mdelay(10);
+		msleep(1);
 	}
 
 	timeout = 0;
 	ispresizer_enable(0);
-	while (ispresizer_busy() && (timeout < 100)) {
+	while (ispresizer_busy() && (timeout < 1000)) {
 		timeout++;
-		mdelay(10);
+		msleep(1);
 	}
 
 	timeout = 0;
@@ -1332,7 +1332,7 @@ u32 isp_calc_pipeline(struct v4l2_pix_format *pix_input,
 		ispccdc_config_datapath(CCDC_RAW, CCDC_OTHERS_VP);
 
 		if (ispmodule_obj.isp_lsc_workaround == 1) {
-			printk(KERN_ERR "Using ISP workaround!\n");
+			DPRINTK_ISPCTRL("Using ISP workaround!\n");
 			isppreview_config_datapath(PRV_RAW_CCDC, PREVIEW_MEM);
 			ispresizer_config_datapath(RSZ_MEM_YUV);
 
@@ -1344,7 +1344,7 @@ u32 isp_calc_pipeline(struct v4l2_pix_format *pix_input,
 
 			isppreview_set_outaddr(buff_addr_mapped);
 		} else {
-			printk(KERN_ERR "NOT using ISP workaround!\n");
+			DPRINTK_ISPCTRL("NOT using ISP workaround!\n");
 
 			isppreview_config_datapath(PRV_RAW_CCDC, PREVIEW_RSZ);
 			ispresizer_config_datapath(RSZ_OTFLY_YUV);
@@ -2145,7 +2145,7 @@ void isp_config_crop(struct v4l2_pix_format *croppix)
 
 	ispmodule_obj.applyCrop = 1;
 
-	printk(KERN_ERR "ISP: resizer crop (%d-%d-%d-%d) \n",
+	DPRINTK_ISPCTRL("ISP: resizer crop (%d-%d-%d-%d) \n",
 		cur_rect.left, cur_rect.top, cur_rect.width, cur_rect.height);
 
 	return;
@@ -2195,17 +2195,13 @@ int isp_s_crop(struct v4l2_crop *a, struct v4l2_pix_format *pix)
 		goto out;
 	}
 
-	if ((crop->c.left + crop->c.width) == pix->width &&
-		(crop->c.top + crop->c.height) == pix->height)
-		goto out;
-
 
 	ispcroprect.left = crop->c.left;
 	ispcroprect.top = crop->c.top;
 	ispcroprect.width = crop->c.width;
 	ispcroprect.height = crop->c.height;
 
-	printk(KERN_ERR "ISP: isp_s_crop -> crop (%d-%d-%d-%d)\n",
+	DPRINTK_ISPCTRL("ISP: isp_s_crop -> crop (%d-%d-%d-%d)\n",
 		ispcroprect.left, ispcroprect.top,
 		ispcroprect.width, ispcroprect.height);
 
@@ -2939,6 +2935,7 @@ int isp_run_preview(void *userdata)
 	unsigned long  isp_addr_out = 0;
 	u32 isppreview_pcr;
 	struct ispprv_run_resizer resizer_param;
+	u16 cropadjust = 0;
 
 	if (ppreview_user == NULL) {
 		printk(KERN_ERR "isp_run_preview() Invalid user data\n");
@@ -3064,6 +3061,14 @@ int isp_run_preview(void *userdata)
 
 		ispresizer_applycrop();
 
+      /*account for pixel loss when using crop*/
+		if ((preview_param.input_height > preview_param.output_height)
+				&& (preview_param.top > 16))
+			cropadjust = 8;
+		else
+			cropadjust = 0;
+
+
 		/*pixel alignment in 32bit space, vertical must be 0 per TRM */
 		omap_writel(((preview_param.left%16) <<
 					ISPRSZ_IN_START_HORZ_ST_SHIFT) |
@@ -3072,7 +3077,8 @@ int isp_run_preview(void *userdata)
 					ISPRSZ_IN_START);
 
 		/* Align input address for cropping, per TRM  */
-		ispresizer_set_inaddr(buff_addr_mapped +
+		ispresizer_set_inaddr(buff_addr_mapped -
+				(resizer_param.input_width*2*cropadjust) +
 				(preview_param.top*resizer_param.input_width*2)
 				+ ((preview_param.left/16)*32));
 	}

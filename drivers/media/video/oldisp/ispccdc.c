@@ -563,7 +563,7 @@ void ispccdc_set_crop_offset(enum ispccdc_raw_fmt raw_fmt)
 		ispccdc_obj.ccdcin_hstart = 1;
 		break;
 	}
-	printk(KERN_INFO "ispccdc_crop_offset(%d)\n", raw_fmt);
+	DPRINTK_ISPCCDC("ispccdc_crop_offset(%d)\n", raw_fmt);
 
 	ispccdc_obj.ccdcin_woffset = ispccdc_obj.ccdcin_wstart;
 	ispccdc_obj.ccdcin_hoffset = ispccdc_obj.ccdcin_hstart;

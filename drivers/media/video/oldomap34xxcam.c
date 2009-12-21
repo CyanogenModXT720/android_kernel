@@ -381,9 +381,17 @@ static int vidioc_g_fmt_cap(struct file *file, void *fh, struct v4l2_format *f)
 {
 	struct omap34xxcam_fh *ofh = fh;
 	struct omap34xxcam_videodev *vdev = ofh->vdev;
+	struct v4l2_format sensor_format;
 
+	/* Get size_out */
 	mutex_lock(&vdev->mutex);
 	f->fmt.pix = ofh->pix;
+
+	/* Get size_in (sensor pixel format) & save in user defined raw_data
+	   after f->fmt.pix */
+	vidioc_int_g_fmt_cap(vdev->vdev_sensor, &sensor_format);
+	memcpy(f->fmt.raw_data + sizeof(sensor_format.fmt.pix),
+		&sensor_format.fmt.pix, sizeof(sensor_format.fmt.pix));
 	mutex_unlock(&vdev->mutex);
 
 	return 0;
@@ -521,7 +529,7 @@ do_it_now:
 	if (best_pix_in->width == 0)
 		return -EINVAL;
 
-	dev_info(vdev->cam->dev, "w %d, h %d -> w %d, h %d\n",
+	dev_dbg(vdev->cam->dev, "w %d, h %d -> w %d, h %d\n",
 		 best_pix_in->width, best_pix_in->height,
 		 best_pix_out.width, best_pix_out.height);
 
@@ -1311,6 +1319,7 @@ int omap34xxcam_sensor_settings(int dev, struct cam_sensor_settings *settings)
 	int err = -1;
 	struct omap34xxcam_videodev *vdev = NULL;
 	struct omap34xxcam_device *cam = omap34xxcam;
+	struct v4l2_streamparm a;
 	struct v4l2_control vc;
 	int i;
 
@@ -1325,6 +1334,15 @@ int omap34xxcam_sensor_settings(int dev, struct cam_sensor_settings *settings)
 		return -ENODEV;
 
 	mutex_lock(&vdev->mutex);
+
+	if (settings->flags & OMAP34XXCAM_SET_FPS) {
+		a.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+		a.parm.capture.timeperframe.numerator = 1;
+		a.parm.capture.timeperframe.denominator = settings->fps;
+		err = vidioc_int_s_parm(vdev->vdev_sensor, &a);
+		if (err)
+			goto update_sensor_exit;
+	}
 
 	if (settings->flags & OMAP34XXCAM_SET_EXPOSURE) {
 		vc.id = V4L2_CID_EXPOSURE;
@@ -1341,7 +1359,13 @@ int omap34xxcam_sensor_settings(int dev, struct cam_sensor_settings *settings)
 	}
 
 update_sensor_exit:
-   vc.id = V4L2_CID_EXPOSURE;
+	a.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+	if (vidioc_int_g_parm(vdev->vdev_sensor, &a) == 0) {
+		settings->fps = a.parm.capture.timeperframe.denominator /
+			a.parm.capture.timeperframe.numerator;
+	}
+
+	vc.id = V4L2_CID_EXPOSURE;
 	vc.value = 0;
 	if (vidioc_int_g_ctrl(vdev->vdev_sensor, &vc) == 0)
 		settings->exposure = (u32)vc.value;

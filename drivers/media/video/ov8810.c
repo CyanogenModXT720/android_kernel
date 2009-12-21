@@ -115,6 +115,7 @@ struct ov8810_sensor {
 	struct ov8810_flash_params flash;
 	struct ov8810_shutter_params shutter;
 	struct ov8810_exp_params exposure;
+	enum ov8810_orientation orientation;
 };
 
 static struct ov8810_sensor ov8810 = {
@@ -133,7 +134,8 @@ static struct ov8810_sensor ov8810 = {
 	},
 	.shutter = {
 		.type = ROLLING_SHUTTER_TYPE,
-	}
+	},
+	.orientation = OV8810_HORZ_FLIP_ONLY,
 };
 
 static struct i2c_driver ov8810sensor_i2c_driver;
@@ -187,7 +189,7 @@ static struct ov8810_sensor_settings sensor_settings[] = {
 		},
 		.frame = {
 			.frame_len_lines_min = 433,
-			.line_len_pck = 4576,
+			.line_len_pck_min = 4576,
 			.x_addr_start = 0,
 			.x_addr_end = 3359,
 			.y_addr_start = 0,
@@ -196,6 +198,10 @@ static struct ov8810_sensor_settings sensor_settings[] = {
 			.y_output_size = 306,
 			.v_subsample = 8,
 			.h_subsample = 8,
+			.min_time_per_frame = {
+				.numerator = 1,
+				.denominator = 30,
+			},
 		},
 		.mipi = {
 			.num_data_lanes = 2,
@@ -220,7 +226,7 @@ static struct ov8810_sensor_settings sensor_settings[] = {
 		},
 		.frame = {
 			.frame_len_lines_min = 845,
-			.line_len_pck = 2344,
+			.line_len_pck_min = 2344,
 			.x_addr_start = 0,
 			.x_addr_end = 3311,
 			.y_addr_start = 0,
@@ -229,6 +235,10 @@ static struct ov8810_sensor_settings sensor_settings[] = {
 			.y_output_size = 612,
 			.v_subsample = 4,
 			.h_subsample = 4,
+			.min_time_per_frame = {
+				.numerator = 1,
+				.denominator = 30,
+			},
 		},
 		.mipi = {
 			.num_data_lanes = 2,
@@ -253,7 +263,7 @@ static struct ov8810_sensor_settings sensor_settings[] = {
 		},
 		.frame = {
 			.frame_len_lines_min = 1244,
-			.line_len_pck = 2336,
+			.line_len_pck_min = 2336,
 			.x_addr_start = 4,
 			.x_addr_end = 3291,
 			.y_addr_start = 302,
@@ -262,6 +272,10 @@ static struct ov8810_sensor_settings sensor_settings[] = {
 			.y_output_size = 918,
 			.v_subsample = 2,
 			.h_subsample = 2,
+			.min_time_per_frame = {
+				.numerator = 1,
+				.denominator = 26,
+			},
 		},
 		.mipi = {
 			.num_data_lanes = 2,
@@ -286,7 +300,7 @@ static struct ov8810_sensor_settings sensor_settings[] = {
 		},
 		.frame = {
 			.frame_len_lines_min = 1552,
-			.line_len_pck = 2320,
+			.line_len_pck_min = 2320,
 			.x_addr_start = 0,
 			.x_addr_end = 3295,
 			.y_addr_start = 0,
@@ -295,6 +309,10 @@ static struct ov8810_sensor_settings sensor_settings[] = {
 			.y_output_size = 1224,
 			.v_subsample = 2,
 			.h_subsample = 2,
+			.min_time_per_frame = {
+				.numerator = 1,
+				.denominator = 21,
+			},
 		},
 		.mipi = {
 			.num_data_lanes = 2,
@@ -319,7 +337,7 @@ static struct ov8810_sensor_settings sensor_settings[] = {
 		},
 		.frame = {
 			.frame_len_lines_min = 2484,
-			.line_len_pck = 3960,
+			.line_len_pck_min = 3960,
 			.x_addr_start = 0,
 			.x_addr_end = 3295,
 			.y_addr_start = 0,
@@ -328,6 +346,10 @@ static struct ov8810_sensor_settings sensor_settings[] = {
 			.y_output_size = 2448,
 			.v_subsample = 1,
 			.h_subsample = 1,
+			.min_time_per_frame = {
+				.numerator = 3,
+				.denominator = 24,
+			},
 		},
 		.mipi = {
 			.num_data_lanes = 2,
@@ -396,6 +418,18 @@ static struct vcontrol {
 	},
 	{
 		{
+			.id = V4L2_CID_PRIVATE_ORIENTATION,
+			.type = V4L2_CTRL_TYPE_INTEGER,
+			.name = "Orientation",
+			.minimum = OV8810_NO_HORZ_FLIP_OR_VERT_FLIP,
+			.maximum = OV8810_HORZ_FLIP_AND_VERT_FLIP,
+			.step = 0,
+			.default_value = OV8810_HORZ_FLIP_ONLY,
+		},
+		.current_value = OV8810_HORZ_FLIP_ONLY,
+	},
+	{
+		{
 			.id = V4L2_CID_PRIVATE_LENS_CORRECTION,
 			.type = V4L2_CTRL_TYPE_INTEGER,
 			.name = "Lens Correction",
@@ -417,18 +451,6 @@ static struct vcontrol {
 			.default_value = 0,
 		},
 		.current_value = 0,
-	},
-	{
-		{
-			.id = V4L2_CID_PRIVATE_ORIENTATION,
-			.type = V4L2_CTRL_TYPE_INTEGER,
-			.name = "Orientation",
-			.minimum = OV8810_NO_HORZ_FLIP_OR_VERT_FLIP,
-			.maximum = OV8810_HORZ_FLIP_AND_VERT_FLIP,
-			.step = 0,
-			.default_value = OV8810_NO_HORZ_FLIP_OR_VERT_FLIP,
-		},
-		.current_value = OV8810_NO_HORZ_FLIP_OR_VERT_FLIP,
 	},
 	{
 		{
@@ -675,7 +697,7 @@ int ov8810_set_exposure_time(u32 exp_time, struct v4l2_int_device *s,
 write_aecl:
 
 		if (coarse_int_tm != sensor->exposure.coarse_int_tm) {
-			/* write number of line times to AEL/H registers */
+			/* write number of line times to AECL/H registers */
 			err = ov8810_write_reg(client, OV8810_AECL_H,
 				coarse_int_tm >> 8);
 			err |= ov8810_write_reg(client, OV8810_AECL_L,
@@ -830,6 +852,14 @@ static int ov8810_set_framerate(struct v4l2_int_device *s,
 	struct vcontrol *lvc = NULL;
 	struct ov8810_sensor_settings *ss = &sensor_settings[isize];
 
+	/* limit desired frame period to min frame period for this readout */
+	if (((fper->numerator << 8) / fper->denominator) <
+		((ss->frame.min_time_per_frame.numerator << 8) /
+		  ss->frame.min_time_per_frame.denominator)) {
+		fper->numerator = ss->frame.min_time_per_frame.numerator;
+		fper->denominator = ss->frame.min_time_per_frame.denominator;
+	}
+
 	skip_factor = lut[ss->frame.h_subsample];
 	line_time_q8 = /* usec's (q8) */
 		((((u32)ss->frame.line_len_pck * 1000) << 8) /
@@ -855,7 +885,7 @@ static int ov8810_set_framerate(struct v4l2_int_device *s,
 	sensor->exposure.line_time = line_time_q8;
 	/* min_exposure_time = (ss->exposure.fine_int_tm * 1000000 /
 		(sensor->freq.vt_pix_clk)) + 1; */
-	/* use line time for min until LAEC turned on - GVH */
+	/* use line time for min until LAEC turned on */
 	sensor->exposure.min_exp_time = line_time_q8 >> 8;
 	sensor->exposure.fps_max_exp_time = (line_time_q8 *
 		(ss->frame.frame_len_lines - 8)) >> 8;
@@ -1027,6 +1057,61 @@ int ov8810_set_flash_next_frame(
 }
 
 /**
+ * Sets the sensor orientation.
+ */
+static int ov8810_set_orientation(enum ov8810_orientation val,
+			struct v4l2_int_device *s, struct vcontrol *lvc)
+{
+	int err = 0;
+	u32 data;
+	struct ov8810_sensor *sensor = s->priv;
+	struct i2c_client *client = to_i2c_client(sensor->dev);
+
+	if ((current_power_state == V4L2_POWER_ON) || sensor->resuming) {
+
+		err = ov8810_read_reg(client, 1,
+			OV8810_IMAGE_TRANSFORM, &data);
+			/* clear both orientation bits */
+			data &= ~OV8810_IMAGE_TRANSFORM_HMIRROR_MASK;
+			data &= ~OV8810_IMAGE_TRANSFORM_VFLIP_MASK;
+		switch (val) {
+		case OV8810_NO_HORZ_FLIP_OR_VERT_FLIP:
+			/* set no bits */
+			break;
+		case OV8810_HORZ_FLIP_ONLY:
+			data |= OV8810_IMAGE_TRANSFORM_HMIRROR_MASK;
+			break;
+		case OV8810_VERT_FLIP_ONLY:
+			data |= OV8810_IMAGE_TRANSFORM_VFLIP_MASK;
+			break;
+		case OV8810_HORZ_FLIP_AND_VERT_FLIP:
+			data |= OV8810_IMAGE_TRANSFORM_HMIRROR_MASK;
+			data |= OV8810_IMAGE_TRANSFORM_VFLIP_MASK;
+			break;
+		default:
+			break;
+		}
+
+		err |= ov8810_write_reg(client,
+			OV8810_IMAGE_TRANSFORM, data);
+
+		dev_dbg(&client->dev, "set_orientation:  " \
+			"sensor->orientation=%d, IMAGE_TRANSFORM=0x%x\n",
+			val, data);
+	}
+
+	if (err) {
+		dev_err(&client->dev, "Error setting orientation.%d", err);
+		return err;
+	} else {
+		lvc->current_value = (u32)val;
+		sensor->orientation = val;
+	}
+
+	return err;
+}
+
+/**
  * ov8810_start_mech_shutter_capture - initiates capture using mechanical shutter
  * @shutter_params: expoosure and shutter delay time
  * @s: pointer to standard V4L2 device structure
@@ -1135,7 +1220,7 @@ int ov8810_start_mech_shutter_capture(
  * 		vt_sys_div / rp_clk_div
  * NOTE:
  *  - The lookup table 'lut1' has been multiplied by 2 so all its values
- *    are integers. The numerator is multipllied by 2 in the Pclk
+ *    are integers. The numerator is multiplied by 2 in the Pclk
  *    calculation to compensate.
  */
 static int ov8810_calc_pclk(struct v4l2_int_device *s,
@@ -1308,6 +1393,7 @@ int ov8810_configure_frame(struct v4l2_int_device *s,
 			    enum image_size_ov isize)
 {
 	u8 lut[9] = { 0, 0, 1, 1, 2, 2, 2, 2, 3 };
+	u32 data;
 	int err = 0;
 	struct ov8810_sensor *sensor = s->priv;
 	struct i2c_client *client = to_i2c_client(sensor->dev);
@@ -1376,17 +1462,43 @@ int ov8810_configure_frame(struct v4l2_int_device *s,
 	ss->frame.frame_len_lines = ss->frame.frame_len_lines_min;
 
 	err |= ov8810_write_reg(client, OV8810_LINE_LEN_PCK_H,
-		 (ss->frame.line_len_pck >> 8) & 0xFF);
+		 (ss->frame.line_len_pck_min >> 8) & 0xFF);
 
 	err |= ov8810_write_reg(client, OV8810_LINE_LEN_PCK_L,
-		 ss->frame.line_len_pck & 0xFF);
+		 ss->frame.line_len_pck_min & 0xFF);
+	ss->frame.line_len_pck = ss->frame.line_len_pck_min;
 
-	err |= ov8810_write_reg(client, OV8810_IMAGE_TRANSFORM,
-		 ((lut[ss->frame.v_subsample] <<
+	data = ((lut[ss->frame.v_subsample] <<
 		 OV8810_IMAGE_TRANSFORM_VSUB_SHIFT) &
 		 OV8810_IMAGE_TRANSFORM_VSUB_MASK) |
 		 (lut[ss->frame.h_subsample] &
-		 OV8810_IMAGE_TRANSFORM_HSUB_MASK) | 0x40);
+		 OV8810_IMAGE_TRANSFORM_HSUB_MASK);
+
+/*
+printk("ov8810_configure_frame: sensor->orientation = %d\n",
+	sensor->orientation);
+*/
+
+/*
+	switch (sensor->orientation) {
+	case OV8810_NO_HORZ_FLIP_OR_VERT_FLIP:
+		break;
+	case OV8810_HORZ_FLIP_ONLY:
+		data |= OV8810_IMAGE_TRANSFORM_HMIRROR_MASK;
+		break;
+	case OV8810_VERT_FLIP_ONLY:
+		data |= OV8810_IMAGE_TRANSFORM_VFLIP_MASK;
+		break;
+	case OV8810_HORZ_FLIP_AND_VERT_FLIP:
+		data |= OV8810_IMAGE_TRANSFORM_HMIRROR_MASK;
+		data |= OV8810_IMAGE_TRANSFORM_VFLIP_MASK;
+		break;
+	default:
+		break;
+	}
+*/
+	data |= 0x40;  /* TEMP force orientation */
+	err |= ov8810_write_reg(client, OV8810_IMAGE_TRANSFORM, data);
 
 	sensor->isize = isize;
 	if (err)
@@ -1462,6 +1574,13 @@ static int ov8810_configure(struct v4l2_int_device *s)
 	}
 	if (err)
 		return err;
+
+	/* Turn on 50-60 Hz Detection */
+	if (isize != SIZE_8M) {
+		err = ov8810_write_regs(client, ov8810_50_60_hz_detect_tbl);
+		if (err)
+			return err;
+	}
 
 	/* Set Shutter related register settings */
 	if (sensor->shutter.type == MECH_SHUTTER_TYPE) {
@@ -1609,6 +1728,7 @@ static int ov8810_detect(struct v4l2_int_device *s)
 	pid |= val & 0xf0;
 	rev = val & 0xf;
 
+	/* Check ID & max supported rev */
 	if (pid == OV8810_PID) {
 		dev_dbg(&client->dev, "OV8810: Detect success " \
 			"(pid=0x%x rev=0x%x\n", pid, rev);
@@ -1695,6 +1815,9 @@ static int ioctl_g_ctrl(struct v4l2_int_device *s,
 			dev_err(&client->dev, "Failed copy_to_user\n");
 		}
 		break;
+	case V4L2_CID_PRIVATE_ORIENTATION:
+		vc->value = lvc->current_value;
+		break;
 	case V4L2_CID_PRIVATE_LENS_CORRECTION:
 		vc->value = lvc->current_value;
 		break;
@@ -1711,9 +1834,6 @@ static int ioctl_g_ctrl(struct v4l2_int_device *s,
 			retval = -EINVAL;
 			dev_err(&client->dev, "Failed copy_to_user\n");
 		}
-		break;
-	case V4L2_CID_PRIVATE_ORIENTATION:
-		vc->value = lvc->current_value;
 		break;
 	case V4L2_CID_PRIVATE_SENSOR_REG_REQ:
 		if (copy_from_user(&sensor_reg,
@@ -1790,6 +1910,9 @@ static int ioctl_s_ctrl(struct v4l2_int_device *s,
 			retval = ov8810_set_flash_next_frame(&flash_params,
 				s, lvc);
 		}
+		break;
+	case V4L2_CID_PRIVATE_ORIENTATION:
+		retval = ov8810_set_orientation(vc->value, s, lvc);
 		break;
 	case V4L2_CID_PRIVATE_LENS_CORRECTION:
 		retval = ov8810_set_lens_correction(vc->value, s, lvc,

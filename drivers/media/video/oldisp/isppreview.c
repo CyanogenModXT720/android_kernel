@@ -994,14 +994,10 @@ void isppreview_config_hmed(struct ispprev_hmed prev_hmed)
 	u32 odddist = 0;
 	u32 evendist = 0;
 
-	if (prev_hmed.odddist == 1)
-		odddist = ~ISPPRV_HMED_ODDDIST;
-	else
+	if (prev_hmed.odddist == 2)
 		odddist = ISPPRV_HMED_ODDDIST;
 
-	if (prev_hmed.evendist == 1)
-		evendist = ~ISPPRV_HMED_EVENDIST;
-	else
+	if (prev_hmed.evendist == 2)
 		evendist = ISPPRV_HMED_EVENDIST;
 
 	spin_lock(&ispprev_obj.ispprev_lock);
