@@ -173,8 +173,17 @@ void OMAPLFBDisableDisplayRegisterAccess(void)
 
 #if defined(CONFIG_PVR_OMAP_DSS2)
 static struct omap_overlay_manager* lcd_mgr = 0;
+#ifdef CONFIG_TVOUT_SHOLEST
+static struct omap_overlay_manager* tv_mgr = 0;
+#endif
 static struct omap_overlay*         omap_gfxoverlay = 0;
+#ifdef CONFIG_TVOUT_SHOLEST
+static struct omap_overlay*         omap_vid2overlay = 0;
+#endif
 static struct omap_overlay_info     gfxoverlayinfo;
+#ifdef CONFIG_TVOUT_SHOLEST
+static struct omap_overlay_info     vid2overlayinfo;
+#endif
 struct fb_info *fb_info;
 
 void OMAPLFBDisplayInit(void)
@@ -185,6 +194,9 @@ void OMAPLFBDisplayInit(void)
 
     // there is tv and lcd managers... we only care about lcd at this time.
     lcd_mgr = omap_dss_get_overlay_manager(OMAP_DSS_OVL_MGR_LCD);
+#ifdef CONFIG_TVOUT_SHOLEST
+    tv_mgr = omap_dss_get_overlay_manager(OMAP_DSS_OVL_MGR_TV);
+#endif
     if(!lcd_mgr)
     {
         DEBUG_PRINTK((KERN_INFO DRIVER_PREFIX ": OMAPLFBSetDisplayInfo couldn't find lcd overlay manager\n"));
@@ -208,6 +220,19 @@ void OMAPLFBDisplayInit(void)
             break;
         }
     }
+#ifdef CONFIG_TVOUT_SHOLEST
+        for( i = 0; i < numoverlays; i++ )
+        {
+            overlayptr = omap_dss_get_overlay(i);
+            if( strncmp( overlayptr->name, "vid2", 4 ) == 0)
+            {
+                DEBUG_PRINTK((KERN_INFO DRIVER_PREFIX ": OMAPLFBSetDisplayInfo found GFX overlay\n"));
+                omap_vid2overlay = overlayptr;
+                break;
+            }
+        }
+
+#endif
     if( omap_gfxoverlay == 0 )
     {
         DEBUG_PRINTK((KERN_INFO DRIVER_PREFIX ": OMAPLFBSetDisplayInfo GFX overlay no found\n"));
@@ -215,6 +240,7 @@ void OMAPLFBDisplayInit(void)
     }
 
     omap_gfxoverlay->get_overlay_info( omap_gfxoverlay, &gfxoverlayinfo );
+    omap_vid2overlay->get_overlay_info(omap_vid2overlay, &vid2overlayinfo);
     fb_info =  registered_fb[0];
 
 }
@@ -241,6 +267,19 @@ void OMAPLFBFlip(OMAPLFB_SWAPCHAIN *psSwapChain, unsigned long paddr)
 						  &gfxoverlayinfo);
 		lcd_mgr->apply(lcd_mgr);
 
+#ifdef CONFIG_TVOUT_SHOLEST
+		omap_vid2overlay->get_overlay_info(omap_vid2overlay,
+						  &vid2overlayinfo);
+		if(vid2overlayinfo.enabled ==1){
+			vid2overlayinfo.paddr = paddr;
+			/* TODO: plumb vaddr in to this function */
+			vid2overlayinfo.vaddr = (void *)paddr - 0x81314000 + 0xd2800000;
+
+			omap_vid2overlay->set_overlay_info(omap_vid2overlay,
+						  &vid2overlayinfo);
+			tv_mgr->apply(tv_mgr);
+		}
+#endif
 		if (lcd_mgr->device->update)
 			lcd_mgr->device->update(lcd_mgr->device, 0, 0,
 						gfxoverlayinfo.width,
