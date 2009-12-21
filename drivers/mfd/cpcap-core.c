@@ -513,6 +513,7 @@ static int tta_ioctl(unsigned int cmd, unsigned long arg)
     {
 	unsigned char gpio_val;
 	enum cpcap_tta_state state;
+	disable_tta_irq();
 	disable_tta();
 	enable_tta();
 	mdelay(10);
@@ -526,7 +527,7 @@ static int tta_ioctl(unsigned int cmd, unsigned long arg)
 	if (copy_to_user((void *)arg,
 			(void *)&state, sizeof(state)))
 		retval = -EFAULT;
-
+	disable_tta();
     }
     break;
   case CPCAP_IOCTL_TTA_REDETECT:

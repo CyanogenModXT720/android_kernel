@@ -751,6 +751,7 @@ int cpcap_direct_misc_write(unsigned short reg, unsigned short value,\
 void enable_tta(void);
 void disable_tta(void);
 void force_to_detect_tta(void);
+void disable_tta_irq(void);
 unsigned char value_of_gpio34(void);
 #endif
 
