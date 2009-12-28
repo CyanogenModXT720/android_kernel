@@ -256,30 +256,30 @@ static int get_sense(struct cpcap_usb_det_data *data)
 #ifdef CONFIG_TTA_CHARGER
 static int configure_hardware_for_tta(struct cpcap_usb_det_data *data)
 {
-  int retval = 0;
+	int retval = 0;
 
-  retval = cpcap_regacc_write(data->cpcap, CPCAP_REG_USBC3,
-		CPCAP_BIT_PU_SPI |
-		CPCAP_BIT_DMPD_SPI |
-		CPCAP_BIT_DPPD_SPI,
-		CPCAP_BIT_PU_SPI |
-		CPCAP_BIT_DMPD_SPI |
-		CPCAP_BIT_DPPD_SPI);
+	retval = cpcap_regacc_write(data->cpcap, CPCAP_REG_USBC3,
+					CPCAP_BIT_PU_SPI |
+					CPCAP_BIT_DMPD_SPI |
+					CPCAP_BIT_DPPD_SPI,
+					CPCAP_BIT_PU_SPI |
+					CPCAP_BIT_DMPD_SPI |
+					CPCAP_BIT_DPPD_SPI);
 
-  retval |= cpcap_regacc_write(data->cpcap, CPCAP_REG_USBC1,
-		CPCAP_BIT_DP150KPU,
-		(CPCAP_BIT_DP150KPU | CPCAP_BIT_DP1K5PU |
-		CPCAP_BIT_DM1K5PU | CPCAP_BIT_DPPD |
-		CPCAP_BIT_DMPD));
+	retval |= cpcap_regacc_write(data->cpcap, CPCAP_REG_USBC1,
+				CPCAP_BIT_DP150KPU,
+				(CPCAP_BIT_DP150KPU | CPCAP_BIT_DP1K5PU |
+				CPCAP_BIT_DM1K5PU | CPCAP_BIT_DPPD |
+				CPCAP_BIT_DMPD));
 
-  retval |= cpcap_regacc_write(data->cpcap, CPCAP_REG_USBC2,
-		CPCAP_BIT_USBXCVREN,
-		CPCAP_BIT_USBXCVREN);
+	retval |= cpcap_regacc_write(data->cpcap, CPCAP_REG_USBC2,
+					CPCAP_BIT_USBXCVREN,
+					CPCAP_BIT_USBXCVREN);
 
-  if (retval != 0)
-	retval = -EFAULT;
+	if (retval != 0)
+		retval = -EFAULT;
 
-  return retval;
+	return retval;
 }
 #endif
 
@@ -297,6 +297,22 @@ static int configure_hardware(struct cpcap_usb_det_data *data,
 				    (CPCAP_BIT_DP150KPU | CPCAP_BIT_DP1K5PU |
 				     CPCAP_BIT_DM1K5PU | CPCAP_BIT_DPPD |
 				     CPCAP_BIT_DMPD));
+	get_sense(data);
+	if (!(data->sense_tta.dplus)) {
+		retval |= cpcap_regacc_write(data->cpcap, CPCAP_REG_USBC3,
+						    CPCAP_BIT_PU_SPI |
+						    CPCAP_BIT_DMPD_SPI |
+						    CPCAP_BIT_DPPD_SPI,
+						    CPCAP_BIT_PU_SPI |
+						    CPCAP_BIT_DMPD_SPI |
+						    CPCAP_BIT_DPPD_SPI);
+
+		retval |= cpcap_regacc_write(data->cpcap, CPCAP_REG_USBC1,
+				CPCAP_BIT_DP150KPU,
+				(CPCAP_BIT_DP150KPU | CPCAP_BIT_DP1K5PU |
+				CPCAP_BIT_DM1K5PU | CPCAP_BIT_DPPD |
+				CPCAP_BIT_DMPD));
+	}
 
 	switch (accy) {
 	case CPCAP_ACCY_USB:
@@ -323,8 +339,8 @@ static int configure_hardware(struct cpcap_usb_det_data *data,
 					     CPCAP_BIT_VBUSPD);
 		break;
 #ifdef CONFIG_TTA_CHARGER
-  case CPCAP_ACCY_TTA_CHARGER:
-		retval = cpcap_regacc_write(data->cpcap, CPCAP_REG_USBC3,
+	case CPCAP_ACCY_TTA_CHARGER:
+		retval |= cpcap_regacc_write(data->cpcap, CPCAP_REG_USBC3,
 						   CPCAP_BIT_PU_SPI |
 						   CPCAP_BIT_DMPD_SPI |
 						   CPCAP_BIT_DPPD_SPI,
@@ -345,6 +361,11 @@ static int configure_hardware(struct cpcap_usb_det_data *data,
 			omap_pm_set_max_mpu_wakeup_lat(&data->dummy_dev, -1);
 			data->is_constraint_set = 0;
 		}
+		retval |= cpcap_regacc_write(data->cpcap, CPCAP_REG_USBC3,
+						CPCAP_BIT_PU_SPI,
+						CPCAP_BIT_PU_SPI |
+						CPCAP_BIT_DMPD_SPI |
+						CPCAP_BIT_DPPD_SPI);
 		retval |= cpcap_regacc_write(data->cpcap, CPCAP_REG_USBC1, 0,
 					     CPCAP_BIT_VBUSPD);
 		retval |= cpcap_regacc_write(data->cpcap, CPCAP_REG_USBC2, 0,
@@ -557,13 +578,6 @@ static void detection_work(struct work_struct *work)
 			cpcap_irq_mask(data->cpcap, CPCAP_IRQ_DMI);
 			disable_tta();
 			enable_tta();
-
-			cpcap_regacc_write(data->cpcap, CPCAP_REG_USBC3,
-						CPCAP_BIT_PU_SPI,
-						CPCAP_BIT_PU_SPI |
-						CPCAP_BIT_DMPD_SPI |
-						CPCAP_BIT_DPPD_SPI);
-
 			data->state = CONFIG;
 			enable_musb_int();
 			schedule_delayed_work(&data->work, 0);
