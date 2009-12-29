@@ -174,12 +174,13 @@ static const struct venc_config venc_config_pal_trm = {
 	.fid_int_start_x__fid_int_start_y	= 0x0001008A,
 	.fid_int_offset_y__fid_ext_start_x	= 0x002E0138,
 	.fid_ext_start_y__fid_ext_offset_y	= 0x01380001,
-
-	.tvdetgp_int_start_stop_x		= 0x00140001,
-	.tvdetgp_int_start_stop_y		= 0x00010001,
 #ifdef CONFIG_TVOUT_SHOLEST
+	.tvdetgp_int_start_stop_x		= 0x00090080,
+	.tvdetgp_int_start_stop_y		= 0x00010001,
 	.gen_ctrl				= 0x00FF0001,
 #else
+	.tvdetgp_int_start_stop_x		= 0x00140001,
+	.tvdetgp_int_start_stop_y		= 0x00010001,
 	.gen_ctrl				= 0x00FF0000,
 #endif
 };
