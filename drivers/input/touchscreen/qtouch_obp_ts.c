@@ -29,6 +29,37 @@
 #include <linux/qtouch_obp_ts.h>
 
 #define IGNORE_CHECKSUM_MISMATCH
+#define IGNORE_TSEVENTS_PWRUP
+
+#ifdef IGNORE_TSEVENTS_PWRUP
+#include <linux/miscdevice.h>
+#include <linux/uaccess.h>
+
+#define ECS_IOCTL_APP_SET_QTSFLAG	88
+#define DEBUG	0
+
+static atomic_t qts_flag;
+
+static int qts_open(struct inode *inode, struct file *file);
+static int qts_release(struct inode *inode, struct file *file);
+static int
+qts_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
+	   unsigned long arg);
+
+static const struct file_operations qts_fops = {
+	.owner = THIS_MODULE,
+	.open = qts_open,
+	.release = qts_release,
+	.ioctl = qts_ioctl,
+};
+
+static struct miscdevice qts_device = {
+	.minor = MISC_DYNAMIC_MINOR,
+	.name = "qts_dev",
+	.fops = &qts_fops,
+};
+
+#endif
 
 struct qtm_object {
 	struct qtm_obj_entry		entry;
@@ -84,6 +115,58 @@ static struct workqueue_struct *qtouch_ts_wq;
 
 static uint32_t qtouch_tsdebug;
 module_param_named(tsdebug, qtouch_tsdebug, uint, 0664);
+
+#ifdef IGNORE_TSEVENTS_PWRUP
+static int qts_open(struct inode *inode, struct file *file)
+{
+#if DEBUG
+	pr_info("%s\n", __func__);
+#endif
+	return 0;
+}
+
+static int qts_release(struct inode *inode, struct file *file)
+{
+#if DEBUG
+	pr_info("%s\n", __func__);
+#endif
+	atomic_set(&qts_flag, 1);
+
+	return 0;
+}
+
+static int
+qts_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
+	   unsigned long arg)
+{
+	void __user *argp = (void __user *)arg;
+	short flag;
+#if DEBUG
+	pr_info("%s\n", __func__);
+#endif
+
+	switch (cmd) {
+	case ECS_IOCTL_APP_SET_QTSFLAG:
+		if (copy_from_user(&flag, argp, sizeof(flag))) {
+			atomic_set(&qts_flag, 1);
+			return -EFAULT;
+		}
+		if (flag < 0 || flag > 1) {
+			atomic_set(&qts_flag, 1);
+			return -EINVAL;
+		}
+		atomic_set(&qts_flag, flag);
+		break;
+	default:
+		atomic_set(&qts_flag, 1);
+		return -EINVAL;
+		break;
+	}
+
+	return 0;
+}
+
+#endif
 
 static irqreturn_t qtouch_ts_irq_handler(int irq, void *dev_id)
 {
@@ -731,6 +814,19 @@ static int do_touch_multi_msg(struct qtouch_ts_data *ts, struct qtm_object *obj,
 	for (i = 0; i < ts->pdata->multi_touch_cfg.num_touch; i++) {
 		if (ts->finger_data[i].down == 0)
 			continue;
+#ifdef IGNORE_TSEVENTS_PWRUP
+		if (atomic_read(&qts_flag)) {
+			input_report_abs(ts->input_dev, ABS_MT_TOUCH_MAJOR,
+					 ts->finger_data[i].z_data);
+			input_report_abs(ts->input_dev, ABS_MT_WIDTH_MAJOR,
+					 ts->finger_data[i].w_data);
+			input_report_abs(ts->input_dev, ABS_MT_POSITION_X,
+					 ts->finger_data[i].x_data);
+			input_report_abs(ts->input_dev, ABS_MT_POSITION_Y,
+					 ts->finger_data[i].y_data);
+			input_mt_sync(ts->input_dev);
+		}
+#else
 		input_report_abs(ts->input_dev, ABS_MT_TOUCH_MAJOR,
 				 ts->finger_data[i].z_data);
 		input_report_abs(ts->input_dev, ABS_MT_WIDTH_MAJOR,
@@ -740,6 +836,7 @@ static int do_touch_multi_msg(struct qtouch_ts_data *ts, struct qtm_object *obj,
 		input_report_abs(ts->input_dev, ABS_MT_POSITION_Y,
 				 ts->finger_data[i].y_data);
 		input_mt_sync(ts->input_dev);
+#endif
 	}
 	input_sync(ts->input_dev);
 
@@ -977,22 +1074,24 @@ static int qtouch_process_info_block(struct qtouch_ts_data *ts)
 	ts->eeprom_checksum = ts->pdata->nv_checksum;
 
 /*below: use different setting for vf.5 && vf.6*/
-	if ((qtm_info.version == 0xf5) || \
+	if ((qtm_info.family_id == 0x80) && \
+		((qtm_info.version == 0xf5) || \
 		(qtm_info.version == 0xf6) || \
-		(qtm_info.version == 0x14)) {
+		(qtm_info.version == 0x12) || \
+		(qtm_info.version == 0x14))) {
 		printk(KERN_INFO "use setting for old touch firmware \n");
-		ts->pdata->power_cfg.active_acq_int = 0x0a;
+		/* ts->pdata->power_cfg.active_acq_int = 0x0a; */
 
-		ts->pdata->acquire_cfg.touch_autocal = 0;
-		ts->pdata->acquire_cfg.anti_cal_sthr = 0x14;
+		/* ts->pdata->acquire_cfg.touch_autocal = 0; */
+		/* ts->pdata->acquire_cfg.anti_cal_sthr = 0x14; */
 
 		ts->pdata->multi_touch_cfg.burst_len = 0x21;
-		ts->pdata->multi_touch_cfg.tch_det_thr = 0x25;
+		/* ts->pdata->multi_touch_cfg.tch_det_thr = 0x25; */
 
-		ts->pdata->noise_suppression_cfg.gcaf_num_active = 0x03;
-		ts->pdata->noise_suppression_cfg.gcaf_num_idle = 0;
+		/* ts->pdata->noise_suppression_cfg.gcaf_num_active = 0x03; */
+		/* ts->pdata->noise_suppression_cfg.gcaf_num_idle = 0; */
 
-		ts->pdata->cte_config_cfg.active_gcaf_depth = 0x10;
+		/* ts->pdata->cte_config_cfg.active_gcaf_depth = 0x10; */
 	}
 	return 0;
 
@@ -1135,6 +1234,16 @@ static int qtouch_ts_probe(struct i2c_client *client,
 	memset(&ts->finger_data[0], 0,
 		(sizeof(struct coordinate_map) *
 		ts->pdata->multi_touch_cfg.num_touch));
+
+#ifdef IGNORE_TSEVENTS_PWRUP
+	err = misc_register(&qts_device);
+	if (err) {
+		pr_err("qtouch_ts_probe: qts_device register failed\n");
+		atomic_set(&qts_flag, 1); /* Enable TS Event */
+	} else {
+		atomic_set(&qts_flag, 0); /* Disable TS Event */
+	}
+#endif
 
 	err = input_register_device(ts->input_dev);
 	if (err != 0) {
