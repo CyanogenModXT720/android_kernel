@@ -307,7 +307,7 @@ enum {
 
 	CPCAP_IOCTL_NUM_TTA__START,
 	CPCAP_IOCTL_NUM_TTA_STATUS_GET,
-	CPCAP_IOCTL_NUM_TTA_REDETECT,
+  CPCAP_IOCTL_NUM_TTA_CHARGER_CONTROL,
 	CPCAP_IOCTL_NUM_TTA__END,
 };
 
@@ -482,6 +482,14 @@ enum cpcap_tta_state {
 	TTA_NOT_DETECTED,
 };
 
+enum cpcap_tta_control {
+  TTA_REDETECT,
+  TTA_REDETCT_SLOWLY,    
+  TTA_DISABLE,
+  TTA_ENABLE,
+  TTA_UNKOWN,
+};
+
 struct cpcap_spi_init_data {
 	enum cpcap_reg reg;
 	unsigned short data;
@@ -651,8 +659,8 @@ struct cpcap_regacc {
 
 #define CPCAP_AUDIO_REG_DEBUG
 
-#define CPCAP_IOCTL_TTA_REDETECT \
-       _IOWR(0, CPCAP_IOCTL_NUM_TTA_REDETECT, unsigned int)
+#define CPCAP_IOCTL_TTA_CHARGER_CONTROL \
+       _IOWR(0, CPCAP_IOCTL_NUM_TTA_CHARGER_CONTROL, enum cpcap_tta_control*)    
 
 #ifdef __KERNEL__
 struct cpcap_device {
@@ -750,7 +758,7 @@ int cpcap_direct_misc_write(unsigned short reg, unsigned short value,\
 #ifdef CONFIG_TTA_CHARGER
 void enable_tta(void);
 void disable_tta(void);
-void force_to_detect_tta(void);
+void force_to_detect_tta(unsigned int time);
 void disable_tta_irq(void);
 unsigned char value_of_gpio34(void);
 #endif

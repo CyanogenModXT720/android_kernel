@@ -116,6 +116,7 @@ struct cpcap_usb_det_data {
 	struct device dummy_dev;
 #ifdef CONFIG_TTA_CHARGER
 	struct tta_sense_data sense_tta;
+	unsigned char is_tta;
 #endif
 };
 
@@ -162,9 +163,9 @@ void disable_tta(void)
 }
 EXPORT_SYMBOL(disable_tta);
 
-void force_to_detect_tta(void)
+void force_to_detect_tta(unsigned int time)
 {
-  schedule_delayed_work(&temp_data->work, msecs_to_jiffies(10));
+  schedule_delayed_work(&temp_data->work, msecs_to_jiffies(time));
 }
 EXPORT_SYMBOL(force_to_detect_tta);
 
@@ -498,7 +499,8 @@ static void detection_work(struct work_struct *work)
 			!(data->sense_tta.gpio_val) &&
 			!(data->sense & CPCAP_BIT_SESSVLD_S)) {
 			notify_accy(data, CPCAP_ACCY_TTA_CHARGER);
-
+			disable_irq(gpio_to_irq(SHOLEST_TTA_CHRG_DET_N_GPIO));
+			data->is_tta = 1;
 			cpcap_irq_clear(data->cpcap, CPCAP_IRQ_DMI);
 			cpcap_irq_unmask(data->cpcap, CPCAP_IRQ_DMI);
 			data->state = TTA;
@@ -568,11 +570,18 @@ static void detection_work(struct work_struct *work)
 			 * See cpcap_usb_det_suspend() for details.
 			 */
 			cpcap_irq_unmask(data->cpcap, CPCAP_IRQ_VBUSVLD);
+#ifdef CONFIG_TTA_CHARGER      
+			if (data->is_tta) {
+				enable_irq(gpio_to_irq(SHOLEST_TTA_CHRG_DET_N_GPIO));
+				data->is_tta = 0;
+			}
+#endif      
 		}
 		break;
 #ifdef CONFIG_TTA_CHARGER
 	case TTA:
 		get_sense(data);
+
 		if ((data->sense_tta.dplus != data->sense_tta.dminus) ||
 			(data->sense_tta.gpio_val)) {
 			cpcap_irq_mask(data->cpcap, CPCAP_IRQ_DMI);
