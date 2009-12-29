@@ -819,7 +819,7 @@ int venc_tv_connect(void)
 		venc_enable_clocks(1);
 
 		bu_x = venc_read_reg(VENC_TVDETGP_INT_START_STOP_X);
-		bu_y = venc_read_reg(VENC_TVDETGP_INT_START_STOP_X);
+		bu_y = venc_read_reg(VENC_TVDETGP_INT_START_STOP_Y);
 		bu_ctrl = venc_read_reg(VENC_GEN_CTRL);
 
 		venc_write_reg(VENC_TVDETGP_INT_START_STOP_X, 0x00140001);
@@ -851,7 +851,7 @@ void venc_tv_disconnect(void)
 	DSSDBG("tv_disconnect\n");
 
 	bu_ctrl = venc_read_reg(VENC_GEN_CTRL);
-	venc_write_reg(VENC_GEN_CTRL, (bu_ctrl & ~(0x00010001)));
+	venc_write_reg(VENC_GEN_CTRL, (bu_ctrl | 0x00010001));
 
 }
 EXPORT_SYMBOL(venc_tv_disconnect);
