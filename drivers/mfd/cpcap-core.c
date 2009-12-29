@@ -530,10 +530,40 @@ static int tta_ioctl(unsigned int cmd, unsigned long arg)
 	disable_tta();
     }
     break;
-  case CPCAP_IOCTL_TTA_REDETECT:
+
+  case CPCAP_IOCTL_TTA_CHARGER_CONTROL:
+    {
+      enum cpcap_tta_control control;      
+		  if (copy_from_user((void *)&control, (void *)arg,
+			  	   sizeof(control)))
+			  return -EFAULT;
+
+      switch(control) {
+        case TTA_REDETECT:
+          	disable_tta();
+        	  enable_tta();
+	          force_to_detect_tta(10);
+        break;
+
+        case TTA_REDETCT_SLOWLY:
+          	disable_tta();
+        	  enable_tta();
+	          force_to_detect_tta(1000);
+        break;        
+        
+        case TTA_DISABLE:
 	disable_tta();
+        break;
+        
+        case TTA_ENABLE:
 	enable_tta();
-	force_to_detect_tta();
+        break;
+
+        default:
+            dev_err(&(misc_cpcap->spi->dev),"Unknown IOCTL for TTA charger\n\n");          
+          break;
+      }
+    }
     break;
 
   default:

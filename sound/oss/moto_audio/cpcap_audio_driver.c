@@ -579,7 +579,9 @@ static void cpcap_audio_set_output_amp(struct cpcap_audio_state *state)
 			& (CPCAP_BIT_HS_L_EN | CPCAP_BIT_HS_R_EN)) {
 			cpcap_regacc_write(state->cpcap, CPCAP_REG_RXOA,
 			CPCAP_BIT_ST_HS_CP_EN, CPCAP_BIT_ST_HS_CP_EN);
-			mdelay(1);
+			/* HS plug-in noise */
+			/*mdelay(1);*/			
+			mdelay(200);
 		}
 	}
 

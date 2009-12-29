@@ -2332,7 +2332,11 @@ static void __exit audio_exit(void)
 static void audio_callback(int status)
 {
 	mutex_lock(&audio_lock);
+#ifdef CONFIG_TVOUT_SHOLEST
+	if (status == 1 || status == 2 || status == 32) {
+#else
 	if (status == 1 || status == 2) {
+#endif
 		if (cpcap_audio_state.stdac_primary_speaker ==
 					CPCAP_AUDIO_OUT_STEREO_HEADSET) {
 			cpcap_audio_state.stdac_primary_speaker =
