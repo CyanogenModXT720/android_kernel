@@ -174,12 +174,13 @@ static const struct venc_config venc_config_pal_trm = {
 	.fid_int_start_x__fid_int_start_y	= 0x0001008A,
 	.fid_int_offset_y__fid_ext_start_x	= 0x002E0138,
 	.fid_ext_start_y__fid_ext_offset_y	= 0x01380001,
-
-	.tvdetgp_int_start_stop_x		= 0x00140001,
-	.tvdetgp_int_start_stop_y		= 0x00010001,
 #ifdef CONFIG_TVOUT_SHOLEST
+	.tvdetgp_int_start_stop_x		= 0x00090080,
+	.tvdetgp_int_start_stop_y		= 0x00010001,
 	.gen_ctrl				= 0x00FF0001,
 #else
+	.tvdetgp_int_start_stop_x		= 0x00140001,
+	.tvdetgp_int_start_stop_y		= 0x00010001,
 	.gen_ctrl				= 0x00FF0000,
 #endif
 };
@@ -819,7 +820,7 @@ int venc_tv_connect(void)
 		venc_enable_clocks(1);
 
 		bu_x = venc_read_reg(VENC_TVDETGP_INT_START_STOP_X);
-		bu_y = venc_read_reg(VENC_TVDETGP_INT_START_STOP_X);
+		bu_y = venc_read_reg(VENC_TVDETGP_INT_START_STOP_Y);
 		bu_ctrl = venc_read_reg(VENC_GEN_CTRL);
 
 		venc_write_reg(VENC_TVDETGP_INT_START_STOP_X, 0x00140001);
@@ -851,7 +852,7 @@ void venc_tv_disconnect(void)
 	DSSDBG("tv_disconnect\n");
 
 	bu_ctrl = venc_read_reg(VENC_GEN_CTRL);
-	venc_write_reg(VENC_GEN_CTRL, (bu_ctrl & ~(0x00010001)));
+	venc_write_reg(VENC_GEN_CTRL, (bu_ctrl | 0x00010001));
 
 }
 EXPORT_SYMBOL(venc_tv_disconnect);

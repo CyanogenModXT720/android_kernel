@@ -66,6 +66,8 @@ struct qtouch_ts_data {
 	uint32_t			last_keystate;
 	uint16_t			eeprom_checksum;
 	uint8_t			    checksum_cnt;
+	int				x_delta;
+	int				y_delta;
 
 	/* Note: The message buffer is reused for reading different messages.
 	 * MUST enforce that there is no concurrent access to msg_buf. */
@@ -406,6 +408,20 @@ static int qtouch_hw_init(struct qtouch_ts_data *ts)
 		}
 	}
 
+	/* configure the COM CONFIG support */
+	obj = find_obj(ts, QTM_OBJ_SPT_COM_CONFIG);
+	if (obj && obj->entry.num_inst > 0) {
+		ret = qtouch_write_addr(ts, obj->entry.addr,
+					&ts->pdata->com_cfg,
+					min(sizeof(ts->pdata->com_cfg),
+					    obj->entry.size));
+		if (ret != 0) {
+			pr_err("%s: Can't write the COM CONFIG config\n",
+			       __func__);
+			return ret;
+		}
+	}
+
 	/* configure the GPIO PWM support */
 	obj = find_obj(ts, QTM_OBJ_SPT_GPIO_PWM);
 	if (obj && obj->entry.num_inst > 0) {
@@ -513,6 +529,20 @@ static int qtouch_hw_init(struct qtouch_ts_data *ts)
 					    obj->entry.size));
 		if (ret != 0) {
 			pr_err("%s: Can't write the noise suppression config\n",
+			       __func__);
+			return ret;
+		}
+	}
+
+	/* configure the user data table */
+	obj = find_obj(ts, QTM_OBJ_CPT_USERDATA);
+	if (obj && obj->entry.num_inst > 0) {
+		ret = qtouch_write_addr(ts, obj->entry.addr,
+					&ts->pdata->userdata,
+					min(sizeof(ts->pdata->userdata),
+					    obj->entry.size));
+		if (ret != 0) {
+			pr_err("%s: Can't write the user data\n",
 			       __func__);
 			return ret;
 		}
@@ -671,9 +701,23 @@ static int do_touch_multi_msg(struct qtouch_ts_data *ts, struct qtm_object *obj,
 
 	down = !(msg->status & QTM_TOUCH_MULTI_STATUS_RELEASE);
 
-	ts->finger_data[finger].x_data = x;
-	ts->finger_data[finger].y_data = y;
-	ts->finger_data[finger].w_data = width;
+	/* The chip may report erroneous points way
+	beyond what a user could possibly perform so we filter
+	these out */
+	if (ts->finger_data[finger].down &&
+			(abs(ts->finger_data[finger].x_data - x) > ts->x_delta ||
+			abs(ts->finger_data[finger].y_data - y) > ts->y_delta)) {
+				down = 0;
+				if (qtouch_tsdebug & 2)
+					pr_info("%s: x0 %i x1 %i y0 %i y1 %i\n",
+						__func__,
+						ts->finger_data[finger].x_data, x,
+						ts->finger_data[finger].y_data, y);
+	} else {
+		ts->finger_data[finger].x_data = x;
+		ts->finger_data[finger].y_data = y;
+		ts->finger_data[finger].w_data = width;
+	}
 
 	/* The touch IC will not give back a pressure of zero
 	   so send a 0 when a liftoff is produced */
@@ -932,6 +976,24 @@ static int qtouch_process_info_block(struct qtouch_ts_data *ts)
 
 	ts->eeprom_checksum = ts->pdata->nv_checksum;
 
+/*below: use different setting for vf.5 && vf.6*/
+	if ((qtm_info.version == 0xf5) || \
+		(qtm_info.version == 0xf6) || \
+		(qtm_info.version == 0x14)) {
+		printk(KERN_INFO "use setting for old touch firmware \n");
+		ts->pdata->power_cfg.active_acq_int = 0x0a;
+
+		ts->pdata->acquire_cfg.touch_autocal = 0;
+		ts->pdata->acquire_cfg.anti_cal_sthr = 0x14;
+
+		ts->pdata->multi_touch_cfg.burst_len = 0x21;
+		ts->pdata->multi_touch_cfg.tch_det_thr = 0x25;
+
+		ts->pdata->noise_suppression_cfg.gcaf_num_active = 0x03;
+		ts->pdata->noise_suppression_cfg.gcaf_num_idle = 0;
+
+		ts->pdata->cte_config_cfg.active_gcaf_depth = 0x10;
+	}
 	return 0;
 
 err_no_checksum:
@@ -980,6 +1042,8 @@ static int qtouch_ts_probe(struct i2c_client *client,
 	ts->client = client;
 	i2c_set_clientdata(client, ts);
 	ts->checksum_cnt = 0;
+	ts->x_delta = ts->pdata->x_delta;
+	ts->y_delta = ts->pdata->y_delta;
 
 	ts->input_dev = input_allocate_device();
 	if (ts->input_dev == NULL) {
@@ -1138,10 +1202,9 @@ static int qtouch_ts_suspend(struct i2c_client *client, pm_message_t mesg)
 
 	disable_irq_nosync(ts->client->irq);
 	ret = cancel_work_sync(&ts->work);
-	if (ret) {
-		pr_info("%s: Not Suspending\n", __func__);
+	if (ret) { /* if work was pending disable-count is now 2 */
+		pr_info("%s: Pending work item\n", __func__);
 		enable_irq(ts->client->irq);
-		return -EBUSY;
 	}
 
 	ret = qtouch_power_config(ts, 0);

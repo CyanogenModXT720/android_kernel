@@ -29,6 +29,8 @@
 #define TOD1_MASK 0x00FF
 #define TOD2_MASK 0x01FF
 
+#define SET_DEFAULT_YEAR_BOOTUP 2000
+
 struct cpcap_time {
 	unsigned short day;
 	unsigned short tod1;
@@ -260,6 +262,10 @@ static void cpcap_rtc_irq(enum cpcap_irqs irq, void *data)
 static int __devinit cpcap_rtc_probe(struct platform_device *pdev)
 {
 	struct cpcap_rtc *rtc;
+#ifdef SET_DEFAULT_YEAR_BOOTUP
+	struct rtc_time tm;
+	int err;
+#endif
 
 	rtc = kzalloc(sizeof(*rtc), GFP_KERNEL);
 	if (!rtc)
@@ -281,7 +287,23 @@ static int __devinit cpcap_rtc_probe(struct platform_device *pdev)
 	cpcap_irq_clear(rtc->cpcap, CPCAP_IRQ_1HZ);
 	cpcap_irq_register(rtc->cpcap, CPCAP_IRQ_1HZ, cpcap_rtc_irq, rtc);
 	cpcap_irq_mask(rtc->cpcap, CPCAP_IRQ_1HZ);
-
+#ifdef SET_DEFAULT_YEAR_BOOTUP
+	err = cpcap_rtc_read_time(&pdev->dev, &tm);
+	if (err == 0) {
+		if (tm.tm_year < (SET_DEFAULT_YEAR_BOOTUP - 1900)) {
+			tm.tm_year = SET_DEFAULT_YEAR_BOOTUP - 1900;
+			tm.tm_mon = 0;
+			tm.tm_mday = 1;
+			tm.tm_hour = 0;
+			tm.tm_min = 0;
+			tm.tm_sec = 0;
+			err = cpcap_rtc_set_time(&pdev->dev, &tm);
+		}
+	}
+	if (err)
+		printk(KERN_WARNING "CPCAP Date/time setting failed. %d.\n",
+			err);
+#endif
 	return 0;
 }
 

@@ -321,7 +321,7 @@ static int sholest_touch_reset(void)
 	gpio_set_value(SHOLEST_TOUCH_RESET_N_GPIO, 0);
 	msleep(20);
 	gpio_set_value(SHOLEST_TOUCH_RESET_N_GPIO, 1);
-	msleep(20);
+	msleep(45);
 
 	return 0;
 }
@@ -547,14 +547,14 @@ static struct vkey sholest_touch_vkeys[] = {
 	},
 	{
 		.code		= KEY_BACK,
-		.center_x	= 304,
+		.center_x	= 314,
 		.center_y	= 906,
 		.width		= 89,
 		.height		= 57,
 	},
 	{
 		.code		= KEY_SEARCH,
-		.center_x	= 439,
+		.center_x	= 449,
 		.center_y	= 906,
 		.width		= 63,
 		.height		= 57,
@@ -604,6 +604,8 @@ static struct qtouch_ts_platform_data sholest_ts_platform_data = {
 	.abs_max_p	= 255,
 	.abs_min_w	= 0,
 	.abs_max_w	= 15,
+	.x_delta	= 400,
+	.y_delta	= 250,
 	.nv_checksum	= 0xf429,
 	.fuzz_x		= 0,
 	.fuzz_y		= 0,
@@ -615,38 +617,30 @@ static struct qtouch_ts_platform_data sholest_ts_platform_data = {
 		.keys		= NULL,
 		.num_keys	= 0,
 	},
-#if 1
 	.power_cfg	= {
 		.idle_acq_int	= 0x0a,
-		.active_acq_int	= 0x0a,
+		.active_acq_int	= 0xff,
 		.active_idle_to	= 0x32,
 	},
-#else
-	.power_cfg      = {
-		.idle_acq_int   = 0xff,
-		.active_acq_int = 0xff,
-		.active_idle_to = 0x32,
-	}
-#endif
 	.acquire_cfg	= {
 		.charge_time	= 0x08,
 		.reserve0	= 0x00,
 		.touch_drift	= 0x0a,
 		.drift_susp	= 0x01,
-		.touch_autocal	= 0,
+		.touch_autocal	= 0x32,
 		.sync		= 0,
 		.anti_cal_susp	= 0x05,
-		.anti_cal_sthr	= 0x14,
+		.anti_cal_sthr	= 0x00,
 	},
 	.multi_touch_cfg	= {
-		.ctrl		= 0x03,
+		.ctrl		= 0x0b,
 		.x_origin	= 0,
 		.y_origin	= 0,
 		.x_size		= 0x12,
 		.y_size		= 0x0a,
 		.aks_cfg	= 0,
-		.burst_len	= 0x21,
-		.tch_det_thr	= 0x25,
+		.burst_len	= 0x11,
+		.tch_det_thr	= 0x22,
 		.tch_det_int	= 0x02,
 		.orient		= 0,
 		.mrg_to		= 0x19,
@@ -659,10 +653,10 @@ static struct qtouch_ts_platform_data sholest_ts_platform_data = {
 		.amp_hyst	= 0,
 		.x_res		= 0x0000,
 		.y_res		= 0x0000,
-		.x_low_clip	= 0x00,
+		.x_low_clip	= 0x05,
 		.x_high_clip	= 0x00,
 		.y_low_clip	= 0x00,
-		.y_high_clip	= 0x00,
+		.y_high_clip	= 0x04,
 		.x_edge_ori	= 0x00,
 		.x_edge_cdist	= 0x00,
 		.y_edge_ori	= 0x00,
@@ -698,6 +692,14 @@ static struct qtouch_ts_platform_data sholest_ts_platform_data = {
 		.duty_cycle_1		= 0,
 		.duty_cycle_2		= 0,
 		.duty_cycle_3		= 0,
+		.trigger_0		= 0,
+		.trigger_1		= 0,
+		.trigger_2		= 0,
+		.trigger_3		= 0,
+	},
+	.com_cfg = {
+		.ctrl		= 0x00,
+		.cmd		= 0x00,
 	},
 	.grip_suppression_cfg = {
 		.ctrl		= 0x00,
@@ -717,7 +719,7 @@ static struct qtouch_ts_platform_data sholest_ts_platform_data = {
 		.reserve0		= 0x0000,
 		.gcaf_upper_limit	= 0x0019,
 		.gcaf_lower_limit	= 0xffe7,
-		.gcaf_num_active	= 0x03,
+		.gcaf_num_active	= 0x04,
 		.noise_threshold	= 0x1e,
 		.reserve1		= 0,
 		.freq_hop_scale		= 0x01,
@@ -726,7 +728,7 @@ static struct qtouch_ts_platform_data sholest_ts_platform_data = {
 		.burst_freq_2		= 0x0f,
 		.burst_freq_3		= 0x13,
 		.burst_freq_4		= 0x15,
-		.gcaf_num_idle		= 0,
+		.gcaf_num_idle		= 0x04,
 	},
 	.one_touch_gesture_proc_cfg = {
 		.ctrl			= 0,
@@ -765,13 +767,24 @@ static struct qtouch_ts_platform_data sholest_ts_platform_data = {
 		.command		= 0,
 		.mode			= 3,
 		.idle_gcaf_depth	= 4,
-		.active_gcaf_depth	= 0x10,
+		.active_gcaf_depth	= 0x20,
+		.voltage		= 0x1e,
 	},
 	.noise1_suppression_cfg = {
 		.ctrl		= 0x00,
 		.reserved	= 0x00,
 		.atchthr	= 0x00,
 		.duty_cycle	= 0x00,
+	},
+	.userdata = {
+		.data_0		= 0x49,
+		.data_1		= 0x00,
+		.data_2		= 0x4C,
+		.data_3		= 0x00,
+		.data_4		= 0x48,
+		.data_5		= 0x00,
+		.data_6		= 0x4A,
+		.data_7		= 0x00,
 	},
 	.vkeys			= {
 		.count		= ARRAY_SIZE(sholest_touch_vkeys),
@@ -874,9 +887,11 @@ static struct i2c_board_info __initdata sholest_i2c_bus3_board_info[] = {
 		.platform_data = &sholest_hplens_platform_data,
 	},
 #endif
+#ifdef CONFIG_HDMI_TDA19989
 	{
 		I2C_BOARD_INFO("tda19989", 0x70),
 	},
+#endif
 #if defined(CONFIG_LEDS_BD7885)
 	{
 		I2C_BOARD_INFO(BD7885_DEVICE_NAME, BD7885_SLAVE_ADDR),

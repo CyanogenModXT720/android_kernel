@@ -55,10 +55,11 @@ enum {
 	QTM_OBJ_PROCI_TWO_TOUCH_GESTURE_PROC = 27,
 	QTM_OBJ_SPT_CTE_CONFIG		= 28,
 	QTM_OBJ_NOISESUPPRESSION_1  = 36,
-	QTM_OBJ_DEBUG_DIAGNOSTIC         = 37,
+	QTM_OBJ_DEBUG_DIAGNOSTIC        = 37,
+	QTM_OBJ_CPT_USERDATA            = 38,
 
 	/* Max number of objects currently defined */
-	QTM_OBP_MAX_OBJECT_NUM = QTM_OBJ_DEBUG_DIAGNOSTIC + 1,
+	QTM_OBP_MAX_OBJECT_NUM = QTM_OBJ_CPT_USERDATA + 1,
 };
 
 /* OBP structures as defined by the wire protocol. */
@@ -237,6 +238,12 @@ struct qtm_proci_linear_tbl_cfg {
 	uint8_t			y_segment[16];
 } __attribute__ ((packed));
 
+/* SPT_COM_CONFIG_T18*/
+struct qtm_spt_com_cfg {
+	uint8_t			ctrl;
+	uint8_t			cmd;
+} __attribute__ ((packed));
+
 /* SPT_GPIOPWM_T19*/
 struct qtm_spt_gpio_pwm_cfg {
 	uint8_t			ctrl;
@@ -251,6 +258,10 @@ struct qtm_spt_gpio_pwm_cfg {
 	uint8_t			duty_cycle_1;
 	uint8_t			duty_cycle_2;
 	uint8_t			duty_cycle_3;
+	uint8_t			trigger_0;
+	uint8_t			trigger_1;
+	uint8_t			trigger_2;
+	uint8_t			trigger_3;
 } __attribute__ ((packed));
 
 /* PROCI_GRIPFACESUPPRESSION_T20 */
@@ -331,6 +342,7 @@ struct qtm_spt_cte_config_cfg {
 	uint8_t			mode;
 	uint8_t			idle_gcaf_depth;
 	uint8_t			active_gcaf_depth;
+	uint8_t			voltage;
 } __attribute__ ((packed));
 
 /* QTM_OBJ_NOISESUPPRESSION_1 */
@@ -339,6 +351,18 @@ struct qtm_proci_noise1_suppression_cfg {
 	uint8_t			reserved;
 	uint8_t			atchthr;
 	uint8_t			duty_cycle;
+} __attribute__ ((packed));
+
+/* QTM_OBJ_CPT_USERDATA_T38 */
+struct qtm_spt_userdata {
+	uint8_t			data_0;
+	uint8_t			data_1;
+	uint8_t			data_2;
+	uint8_t			data_3;
+	uint8_t			data_4;
+	uint8_t			data_5;
+	uint8_t			data_6;
+	uint8_t			data_7;
 } __attribute__ ((packed));
 
 /*******************************/
@@ -391,6 +415,9 @@ struct qtouch_ts_platform_data {
 	uint32_t		abs_min_w;
 	uint32_t		abs_max_w;
 
+	uint32_t		x_delta;
+	uint32_t		y_delta;
+
 	uint16_t		nv_checksum;
 
 	uint32_t		fuzz_x;
@@ -413,6 +440,7 @@ struct qtouch_ts_platform_data {
 	struct qtm_procg_sig_filter_cfg		sig_filter_cfg;
 	struct qtm_proci_linear_tbl_cfg		linear_tbl_cfg;
 	struct qtm_proci_grip_suppression_cfg	    grip_suppression_cfg;
+	struct qtm_spt_com_cfg			        com_cfg;
 	struct qtm_spt_gpio_pwm_cfg			        gpio_pwm_cfg;
 	struct qtm_procg_noise_suppression_cfg	    noise_suppression_cfg;
 	struct qtm_proci_one_touch_gesture_proc_cfg	\
@@ -421,6 +449,7 @@ struct qtouch_ts_platform_data {
 	struct qtm_proci_two_touch_gesture_proc_cfg	two_touch_gesture_proc_cfg;
 	struct qtm_spt_cte_config_cfg			    cte_config_cfg;
 	struct qtm_proci_noise1_suppression_cfg     noise1_suppression_cfg;
+	struct qtm_spt_userdata     userdata;
 };
 
 #endif /* _LINUX_QTOUCH_OBP_TS_H */
