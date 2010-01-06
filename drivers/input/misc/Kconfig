@@ -271,4 +271,12 @@ config INPUT_HALLEFFECT_BU52014HV
 	  effect sensor.
 
 	  If unsure, say N.
+          
+config DISABLE_IRQ_WAKE_KPD
+	tristate "Disable IRQ wakeup on Keypad"
+	default y
+	help	
+	  Say Y here if you wish not to let Keypad input wake up the phone
+	  from sleep state.
+
 endif
