@@ -291,9 +291,11 @@ static const struct sample_rate_info_t valid_sample_rates[] = {
 	{.rate = 48000, .cpcap_audio_rate = CPCAP_AUDIO_STDAC_RATE_48000_HZ},
 };
 
+/*
 static DEFINE_MUTEX(audio_write_lock);
 static DEFINE_MUTEX(audio_read_lock);
 static unsigned long flags;
+*/
 static int read_buf_full;
 static int primary_spkr_setting = CPCAP_AUDIO_OUT_NONE;
 static int secondary_spkr_setting = CPCAP_AUDIO_OUT_NONE;
@@ -1973,6 +1975,7 @@ static ssize_t audio_write(struct file *file, const char *buffer, size_t count,
 								loff_t *nouse)
 {
 	int chunksize, ret = 0;
+	unsigned long flags;
 	const char *buffer0 = buffer;
 	struct inode *inode = (struct inode *)file->private_data;
 	int minor = MINOR(inode->i_rdev);
@@ -1980,7 +1983,7 @@ static ssize_t audio_write(struct file *file, const char *buffer, size_t count,
 			state.stdac_out_stream : state.codec_out_stream;
 
 	mutex_lock(&audio_lock);
-	mutex_lock(&audio_write_lock);
+	/*mutex_lock(&audio_write_lock);*/
 
 	if (minor == state.dev_dsp) {
 		if (!str->active) {
@@ -2074,7 +2077,7 @@ static ssize_t audio_write(struct file *file, const char *buffer, size_t count,
 		buf->offset = 0;
 
 		/*spin_lock_irqsave(&audio_write_lock, flags);*/
-
+		local_irq_save(flags);
 		if (++str->usr_head >= str->nbfrags)
 			str->usr_head = 0;
 
@@ -2083,12 +2086,13 @@ static ssize_t audio_write(struct file *file, const char *buffer, size_t count,
 		ret = audio_process_buf(str, inode);
 
 		/*spin_unlock_irqrestore(&audio_write_lock, flags);*/
+		local_irq_restore(flags);
 	}
 
 	if (buffer - buffer0)
 		ret = buffer - buffer0;
 
-	mutex_unlock(&audio_write_lock);
+	/*mutex_unlock(&audio_write_lock);*/
 
 out:
 	mutex_unlock(&audio_lock);
@@ -2257,7 +2261,7 @@ static ssize_t audio_codec_read(struct file *file, char *buffer, size_t size,
 						 AUDIO_TIMEOUT);
 		mutex_lock(&audio_lock);
 
-		mutex_lock(&audio_read_lock);
+		/*mutex_lock(&audio_read_lock);*/
 
 		read_buf_full--;
 
@@ -2267,7 +2271,7 @@ static ssize_t audio_codec_read(struct file *file, char *buffer, size_t size,
 		if (copy_to_user(buffer, buf->data, str->fragsize)) {
 			AUDIO_ERROR_LOG("Audio: CopyTo User failed \n");
 			ret = -EFAULT;
-			mutex_unlock(&audio_read_lock);
+			/*mutex_unlock(&audio_read_lock);*/
 			goto err;
 		}
 
@@ -2276,7 +2280,7 @@ static ssize_t audio_codec_read(struct file *file, char *buffer, size_t size,
 
 		size -= str->fragsize;
 
-		mutex_unlock(&audio_read_lock);
+		/*mutex_unlock(&audio_read_lock);*/
 	}
 
 	ret = local_size;
