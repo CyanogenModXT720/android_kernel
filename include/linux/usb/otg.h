@@ -132,6 +132,7 @@ otg_start_srp(struct otg_transceiver *otg)
 #ifdef CONFIG_TTA_CHARGER
 extern void enable_musb_int(void);
 extern void disable_musb_int(void);
+extern unsigned char is_emu_accessory(void);
 #endif
 
 /* for OTG controller drivers (and maybe other stuff) */
