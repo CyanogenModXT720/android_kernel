@@ -458,6 +458,13 @@ static void detection_work(struct work_struct *work)
 
 	case SAMPLE_1:
 		get_sense(data);
+#ifdef CONFIG_TTA_CHARGER
+    if (!(data->sense_tta.gpio_val) &&
+				(data->sense & CPCAP_BIT_SESSVLD_S)) {
+      disable_tta();
+      enable_tta();
+    }
+#endif    
 		data->state = SAMPLE_2;
 		schedule_delayed_work(&data->work, msecs_to_jiffies(100));
 		break;
