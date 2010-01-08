@@ -395,7 +395,7 @@ int ispccdc_request(void)
 							ISPCTRL_CCDC_CLK_EN |
 							ISPCTRL_SBL_WR1_RAM_EN,
 							ISP_CTRL);
-	omap_writel((omap_readl(ISPCCDC_CFG)) | ISPCCDC_CFG_VDLC, ISPCCDC_CFG);
+	omap_writel((omap_readl(ISPCCDC_CFG) | ISPCCDC_CFG_VDLC), ISPCCDC_CFG);
 	spin_unlock(&ispccdc_obj.ispccdc_lock);
 	return 0;
 }
@@ -680,7 +680,7 @@ int ispccdc_config_datapath(enum ccdc_input input, enum ccdc_output output)
 		syn_mode |= ISPCCDC_SYN_MODE_WEN;
 		syn_mode &= ~ISPCCDC_SYN_MODE_EXWEN;
 		spin_lock(&ispccdc_obj.ispccdc_lock);
-		omap_writel((omap_readl(ISPCCDC_CFG)) & ~ISPCCDC_CFG_WENLOG,
+		omap_writel((omap_readl(ISPCCDC_CFG) & ~ISPCCDC_CFG_WENLOG),
 								ISPCCDC_CFG);
 		spin_unlock(&ispccdc_obj.ispccdc_lock);
 		vpcfg.bitshift_sel = BIT11_2;
@@ -708,8 +708,8 @@ int ispccdc_config_datapath(enum ccdc_input input, enum ccdc_output output)
 		syn_mode |= ISPCCDC_SYN_MODE_WEN;
 		/* Generally cam_wen is used with cam_hs, vs signals */
 		syn_mode |= ISPCCDC_SYN_MODE_EXWEN;
-		omap_writel((omap_readl(ISPCCDC_CFG))
-			| ISPCCDC_CFG_WENLOG, ISPCCDC_CFG);
+		omap_writel((omap_readl(ISPCCDC_CFG) |
+			ISPCCDC_CFG_WENLOG), ISPCCDC_CFG);
 		/* Video Port Configuration */
 		vpcfg.bitshift_sel = BIT9_0;
 		vpcfg.freq_sel = PIXCLKBY2;

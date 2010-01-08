@@ -162,7 +162,6 @@ int hp3a_dequeue(struct hp3a_queue *queue, void *element)
 
 		/* copy data from queue to element. */
 		memcpy(element, item, queue->element_size);
-
 		ret = 0;
 	}
 
@@ -196,7 +195,6 @@ int hp3a_dequeue_irqsave(struct hp3a_queue *queue, void *element)
 
 		/* copy data from queue to element. */
 		memcpy(element, item, queue->element_size);
-
 		ret = 0;
 	}
 

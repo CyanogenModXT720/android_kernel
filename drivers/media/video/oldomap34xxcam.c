@@ -147,9 +147,7 @@ int omap34xxcam_update_vbq(struct videobuf_buffer *vb)
 	struct isp_af_xtrastats af_xtrastats;
 #endif
 
-#ifdef CONFIG_VIDEO_OMAP3_HP3A
-	ktime_get_ts((struct timespec *)&vb->ts);
-#else
+#if !defined(CONFIG_VIDEO_OMAP3_HP3A)
 	do_gettimeofday(&vb->ts);
 #endif
 
@@ -1335,13 +1333,12 @@ int omap34xxcam_sensor_settings(int dev, struct cam_sensor_settings *settings)
 
 	mutex_lock(&vdev->mutex);
 
-	if (settings->flags & OMAP34XXCAM_SET_FPS) {
+	if ((settings->flags & OMAP34XXCAM_SET_FPS) &&
+		  settings->fps != 0) {
 		a.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 		a.parm.capture.timeperframe.numerator = 1;
 		a.parm.capture.timeperframe.denominator = settings->fps;
 		err = vidioc_int_s_parm(vdev->vdev_sensor, &a);
-		if (err)
-			goto update_sensor_exit;
 	}
 
 	if (settings->flags & OMAP34XXCAM_SET_EXPOSURE) {

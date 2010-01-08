@@ -1126,7 +1126,7 @@ void omapisp_unset_callback()
 EXPORT_SYMBOL(omapisp_unset_callback);
 
 /**
- *  isp_buf_allocation - To allocate a 10MB memory
+ *  isp_buf_allocation - To allocate isp workaround buffer
  *
  **/
 u32 isp_buf_allocation(void)
@@ -1162,6 +1162,9 @@ u32 isp_buf_allocation(void)
  **/
 u32 isp_buf_mmap(void)
 {
+	if (alloc_done == 0)
+		isp_buf_allocation();
+
 	if (alloc_done == 1) {
 		if (buff_addr_mapped == 0) {
 			buff_addr_mapped = ispmmu_map_sg(sglist_alloc,
@@ -1203,7 +1206,7 @@ dma_addr_t isp_buf_get(void)
 }
 
 /**
- *  isp_buf_free - To free allocated 10MB memory
+ *  isp_buf_free - To free allocated ISP workaround buffer
  *
  **/
 void isp_buf_free(void)
@@ -1536,6 +1539,8 @@ void isp_vbq_done(unsigned long status, isp_vbq_callback_ptr arg1, void *arg2)
 		}
 
 		spin_unlock_irqrestore(&isp_obj.isp_temp_buf_lock, flags);
+
+		ktime_get_ts((struct timespec *)&vb->ts);
 
 #ifdef CONFIG_VIDEO_OMAP3_HP3A
 		hp3a_ccdc_start();
@@ -1987,6 +1992,8 @@ int isp_handle_private(int cmd, void *arg)
 	case VIDIOC_PRIVATE_ISP_LSC_WORKAROUND_CFG:
 	  {
 		 ispmodule_obj.isp_lsc_workaround = (*(int *)arg ? 1 : 0);
+		if (ispmodule_obj.isp_lsc_workaround == 0)
+			isp_buf_free();
 	  }
 	  break;
 	default:
@@ -2597,9 +2604,8 @@ static int __init isp_init(void)
 	alloc_done = 0;
 	offset_value = 0;
 	rval = isp_buf_allocation();
-	if (rval) {
-			return -EINVAL;
-	}
+	if (rval)
+		return -EINVAL;
 
 	for (i = 0; i < CBK_END; ++i) {
 		ispirq_obj.irq_events[i] = 0;
