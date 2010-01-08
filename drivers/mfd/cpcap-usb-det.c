@@ -179,6 +179,18 @@ void disable_tta_irq(void)
   disable_irq(gpio_to_irq(SHOLEST_TTA_CHRG_DET_N_GPIO));
 }
 EXPORT_SYMBOL(disable_tta_irq);
+
+unsigned char is_emu_accessory(void)
+{
+  if ((temp_data->usb_accy == CPCAP_ACCY_NONE) ||
+      (temp_data->usb_accy == CPCAP_ACCY_TTA_CHARGER))
+  {
+    return 1;
+  } else {
+    return 0;  
+  }
+}
+EXPORT_SYMBOL(is_emu_accessory);
 #endif
 
 static int get_sense(struct cpcap_usb_det_data *data)
@@ -446,6 +458,13 @@ static void detection_work(struct work_struct *work)
 
 	case SAMPLE_1:
 		get_sense(data);
+#ifdef CONFIG_TTA_CHARGER
+    if (!(data->sense_tta.gpio_val) &&
+				(data->sense & CPCAP_BIT_SESSVLD_S)) {
+      disable_tta();
+      enable_tta();
+    }
+#endif    
 		data->state = SAMPLE_2;
 		schedule_delayed_work(&data->work, msecs_to_jiffies(100));
 		break;
@@ -566,6 +585,10 @@ static void detection_work(struct work_struct *work)
 			 * See cpcap_usb_det_suspend() for details.
 			 */
 			cpcap_irq_unmask(data->cpcap, CPCAP_IRQ_VBUSVLD);
+#ifdef CONFIG_TTA_CHARGER      
+      disable_tta();
+      enable_tta();
+#endif      
 		}
 		break;
 #ifdef CONFIG_TTA_CHARGER
@@ -750,11 +773,6 @@ static int __init cpcap_usb_det_probe(struct platform_device *pdev)
 	}
 
 	dev_info(&pdev->dev, "CPCAP USB detection device probed\n");
-
-#ifdef CONFIG_TTA_CHARGER
-  disable_tta();
-  enable_tta();
-#endif
 
 	/* Perform initial detection */
 	detection_work(&(data->work.work));

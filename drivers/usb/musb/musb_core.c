@@ -1485,6 +1485,13 @@ static irqreturn_t generic_interrupt(int irq, void *__hci)
 	musb->int_tx = musb_readw(musb->mregs, MUSB_INTRTX);
 	musb->int_rx = musb_readw(musb->mregs, MUSB_INTRRX);
 
+#ifdef CONFIG_TTA_CHARGER
+  if (is_emu_accessory()) {
+    (musb->int_usb) &= ~MUSB_INTR_SESSREQ;
+    musb_writeb(musb->mregs, MUSB_INTRUSB, musb->int_usb);
+  }
+#endif
+
 	if (musb->int_usb || musb->int_tx || musb->int_rx)
 		retval = musb_interrupt(musb);
 
