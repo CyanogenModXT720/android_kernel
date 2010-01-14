@@ -2203,21 +2203,21 @@ static int ioctl_g_priv(struct v4l2_int_device *s, void *p)
 		return rval;
 	}
 
+	if (on == V4L2_POWER_ON) {
+		isp_set_xclk(sensor->freq.xclk, OV8810_USE_XCLKA);
+	} else if (on == V4L2_POWER_OFF) {
+		isp_set_xclk(0, OV8810_USE_XCLKA);
+		sensor->streaming = false;
+	} else {
+		sensor->streaming = false;
+	}
+
 	rval = sensor->pdata->power_set(sensor->dev, c, on);
 	if (rval < 0) {
 		printk(KERN_ERR "OV8810: Unable to set the power state: "
 			OV8810_DRIVER_NAME " sensor\n");
 		isp_set_xclk(0, OV8810_USE_XCLKA);
 		return rval;
-	}
-
-	if (on == V4L2_POWER_ON) {
-		isp_set_xclk(sensor->freq.xclk, OV8810_USE_XCLKA);
-		/* set streaming off, standby */
-		ov8810_write_reg(c, OV8810_IMAGE_SYSTEM, 0x00);
-	} else {
-		isp_set_xclk(0, OV8810_USE_XCLKA);
-		sensor->streaming = false;
 	}
 
 	if ((current_power_state == V4L2_POWER_STANDBY) &&

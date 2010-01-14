@@ -58,18 +58,27 @@ static void af_led_set(struct led_classdev *led_cdev,
 		if (cpcap_status < 0)
 			pr_err("%s: Writing to the register failed for %i\n",
 			       __func__, cpcap_status);
-
 	} else {
-		brightness = 0;
-
 		if ((af_led_data->regulator) &&
 		    (af_led_data->regulator_state == 1)) {
 			regulator_disable(af_led_data->regulator);
 			af_led_data->regulator_state = 0;
 		}
 
+		/* Due to a HW issue turn off the current then
+		turn off the duty cycle */
+		brightness = 1;
+
 		/*cpcap_uc_start(af_led_data->cpcap, CPCAP_MACRO_6);*/
 		/*cpcap_uc_start(af_led_data->cpcap, CPCAP_MACRO_4);*/
+
+		cpcap_status = cpcap_regacc_write(af_led_data->cpcap,
+			CPCAP_REG_REDC, brightness, LD_MSG_IND_CPCAP_MASK);
+		if (cpcap_status < 0)
+			pr_err("%s: Writing to the register failed for %i\n",
+			       __func__, cpcap_status);
+
+		brightness = 0;
 
 		cpcap_status = cpcap_regacc_write(af_led_data->cpcap,
 			CPCAP_REG_REDC, brightness, LD_MSG_IND_CPCAP_MASK);
