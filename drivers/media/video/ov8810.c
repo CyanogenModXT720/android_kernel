@@ -550,6 +550,11 @@ static int ov8810_read_reg(struct i2c_client *client, u16 data_length, u16 reg,
 	data[1] = (u8) (reg & 0xff);
 
 	err = i2c_transfer(client->adapter, msg, 1);
+	if (err < 0) {
+		msleep(5);
+		err = i2c_transfer(client->adapter, msg, 1);
+	}
+
 	if (err >= 0) {
 		mdelay(3);
 		msg->flags = I2C_M_RD;
@@ -583,11 +588,11 @@ int ov8810_write_reg(struct i2c_client *client, u16 reg, u8 val)
 	int err = 0;
 	struct i2c_msg msg[1];
 	unsigned char data[3];
-	int retries = 0;
+	int retries = 5;
 
 	if (!client->adapter)
 		return -ENODEV;
-retry:
+
 	msg->addr = client->addr;
 	msg->flags = I2C_M_WR;
 	msg->len = 3;
@@ -598,19 +603,14 @@ retry:
 	data[1] = (u8) (reg & 0xff);
 	data[2] = val;
 
-	err = i2c_transfer(client->adapter, msg, 1);
-	udelay(50);
-
-	if (err >= 0)
-		return 0;
-
-	if (retries <= 5) {
-		DPRINTK_OV8810("Retrying I2C... %d\n", retries);
-		retries++;
-		set_current_state(TASK_UNINTERRUPTIBLE);
-		schedule_timeout(msecs_to_jiffies(20));
-		goto retry;
-	}
+	do {
+		err = i2c_transfer(client->adapter, msg, 1);
+		if (err >= 0) {
+			udelay(50);
+			return 0;
+		}
+		msleep(5);
+	} while ((--retries) > 0);
 
 	return err;
 }
@@ -1123,7 +1123,7 @@ int ov8810_start_mech_shutter_capture(
 			struct ov8810_shutter_params *shutter_params,
 			struct v4l2_int_device *s, struct vcontrol *lvc)
 {
-	u16 Tr_lines = 1, Tfrex_lines, Tfe2v_lines;
+	u16 Tr_lines = 1, Tfrex_lines, shutter_dly_lines, frame_len_lines_adj;
 	u16 data = 0;
 	int err = -EINVAL;
 	int adjusted_exp_time;
@@ -1168,16 +1168,8 @@ int ov8810_start_mech_shutter_capture(
 		((Tfrex_lines) & 0xFF));
 
 	/* Calc TFE2V  lines (with rounding)  */
-	Tfe2v_lines = (((shutter_params->delay_time << 8) +
+	shutter_dly_lines = (((shutter_params->delay_time << 8) +
 		(line_time_q8 >> 1)) / line_time_q8);
-
-	DPRINTK_OV8810("start_mech_shutter_capture:  " \
-		"expT=%dus, line_time_q8=%dus/256, " \
-		"shutter_dly=%dus Tfrex_lines=%d, " \
-		"Tfe2v_lines=%d\n",
-		shutter_params->exp_time, line_time_q8,
-		shutter_params->delay_time, Tfrex_lines,
-		Tfe2v_lines);
 
 	/*
 	 * start FREX capture & MIPI output simultaneously
@@ -1196,6 +1188,14 @@ int ov8810_start_mech_shutter_capture(
 
 	err |= ov8810_write_reg(client, OV8810_MIPI_CTRL0B, 0x0C | data);
 
+	/* adjust frame length to delay readout */
+	frame_len_lines_adj = ss->frame.frame_len_lines + shutter_dly_lines;
+	err |= ov8810_write_reg(client, OV8810_FRM_LEN_LINES_H,
+		 (frame_len_lines_adj >> 8) & 0xFF);
+
+	err |= ov8810_write_reg(client, OV8810_FRM_LEN_LINES_L,
+		 frame_len_lines_adj & 0xFF);
+
 	/* do frame trigger */
 	err |= ov8810_write_reg(client, OV8810_FRS7, 0x01);
 
@@ -1204,6 +1204,14 @@ int ov8810_start_mech_shutter_capture(
 
 	/* trigger group latch in the coming V-blank */
 	err |= ov8810_write_reg(client, OV8810_GROUP_WR, 0xFF);
+
+	DPRINTK_OV8810("start_mech_shutter_capture:  " \
+		"expT=%dus, line_time_q8=%dus/256, " \
+		"shutter_dly=%dus Tfrex_lines=%d, " \
+		"shutter_dly_lines=%d, frame_len_lines = %d\n",
+		shutter_params->exp_time, line_time_q8,
+		shutter_params->delay_time, Tfrex_lines,
+		shutter_dly_lines, frame_len_lines_adj);
 
 	if (err)
 		printk(KERN_ERR "OV8810: Error setting mech shutter registers\n");
@@ -1469,10 +1477,8 @@ int ov8810_configure_frame(struct v4l2_int_device *s,
 		 (lut[ss->frame.h_subsample] &
 		 OV8810_IMAGE_TRANSFORM_HSUB_MASK);
 
-/*
-printk("ov8810_configure_frame: sensor->orientation = %d\n",
-	sensor->orientation);
-*/
+	DPRINTK_OV8810("ov8810_configure_frame: sensor->orientation = %d\n",
+		sensor->orientation);
 
 /*
 	switch (sensor->orientation) {
@@ -2314,12 +2320,34 @@ static int ioctl_enum_framesizes(struct v4l2_int_device *s,
 		return -EINVAL;
 
 	/* Do we already reached all discrete framesizes? */
-	if (frms->index >= OV_NUM_IMAGE_SIZES)
-		return -EINVAL;
+	/* Filtering out resolution 2 in the table if the isp
+		LSC workaround is disable */
+	if (isp_lsc_workaround_enabled() == 0) {
+		if (frms->index >= OV_NUM_IMAGE_SIZES)
+			return -EINVAL;
+	} else {
+		if (frms->index >= (OV_NUM_IMAGE_SIZES - 1))
+			return -EINVAL;
+	}
 
 	frms->type = V4L2_FRMSIZE_TYPE_DISCRETE;
-	frms->discrete.width = ov8810_sizes[frms->index].width;
-	frms->discrete.height = ov8810_sizes[frms->index].height;
+
+	if (isp_lsc_workaround_enabled() == 0) {
+		frms->discrete.width = ov8810_sizes[frms->index].width;
+		frms->discrete.height = ov8810_sizes[frms->index].height;
+   } else {
+		if (frms->index < 2) {
+			frms->discrete.width =
+				ov8810_sizes[frms->index].width;
+			frms->discrete.height =
+				ov8810_sizes[frms->index].height;
+		} else {
+			frms->discrete.width =
+				ov8810_sizes[frms->index + 1].width;
+			frms->discrete.height =
+				ov8810_sizes[frms->index + 1].height;
+		}
+	}
 
 	return 0;
 }

@@ -262,15 +262,9 @@ struct hp3a_context {
 	u8 exposure_sync;
 	u8 gain_sync;
 	u32 hist_bin_size;
-	u32 current_fps;
-	u32 current_exposure;
-	u32 current_gain;
-	u32 requested_fps;
-	u32 requested_exposure;
-	u32 requested_gain;
-	u32 exposure;
-	u16 gain;
-	u16 fps;
+	struct hp3a_sensor_param sensor_current;
+	struct hp3a_sensor_param sensor_requested;
+	struct hp3a_sensor_param sensor_stats;
 	u32 frame_count;
 	u32 req_af_buffer_size;
 	u32 req_raw_buffer_size;

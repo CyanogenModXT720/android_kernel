@@ -33,7 +33,6 @@
  **/
 void hp3a_ccdc_done(void)
 {
-	++g_tc.frame_count;
 	hp3a_update_stats_readout_done();
 }
 EXPORT_SYMBOL(hp3a_ccdc_done);
@@ -45,6 +44,7 @@ EXPORT_SYMBOL(hp3a_ccdc_done);
  **/
 void hp3a_ccdc_start(void)
 {
+	++g_tc.frame_count;
 	hp3a_schedule_task();
 }
 EXPORT_SYMBOL(hp3a_ccdc_start);
@@ -79,6 +79,11 @@ EXPORT_SYMBOL(hp3a_update_wb);
 void hp3a_stream_on(void)
 {
 	g_tc.frame_count = 0;
+
+	memset(&g_tc.sensor_current, 0, sizeof(struct hp3a_sensor_param));
+	memset(&g_tc.sensor_requested, 0, sizeof(struct hp3a_sensor_param));
+	memset(&g_tc.sensor_stats, 0, sizeof(struct hp3a_sensor_param));
+
 	g_tc.v4l2_streaming = 1;
 	g_tc.raw_cap_sched_count = 0;
 
