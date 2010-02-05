@@ -1226,10 +1226,9 @@ void cpcap_audio_set_audio_state(struct cpcap_audio_state *state)
 
 	previous_state_struct = *state;
 
-//#ifdef CPCAP_AUDIO_REG_DEBUG
-//        cpcap_regacc_audio_reg_dump();
-//#endif
-        cpcap_audio_register_dump(state);
+#ifdef CPCAP_AUDIO_REG_DEBUG
+        cpcap_regacc_audio_reg_dump();
+#endif
 }
 
 void cpcap_audio_init(struct cpcap_audio_state *state)
