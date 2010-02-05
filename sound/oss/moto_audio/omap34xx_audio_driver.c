@@ -291,17 +291,14 @@ static const struct sample_rate_info_t valid_sample_rates[] = {
 	{.rate = 48000, .cpcap_audio_rate = CPCAP_AUDIO_STDAC_RATE_48000_HZ},
 };
 
-/*
-static DEFINE_MUTEX(audio_write_lock);
-static DEFINE_MUTEX(audio_read_lock);
 static unsigned long flags;
-*/
 static int read_buf_full;
 static int primary_spkr_setting = CPCAP_AUDIO_OUT_NONE;
 static int secondary_spkr_setting = CPCAP_AUDIO_OUT_NONE;
 static int mic_setting = CPCAP_AUDIO_IN_NONE;
 static unsigned int capture_mode;
 static struct omap_mcbsp_wrapper *mcbsp_wrapper;
+static DEFINE_SPINLOCK(audio_write_lock);
 #ifdef CONFIG_WAKELOCK
 static struct wake_lock mcbsp_wakelock;
 #endif
@@ -1177,20 +1174,16 @@ static int audio_select_speakers(int spkr)
 		local_spkr = -1;
 	}
 
-	AUDIO_LEVEL3_LOG("spkr1 = %#x, spkr2 = %#x\n", spkr1, spkr2);
+	AUDIO_LEVEL1_LOG("spkr1 = %#x, spkr2 = %#x\n", spkr1, spkr2);
 
-	/* LIBtt21120, to setup audio path, this routine have to remove */
-	#if 0
+	///* LIBtt21120, to setup audio path, this routine have to remove */
 	if (spkr1 != primary_spkr_setting || spkr2 != secondary_spkr_setting) {
-	#endif
 		primary_spkr_setting = spkr1;
 		secondary_spkr_setting = spkr2;
 		map_audioic_speakers();
 		cpcap_audio_state.output_gain = 0;
 		cpcap_audio_set_audio_state(&cpcap_audio_state);
-	#if 0
 	}
-	#endif
 
 	return 0;
 }
@@ -1916,15 +1909,12 @@ static int audio_ioctl(struct inode *inode, struct file *file,
 					CPCAP_AUDIO_CODEC_ON)
 				cpcap_audio_state.codec_mute =
 						CPCAP_AUDIO_CODEC_UNMUTE;
-		}
-		cpcap_audio_state.output_gain = gain;
 
+			cpcap_audio_state.output_gain = gain;
+		}
 		cpcap_audio_set_audio_state(&cpcap_audio_state);
-		/*AUDIO_LEVEL2_LOG("SOUND_MIXER_VOLUME, output_gain = %d\n",
-				cpcap_audio_state.output_gain);*/
 		AUDIO_LEVEL1_LOG("SOUND_MIXER_VOLUME, output_gain = %d\n",
 				cpcap_audio_state.output_gain);
-
 		break;
 	}
 
@@ -1975,7 +1965,6 @@ static ssize_t audio_write(struct file *file, const char *buffer, size_t count,
 								loff_t *nouse)
 {
 	int chunksize, ret = 0;
-	unsigned long flags;
 	const char *buffer0 = buffer;
 	struct inode *inode = (struct inode *)file->private_data;
 	int minor = MINOR(inode->i_rdev);
@@ -1983,7 +1972,6 @@ static ssize_t audio_write(struct file *file, const char *buffer, size_t count,
 			state.stdac_out_stream : state.codec_out_stream;
 
 	mutex_lock(&audio_lock);
-	/*mutex_lock(&audio_write_lock);*/
 
 	if (minor == state.dev_dsp) {
 		if (!str->active) {
@@ -2051,17 +2039,20 @@ static ssize_t audio_write(struct file *file, const char *buffer, size_t count,
 		}
 
 		/* Workaround for CPCAP channel inversion issue */
-		if (minor == state.dev_dsp &&
-			(cpcap_audio_state.stdac_primary_speaker ==
+		if (cpcap_audio_state.cpcap->revision == CPCAP_REVISION_2_1 &&
+			cpcap_audio_state.cpcap->vendor == CPCAP_VENDOR_TI) {
+			if (minor == state.dev_dsp &&
+				(cpcap_audio_state.stdac_primary_speaker ==
 					CPCAP_AUDIO_OUT_STEREO_HEADSET ||
-			cpcap_audio_state.stdac_secondary_speaker ==
-				CPCAP_AUDIO_OUT_STEREO_HEADSET)) {
-			int lc;
-			short *ptr = (short *)(buf->data + buf->offset);
-			for (lc = 0; lc < chunksize / 2; lc += 2) {
-				ptr[lc] = -ptr[lc];
-				if (ptr[lc] == (short)0x8000)
-					ptr[lc] = (short)0x7FFF;
+				cpcap_audio_state.stdac_secondary_speaker ==
+					CPCAP_AUDIO_OUT_STEREO_HEADSET)) {
+				int lc;
+				short *ptr = (short *)(buf->data + buf->offset);
+				for (lc = 0; lc < chunksize / 2; lc += 2) {
+					ptr[lc] = -ptr[lc];
+					if (ptr[lc] == (short)0x8000)
+						ptr[lc] = (short)0x7FFF;
+				}
 			}
 		}
 
@@ -2076,8 +2067,8 @@ static ssize_t audio_write(struct file *file, const char *buffer, size_t count,
 
 		buf->offset = 0;
 
-		/*spin_lock_irqsave(&audio_write_lock, flags);*/
-		local_irq_save(flags);
+		spin_lock_irqsave(&audio_write_lock, flags);
+
 		if (++str->usr_head >= str->nbfrags)
 			str->usr_head = 0;
 
@@ -2085,15 +2076,11 @@ static ssize_t audio_write(struct file *file, const char *buffer, size_t count,
 
 		ret = audio_process_buf(str, inode);
 
-		/*spin_unlock_irqrestore(&audio_write_lock, flags);*/
-		local_irq_restore(flags);
+		spin_unlock_irqrestore(&audio_write_lock, flags);
 	}
 
 	if (buffer - buffer0)
 		ret = buffer - buffer0;
-
-	/*mutex_unlock(&audio_write_lock);*/
-
 out:
 	mutex_unlock(&audio_lock);
 	return ret;
@@ -2148,7 +2135,7 @@ static int audio_codec_open(struct inode *inode, struct file *file)
 			cpcap_audio_state.microphone = mic_setting;
 			cpcap_audio_set_audio_state(&cpcap_audio_state);
 			state.codec_in_stream =
-			kmalloc(sizeof(struct audio_stream), GFP_KERNEL);
+			    kmalloc(sizeof(struct audio_stream), GFP_KERNEL);
 			memset(state.codec_in_stream, 0,
 			       sizeof(struct audio_stream));
 			state.codec_in_stream->inode = inode;
@@ -2261,8 +2248,6 @@ static ssize_t audio_codec_read(struct file *file, char *buffer, size_t size,
 						 AUDIO_TIMEOUT);
 		mutex_lock(&audio_lock);
 
-		/*mutex_lock(&audio_read_lock);*/
-
 		read_buf_full--;
 
 		if (read_buf_full < 0)
@@ -2271,7 +2256,6 @@ static ssize_t audio_codec_read(struct file *file, char *buffer, size_t size,
 		if (copy_to_user(buffer, buf->data, str->fragsize)) {
 			AUDIO_ERROR_LOG("Audio: CopyTo User failed \n");
 			ret = -EFAULT;
-			/*mutex_unlock(&audio_read_lock);*/
 			goto err;
 		}
 
@@ -2279,12 +2263,9 @@ static ssize_t audio_codec_read(struct file *file, char *buffer, size_t size,
 			str->usr_head = 0;
 
 		size -= str->fragsize;
-
-		/*mutex_unlock(&audio_read_lock);*/
 	}
 
 	ret = local_size;
-
 err:
 	mutex_unlock(&audio_lock);
 	return ret;
@@ -2401,6 +2382,7 @@ static int audio_probe(struct platform_device *dev)
 
 	cpcap_audio_state.cpcap = dev->dev.platform_data;
 	cpcap_audio_init(&cpcap_audio_state);
+
 	cpcap_audio_state.cpcap->h2w_new_state = &audio_callback;
 	return 0;
 }
