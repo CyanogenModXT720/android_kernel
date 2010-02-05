@@ -23,6 +23,8 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY
  * OF SUCH DAMAGE.
  *
+ * Motorola 2009-Nov-06 - Add support for local timers
+ * Motorola 2009-Oct-10 - Add support for low current drain wakeups
  * Motorola 2009-Mar-16 - Support the GIT build environment
  * Motorola 2008-Dec-06 - Added a Sleep IOCTL
  * Motorola 2008-Mar-05 - OMAP support
@@ -83,18 +85,37 @@ enum
 };
 typedef UINT8 SIM_MODULE_CLOCK_RATE;
 
+/* List of values for manipulating the mutex */
+enum
+{
+    KERNEL_MUTEX_ID     = 0x01,
+    SCSM_MUTEX_ID       = 0x02,
+    SCPC_MUTEX_ID       = 0x03,
+};
+typedef UINT8 SIM_MUTEX_ID;
+
+#define MUTEX_UNLOCK_MASK      0x10
+#define MUTEX_REQUESTER_MASK   0x0F
+#define KERNEL_LOCK_MUTEX      KERNEL_MUTEX_ID
+#define KERNEL_UNLOCK_MUTEX    0x11
+
 /* SIM module A events */
-#define SIM_MODULE_EVENT_NONE            0x00000000
-#define SIM_MODULE_EVENT_RX_A            0x00000001
-#define SIM_MODULE_EVENT_SIMPD_BOUNCE    0x00000002
-#define SIM_MODULE_EVENT_SIMPD_INSERTION 0x00000004      
-#define SIM_MODULE_EVENT_SIMPD_REMOVAL   0x00000008
-#define SIM_MODULE_EVENT_PARITY_ERROR    0x00000010
-#define SIM_MODULE_EVENT_BUFFER_INDEX    0x00000020
-#define SIM_MODULE_EVENT_ERROR_FLAG      0x00000040
-#define SIM_MODULE_EVENT_NO_ATR_FLAG     0x00000080
-#define SIM_MODULE_EVENT_WWT_VIOLATION   0x00000100
-#define SIM_MODULE_EVENT_FIFO_OVERFLOW   0x00000200
+#define SIM_MODULE_EVENT_NONE                   0x00000000
+#define SIM_MODULE_EVENT_RX_A                   0x00000001
+#define SIM_MODULE_EVENT_SIMPD_BOUNCE           0x00000002
+#define SIM_MODULE_EVENT_SIMPD_INSERTION        0x00000004      
+#define SIM_MODULE_EVENT_SIMPD_REMOVAL          0x00000008
+#define SIM_MODULE_EVENT_PARITY_ERROR           0x00000010
+#define SIM_MODULE_EVENT_BUFFER_INDEX           0x00000020
+#define SIM_MODULE_EVENT_ERROR_FLAG             0x00000040
+#define SIM_MODULE_EVENT_NO_ATR_FLAG            0x00000080
+#define SIM_MODULE_EVENT_WWT_VIOLATION          0x00000100
+#define SIM_MODULE_EVENT_FIFO_OVERFLOW          0x00000200
+#define SIM_MODULE_EVENT_INCOMPLETE_SLIM_STATUS 0x00000400
+#define SIM_MODULE_EVENT_MUTEX_FREE             0x00000800
+#define SIM_MODULE_EVENT_NULL_BYTE_OVERFLOW     0x00001000
+#define SIM_MODULE_EVENT_NO_DMA_CN_AVB          0x00002000
+#define SIM_MODULE_EVENT_TIMER_EXP              0x00004000
 
 #define SIM_NUM 230
 /*******************************************************************************************
@@ -128,7 +149,13 @@ typedef UINT8 SIM_MODULE_CLOCK_RATE;
 #define SIM_IOC_CMD_CORE_GET_SIM_CLOCK_FREQ            (0x14)
 #define SIM_IOC_CMD_CORE_LOW_POWER_STATE               (0x15)
 #define SIM_IOC_CMD_CORE_SLEEP                         (0x16)
-#define SIM_IOC_CMD_CORE_LAST_CMD                       SIM_IOC_CMD_CORE_SLEEP
+#define SIM_IOC_CMD_CORE_CARD_TYPE                     (0x17)
+#define SIM_IOC_CMD_CORE_MUTEX_UPDATE                  (0x18)
+#define SIM_IOC_CMD_CORE_POLL_INTERVAL                 (0x19)
+#define SIM_IOC_CMD_CORE_CALL_STATUS                   (0x1A)
+#define SIM_IOC_CMD_CORE_START_TIMER                   (0x1B)
+#define SIM_IOC_CMD_CORE_STOP_TIMER                    (0x1C)
+#define SIM_IOC_CMD_CORE_LAST_CMD                      SIM_IOC_CMD_CORE_STOP_TIMER
 
 /*******************************************************************************************
  * Ioctl requests
@@ -178,5 +205,17 @@ typedef UINT8 SIM_MODULE_CLOCK_RATE;
        _IOW(SIM_NUM, SIM_IOC_CMD_CORE_LOW_POWER_STATE, UINT32 *)
 #define SIM_IOCTL_SLEEP \
        _IO(SIM_NUM, SIM_IOC_CMD_CORE_SLEEP)
+#define SIM_IOCTL_CARD_TYPE \
+       _IOW(SIM_NUM, SIM_IOC_CMD_CORE_CARD_TYPE, UINT32 *)
+#define SIM_IOCTL_MUTEX_UPDATE \
+       _IOW(SIM_NUM, SIM_IOC_CMD_CORE_MUTEX_UPDATE, UINT32 *)
+#define SIM_IOCTL_POLL_INTERVAL \
+       _IOW(SIM_NUM, SIM_IOC_CMD_CORE_POLL_INTERVAL, UINT32 *)
+#define SIM_IOCTL_CALL_STATUS \
+       _IOW(SIM_NUM, SIM_IOC_CMD_CORE_CALL_STATUS, UINT32 *)
+#define SIM_IOCTL_START_TIMER \
+       _IO(SIM_NUM, SIM_IOC_CMD_CORE_START_TIMER)
+#define SIM_IOCTL_STOP_TIMER \
+       _IO(SIM_NUM, SIM_IOC_CMD_CORE_STOP_TIMER)
 
 #endif /* __SMART_CARD_H__ */

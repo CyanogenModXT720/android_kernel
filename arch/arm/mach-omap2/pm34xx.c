@@ -513,7 +513,8 @@ void omap_sram_idle(void)
 		omap2_clkdm_deny_idle(mpu_pwrdm->pwrdm_clkdms[0]);
 
 	/* CORE */
-	if (core_next_state < PWRDM_POWER_ON) {
+	if (core_next_state < PWRDM_POWER_ON ||
+		mpu_next_state < PWRDM_POWER_ON) {
 		/* Disable smartreflex before entering WFI */
 		disable_smartreflex(SR1);
 		disable_smartreflex(SR2);
@@ -529,10 +530,6 @@ void omap_sram_idle(void)
 		/* Enable IO-PAD and IO-CHAIN wakeups */
 		prm_set_mod_reg_bits(OMAP3430_EN_IO, WKUP_MOD, PM_WKEN);
 		omap3_enable_io_chain();
-		/* FIXME: This needs to be removed once find proper way
-		 * to put OTG module into standby */
-		cm_rmw_mod_reg_bits(OMAP3430_EN_HSOTGUSB, 0, CORE_MOD,
-				CM_ICLKEN1);
 	}
 
 	/*
@@ -569,7 +566,8 @@ void omap_sram_idle(void)
 
 
 	/* CORE */
-	if (core_next_state < PWRDM_POWER_ON) {
+	if (core_next_state < PWRDM_POWER_ON ||
+		mpu_next_state < PWRDM_POWER_ON) {
 		core_prev_state = pwrdm_read_prev_pwrst(core_pwrdm);
 		if (core_prev_state == PWRDM_POWER_OFF) {
 			omap3_core_restore_context();
@@ -586,10 +584,6 @@ void omap_sram_idle(void)
 		/* Enable smartreflex after WFI */
 		enable_smartreflex(SR1);
 		enable_smartreflex(SR2);
-		/* FIXME: This needs to be removed once find proper way
-		 * to put OTG module into standby */
-		cm_rmw_mod_reg_bits(OMAP3430_EN_HSOTGUSB, OMAP3430_EN_HSOTGUSB,
-				CORE_MOD, CM_ICLKEN1);
 	}
 
 	/* PER */
@@ -607,7 +601,8 @@ void omap_sram_idle(void)
 	}
 
 	/* Disable IO-PAD and IO-CHAIN wakeup */
-	if (core_next_state < PWRDM_POWER_ON) {
+	if (core_next_state < PWRDM_POWER_ON ||
+		mpu_next_state < PWRDM_POWER_ON) {
 		prm_clear_mod_reg_bits(OMAP3430_EN_IO, WKUP_MOD, PM_WKEN);
 		omap3_disable_io_chain();
 	}
@@ -703,14 +698,36 @@ static suspend_state_t suspend_state;
 static void omap2_pm_wakeup_on_timer(u32 seconds, u32 nseconds)
 {
 	u32 tick_rate, cycles;
-
-	if (!seconds && !nseconds)
-		return;
+	void __iomem *base;
+	u32 cnt = 10;
 
 	tick_rate = clk_get_rate(omap_dm_timer_get_fclk(gptimer_wakeup));
 	cycles = tick_rate * seconds;
 	cycles += ((nseconds / NSEC_PER_MSEC) * tick_rate) / MSEC_PER_SEC;
 	omap_dm_timer_stop(gptimer_wakeup);
+
+	/* Cleared pending gpt1 irq if there is. */
+	if (omap_dm_timer_read_status(gptimer_wakeup) & OMAP_TIMER_INT_OVERFLOW)
+		omap_dm_timer_write_status(gptimer_wakeup,
+				OMAP_TIMER_INT_OVERFLOW);
+
+	/* Make sure the intc pending irq37 is automatically cleared. */
+	base = OMAP2_IO_ADDRESS(OMAP34XX_IC_BASE);
+	while ((__raw_readl(base + 0x00B8) & 0x20) == 0x20 && cnt) {
+		udelay(1000000/tick_rate + 1);
+		cnt--;
+	}
+
+	/* If the INTC gpt1 signal to MPU is still there, then finally
+	 * refresh the IRQ INTC ouput to make sure it will not break wfi.
+	 */
+	if ((__raw_readl(base + 0x40) & 0x7F) == INT_24XX_GPTIMER1)
+		__raw_writel(0x1, base + 0x0048);
+
+	/* Not to start the timer again in airplane mode or no SIM insert */
+	if (!seconds && !nseconds)
+		return;
+
 	omap_dm_timer_set_load_start(gptimer_wakeup, 0, 0xffffffff - cycles);
 
 	pr_debug("PM: Resume timer in %d secs (%d ticks at %d ticks/sec.)\n",
@@ -729,9 +746,7 @@ static int omap3_pm_suspend(void)
 	struct power_state *pwrst;
 	int state, ret = 0;
 
-	if (wakeup_timer_seconds || wakeup_timer_nseconds)
-		omap2_pm_wakeup_on_timer(wakeup_timer_seconds,
-						wakeup_timer_nseconds);
+	omap2_pm_wakeup_on_timer(wakeup_timer_seconds, wakeup_timer_nseconds);
 
 	/* Read current next_pwrsts */
 	list_for_each_entry(pwrst, &pwrst_list, node)
@@ -1077,6 +1092,16 @@ void omap3_pm_off_mode_enable(int enable)
 #endif
 	list_for_each_entry(pwrst, &pwrst_list, node) {
 		pwrst->next_state = state;
+		/* Temporarily disable PER OFF mode*/
+		if (!strcmp(pwrst->pwrdm->name, "per_pwrdm"))
+			pwrst->next_state = PWRDM_POWER_RET;
+		/* Temporarily disable DSS OFF mode*/
+		if (!strcmp(pwrst->pwrdm->name, "dss_pwrdm"))
+			pwrst->next_state = PWRDM_POWER_RET;
+		/* Temporarily disable CORE OFF mode*/
+		if (!strcmp(pwrst->pwrdm->name, "core_pwrdm"))
+			pwrst->next_state = PWRDM_POWER_RET;
+
 		set_pwrdm_state(pwrst->pwrdm, state);
 	}
 }

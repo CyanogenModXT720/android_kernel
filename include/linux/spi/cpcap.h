@@ -542,6 +542,7 @@ struct cpcap_platform_data {
 	struct cpcap_spi_init_data *init;
 	int init_len;
 	unsigned short *regulator_mode_values;
+	unsigned short *regulator_off_mode_values;
 	struct regulator_init_data *regulator_init;
 	struct cpcap_adc_ato *adc_ato;
 	int barrel_capability;

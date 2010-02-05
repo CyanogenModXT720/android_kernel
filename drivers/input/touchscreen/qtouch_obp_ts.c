@@ -97,8 +97,8 @@ struct qtouch_ts_data {
 	uint32_t			last_keystate;
 	uint16_t			eeprom_checksum;
 	uint8_t			    checksum_cnt;
-	int				x_delta;
-	int				y_delta;
+	int					x_delta;
+	int					y_delta;
 
 	/* Note: The message buffer is reused for reading different messages.
 	 * MUST enforce that there is no concurrent access to msg_buf. */

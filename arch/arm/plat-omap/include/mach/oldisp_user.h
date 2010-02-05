@@ -52,7 +52,6 @@
 #define VIDIOC_PRIVATE_ISP_LSC_WORKAROUND_CFG \
    _IOW('V', BASE_VIDIOC_PRIVATE + 16, int)
 
-
 /* AE/AWB related structures and flags*/
 
 /* Flags for update field */

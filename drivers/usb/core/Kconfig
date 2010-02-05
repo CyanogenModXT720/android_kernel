@@ -136,3 +136,11 @@ config USB_OTG_BLACKLIST_HUB
 	  and software costs by not supporting external hubs.  So
 	  are "Embedded Hosts" that don't offer OTG support.
 
+config EHCI_SKIP_SYS_RESUME
+	bool "skip system resume"
+	default n
+	help
+	  This should be enabled for MAPPHONE only - mapphone_defconfig,
+	  where no use case existing for USB-PERSIST port handover. Please
+	  refer to function usb_suspend in driver.c for details.
+

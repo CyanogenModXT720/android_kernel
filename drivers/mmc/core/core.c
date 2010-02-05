@@ -995,7 +995,7 @@ void mmc_stop_host(struct mmc_host *host)
  */
 int mmc_suspend_host(struct mmc_host *host, pm_message_t state)
 {
-	if (mmc_bus_needs_resume(host))
+	if (mmc_bus_needs_resume(host) || !(host->bus_resume_flags))
 		return 0;
 
 	cancel_delayed_work(&host->detect);
