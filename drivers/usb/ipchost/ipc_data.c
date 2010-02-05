@@ -800,13 +800,16 @@ static int usb_ipc_resume(struct usb_interface *iface)
 		USB_IPC_LOG_IF_NUM) {
 		DEBUG("%s:resume ipc log interface @ jiffies=%lu\n",
 			__func__, jiffies);
-		if (ipc_log_param.write_buf != NULL) {
+		if ((ipc_log_param.write_buf != NULL)
+			&& (ipc_log_param.urb_flag == 0)) {
 			ipc_log_param.read_urb.transfer_buffer =
 				ipc_log_param.write_buf->ptr;
 			ipc_log_param.read_urb.transfer_buffer_length =
 				ipc_log_param.read_bufsize;
 			ret = usb_submit_urb(&ipc_log_param.read_urb,
 				GFP_KERNEL);
+			if (!ret)
+				ipc_log_param.urb_flag = 1;
 			DEBUG("log read urb restarted, ret=%d.\n", ret);
 		}
 	}

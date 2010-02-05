@@ -15,6 +15,7 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  
  * 02111-1307, USA
  *
+ * Motorola 2009-Oct-29 - Support for low current drain wakeups
  * Motorola 2009-Jan-06 - Update for TI Kernel 25.3
  * Motorola 2008-Mar-05 - Update for OMAP
  * Motorola 2007-Sep-14 - Initial Creation
@@ -126,6 +127,7 @@ typedef struct
 #define USIM_NATR_MASK                  0x0001
 
 /* irqenable */
+#define USIM_IRQEN_MASK_ALL                0x1FFF
 #define USIM_STOP_CLK_EN_MASK              0x1000
 #define IT_EMV_ATR_LENGTH_TIME_OUT_EN_MASK 0x0800
 #define TS_ERROR_EN_MASK                   0x0400

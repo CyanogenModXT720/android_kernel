@@ -148,10 +148,10 @@ static int hsmmc_set_power(struct device *dev, int slot, int power_on,
 		if (!hsmmc_regulator_is_on) {
 			hsmmc_regulator_is_on = 1;
 			regulator_enable(hsmmc_regulator);
+			msleep(4);
 		}
 		mutex_unlock(&regulator_lock);
 
-		msleep(4);
 		reg = omap_ctrl_readl(OMAP343X_CONTROL_PBIAS_LITE);
 		reg |= OMAP2_PBIASLITEPWRDNZ0;
 		if ((1 << vdd) <= MMC_VDD_165_195)
@@ -170,10 +170,10 @@ static int hsmmc_set_power(struct device *dev, int slot, int power_on,
 		if (hsmmc_regulator_is_on) {
 			hsmmc_regulator_is_on = 0;
 			regulator_disable(hsmmc_regulator);
+			msleep(20);
 		}
 		mutex_unlock(&regulator_lock);
 
-		msleep(20);
 		reg = omap_ctrl_readl(OMAP343X_CONTROL_PBIAS_LITE);
 		reg |= (OMAP2_PBIASLITEPWRDNZ0 | OMAP2_PBIASLITEVMODE0);
 		omap_ctrl_writel(reg, OMAP343X_CONTROL_PBIAS_LITE);

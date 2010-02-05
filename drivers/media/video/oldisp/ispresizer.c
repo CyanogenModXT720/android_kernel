@@ -501,7 +501,7 @@ int ispresizer_config_size(u32 input_w, u32 input_h, u32 output_w,
 		return -EINVAL;
 	}
 
-	if (isp_lsc_workaround_eanbled()) {
+	if (isp_lsc_workaround_enabled()) {
 		buff_addr_lsc_wa = isp_buf_get();
 		if (buff_addr_lsc_wa) {
 			/* Set Resizer input address and offset adderss */
@@ -520,7 +520,7 @@ int ispresizer_config_size(u32 input_w, u32 input_h, u32 output_w,
 						ISPRSZ_CNT_VSTPH_SHIFT),
 						ISPRSZ_CNT);
 
-	if (isp_lsc_workaround_eanbled()) {
+	if (isp_lsc_workaround_enabled()) {
 		omap_writel((0x00 <<	ISPRSZ_IN_START_HORZ_ST_SHIFT) |
 						(0x00 <<
 						ISPRSZ_IN_START_VERT_ST_SHIFT),

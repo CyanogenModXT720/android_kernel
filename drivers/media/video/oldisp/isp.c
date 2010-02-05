@@ -278,7 +278,7 @@ static struct isp_reg isp_reg_list[] = {
 	{ISP_TOK_TERM, 0}
 };
 
-int isp_lsc_workaround_eanbled(void)
+int isp_lsc_workaround_enabled(void)
 {
 	return ispmodule_obj.isp_lsc_workaround;
 }

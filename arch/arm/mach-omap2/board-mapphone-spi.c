@@ -59,6 +59,7 @@ struct cpcap_spi_init_data mapphone_cpcap_spi_init[CPCAP_REG_SIZE + 1] = {
 	{CPCAP_REG_VUSBINT2C, 0x0029},
 	{CPCAP_REG_VAUDIOC,   0x0060},
 	{CPCAP_REG_ADCC1,     0x9000},
+	{CPCAP_REG_ADCC2,     0x4136},
 	{CPCAP_REG_USBC1,     0x1201},
 	{CPCAP_REG_USBC3,     0x7DFB},
 	{CPCAP_REG_UIER2,     0x001F},
@@ -79,23 +80,45 @@ struct cpcap_spi_init_data mapphone_cpcap_spi_init[CPCAP_REG_SIZE + 1] = {
 unsigned short cpcap_regulator_mode_values[CPCAP_NUM_REGULATORS] = {
 	[CPCAP_SW5]      = 0x0022,
 	[CPCAP_VCAM]     = 0x0003,
-	[CPCAP_VCSI]     = 0x0003,
+	[CPCAP_VCSI]     = 0x0043,
 	[CPCAP_VDAC]     = 0x0003,
-	[CPCAP_VDIG]     = 0x0003,
+	[CPCAP_VDIG]     = 0x0082,
 	[CPCAP_VFUSE]    = 0x0080,
 	[CPCAP_VHVIO]    = 0x0003,
 	[CPCAP_VSDIO]    = 0x0003,
 	[CPCAP_VPLL]     = 0x0042,
-	[CPCAP_VRF1]     = 0x000C,
-	[CPCAP_VRF2]     = 0x0003,
-	[CPCAP_VRFREF]   = 0x0003,
+	[CPCAP_VRF1]     = 0x0024,
+	[CPCAP_VRF2]     = 0x0001,
+	[CPCAP_VRFREF]   = 0x0023,
 	[CPCAP_VWLAN1]   = 0x0003,
 	[CPCAP_VWLAN2]   = 0x000C,
 	[CPCAP_VSIM]     = 0x0003,
 	[CPCAP_VSIMCARD] = 0x1E00,
 	[CPCAP_VVIB]     = 0x0001,
 	[CPCAP_VUSB]     = 0x000C,
-	[CPCAP_VAUDIO]   = 0x0006,
+	[CPCAP_VAUDIO]   = 0x0014,
+};
+
+unsigned short cpcap_regulator_off_mode_values[CPCAP_NUM_REGULATORS] = {
+	[CPCAP_SW5]      = 0x0000,
+	[CPCAP_VCAM]     = 0x0000,
+	[CPCAP_VCSI]     = 0x0041,
+	[CPCAP_VDAC]     = 0x0000,
+	[CPCAP_VDIG]     = 0x0000,
+	[CPCAP_VFUSE]    = 0x0000,
+	[CPCAP_VHVIO]    = 0x0000,
+	[CPCAP_VSDIO]    = 0x0000,
+	[CPCAP_VPLL]     = 0x0000,
+	[CPCAP_VRF1]     = 0x0000,
+	[CPCAP_VRF2]     = 0x0000,
+	[CPCAP_VRFREF]   = 0x0000,
+	[CPCAP_VWLAN1]   = 0x0000,
+	[CPCAP_VWLAN2]   = 0x0000,
+	[CPCAP_VSIM]     = 0x0000,
+	[CPCAP_VSIMCARD] = 0x0000,
+	[CPCAP_VVIB]     = 0x0000,
+	[CPCAP_VUSB]     = 0x0000,
+	[CPCAP_VAUDIO]   = 0x0000,
 };
 
 #define CPCAP_GPIO 0
@@ -201,9 +224,11 @@ static struct regulator_init_data cpcap_regulator[CPCAP_NUM_REGULATORS] = {
 	},
 	[CPCAP_VDIG] = {
 		.constraints = {
-			.min_uV			= 1200000,
+			.min_uV			= 1875000,
 			.max_uV			= 1875000,
-			.valid_ops_mask		= 0,
+			.valid_ops_mask		= REGULATOR_CHANGE_VOLTAGE,
+			.always_on		= 1,
+			.apply_uV		= 1,
 		},
 	},
 	[CPCAP_VFUSE] = {
@@ -248,23 +273,32 @@ static struct regulator_init_data cpcap_regulator[CPCAP_NUM_REGULATORS] = {
 	},
 	[CPCAP_VRF1] = {
 		.constraints = {
-			.min_uV			= 2500000,
+			.min_uV			= 2775000,
 			.max_uV			= 2775000,
-			.valid_ops_mask		= 0,
+			.valid_ops_mask		= (REGULATOR_CHANGE_STATUS |
+						   REGULATOR_CHANGE_VOLTAGE),
+			.always_on		= 1,
+			.apply_uV		= 1,
 		},
 	},
 	[CPCAP_VRF2] = {
 		.constraints = {
 			.min_uV			= 2775000,
 			.max_uV			= 2775000,
-			.valid_ops_mask		= 0,
+			.valid_ops_mask		= (REGULATOR_CHANGE_STATUS |
+						   REGULATOR_CHANGE_VOLTAGE),
+			.always_on		= 1,
+			.apply_uV		= 1,
 		},
 	},
 	[CPCAP_VRFREF] = {
 		.constraints = {
-			.min_uV			= 2500000,
+			.min_uV			= 2775000,
 			.max_uV			= 2775000,
-			.valid_ops_mask		= 0,
+			.valid_ops_mask		= (REGULATOR_CHANGE_STATUS |
+						   REGULATOR_CHANGE_VOLTAGE),
+			.always_on		= 1,
+			.apply_uV		= 1,
 		},
 	},
 	[CPCAP_VWLAN1] = {
@@ -288,7 +322,8 @@ static struct regulator_init_data cpcap_regulator[CPCAP_NUM_REGULATORS] = {
 		.constraints = {
 			.min_uV			= 1800000,
 			.max_uV			= 2900000,
-			.valid_ops_mask		= 0,
+			.valid_ops_mask		= (REGULATOR_CHANGE_STATUS |
+						   REGULATOR_CHANGE_VOLTAGE),
 		},
 		.num_consumer_supplies	= ARRAY_SIZE(cpcap_vsim_consumers),
 		.consumer_supplies	= cpcap_vsim_consumers,
@@ -297,7 +332,8 @@ static struct regulator_init_data cpcap_regulator[CPCAP_NUM_REGULATORS] = {
 		.constraints = {
 			.min_uV			= 1800000,
 			.max_uV			= 2900000,
-			.valid_ops_mask		= 0,
+			.valid_ops_mask		= (REGULATOR_CHANGE_STATUS |
+						   REGULATOR_CHANGE_VOLTAGE),
 		},
 		.num_consumer_supplies	= ARRAY_SIZE(cpcap_vsimcard_consumers),
 		.consumer_supplies	= cpcap_vsimcard_consumers,
@@ -401,9 +437,10 @@ static void batt_changed(struct power_supply *batt,
 static struct cpcap_platform_data mapphone_cpcap_data = {
 	.init = mapphone_cpcap_spi_init,
 	.regulator_mode_values = cpcap_regulator_mode_values,
+	.regulator_off_mode_values = cpcap_regulator_off_mode_values,
 	.regulator_init = cpcap_regulator,
 	.adc_ato = &mapphone_cpcap_adc_ato,
-	.ac_changed = NULL,
+	.ac_changed = ac_changed,
 	.batt_changed = batt_changed,
 	.usb_changed = NULL,
 };
@@ -473,6 +510,20 @@ static void regulator_mode_init(void *p_data)
 	}
 }
 
+static void regulator_off_mode_init(void *p_data)
+{
+	struct omap_rgt_mode_entry *p = p_data;
+	unsigned short *p_devs = cpcap_regulator_off_mode_values;
+
+	if (p->id < CPCAP_NUM_REGULATORS) {
+		p_devs[p->id] = p->data;
+		printk(KERN_INFO "CPCAP: Overwrite regulator off mode [%d]!\n",
+				p->id);
+	} else {
+		printk(KERN_ERR "CPCAP: Too big cpcap regulator count!\n");
+	}
+}
+
 static void cpcap_spi_init(void *p_data)
 {
 	struct omap_spi_init_entry *p = p_data;
@@ -534,6 +585,8 @@ static void __init cpcap_of_init(void)
 	for (i = 0; i < count; i++)
 		cpcap_spi_init((struct omap_spi_init_entry *)prop + i);
 
+#if 0 /* Temporary FOTA workaround:Do not allow the device tree to
+	 overwrite the board file regulator mode settings. */
 	unit_size = sizeof(struct omap_rgt_init_entry);
 	prop = of_get_property(node, DT_PROP_CPCAP_RGTINIT, &size);
 	if ((!prop) || (size % unit_size)) {
@@ -564,6 +617,21 @@ static void __init cpcap_of_init(void)
 	for (i = 0; i < count; i++)
 		regulator_mode_init((struct omap_rgt_mode_entry *)prop + i);
 
+	unit_size = sizeof(struct omap_rgt_mode_entry);
+	prop = of_get_property(node, DT_PROP_CPCAP_RGTOFFMODE, &size);
+	if ((!prop) || (size % unit_size)) {
+		printk(KERN_ERR "Read property %s error!\n",
+				DT_PROP_CPCAP_RGTOFFMODE);
+		of_node_put(node);
+		return;
+	}
+
+	count = size / unit_size;
+	printk(KERN_INFO "cpcap init size = %d\n", count);
+
+	for (i = 0; i < count; i++)
+		regulator_off_mode_init((struct omap_rgt_mode_entry *)prop + i);
+#endif
 	of_node_put(node);
 	return;
 }

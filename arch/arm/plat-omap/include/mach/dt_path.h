@@ -99,9 +99,9 @@
 
 /* CPCAP Node */
 #define DT_PATH_CPCAP			"/System@0/SPI@0/PowerIC@0"
-#define DT_PROP_CPCAP_SPIINIT	"spiinit"
-#define DT_PROP_CPCAP_RGTINIT	"regulator_init"
-#define DT_PROP_CPCAP_RGTMODE	"regulator_mode"
-
+#define DT_PROP_CPCAP_SPIINIT	 "spiinit"
+#define DT_PROP_CPCAP_RGTINIT	 "regulator_init"
+#define DT_PROP_CPCAP_RGTMODE	 "regulator_mode"
+#define DT_PROP_CPCAP_RGTOFFMODE "regulator_off_mode"
 #endif
 #endif
