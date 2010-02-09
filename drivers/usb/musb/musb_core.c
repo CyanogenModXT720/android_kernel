@@ -1485,13 +1485,6 @@ static irqreturn_t generic_interrupt(int irq, void *__hci)
 	musb->int_tx = musb_readw(musb->mregs, MUSB_INTRTX);
 	musb->int_rx = musb_readw(musb->mregs, MUSB_INTRRX);
 
-#ifdef CONFIG_TTA_CHARGER
-/*	if (is_emu_accessory()) {
-		(musb->int_usb) &= ~MUSB_INTR_SESSREQ;
-		musb_writeb(musb->mregs, MUSB_INTRUSB, musb->int_usb);
-	}*/
-#endif
-
 	if (musb->int_usb || musb->int_tx || musb->int_rx)
 		retval = musb_interrupt(musb);
 
@@ -1514,9 +1507,12 @@ static irqreturn_t generic_interrupt(int irq, void *__hci)
 void enable_musb_int(void)
 {
 	u8 value;
+  if (is_emu_accessory())
+  {
 	value = musb_readb(musb_misc->mregs, MUSB_INTRUSB);
 	value &= ~MUSB_INTR_SESSREQ;
 	musb_writeb(musb_misc->mregs, MUSB_INTRUSB, value);
+  }
 	enable_irq(nIrq_misc);
 }
 EXPORT_SYMBOL(enable_musb_int);
@@ -2084,6 +2080,7 @@ bad_config:
 #ifdef CONFIG_TTA_CHARGER
 	musb_misc = musb;
 	nIrq_misc = nIrq;
+  disable_musb_int();
 #endif
 
 #ifdef CONFIG_SYSFS
