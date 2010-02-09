@@ -286,6 +286,7 @@ enum {
 	CPCAP_IOCTL_NUM_TEST__START,
 	CPCAP_IOCTL_NUM_TEST_READ_REG,
 	CPCAP_IOCTL_NUM_TEST_WRITE_REG,
+	CPCAP_IOCTL_NUM_TEST_FORCE_TO_DETECT,
 	CPCAP_IOCTL_NUM_TEST__END,
 
 	CPCAP_IOCTL_NUM_ADC__START,
@@ -629,6 +630,9 @@ struct cpcap_regacc {
 #define CPCAP_IOCTL_TEST_WRITE_REG \
 	_IOWR(0, CPCAP_IOCTL_NUM_TEST_WRITE_REG, struct cpcap_regacc*)
 
+#define CPCAP_IOCTL_TEST_FORCE_TO_DETECT \
+	_IOWR(0, CPCAP_IOCTL_NUM_TEST_FORCE_TO_DETECT, unsigned char*)
+
 #define CPCAP_IOCTL_ADC_PHASE \
 	_IOWR(0, CPCAP_IOCTL_NUM_ADC_PHASE, struct cpcap_adc_phase*)
 
@@ -755,6 +759,8 @@ unsigned char cpcap_uc_status(struct cpcap_device *cpcap,
 int cpcap_direct_misc_write(unsigned short reg, unsigned short value,\
 							unsigned short mask);
 #endif
+
+void force_to_detect_usb(void);
 
 #ifdef CONFIG_TTA_CHARGER
 void enable_tta(void);
