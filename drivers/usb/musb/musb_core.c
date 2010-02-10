@@ -878,9 +878,7 @@ void musb_start(struct musb *musb)
 
 	/* put into basic highspeed mode and start session */
 	musb_writeb(regs, MUSB_POWER, MUSB_POWER_ISOUPDATE
-#ifndef CONFIG_USB_MOT_ANDROID /* At default, shall NOT enumeration */
 						| MUSB_POWER_SOFTCONN
-#endif
 						| MUSB_POWER_HSENAB
 						/* ENSUSPEND wedges tusb */
 						/* | MUSB_POWER_ENSUSPEND */
@@ -910,11 +908,7 @@ void musb_start(struct musb *musb)
 			musb->is_active = 1;
 	}
 	musb_platform_enable(musb);
-#ifdef CONFIG_USB_MOT_ANDROID /* At default, NOT enumeration ?? */
-	musb_writeb(regs, MUSB_DEVCTL, 0);
-#else
 	musb_writeb(regs, MUSB_DEVCTL, devctl);
-#endif
 }
 
 
@@ -1507,12 +1501,11 @@ static irqreturn_t generic_interrupt(int irq, void *__hci)
 void enable_musb_int(void)
 {
 	u8 value;
-  if (is_emu_accessory())
-  {
-	value = musb_readb(musb_misc->mregs, MUSB_INTRUSB);
-	value &= ~MUSB_INTR_SESSREQ;
-	musb_writeb(musb_misc->mregs, MUSB_INTRUSB, value);
-  }
+	if (is_emu_accessory()) {
+		value = musb_readb(musb_misc->mregs, MUSB_INTRUSB);
+		value &= ~MUSB_INTR_SESSREQ;
+		musb_writeb(musb_misc->mregs, MUSB_INTRUSB, value);
+	}
 	enable_irq(nIrq_misc);
 }
 EXPORT_SYMBOL(enable_musb_int);
@@ -2080,7 +2073,7 @@ bad_config:
 #ifdef CONFIG_TTA_CHARGER
 	musb_misc = musb;
 	nIrq_misc = nIrq;
-  disable_musb_int();
+	disable_musb_int();
 #endif
 
 #ifdef CONFIG_SYSFS

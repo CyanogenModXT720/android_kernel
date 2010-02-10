@@ -308,7 +308,7 @@ enum {
 
 	CPCAP_IOCTL_NUM_TTA__START,
 	CPCAP_IOCTL_NUM_TTA_STATUS_GET,
-  CPCAP_IOCTL_NUM_TTA_CHARGER_CONTROL,
+	CPCAP_IOCTL_NUM_TTA_CHARGER_CONTROL,
 	CPCAP_IOCTL_NUM_TTA__END,
 };
 
@@ -484,11 +484,11 @@ enum cpcap_tta_state {
 };
 
 enum cpcap_tta_control {
-  TTA_REDETECT,
-  TTA_REDETCT_SLOWLY,    
-  TTA_DISABLE,
-  TTA_ENABLE,
-  TTA_UNKOWN,
+	TTA_REDETECT,
+	TTA_REDETCT_SLOWLY,    
+	TTA_DISABLE,
+	TTA_ENABLE,
+	TTA_UNKOWN,
 };
 
 struct cpcap_spi_init_data {
@@ -663,7 +663,7 @@ struct cpcap_regacc {
      _IOWR(0, CPCAP_IOCTL_NUM_TTA_STATUS_GET, enum cpcap_tta_state*)
 
 #define CPCAP_IOCTL_TTA_CHARGER_CONTROL \
-       _IOWR(0, CPCAP_IOCTL_NUM_TTA_CHARGER_CONTROL, enum cpcap_tta_control*) 
+       _IOWR(0, CPCAP_IOCTL_NUM_TTA_CHARGER_CONTROL, enum cpcap_tta_control*)
 
 #define CPCAP_AUDIO_REG_DEBUG
 

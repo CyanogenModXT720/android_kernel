@@ -155,71 +155,67 @@ static void vusb_disable(struct cpcap_usb_det_data *data)
 #ifdef CONFIG_TTA_CHARGER
 void enable_tta(void)
 {
-  mdelay(TIME_FOR_GPIO_HIGH);
-  gpio_direction_input(SHOLEST_TTA_CHRG_DET_N_GPIO);
+	mdelay(TIME_FOR_GPIO_HIGH);
+	gpio_direction_input(SHOLEST_TTA_CHRG_DET_N_GPIO);
 }
 EXPORT_SYMBOL(enable_tta);
 
 void disable_tta(void)
 {
-  gpio_direction_output(SHOLEST_TTA_CHRG_DET_N_GPIO, 1);
+	gpio_direction_output(SHOLEST_TTA_CHRG_DET_N_GPIO, 1);
 }
 EXPORT_SYMBOL(disable_tta);
 
 void force_to_detect_tta(unsigned int time)
 {
-  schedule_delayed_work(&temp_data->work, msecs_to_jiffies(time));
+	schedule_delayed_work(&temp_data->work, msecs_to_jiffies(time));
 }
 EXPORT_SYMBOL(force_to_detect_tta);
 
 unsigned char value_of_gpio34(void)
 {
-  return gpio_get_value(SHOLEST_TTA_CHRG_DET_N_GPIO);
+	return gpio_get_value(SHOLEST_TTA_CHRG_DET_N_GPIO);
 }
 EXPORT_SYMBOL(value_of_gpio34);
 
 void disable_tta_irq(void)
 {
-  disable_irq(gpio_to_irq(SHOLEST_TTA_CHRG_DET_N_GPIO));
+	disable_irq(gpio_to_irq(SHOLEST_TTA_CHRG_DET_N_GPIO));
 }
 EXPORT_SYMBOL(disable_tta_irq);
 
 unsigned char is_emu_accessory(void)
 {
-  if ((temp_data->usb_accy == CPCAP_ACCY_NONE) ||
-      (temp_data->usb_accy == CPCAP_ACCY_TTA_CHARGER))
-  {
-    return 1;
-  } else {
-    return 0;  
-  }
+	if ((temp_data->usb_accy == CPCAP_ACCY_NONE) ||
+	    (temp_data->usb_accy == CPCAP_ACCY_TTA_CHARGER))
+		return 1;
+	else
+		return 0;  
 }
 EXPORT_SYMBOL(is_emu_accessory);
 #endif
 
 void force_to_detect_usb(void)
 {
-  unsigned char sense = 0;
-  unsigned short value;
-  cpcap_regacc_read(temp_data->cpcap, CPCAP_REG_INTS2, &value);
+	unsigned char sense = 0;
+	unsigned short value;
+	cpcap_regacc_read(temp_data->cpcap, CPCAP_REG_INTS2, &value);
   
-  /* Clear ASAP after read. */
-  cpcap_regacc_write(temp_data->cpcap, CPCAP_REG_INT2,
-            (CPCAP_BIT_CHRGCURR1_I |
-             CPCAP_BIT_VBUSVLD_I |
-             CPCAP_BIT_SESSVLD_I |
-             CPCAP_BIT_SE1_I),
-            (CPCAP_BIT_CHRGCURR1_I |
-             CPCAP_BIT_VBUSVLD_I |
-             CPCAP_BIT_SESSVLD_I |
-             CPCAP_BIT_SE1_I));
-  
-  sense = ((value & CPCAP_BIT_VBUSVLD_S) ? 1 : 0);
+	/* Clear ASAP after read. */
+	cpcap_regacc_write(temp_data->cpcap, CPCAP_REG_INT2,
+			   (CPCAP_BIT_CHRGCURR1_I |
+			    CPCAP_BIT_VBUSVLD_I |
+			    CPCAP_BIT_SESSVLD_I |
+			    CPCAP_BIT_SE1_I),
+			   (CPCAP_BIT_CHRGCURR1_I |
+			    CPCAP_BIT_VBUSVLD_I |
+			    CPCAP_BIT_SESSVLD_I |
+			    CPCAP_BIT_SE1_I));
 
-  if (!sense)
-  {
-    schedule_delayed_work(&temp_data->work, msecs_to_jiffies(0));
-  }
+	sense = ((value & CPCAP_BIT_VBUSVLD_S) ? 1 : 0);
+
+	if (!sense)
+		schedule_delayed_work(&temp_data->work, msecs_to_jiffies(0));
 }
 EXPORT_SYMBOL(force_to_detect_usb);
 
@@ -441,7 +437,7 @@ static void detection_work(struct work_struct *work)
 	struct cpcap_usb_det_data *data =
 		container_of(work, struct cpcap_usb_det_data, work.work);
 #ifdef CONFIG_TTA_CHARGER  
-  static unsigned char first_time = 0;
+	static unsigned char first_time = 0;
 #endif
 
 	switch (data->state) {
@@ -507,7 +503,7 @@ static void detection_work(struct work_struct *work)
 		break;
 #ifdef CONFIG_TTA_CHARGER
 	case IDENTIFY_TTA:
-    configure_hardware(data, CPCAP_ACCY_TTA_CHARGER);
+		configure_hardware(data, CPCAP_ACCY_TTA_CHARGER);
 		data->state = IDENTIFY;
 		schedule_delayed_work(&data->work, 0);
 		break;
@@ -691,12 +687,11 @@ static void detection_work(struct work_struct *work)
 		break;
 	}
 #ifdef CONFIG_TTA_CHARGER
-  temp_data = data;
-  if (!first_time)
-  {
-    enable_musb_int();
-    first_time = 1;
-  }
+	temp_data = data;
+	if (!first_time) {
+		enable_musb_int();
+		first_time = 1;
+	}
 #endif
 }
 

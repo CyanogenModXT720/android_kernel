@@ -337,7 +337,7 @@ void cpcap_batt_irq_hdlr(enum cpcap_irqs irq, void *data)
 	struct cpcap_batt_ps *sply = data;
 
 	mutex_lock(&sply->lock);
-printk(KERN_ERR "cpcap_batt_irq_hdlr: irq = %d\n", irq);
+	printk(KERN_ERR "cpcap_batt_irq_hdlr: irq = %d\n", irq);
 	sply->data_pending = 1;
 
 	switch (irq) {
@@ -559,20 +559,20 @@ static int cpcap_batt_tta_get_property(struct power_supply *psy,
 					enum power_supply_property psp,
 					union power_supply_propval *val)
 {
-  int ret = 0;
-  struct cpcap_batt_ps *sply = container_of(psy, struct cpcap_batt_ps,
-					tta);
+	int ret = 0;
+	struct cpcap_batt_ps *sply =
+		container_of(psy, struct cpcap_batt_ps,	tta);
 
-  switch (psp) {
-  case POWER_SUPPLY_PROP_ONLINE:
-    val->intval = sply->tta_state.online;
-    break;
-  default:
-    ret = -EINVAL;
-    break;
-  }
+	switch (psp) {
+	case POWER_SUPPLY_PROP_ONLINE:
+		val->intval = sply->tta_state.online;
+		break;
+	default:
+		ret = -EINVAL;
+		break;
+	}
 
-  return ret;
+	return ret;
 }
 #endif
 
@@ -864,7 +864,7 @@ static int cpcap_batt_resume(struct platform_device *pdev)
 
 	if ((cur_time - sply->last_run_time) > 50) {
 		mutex_lock(&sply->lock);
-printk(KERN_ERR "cpcap_batt_resume: Wakeup! \n");
+		printk(KERN_ERR "cpcap_batt_resume: Wakeup! \n");
 		sply->data_pending = 1;
 		sply->irq_status |= CPCAP_BATT_IRQ_MACRO;
 
