@@ -297,6 +297,7 @@ static int primary_spkr_setting = CPCAP_AUDIO_OUT_NONE;
 static int secondary_spkr_setting = CPCAP_AUDIO_OUT_NONE;
 static int mic_setting = CPCAP_AUDIO_IN_NONE;
 static unsigned int capture_mode;
+static u8 enable_tx;
 static struct omap_mcbsp_wrapper *mcbsp_wrapper;
 static DEFINE_SPINLOCK(audio_write_lock);
 #ifdef CONFIG_WAKELOCK
@@ -354,15 +355,6 @@ static void omap2_mcbsp_tx_dma_callback(int lch, u16 ch_status, void *data)
 		return;
 	}
 	io_base = mcbsp_dma_tx->io_base;
-
-	/* If we are at the last transfer, Shut down the Transmitter */
-	if ((mcbsp_wrapper[id].auto_reset & OMAP_MCBSP_AUTO_XRST)
-	    && (omap_dma_chain_status(mcbsp_dma_tx->dma_tx_lch) ==
-		OMAP_DMA_CHAIN_INACTIVE))
-		omap_mcbsp_write(io_base, OMAP_MCBSP_REG_SPCR2,
-				 omap_mcbsp_read(io_base,
-						 OMAP_MCBSP_REG_SPCR2) &
-				 (~XRST));
 
 	if (mcbsp_wrapper[id].tx_callback != NULL)
 		mcbsp_wrapper[id].tx_callback(ch_status,
@@ -1009,7 +1001,6 @@ int omap2_mcbsp_send_data(unsigned int id, void *cbdata,
 {
 	struct omap_mcbsp *mcbsp;
 	void __iomem *io_base;
-	u8 enable_tx = 0;
 	int e_count = 0;
 	int f_count = 0;
 	int ret = 0;
@@ -1018,16 +1009,6 @@ int omap2_mcbsp_send_data(unsigned int id, void *cbdata,
 	io_base = mcbsp->io_base;
 	mcbsp_wrapper[id].tx_cb_arg = cbdata;
 
-	/* Auto RRST handling logic - disable the Reciever before 1st dma */
-	if ((mcbsp_wrapper[id].auto_reset & OMAP_MCBSP_AUTO_XRST) &&
-	    (omap_dma_chain_status(mcbsp->dma_tx_lch)
-	     == OMAP_DMA_CHAIN_INACTIVE)) {
-		omap_mcbsp_write(io_base, OMAP_MCBSP_REG_SPCR2,
-				 omap_mcbsp_read(io_base,
-						 OMAP_MCBSP_REG_SPCR2) &
-				 (~XRST));
-		enable_tx = 1;
-	}
 	/*
 	 * for skip_first and second, we need to set e_count =2, and
 	 * f_count = number of frames = number of elements/e_count
@@ -1070,11 +1051,13 @@ int omap2_mcbsp_send_data(unsigned int id, void *cbdata,
 	}
 
 	/* Auto XRST handling logic - Enable the Reciever after 1st dma */
-	if (enable_tx && (omap_dma_chain_status(mcbsp->dma_tx_lch)
-			  == OMAP_DMA_CHAIN_ACTIVE))
+	if ((enable_tx == 0) && (omap_dma_chain_status(mcbsp->dma_tx_lch)
+			  == OMAP_DMA_CHAIN_ACTIVE)) {
 		omap_mcbsp_write(io_base, OMAP_MCBSP_REG_SPCR2,
 				 omap_mcbsp_read(io_base,
 						 OMAP_MCBSP_REG_SPCR2) | XRST);
+		enable_tx = 1;
+	}
 
 	return 0;
 }
@@ -1307,6 +1290,7 @@ static void audio_discard_buf(struct audio_stream *str, struct inode *inode)
 static int audio_process_buf(struct audio_stream *str, struct inode *inode)
 {
 	int ret = 0;
+	unsigned long flags;
 
 	if (str == NULL) {
 		AUDIO_ERROR_LOG("Invalid stream parameter\n");
@@ -1332,6 +1316,14 @@ static int audio_process_buf(struct audio_stream *str, struct inode *inode)
 		if (++str->buf_head >= str->nbfrags)
 			str->buf_head = 0;
 	} else {
+		spin_lock_irqsave(&audio_write_lock, flags);
+		if (str->in_use) {
+			spin_unlock_irqrestore(&audio_write_lock, flags);
+			return ret;
+		}
+		str->in_use = 1;
+		spin_unlock_irqrestore(&audio_write_lock, flags);
+
 		while (str->pending_frags) {
 			struct audio_buf *b = &str->buffers[str->buf_head];
 			u32 buf_size = str->fragsize - b->offset;
@@ -1346,12 +1338,6 @@ static int audio_process_buf(struct audio_stream *str, struct inode *inode)
 						buf_size, str->inode);
 			}
 
-			/* Do not continue and move the frags forward..
-			 * the completion of the next transfer will
-			 * put it thru. */
-			if (ret == -EBUSY)
-				return ret;
-
 			if (ret)
 				goto out;
 
@@ -1364,12 +1350,12 @@ static int audio_process_buf(struct audio_stream *str, struct inode *inode)
 					str->buf_head = 0;
 			}
 		}
+out:
+		spin_lock_irqsave(&audio_write_lock, flags);
+		str->in_use = 0;
+		spin_unlock_irqrestore(&audio_write_lock, flags);;
 	}
 
-	return ret;
-
-out:
-	str->in_use = 0;
 	return ret;
 }
 
@@ -1393,6 +1379,7 @@ static void audio_buffer_reset(struct audio_stream *str, struct inode *inode)
 	str->buf_head = 0;
 	str->usr_head = 0;
 	str->fragsize = 0;
+	str->in_use   = 0;
 }
 
 static void mcbsp_dma_tx_cb(u32 ch_status, void *arg)
@@ -1550,7 +1537,7 @@ int audio_stop_ssi(struct inode *inode, struct file *file)
 	if (file->f_mode & FMODE_WRITE) {
 		TRY(omap2_mcbsp_set_xrst(ssi, OMAP_MCBSP_XRST_DISABLE))
 		TRY(omap2_mcbsp_stop_datatx(ssi))
-
+		enable_tx = 0;
 		omap_ctrl_writel(omap_ctrl_readl(OMAP2_CONTROL_DEVCONF0) &
 					~(1 << OMAP2_CONTROL_DEVCONF0_BIT6),
 						OMAP2_CONTROL_DEVCONF0);
@@ -1844,6 +1831,9 @@ static int audio_ioctl(struct inode *inode, struct file *file,
 				CPCAP_AUDIO_OUT_NONE;
 			cpcap_audio_state.ext_secondary_speaker =
 				CPCAP_AUDIO_OUT_NONE;
+			/* new added */
+			cpcap_audio_state.analog_source =
+				CPCAP_AUDIO_ANALOG_SOURCE_OFF;
 			cpcap_audio_set_audio_state(&cpcap_audio_state);
 			break;
 		}
@@ -2380,6 +2370,7 @@ static int audio_probe(struct platform_device *dev)
 	state.codec_out_stream = NULL;
 	state.codec_in_stream = NULL;
 
+	enable_tx = 0;
 	cpcap_audio_state.cpcap = dev->dev.platform_data;
 	cpcap_audio_init(&cpcap_audio_state);
 
