@@ -222,7 +222,7 @@ const struct omap_opp  vdd1_rate_table_bridge[] = {
 	/*OPP4*/
 	{S550M, VDD1_OPP4, 0},
 	/*OPP5*/
-	{S720M, VDD1_OPP5, 0},
+	{S600M, VDD1_OPP5, 0},
 };
 #endif
 #endif
@@ -238,9 +238,9 @@ u32 vdd1_dsp_freq[6][4] = {
 	/*OPP3*/
 	{0, 360000, 160000, 340000},
 	/*OPP4*/
-	{0, 400000, 325000, 376000},
+	{0, 396000, 325000, 376000},
 	/*OPP5*/
-	{0, 520000, 355000, 520000},
+	{0, 430000, 355000, 430000},
 };
 
 #ifdef CONFIG_BRIDGE_DVFS

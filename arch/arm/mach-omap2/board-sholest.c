@@ -149,7 +149,7 @@ static struct omap_opp sholest_mpu_rate_table[] = {
 	/*OPP4*/
 	{S550M, VDD1_OPP4, 0x38},
 	/*OPP5*/
-	{S720M, VDD1_OPP5, 0x3E},
+	{S600M, VDD1_OPP5, 0x3E},
 };
 
 #define S80M 80000000
@@ -176,7 +176,7 @@ static struct omap_opp sholest_dsp_rate_table[] = {
 	/*OPP4*/
 	{S400M, VDD1_OPP4, 0x38},
 	/*OPP5*/
-	{S520M, VDD1_OPP5, 0x3E},
+	{S430M, VDD1_OPP5, 0x3E},
 };
 
 static void __init sholest_init_irq(void)

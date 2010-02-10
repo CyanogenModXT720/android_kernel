@@ -185,14 +185,13 @@ static struct usb_device_descriptor device_desc = {
 
 void android_usb_set_connected(int connected)
 {
-/*
 	if (_android_dev && _android_dev->cdev && _android_dev->cdev->gadget) {
 		printk(KERN_INFO "USB Driver - Notification from CPCAP for %s \n",
 			 connected ? "attach" : "detach");
+		/*Disconnect so that USBD can control the connection */
 		if (connected)
 			usb_gadget_disconnect(_android_dev->cdev->gadget);
 	}
-*/
 }
 
 static int __init android_bind_config(struct usb_configuration *c)

@@ -472,6 +472,10 @@ static int test_ioctl(unsigned int cmd, unsigned long arg)
 					    write_data.value, write_data.mask);
 	break;
 
+	case CPCAP_IOCTL_TEST_FORCE_TO_DETECT:
+		force_to_detect_usb();
+	break;
+
 	default:
 		retval = -ENOTTY;
 	break;
@@ -561,7 +565,7 @@ static int tta_ioctl(unsigned int cmd, unsigned long arg)
 
 		default:
 			dev_err(&(misc_cpcap->spi->dev),
-					"Unknown IOCTL for TTA charger\n\n");
+					"Unknown IOCTL for TTA charger\n");
 			break;
 		}
 	}
