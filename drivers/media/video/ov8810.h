@@ -974,6 +974,7 @@ struct ov8810_platform_data {
 	const struct ov8810_reg *default_regs;
 	int (*ifparm)(struct v4l2_ifparm *p);
 	int (*priv_data_set)(void *);
+	void (*lock_cpufreq)(int lock);
 };
 
 #if defined(CONFIG_LEDS_FLASH_RESET)

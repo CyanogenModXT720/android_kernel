@@ -26,7 +26,9 @@
 #define MOD_NAME "OV8810: "
 
 #define I2C_M_WR 0
-#define VDD1_LOCK_VAL 0x5
+
+#define CPU_CLK_LOCK	 1
+#define CPU_CLK_UNLOCK   0
 
 /* OV8810 clock related parameters */
 struct ov8810_clk_freqs {
@@ -140,7 +142,6 @@ static struct ov8810_sensor ov8810 = {
 
 static struct i2c_driver ov8810sensor_i2c_driver;
 static enum v4l2_power current_power_state = V4L2_POWER_OFF;
-static struct device *ov_dev;
 
 /* List of image formats supported by OV8810 sensor */
 const static struct v4l2_fmtdesc ov8810_formats[] = {
@@ -550,6 +551,11 @@ static int ov8810_read_reg(struct i2c_client *client, u16 data_length, u16 reg,
 	data[1] = (u8) (reg & 0xff);
 
 	err = i2c_transfer(client->adapter, msg, 1);
+	if (err < 0) {
+		msleep(5);
+		err = i2c_transfer(client->adapter, msg, 1);
+	}
+
 	if (err >= 0) {
 		mdelay(3);
 		msg->flags = I2C_M_RD;
@@ -583,11 +589,11 @@ int ov8810_write_reg(struct i2c_client *client, u16 reg, u8 val)
 	int err = 0;
 	struct i2c_msg msg[1];
 	unsigned char data[3];
-	int retries = 0;
+	int retries = 5;
 
 	if (!client->adapter)
 		return -ENODEV;
-retry:
+
 	msg->addr = client->addr;
 	msg->flags = I2C_M_WR;
 	msg->len = 3;
@@ -598,19 +604,14 @@ retry:
 	data[1] = (u8) (reg & 0xff);
 	data[2] = val;
 
-	err = i2c_transfer(client->adapter, msg, 1);
-	udelay(50);
-
-	if (err >= 0)
-		return 0;
-
-	if (retries <= 5) {
-		DPRINTK_OV8810("Retrying I2C... %d\n", retries);
-		retries++;
-		set_current_state(TASK_UNINTERRUPTIBLE);
-		schedule_timeout(msecs_to_jiffies(20));
-		goto retry;
-	}
+	do {
+		err = i2c_transfer(client->adapter, msg, 1);
+		if (err >= 0) {
+			udelay(50);
+			return 0;
+		}
+		msleep(5);
+	} while ((--retries) > 0);
 
 	return err;
 }
@@ -1123,7 +1124,7 @@ int ov8810_start_mech_shutter_capture(
 			struct ov8810_shutter_params *shutter_params,
 			struct v4l2_int_device *s, struct vcontrol *lvc)
 {
-	u16 Tr_lines = 1, Tfrex_lines, Tfe2v_lines;
+	u16 Tr_lines = 1, Tfrex_lines, shutter_dly_lines, frame_len_lines_adj;
 	u16 data = 0;
 	int err = -EINVAL;
 	int adjusted_exp_time;
@@ -1168,16 +1169,8 @@ int ov8810_start_mech_shutter_capture(
 		((Tfrex_lines) & 0xFF));
 
 	/* Calc TFE2V  lines (with rounding)  */
-	Tfe2v_lines = (((shutter_params->delay_time << 8) +
+	shutter_dly_lines = (((shutter_params->delay_time << 8) +
 		(line_time_q8 >> 1)) / line_time_q8);
-
-	DPRINTK_OV8810("start_mech_shutter_capture:  " \
-		"expT=%dus, line_time_q8=%dus/256, " \
-		"shutter_dly=%dus Tfrex_lines=%d, " \
-		"Tfe2v_lines=%d\n",
-		shutter_params->exp_time, line_time_q8,
-		shutter_params->delay_time, Tfrex_lines,
-		Tfe2v_lines);
 
 	/*
 	 * start FREX capture & MIPI output simultaneously
@@ -1196,6 +1189,14 @@ int ov8810_start_mech_shutter_capture(
 
 	err |= ov8810_write_reg(client, OV8810_MIPI_CTRL0B, 0x0C | data);
 
+	/* adjust frame length to delay readout */
+	frame_len_lines_adj = ss->frame.frame_len_lines + shutter_dly_lines;
+	err |= ov8810_write_reg(client, OV8810_FRM_LEN_LINES_H,
+		 (frame_len_lines_adj >> 8) & 0xFF);
+
+	err |= ov8810_write_reg(client, OV8810_FRM_LEN_LINES_L,
+		 frame_len_lines_adj & 0xFF);
+
 	/* do frame trigger */
 	err |= ov8810_write_reg(client, OV8810_FRS7, 0x01);
 
@@ -1204,6 +1205,13 @@ int ov8810_start_mech_shutter_capture(
 
 	/* trigger group latch in the coming V-blank */
 	err |= ov8810_write_reg(client, OV8810_GROUP_WR, 0xFF);
+	DPRINTK_OV8810("start_mech_shutter_capture:  " \
+		"expT=%dus, line_time_q8=%dus/256, " \
+		"shutter_dly=%dus Tfrex_lines=%d, " \
+		"shutter_dly_lines=%d, frame_len_lines = %d\n",
+		shutter_params->exp_time, line_time_q8,
+		shutter_params->delay_time, Tfrex_lines,
+		shutter_dly_lines, frame_len_lines_adj);
 
 	if (err)
 		printk(KERN_ERR "OV8810: Error setting mech shutter registers\n");
@@ -1260,9 +1268,9 @@ static int ov8810_set_lens_correction(u16 enable_lens_correction,
 
 	if ((current_power_state == V4L2_POWER_ON) || sensor->resuming) {
 		if (enable_lens_correction) {
-			/* Lock VDD1 - Temporary workaround for 720p
-			   mode only !!!*/
-			resource_request("vdd1_opp", ov_dev, VDD1_LOCK_VAL);
+			/* Lock VDD1 to OPP5 - Temporary workaround for 720p
+			   mode only !!!*/			
+			sensor->pdata->lock_cpufreq(CPU_CLK_LOCK);
 
 			err = ov8810_write_regs(client, len_correction_tbl);
 			/* enable 0x3300[4] */
@@ -1294,9 +1302,6 @@ static int ov8810_set_lens_correction(u16 enable_lens_correction,
 			data &= 0xef;
 			err |= ov8810_write_reg(client,
 				OV8810_ISP_ENBL_0, data);
-
-			/* release resource lock */
-			resource_release("vdd1_opp", ov_dev);
 		}
 	}
 
@@ -2208,6 +2213,8 @@ static int ioctl_g_priv(struct v4l2_int_device *s, void *p)
 	} else if (on == V4L2_POWER_OFF) {
 		isp_set_xclk(0, OV8810_USE_XCLKA);
 		sensor->streaming = false;
+		/* release resource lock */		
+ 		sensor->pdata->lock_cpufreq(CPU_CLK_UNLOCK);
 	} else {
 		sensor->streaming = false;
 	}
@@ -2314,12 +2321,34 @@ static int ioctl_enum_framesizes(struct v4l2_int_device *s,
 		return -EINVAL;
 
 	/* Do we already reached all discrete framesizes? */
-	if (frms->index >= OV_NUM_IMAGE_SIZES)
-		return -EINVAL;
+	/* Filtering out resolution 2 in the table if the isp
+		LSC workaround is disable */
+	if (isp_lsc_workaround_enabled() == 0) {
+		if (frms->index >= OV_NUM_IMAGE_SIZES)
+			return -EINVAL;
+	} else {
+		if (frms->index >= (OV_NUM_IMAGE_SIZES - 1))
+			return -EINVAL;
+	}
 
 	frms->type = V4L2_FRMSIZE_TYPE_DISCRETE;
-	frms->discrete.width = ov8810_sizes[frms->index].width;
-	frms->discrete.height = ov8810_sizes[frms->index].height;
+
+	if (isp_lsc_workaround_enabled() == 0) {
+		frms->discrete.width = ov8810_sizes[frms->index].width;
+		frms->discrete.height = ov8810_sizes[frms->index].height;
+   } else {
+		if (frms->index < 2) {
+			frms->discrete.width =
+				ov8810_sizes[frms->index].width;
+			frms->discrete.height =
+				ov8810_sizes[frms->index].height;
+		} else {
+			frms->discrete.width =
+				ov8810_sizes[frms->index + 1].width;
+			frms->discrete.height =
+				ov8810_sizes[frms->index + 1].height;
+		}
+	}
 
 	return 0;
 }
