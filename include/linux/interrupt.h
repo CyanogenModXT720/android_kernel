@@ -59,6 +59,12 @@
 #define IRQF_NOBALANCING	0x00000800
 #define IRQF_IRQPOLL		0x00001000
 
+typedef int fiqreturn_t;
+
+typedef fiqreturn_t (*fiq_handler_t)(struct pt_regs *);
+
+void set_fiq_handler(fiq_handler_t fiq_handler);
+
 typedef irqreturn_t (*irq_handler_t)(int, void *);
 
 struct irqaction {

@@ -51,6 +51,10 @@ extern void setup_mm_for_reboot(char mode);
 
 static volatile int hlt_counter;
 
+#ifdef CONFIG_NON_NESTED_FIQ
+static fiq_handler_t fiq_handler;
+#endif
+
 #include <mach/system.h>
 
 void disable_hlt(void)
@@ -199,6 +203,44 @@ void machine_restart(char * __unused)
 	arm_pm_restart(reboot_mode);
 }
 
+#ifdef CONFIG_NON_NESTED_FIQ
+void set_fiq_handler(fiq_handler_t ufiq_handler)
+{
+	fiq_handler = ufiq_handler;
+}
+EXPORT_SYMBOL(set_fiq_handler);
+
+static int __emergency_fiq_action(struct pt_regs *regs)
+{
+	if (NULL == (void *)fiq_handler)
+		return -EINVAL;
+
+	fiq_handler(regs);
+
+	return 0;
+}
+asmlinkage void __exception asm_do_FIQ(struct pt_regs* regs)
+{
+	__emergency_fiq_action(regs);
+}
+
+int disable_abort;
+#define safe_probe_kernel_address(addr, retval) \
+	({			\
+		long val;	\
+		disable_abort = 1;	\
+		asm volatile("mrc p15, 0, %0, c5, c0, 0" : "=r" (val));	\
+		val &= ~0xF;						\
+		asm volatile("mcr p15, 0, %0, c5, c0, 0" : : "r" (val));\
+		barrier();						\
+		retval = *addr;						\
+		asm volatile("mrc p15, 0, %0, c5, c0, 0" : "=r" (val));	\
+		disable_abort = 0;					\
+		barrier();						\
+		(val & 0x8);						\
+	})
+#endif
+
 /*
  * dump a block of kernel memory from around the given address
  */
@@ -234,7 +276,11 @@ static void show_data(unsigned long addr, int nbytes, const char *name)
 		printk("%04lx ", (unsigned long)p & 0xffff);
 		for (j = 0; j < 8; j++) {
 			u32	data;
+#ifndef CONFIG_NON_NESTED_FIQ
 			if (probe_kernel_address(p, data)) {
+#else
+			if (safe_probe_kernel_address(p, data)) {
+#endif
 				printk(" ********");
 			} else {
 				printk(" %08x", data);

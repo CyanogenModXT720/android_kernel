@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2005-2009 Motorola, Inc.
+ * Copyright (C) 2005-2010 Motorola, Inc.
  */
 
 /* 
@@ -2137,6 +2137,13 @@ int sim_slim_status_handler()
 			sim_module_rx_event |= SIM_MODULE_EVENT_NULL_BYTE_OVERFLOW;
 			status = 1;
 		}
+		/* send incomplete slim status with RX_A event */
+		else {
+			sim_module_rx_event |= SIM_MODULE_EVENT_RX_A;
+			sim_module_rx_event |=
+				SIM_MODULE_EVENT_INCOMPLETE_SLIM_STATUS;
+			status = 1;
+		}
 	}
 
 	/* if this interrupt caused a user space event ... */
@@ -2209,6 +2216,10 @@ static BOOL sim_mutex_update(UINT8 mutex_request)
 		else if((sim_mutex_locked_by_id == KERNEL_MUTEX_ID) &&
 			(mutex_requester == SCPC_MUTEX_ID)) {
 			sim_mutex_locked_by_id = SCPC_MUTEX_ID;
+			success = TRUE;
+		}
+		/* If its locked and requested by the owner */
+		else if (sim_mutex_locked_by_id == mutex_requester) {
 			success = TRUE;
 		}
 		/* If it's locked, and requested by anyone but the KERNEL, then queue the request */
