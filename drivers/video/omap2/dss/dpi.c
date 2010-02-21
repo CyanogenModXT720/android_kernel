@@ -222,6 +222,10 @@ static void dpi_display_disable(struct omap_dss_device *dssdev)
 	dss_clk_disable(DSS_CLK_FCK2);
 #endif
 
+#ifdef CONFIG_PANEL_HDTV
+	dispc_set_pol_freq(dssdev->panel.config, dssdev->panel.acbi,
+			dssdev->panel.acb);
+#endif
 	dss_clk_disable(DSS_CLK_ICK | DSS_CLK_FCK1);
 
 	dssdev->state = OMAP_DSS_DISPLAY_DISABLED;

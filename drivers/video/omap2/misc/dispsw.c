@@ -754,6 +754,7 @@ static void dispsw_unset_display(struct omap_dss_device *dssdev,
 	DBG("Disconnecting %s from %s\n", dssdev->name, dssmgr->name);
 
 	/* Ignore the errors as we are unsetting */
+	dssdev->panel.config = OMAP_DSS_LCD_TFT;
 	dssdev->disable(dssdev);
 
 	for (i = 0; i < gDev->num_ovls; i++) {
