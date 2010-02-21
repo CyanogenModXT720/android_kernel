@@ -38,8 +38,6 @@ static DECLARE_MUTEX(res_mutex);
 
 /* Static Pool of users for a resource used till kmalloc becomes available */
 struct  users_list usr_list[MAX_USERS];
-/* Spinlock only for static user list */
-static spinlock_t users_list_lock;
 
 /* Private/Internal functions */
 
@@ -139,7 +137,6 @@ static struct users_list *get_user(void)
 	int ind = 0;
 	struct users_list *user;
 
-	spin_lock(&users_list_lock);
 	/* See if something available in the static pool */
 	while (ind < MAX_USERS) {
 		if (usr_list[ind].usage == UNUSED)
@@ -151,9 +148,7 @@ static struct users_list *get_user(void)
 		/* Pick from the static pool */
 		user = &usr_list[ind];
 		user->usage = STATIC_ALLOC;
-		spin_unlock(&users_list_lock);
 	} else {
-		spin_unlock(&users_list_lock);
 		/* By this time we hope slab is initialized */
 		if (slab_is_available()) {
 			user = kmalloc(sizeof(struct  users_list), GFP_KERNEL);
@@ -186,11 +181,9 @@ void free_user(struct users_list *user)
 	if (user->usage == DYNAMIC_ALLOC) {
 		kfree(user);
 	} else {
-		spin_lock(&users_list_lock);
 		user->usage = UNUSED;
 		user->level = RES_DEFAULTLEVEL;
 		user->dev = NULL;
-		spin_unlock(&users_list_lock);
 	}
 }
 
@@ -216,7 +209,6 @@ void resource_init(struct shared_resource **resources)
 		WARN_ON(1);
 	}
 
-	spin_lock_init(&users_list_lock);
 	/* Init the users_list POOL */
 	for (ind = 0; ind < MAX_USERS; ind++) {
 		usr_list[ind].usage = UNUSED;
