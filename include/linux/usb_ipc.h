@@ -141,6 +141,10 @@ typedef struct {
 	int truncated_size;
 } USB_IPC_IFS_STRUCT;
 
+extern USB_IPC_IFS_STRUCT usb_ipc_data_param;
+extern spinlock_t ipc_event_lock;
+extern wait_queue_head_t kipcd_wait;
+
 /* macros for LinkDriver read/write semphore */
 #define SEM_LOCK_INIT(x)     init_MUTEX_LOCKED(x)
 #define SEM_LOCK(x)          down(x)

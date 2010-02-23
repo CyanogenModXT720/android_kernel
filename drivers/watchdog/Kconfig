@@ -200,6 +200,13 @@ config OMAP_WATCHDOG_AUTOPET
 	  Select if you want the kernel to auto-enable and pet the watchdog
 	  itself.
 
+config OMAP_WATCHDOG_FIQ
+	bool "FIQ watchdog based on timer"
+	depends on OMAP_WATCHDOG && NON_NESTED_FIQ
+	default n
+	help
+	  Select if you want to debug watchdog reset.
+
 config OMAP_WATCHDOG_CONTROL
     bool "Control watchdog disable from user space"
 	depends on OMAP_WATCHDOG

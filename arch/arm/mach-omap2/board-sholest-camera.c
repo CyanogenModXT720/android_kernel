@@ -26,6 +26,7 @@
 #include <mach/board-sholest.h>
 #include <mach/omap-pm.h>
 #include <mach/control.h>
+#include <mach/resource.h>
 
 #ifdef CONFIG_VIDEO_OLDOMAP3
 #include <media/v4l2-int-device.h>
@@ -54,6 +55,7 @@
 #define OV8810_CSI2_PHY_TCLK_TERM	0
 #define OV8810_CSI2_PHY_TCLK_MISS	1
 #define OV8810_CSI2_PHY_TCLK_SETTLE	14
+#define CPUCLK_LOCK_VAL			    0x5
 #endif
 
 #ifdef CONFIG_VIDEO_OMAP3_HPLENS
@@ -242,11 +244,27 @@ struct mt9p012_platform_data sholest_mt9p012_platform_data = {
 #endif /* #ifdef CONFIG_VIDEO_MT9P012 || CONFIG_VIDEO_MT9P012_MODULE */
 
 #if defined(CONFIG_VIDEO_OV8810)
+
 static struct omap34xxcam_sensor_config ov8810_cam_hwc = {
 	.sensor_isp = 0,
 	.xclk = OMAP34XXCAM_XCLK_A,
 	.capture_mem = PAGE_ALIGN(3264 * 2448 * 2 * 2) * 4,
 };
+
+static void mapphone_lock_cpufreq(int lock){
+	static struct device *ov_dev;
+	static int flag;
+	if (lock == 1) {
+		resource_request("vdd1_opp", ov_dev, CPUCLK_LOCK_VAL);
+		flag = 1;
+	}
+	else {
+		if (flag == 1) {
+			resource_release("vdd1_opp", ov_dev);
+			flag = 0;
+		}
+	}
+}
 
 static int ov8810_sensor_set_prv_data(void *priv)
 {
@@ -529,6 +547,7 @@ static int ov8810_sensor_power_set(struct device *dev, \
 struct ov8810_platform_data sholest_ov8810_platform_data = {
 	.power_set      = ov8810_sensor_power_set,
 	.priv_data_set  = ov8810_sensor_set_prv_data,
+	.lock_cpufreq   = mapphone_lock_cpufreq,
 	.default_regs   = NULL,
 };
 

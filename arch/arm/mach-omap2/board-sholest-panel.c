@@ -212,7 +212,8 @@ static struct dispsw_mr_support sholest_dispsw_hdtv_2 = {
 	 	.vfp			= 9,
 	 	.vbp			= 30,
 	},
-	.panel_config = (OMAP_DSS_LCD_TFT|OMAP_DSS_LCD_IVS|OMAP_DSS_LCD_IHS),
+	.panel_config = (OMAP_DSS_LCD_TFT|OMAP_DSS_LCD_IVS|OMAP_DSS_LCD_IHS|
+					OMAP_DSS_LCD_ONOFF|OMAP_DSS_LCD_IPC),
 };
 
 static struct dispsw_mr_support sholest_dispsw_hdtv_4 = {
@@ -229,7 +230,7 @@ static struct dispsw_mr_support sholest_dispsw_hdtv_4 = {
 		.vfp	= 5,
 		.vbp	= 20,
 	},
-	.panel_config = OMAP_DSS_LCD_TFT,
+	.panel_config = (OMAP_DSS_LCD_TFT|OMAP_DSS_LCD_ONOFF|OMAP_DSS_LCD_IPC),
 };
 
 #ifdef CONFIG_TVOUT_SHOLEST

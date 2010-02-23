@@ -291,17 +291,15 @@ static const struct sample_rate_info_t valid_sample_rates[] = {
 	{.rate = 48000, .cpcap_audio_rate = CPCAP_AUDIO_STDAC_RATE_48000_HZ},
 };
 
-/*
-static DEFINE_MUTEX(audio_write_lock);
-static DEFINE_MUTEX(audio_read_lock);
 static unsigned long flags;
-*/
 static int read_buf_full;
 static int primary_spkr_setting = CPCAP_AUDIO_OUT_NONE;
 static int secondary_spkr_setting = CPCAP_AUDIO_OUT_NONE;
 static int mic_setting = CPCAP_AUDIO_IN_NONE;
 static unsigned int capture_mode;
+static u8 enable_tx;
 static struct omap_mcbsp_wrapper *mcbsp_wrapper;
+static DEFINE_SPINLOCK(audio_write_lock);
 #ifdef CONFIG_WAKELOCK
 static struct wake_lock mcbsp_wakelock;
 #endif
@@ -357,15 +355,6 @@ static void omap2_mcbsp_tx_dma_callback(int lch, u16 ch_status, void *data)
 		return;
 	}
 	io_base = mcbsp_dma_tx->io_base;
-
-	/* If we are at the last transfer, Shut down the Transmitter */
-	if ((mcbsp_wrapper[id].auto_reset & OMAP_MCBSP_AUTO_XRST)
-	    && (omap_dma_chain_status(mcbsp_dma_tx->dma_tx_lch) ==
-		OMAP_DMA_CHAIN_INACTIVE))
-		omap_mcbsp_write(io_base, OMAP_MCBSP_REG_SPCR2,
-				 omap_mcbsp_read(io_base,
-						 OMAP_MCBSP_REG_SPCR2) &
-				 (~XRST));
 
 	if (mcbsp_wrapper[id].tx_callback != NULL)
 		mcbsp_wrapper[id].tx_callback(ch_status,
@@ -1012,7 +1001,6 @@ int omap2_mcbsp_send_data(unsigned int id, void *cbdata,
 {
 	struct omap_mcbsp *mcbsp;
 	void __iomem *io_base;
-	u8 enable_tx = 0;
 	int e_count = 0;
 	int f_count = 0;
 	int ret = 0;
@@ -1021,16 +1009,6 @@ int omap2_mcbsp_send_data(unsigned int id, void *cbdata,
 	io_base = mcbsp->io_base;
 	mcbsp_wrapper[id].tx_cb_arg = cbdata;
 
-	/* Auto RRST handling logic - disable the Reciever before 1st dma */
-	if ((mcbsp_wrapper[id].auto_reset & OMAP_MCBSP_AUTO_XRST) &&
-	    (omap_dma_chain_status(mcbsp->dma_tx_lch)
-	     == OMAP_DMA_CHAIN_INACTIVE)) {
-		omap_mcbsp_write(io_base, OMAP_MCBSP_REG_SPCR2,
-				 omap_mcbsp_read(io_base,
-						 OMAP_MCBSP_REG_SPCR2) &
-				 (~XRST));
-		enable_tx = 1;
-	}
 	/*
 	 * for skip_first and second, we need to set e_count =2, and
 	 * f_count = number of frames = number of elements/e_count
@@ -1073,11 +1051,13 @@ int omap2_mcbsp_send_data(unsigned int id, void *cbdata,
 	}
 
 	/* Auto XRST handling logic - Enable the Reciever after 1st dma */
-	if (enable_tx && (omap_dma_chain_status(mcbsp->dma_tx_lch)
-			  == OMAP_DMA_CHAIN_ACTIVE))
+	if ((enable_tx == 0) && (omap_dma_chain_status(mcbsp->dma_tx_lch)
+			  == OMAP_DMA_CHAIN_ACTIVE)) {
 		omap_mcbsp_write(io_base, OMAP_MCBSP_REG_SPCR2,
 				 omap_mcbsp_read(io_base,
 						 OMAP_MCBSP_REG_SPCR2) | XRST);
+		enable_tx = 1;
+	}
 
 	return 0;
 }
@@ -1177,20 +1157,16 @@ static int audio_select_speakers(int spkr)
 		local_spkr = -1;
 	}
 
-	AUDIO_LEVEL3_LOG("spkr1 = %#x, spkr2 = %#x\n", spkr1, spkr2);
+	AUDIO_LEVEL1_LOG("spkr1 = %#x, spkr2 = %#x\n", spkr1, spkr2);
 
-	/* LIBtt21120, to setup audio path, this routine have to remove */
-	#if 0
+	///* LIBtt21120, to setup audio path, this routine have to remove */
 	if (spkr1 != primary_spkr_setting || spkr2 != secondary_spkr_setting) {
-	#endif
 		primary_spkr_setting = spkr1;
 		secondary_spkr_setting = spkr2;
 		map_audioic_speakers();
 		cpcap_audio_state.output_gain = 0;
 		cpcap_audio_set_audio_state(&cpcap_audio_state);
-	#if 0
 	}
-	#endif
 
 	return 0;
 }
@@ -1314,6 +1290,7 @@ static void audio_discard_buf(struct audio_stream *str, struct inode *inode)
 static int audio_process_buf(struct audio_stream *str, struct inode *inode)
 {
 	int ret = 0;
+	unsigned long flags;
 
 	if (str == NULL) {
 		AUDIO_ERROR_LOG("Invalid stream parameter\n");
@@ -1339,6 +1316,14 @@ static int audio_process_buf(struct audio_stream *str, struct inode *inode)
 		if (++str->buf_head >= str->nbfrags)
 			str->buf_head = 0;
 	} else {
+		spin_lock_irqsave(&audio_write_lock, flags);
+		if (str->in_use) {
+			spin_unlock_irqrestore(&audio_write_lock, flags);
+			return ret;
+		}
+		str->in_use = 1;
+		spin_unlock_irqrestore(&audio_write_lock, flags);
+
 		while (str->pending_frags) {
 			struct audio_buf *b = &str->buffers[str->buf_head];
 			u32 buf_size = str->fragsize - b->offset;
@@ -1353,12 +1338,6 @@ static int audio_process_buf(struct audio_stream *str, struct inode *inode)
 						buf_size, str->inode);
 			}
 
-			/* Do not continue and move the frags forward..
-			 * the completion of the next transfer will
-			 * put it thru. */
-			if (ret == -EBUSY)
-				return ret;
-
 			if (ret)
 				goto out;
 
@@ -1371,12 +1350,12 @@ static int audio_process_buf(struct audio_stream *str, struct inode *inode)
 					str->buf_head = 0;
 			}
 		}
+out:
+		spin_lock_irqsave(&audio_write_lock, flags);
+		str->in_use = 0;
+		spin_unlock_irqrestore(&audio_write_lock, flags);;
 	}
 
-	return ret;
-
-out:
-	str->in_use = 0;
 	return ret;
 }
 
@@ -1400,6 +1379,7 @@ static void audio_buffer_reset(struct audio_stream *str, struct inode *inode)
 	str->buf_head = 0;
 	str->usr_head = 0;
 	str->fragsize = 0;
+	str->in_use   = 0;
 }
 
 static void mcbsp_dma_tx_cb(u32 ch_status, void *arg)
@@ -1557,7 +1537,7 @@ int audio_stop_ssi(struct inode *inode, struct file *file)
 	if (file->f_mode & FMODE_WRITE) {
 		TRY(omap2_mcbsp_set_xrst(ssi, OMAP_MCBSP_XRST_DISABLE))
 		TRY(omap2_mcbsp_stop_datatx(ssi))
-
+		enable_tx = 0;
 		omap_ctrl_writel(omap_ctrl_readl(OMAP2_CONTROL_DEVCONF0) &
 					~(1 << OMAP2_CONTROL_DEVCONF0_BIT6),
 						OMAP2_CONTROL_DEVCONF0);
@@ -1851,6 +1831,9 @@ static int audio_ioctl(struct inode *inode, struct file *file,
 				CPCAP_AUDIO_OUT_NONE;
 			cpcap_audio_state.ext_secondary_speaker =
 				CPCAP_AUDIO_OUT_NONE;
+			/* new added */
+			cpcap_audio_state.analog_source =
+				CPCAP_AUDIO_ANALOG_SOURCE_OFF;
 			cpcap_audio_set_audio_state(&cpcap_audio_state);
 			break;
 		}
@@ -1916,15 +1899,12 @@ static int audio_ioctl(struct inode *inode, struct file *file,
 					CPCAP_AUDIO_CODEC_ON)
 				cpcap_audio_state.codec_mute =
 						CPCAP_AUDIO_CODEC_UNMUTE;
-		}
-		cpcap_audio_state.output_gain = gain;
 
+			cpcap_audio_state.output_gain = gain;
+		}
 		cpcap_audio_set_audio_state(&cpcap_audio_state);
-		/*AUDIO_LEVEL2_LOG("SOUND_MIXER_VOLUME, output_gain = %d\n",
-				cpcap_audio_state.output_gain);*/
 		AUDIO_LEVEL1_LOG("SOUND_MIXER_VOLUME, output_gain = %d\n",
 				cpcap_audio_state.output_gain);
-
 		break;
 	}
 
@@ -1975,7 +1955,6 @@ static ssize_t audio_write(struct file *file, const char *buffer, size_t count,
 								loff_t *nouse)
 {
 	int chunksize, ret = 0;
-	unsigned long flags;
 	const char *buffer0 = buffer;
 	struct inode *inode = (struct inode *)file->private_data;
 	int minor = MINOR(inode->i_rdev);
@@ -1983,7 +1962,6 @@ static ssize_t audio_write(struct file *file, const char *buffer, size_t count,
 			state.stdac_out_stream : state.codec_out_stream;
 
 	mutex_lock(&audio_lock);
-	/*mutex_lock(&audio_write_lock);*/
 
 	if (minor == state.dev_dsp) {
 		if (!str->active) {
@@ -2051,17 +2029,20 @@ static ssize_t audio_write(struct file *file, const char *buffer, size_t count,
 		}
 
 		/* Workaround for CPCAP channel inversion issue */
-		if (minor == state.dev_dsp &&
-			(cpcap_audio_state.stdac_primary_speaker ==
+		if (cpcap_audio_state.cpcap->revision == CPCAP_REVISION_2_1 &&
+			cpcap_audio_state.cpcap->vendor == CPCAP_VENDOR_TI) {
+			if (minor == state.dev_dsp &&
+				(cpcap_audio_state.stdac_primary_speaker ==
 					CPCAP_AUDIO_OUT_STEREO_HEADSET ||
-			cpcap_audio_state.stdac_secondary_speaker ==
-				CPCAP_AUDIO_OUT_STEREO_HEADSET)) {
-			int lc;
-			short *ptr = (short *)(buf->data + buf->offset);
-			for (lc = 0; lc < chunksize / 2; lc += 2) {
-				ptr[lc] = -ptr[lc];
-				if (ptr[lc] == (short)0x8000)
-					ptr[lc] = (short)0x7FFF;
+				cpcap_audio_state.stdac_secondary_speaker ==
+					CPCAP_AUDIO_OUT_STEREO_HEADSET)) {
+				int lc;
+				short *ptr = (short *)(buf->data + buf->offset);
+				for (lc = 0; lc < chunksize / 2; lc += 2) {
+					ptr[lc] = -ptr[lc];
+					if (ptr[lc] == (short)0x8000)
+						ptr[lc] = (short)0x7FFF;
+				}
 			}
 		}
 
@@ -2076,8 +2057,8 @@ static ssize_t audio_write(struct file *file, const char *buffer, size_t count,
 
 		buf->offset = 0;
 
-		/*spin_lock_irqsave(&audio_write_lock, flags);*/
-		local_irq_save(flags);
+		spin_lock_irqsave(&audio_write_lock, flags);
+
 		if (++str->usr_head >= str->nbfrags)
 			str->usr_head = 0;
 
@@ -2085,15 +2066,11 @@ static ssize_t audio_write(struct file *file, const char *buffer, size_t count,
 
 		ret = audio_process_buf(str, inode);
 
-		/*spin_unlock_irqrestore(&audio_write_lock, flags);*/
-		local_irq_restore(flags);
+		spin_unlock_irqrestore(&audio_write_lock, flags);
 	}
 
 	if (buffer - buffer0)
 		ret = buffer - buffer0;
-
-	/*mutex_unlock(&audio_write_lock);*/
-
 out:
 	mutex_unlock(&audio_lock);
 	return ret;
@@ -2148,7 +2125,7 @@ static int audio_codec_open(struct inode *inode, struct file *file)
 			cpcap_audio_state.microphone = mic_setting;
 			cpcap_audio_set_audio_state(&cpcap_audio_state);
 			state.codec_in_stream =
-			kmalloc(sizeof(struct audio_stream), GFP_KERNEL);
+			    kmalloc(sizeof(struct audio_stream), GFP_KERNEL);
 			memset(state.codec_in_stream, 0,
 			       sizeof(struct audio_stream));
 			state.codec_in_stream->inode = inode;
@@ -2261,8 +2238,6 @@ static ssize_t audio_codec_read(struct file *file, char *buffer, size_t size,
 						 AUDIO_TIMEOUT);
 		mutex_lock(&audio_lock);
 
-		/*mutex_lock(&audio_read_lock);*/
-
 		read_buf_full--;
 
 		if (read_buf_full < 0)
@@ -2271,7 +2246,6 @@ static ssize_t audio_codec_read(struct file *file, char *buffer, size_t size,
 		if (copy_to_user(buffer, buf->data, str->fragsize)) {
 			AUDIO_ERROR_LOG("Audio: CopyTo User failed \n");
 			ret = -EFAULT;
-			/*mutex_unlock(&audio_read_lock);*/
 			goto err;
 		}
 
@@ -2279,12 +2253,9 @@ static ssize_t audio_codec_read(struct file *file, char *buffer, size_t size,
 			str->usr_head = 0;
 
 		size -= str->fragsize;
-
-		/*mutex_unlock(&audio_read_lock);*/
 	}
 
 	ret = local_size;
-
 err:
 	mutex_unlock(&audio_lock);
 	return ret;
@@ -2399,8 +2370,10 @@ static int audio_probe(struct platform_device *dev)
 	state.codec_out_stream = NULL;
 	state.codec_in_stream = NULL;
 
+	enable_tx = 0;
 	cpcap_audio_state.cpcap = dev->dev.platform_data;
 	cpcap_audio_init(&cpcap_audio_state);
+
 	cpcap_audio_state.cpcap->h2w_new_state = &audio_callback;
 	return 0;
 }

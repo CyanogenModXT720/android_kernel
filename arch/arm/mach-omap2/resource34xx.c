@@ -373,7 +373,7 @@ int set_opp(struct shared_resource *resp, u32 target_level)
 
 	if (resp == vdd1_resp) {
 		if (target_level < 3)
-			resource_release("vdd2_opp", &vdd2_dev);
+			_resource_release(vdd2_resp, &vdd2_dev);
 
 		resource_set_opp_level(VDD1_OPP, target_level, 0);
 		/*
@@ -382,7 +382,7 @@ int set_opp(struct shared_resource *resp, u32 target_level)
 		 * throughput in KiB/s for 100 Mhz = 100 * 1000 * 4.
 		 */
 		if (target_level >= 3)
-			resource_request("vdd2_opp", &vdd2_dev, 400000);
+			_resource_request(vdd2_resp, &vdd2_dev, 400000);
 
 	} else if (resp == vdd2_resp) {
 		tput = target_level;
@@ -448,10 +448,10 @@ int set_freq(struct shared_resource *resp, u32 target_level)
 
 	if (strcmp(resp->name, "mpu_freq") == 0) {
 		vdd1_opp = get_opp(mpu_opps + MAX_VDD1_OPP, target_level);
-		resource_request("vdd1_opp", &dummy_mpu_dev, vdd1_opp);
+		_resource_request(vdd1_resp, &dummy_mpu_dev, vdd1_opp);
 	} else if (strcmp(resp->name, "dsp_freq") == 0) {
 		vdd1_opp = get_opp(dsp_opps + MAX_VDD1_OPP, target_level);
-		resource_request("vdd1_opp", &dummy_dsp_dev, vdd1_opp);
+		_resource_request(vdd1_resp, &dummy_dsp_dev, vdd1_opp);
 	}
 	resp->curr_level = target_level;
 	return 0;

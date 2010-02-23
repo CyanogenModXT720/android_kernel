@@ -22,6 +22,8 @@
 #include <linux/freezer.h>
 #include <linux/vmstat.h>
 #include <linux/syscalls.h>
+#include <linux/quickwakeup.h>
+#include <linux/wakelock.h>
 
 #include "power.h"
 
@@ -279,20 +281,12 @@ void __attribute__ ((weak)) arch_suspend_enable_irqs(void)
 	local_irq_enable();
 }
 
-/**
- *	suspend_enter - enter the desired system sleep state.
- *	@state:		state to enter
- *
- *	This function should be called after devices have been suspended.
- */
-static int suspend_enter(suspend_state_t state)
+static int _suspend_enter(suspend_state_t state)
 {
 	int error = 0;
 
-	device_pm_lock();
 	arch_suspend_disable_irqs();
 	BUG_ON(!irqs_disabled());
-
 	if ((error = device_power_down(PMSG_SUSPEND))) {
 		printk(KERN_ERR "PM: Some devices failed to power down\n");
 		goto Done;
@@ -307,8 +301,34 @@ static int suspend_enter(suspend_state_t state)
 
 	device_power_up(PMSG_RESUME);
  Done:
+
+#ifdef CONFIG_QUICK_WAKEUP
+	quickwakeup_check();
+#endif
 	arch_suspend_enable_irqs();
 	BUG_ON(irqs_disabled());
+	return error;
+}
+
+/**
+ *	suspend_enter - enter the desired system sleep state.
+ *	@state:		state to enter
+ *
+ *	This function should be called after devices have been suspended.
+ */
+static int suspend_enter(suspend_state_t state)
+{
+	int error = 0;
+	device_pm_lock();
+	error = _suspend_enter(state);
+
+#ifdef CONFIG_QUICK_WAKEUP
+	while (!error && !quickwakeup_execute()) {
+		if (has_wake_lock(WAKE_LOCK_SUSPEND))
+			break;
+		error = _suspend_enter(state);
+	}
+#endif
 	device_pm_unlock();
 	return error;
 }

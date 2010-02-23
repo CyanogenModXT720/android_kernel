@@ -83,6 +83,13 @@ __dabt_invalid:
 	b	common_invalid
 ENDPROC(__dabt_invalid)
 
+#ifdef CONFIG_NON_NESTED_FIQ
+__fiq_invalid:
+	inv_entry BAD_FIQ
+	b	common_invalid
+ENDPROC(__fiq_invalid)
+#endif
+
 __irq_invalid:
 	inv_entry BAD_IRQ
 	b	common_invalid
@@ -182,8 +189,22 @@ __dabt_svc:
 	@ set desired IRQ state, then call main handler
 	@
 	msr	cpsr_c, r9
+#ifdef CONFIG_NON_NESTED_FIQ
+	ldr	r2, .LCdisabledabt
+	ldr	r2, [r2]
+	tst	r2, #1
+	beq	doabort
+	ldr     r2, [sp, #S_PC]
+	add	r2, r2, #4
+	str	r2, [sp, #S_PC]
+	b	abortfinish
+doabort:
+#endif
 	mov	r2, sp
 	bl	do_DataAbort
+#ifdef CONFIG_NON_NESTED_FIQ
+abortfinish:
+#endif
 
 	@
 	@ IRQs off again before pulling preserved data off the stack
@@ -197,6 +218,22 @@ __dabt_svc:
 	msr	spsr_cxsf, r0
 	ldmia	sp, {r0 - pc}^			@ load r0 - pc, cpsr
 ENDPROC(__dabt_svc)
+
+#ifdef CONFIG_NON_NESTED_FIQ
+.LCdisabledabt:
+	.word disable_abort
+
+	.align	5
+__fiq_svc:
+	disable_irq
+	svc_entry
+	mov 	r0, sp
+	bl 	asm_do_FIQ
+	ldr     r0, [sp, #S_PSR]                @ irqs are already disabled
+	msr     spsr_cxsf, r0
+	ldmia   sp, {r0 - pc}^                  @ load r0 - pc, cpsr
+ENDPROC(__fiq_svc)
+#endif
 
 	.align	5
 __irq_svc:
@@ -423,6 +460,19 @@ __dabt_usr:
 ENDPROC(__dabt_usr)
 
 	.align	5
+#ifdef CONFIG_NON_NESTED_FIQ
+__fiq_usr:
+	usr_entry
+	kuser_cmpxchg_check
+	mov 	r0, sp
+	bl 	asm_do_FIQ
+	get_thread_info tsk
+	mov 	why, #0
+	b   	ret_to_user
+ENDPROC(__fiq_svc)
+
+	.align	5
+#endif
 __irq_usr:
 	usr_entry
 	kuser_cmpxchg_check
@@ -1072,6 +1122,26 @@ __stubs_start:
 	.long	__irq_invalid			@  e
 	.long	__irq_invalid			@  f
 
+#ifdef CONFIG_NON_NESTED_FIQ
+	vector_stub	fiq, FIQ_MODE, 4
+
+	.long	__fiq_usr			@  0  (USR_26 / USR_32)
+	.long	__fiq_invalid			@  1  (FIQ_26 / FIQ_32)
+	.long	__fiq_invalid			@  2  (IRQ_26 / IRQ_32)
+	.long	__fiq_svc			@  3  (SVC_26 / SVC_32)
+	.long	__fiq_invalid			@  4
+	.long	__fiq_invalid			@  5
+	.long	__fiq_invalid			@  6
+	.long	__fiq_invalid			@  7
+	.long	__fiq_invalid			@  8
+	.long	__fiq_invalid			@  9
+	.long	__fiq_invalid			@  a
+	.long	__fiq_invalid			@  b
+	.long	__fiq_invalid			@  c
+	.long	__fiq_invalid			@  d
+	.long	__fiq_invalid			@  e
+	.long	__fiq_invalid			@  f
+#endif
 /*
  * Data abort dispatcher
  * Enter in ABT mode, spsr = USR CPSR, lr = USR PC
@@ -1153,9 +1223,11 @@ __stubs_start:
  * other mode than FIQ...  Ok you can switch to another mode, but you can't
  * get out of that mode without clobbering one register.
  */
+#ifndef CONFIG_NON_NESTED_FIQ
 vector_fiq:
-	disable_fiq
-	subs	pc, lr, #4
+    disable_fiq
+    subs	pc, lr, #4
+#endif
 
 /*=============================================================================
  * Address exception handler

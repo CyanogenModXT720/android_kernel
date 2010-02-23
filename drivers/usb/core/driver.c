@@ -1752,7 +1752,9 @@ int usb_suspend(struct device *dev, pm_message_t msg)
 	 * properly.
 	 */
 	if (udev->state == USB_STATE_SUSPENDED) {
+#ifndef CONFIG_EHCI_SKIP_SYS_RESUME
 		if (udev->parent || udev->speed != USB_SPEED_HIGH)
+#endif
 			udev->skip_sys_resume = 1;
 		return 0;
 	}

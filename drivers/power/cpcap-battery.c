@@ -337,7 +337,7 @@ void cpcap_batt_irq_hdlr(enum cpcap_irqs irq, void *data)
 	struct cpcap_batt_ps *sply = data;
 
 	mutex_lock(&sply->lock);
-
+	printk(KERN_ERR "cpcap_batt_irq_hdlr: irq = %d\n", irq);
 	sply->data_pending = 1;
 
 	switch (irq) {
@@ -412,7 +412,6 @@ static ssize_t cpcap_batt_read(struct file *file,
 {
 	struct cpcap_batt_ps *sply = file->private_data;
 	int ret = -EFBIG;
-	unsigned short regval;
 	unsigned long long temp;
 
 	if (count >= sizeof(char)) {
@@ -426,11 +425,6 @@ static ssize_t cpcap_batt_read(struct file *file,
 		temp = sched_clock();
 		do_div(temp, NSEC_PER_SEC);
 		sply->last_run_time = (unsigned long)temp;
-
-		cpcap_regacc_read(sply->cpcap, CPCAP_REG_MIM1, &regval);
-		cpcap_regacc_write(sply->cpcap, CPCAP_REG_MIM1,
-				   ((~regval) & CPCAP_BIT_PRIMACRO_12M),
-				   CPCAP_BIT_PRIMACRO_12M);
 
 		sply->irq_status = 0;
 		mutex_unlock(&sply->lock);
@@ -565,20 +559,20 @@ static int cpcap_batt_tta_get_property(struct power_supply *psy,
 					enum power_supply_property psp,
 					union power_supply_propval *val)
 {
-  int ret = 0;
-  struct cpcap_batt_ps *sply = container_of(psy, struct cpcap_batt_ps,
-					tta);
+	int ret = 0;
+	struct cpcap_batt_ps *sply =
+		container_of(psy, struct cpcap_batt_ps,	tta);
 
-  switch (psp) {
-  case POWER_SUPPLY_PROP_ONLINE:
-    val->intval = sply->tta_state.online;
-    break;
-  default:
-    ret = -EINVAL;
-    break;
-  }
+	switch (psp) {
+	case POWER_SUPPLY_PROP_ONLINE:
+		val->intval = sply->tta_state.online;
+		break;
+	default:
+		ret = -EINVAL;
+		break;
+	}
 
-  return ret;
+	return ret;
 }
 #endif
 
@@ -870,18 +864,7 @@ static int cpcap_batt_resume(struct platform_device *pdev)
 
 	if ((cur_time - sply->last_run_time) > 50) {
 		mutex_lock(&sply->lock);
-		cpcap_regacc_write(sply->cpcap, CPCAP_REG_MIM1,
-				   CPCAP_BIT_PRIMACRO_7M |
-				   CPCAP_BIT_PRIMACRO_8M |
-				   CPCAP_BIT_PRIMACRO_9M |
-				   CPCAP_BIT_PRIMACRO_10M |
-				   CPCAP_BIT_PRIMACRO_11M,
-				   CPCAP_BIT_PRIMACRO_7M |
-				   CPCAP_BIT_PRIMACRO_8M |
-				   CPCAP_BIT_PRIMACRO_9M |
-				   CPCAP_BIT_PRIMACRO_10M |
-				   CPCAP_BIT_PRIMACRO_11M);
-
+		printk(KERN_ERR "cpcap_batt_resume: Wakeup! \n");
 		sply->data_pending = 1;
 		sply->irq_status |= CPCAP_BATT_IRQ_MACRO;
 

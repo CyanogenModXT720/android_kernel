@@ -1225,7 +1225,10 @@ int dsi_pll_init(bool enable_hsclk, bool enable_hsdiv)
 	if (r)
 		goto err1;
 
-
+#ifndef CONFIG_TVOUT_SHOLEST
+	enable_clocks(0);
+	dsi_enable_pll_clock(0);
+#endif
 	DSSDBG("PLL init done\n");
 
 	return 0;
@@ -1239,9 +1242,10 @@ err0:
 
 void dsi_pll_uninit(void)
 {
+#ifdef CONFIG_TVOUT_SHOLEST
 	enable_clocks(0);
 	dsi_enable_pll_clock(0);
-	
+#endif
 	dsi.pll_locked = 0;
 	dsi_pll_power(DSI_PLL_POWER_OFF);
 
@@ -1461,7 +1465,7 @@ static void dsi_complexio_timings(void)
 	ths_prepare = ns2ddr(70) + 2;
 
 	/* min 145ns + 10*UI */
-	ths_prepare_ths_zero = ns2ddr(175) + 2;
+	ths_prepare_ths_zero = ns2ddr(175 + 425) + 2;
 
 	/* min max(8*UI, 60ns+4*UI) */
 	ths_trail = ns2ddr(60) + 5;
@@ -1891,7 +1895,10 @@ static int dsi_vc_send_bta_sync(int channel)
 
 	INIT_COMPLETION(dsi.bta_completion);
 
-
+#ifndef CONFIG_TVOUT_SHOLEST
+	enable_clocks(1);
+	dsi_enable_pll_clock(1);
+#endif
 	dsi_vc_enable_bta_irq(channel);
 
 	r = dsi_vc_send_bta(channel);
@@ -1913,8 +1920,10 @@ static int dsi_vc_send_bta_sync(int channel)
 	}
 err:
 	dsi_vc_disable_bta_irq(channel);
-
-
+#ifndef CONFIG_TVOUT_SHOLEST
+	enable_clocks(0);
+	dsi_enable_pll_clock(0);
+#endif
 	return r;
 }
 
@@ -1966,6 +1975,10 @@ static int dsi_vc_send_long(int channel, u8 data_type, u8 *data, u16 len,
 		return -EINVAL;
 	}
 
+#ifndef CONFIG_TVOUT_SHOLEST
+	enable_clocks(1);
+	dsi_enable_pll_clock(1);
+#endif
 	INIT_COMPLETION(dsi.packet_sent_completion);
 	dsi_vc_enable_packet_sent_irq(channel);
 
@@ -2013,11 +2026,14 @@ static int dsi_vc_send_long(int channel, u8 data_type, u8 *data, u16 len,
 	}
 
 	if (wait_for_completion_timeout(&dsi.packet_sent_completion,
-	    msecs_to_jiffies(10)) == 0)
+	  msecs_to_jiffies(10)) == 0)
 		DSSERR("Failed to send long packet\n");
 
 	dsi_vc_disable_packet_sent_irq(channel);
-
+#ifndef CONFIG_TVOUT_SHOLEST
+	enable_clocks(0);
+	dsi_enable_pll_clock(0);
+#endif
 	return r;
 }
 
@@ -2032,8 +2048,10 @@ static int dsi_vc_send_short(int channel, u8 data_type, u16 data, u8 ecc)
 		DSSDBG("dsi_vc_send_short(ch%d, dt %#x, b1 %#x, b2 %#x)\n",
 				channel,
 				data_type, data & 0xff, (data >> 8) & 0xff);
-
-
+#ifndef CONFIG_TVOUT_SHOLEST
+	enable_clocks(1);
+	dsi_enable_pll_clock(1);
+#endif
 	if (FLD_GET(dsi_read_reg(DSI_VC_CTRL(channel)), 16, 16)) {
 		DSSERR("ERROR FIFO FULL, aborting transfer\n");
 		return -EINVAL;
@@ -2049,11 +2067,14 @@ static int dsi_vc_send_short(int channel, u8 data_type, u16 data, u8 ecc)
 	dsi_write_reg(DSI_VC_SHORT_PACKET_HEADER(channel), r);
 
 	if (wait_for_completion_timeout(&dsi.packet_sent_completion,
-	    msecs_to_jiffies(10)) == 0)
+	   msecs_to_jiffies(10)) == 0)
 		DSSERR("Failed to send short packet\n");
 
 	dsi_vc_disable_packet_sent_irq(channel);
-
+#ifndef CONFIG_TVOUT_SHOLEST
+	enable_clocks(0);
+	dsi_enable_pll_clock(0);
+#endif
 	return 0;
 }
 
@@ -2846,8 +2867,10 @@ static int dsi_update_thread(void *data)
 			dsi_bus_unlock();
 			break;
 		}
-
-
+#ifndef CONFIG_TVOUT_SHOLEST
+		enable_clocks(1);
+		dsi_enable_pll_clock(1);
+#endif
 		dsi_perf_mark_setup();
 
 		if (dsi.update_region.dirty) {
@@ -2940,7 +2963,10 @@ static int dsi_update_thread(void *data)
 
 		complete_all(&dsi.update_completion);
 
-
+#ifndef CONFIG_TVOUT_SHOLEST
+		enable_clocks(0);
+		dsi_enable_pll_clock(0);
+#endif
 		dsi_bus_unlock();
 
 		/* XXX We need to give others chance to get the bus lock. Is
@@ -3137,6 +3163,10 @@ static int dsi_display_enable(struct omap_dss_device *dssdev)
 	if (dsi.update_mode == OMAP_DSS_UPDATE_AUTO)
 		dsi_start_auto_update(dssdev);
 
+#ifndef CONFIG_TVOUT_SHOLEST
+	enable_clocks(0);
+	dsi_enable_pll_clock(0);
+#endif
 	dsi.error_recovery.enabled = true;
 
 	dsi_bus_unlock();
@@ -3168,8 +3198,8 @@ static void dsi_display_disable(struct omap_dss_device *dssdev)
 	dsi.error_recovery.enabled = false;
 	cancel_work_sync(&dsi.error_recovery.work);
 
-	complete_all(&dsi.packet_sent_completion);
 	complete_all(&dsi.update_completion);
+	complete_all(&dsi.packet_sent_completion);
 
 	if (dssdev->state == OMAP_DSS_DISPLAY_DISABLED ||
 			dssdev->state == OMAP_DSS_DISPLAY_SUSPENDED)
@@ -3178,7 +3208,10 @@ static void dsi_display_disable(struct omap_dss_device *dssdev)
 	dsi.update_mode = OMAP_DSS_UPDATE_DISABLED;
 	dssdev->state = OMAP_DSS_DISPLAY_DISABLED;
 
-
+#ifndef CONFIG_TVOUT_SHOLEST
+	enable_clocks(1);
+	dsi_enable_pll_clock(1);
+#endif
 	dsi_display_uninit_dispc(dssdev);
 
 	dsi_display_uninit_dsi(dssdev);
@@ -3202,8 +3235,8 @@ static int dsi_display_suspend(struct omap_dss_device *dssdev)
 	dsi.error_recovery.enabled = false;
 	cancel_work_sync(&dsi.error_recovery.work);
 
-	complete_all(&dsi.packet_sent_completion);
 	complete_all(&dsi.update_completion);
+	complete_all(&dsi.packet_sent_completion);
 
 	if (dssdev->state == OMAP_DSS_DISPLAY_DISABLED ||
 			dssdev->state == OMAP_DSS_DISPLAY_SUSPENDED)
@@ -3212,7 +3245,10 @@ static int dsi_display_suspend(struct omap_dss_device *dssdev)
 	dsi.update_mode = OMAP_DSS_UPDATE_DISABLED;
 	dssdev->state = OMAP_DSS_DISPLAY_SUSPENDED;
 
-
+#ifndef CONFIG_TVOUT_SHOLEST
+	enable_clocks(1);
+	dsi_enable_pll_clock(1);
+#endif
 	dsi_display_uninit_dispc(dssdev);
 
 	dsi_display_uninit_dsi(dssdev);
@@ -3266,6 +3302,10 @@ static int dsi_display_resume(struct omap_dss_device *dssdev)
 	if (dsi.update_mode == OMAP_DSS_UPDATE_AUTO)
 		dsi_start_auto_update(dssdev);
 
+#ifndef CONFIG_TVOUT_SHOLEST
+	enable_clocks(0);
+	dsi_enable_pll_clock(0);
+#endif
 	dsi.error_recovery.enabled = true;
 
 	dsi_bus_unlock();
@@ -3412,7 +3452,10 @@ static int dsi_display_enable_te(struct omap_dss_device *dssdev, bool enable)
 
 	dsi_bus_lock();
 
-
+#ifndef CONFIG_TVOUT_SHOLEST
+	enable_clocks(1);
+	dsi_enable_pll_clock(1);
+#endif
 	dsi.te_enabled = enable;
 
 	if (dssdev->state != OMAP_DSS_DISPLAY_ACTIVE)
@@ -3420,7 +3463,10 @@ static int dsi_display_enable_te(struct omap_dss_device *dssdev, bool enable)
 
 	dsi_set_te(dssdev, enable);
 end:
-
+#ifndef CONFIG_TVOUT_SHOLEST
+	enable_clocks(0);
+	dsi_enable_pll_clock(0);
+#endif
 	dsi_bus_unlock();
 
 	return 0;

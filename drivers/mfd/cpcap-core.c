@@ -472,6 +472,10 @@ static int test_ioctl(unsigned int cmd, unsigned long arg)
 					    write_data.value, write_data.mask);
 	break;
 
+	case CPCAP_IOCTL_TEST_FORCE_TO_DETECT:
+		force_to_detect_usb();
+	break;
+
 	default:
 		retval = -ENOTTY;
 	break;
@@ -506,71 +510,72 @@ static int adc_ioctl(unsigned int cmd, unsigned long arg)
 #ifdef CONFIG_TTA_CHARGER
 static int tta_ioctl(unsigned int cmd, unsigned long arg)
 {
-  int retval = 0;
+	int retval = 0;
 
-  switch (cmd) {
-  case CPCAP_IOCTL_TTA_READ_STATUS:
-    {
-	unsigned char gpio_val;
-	enum cpcap_tta_state state;
-	disable_tta_irq();
-	disable_tta();
-	enable_tta();
-	mdelay(10);
-	gpio_val = value_of_gpio34();
+	switch (cmd) {
+	case CPCAP_IOCTL_TTA_READ_STATUS:
+    	{
+		unsigned char gpio_val;
+		enum cpcap_tta_state state;
+		disable_tta_irq();
+		disable_tta();
+		enable_tta();
+		mdelay(10);
+		gpio_val = value_of_gpio34();
 
-	if (!gpio_val)
-		state = TTA_DETECTED;
-	else
-		state = TTA_NOT_DETECTED;
+		if (!gpio_val)
+			state = TTA_DETECTED;
+		else
+			state = TTA_NOT_DETECTED;
 
-	if (copy_to_user((void *)arg,
+		if (copy_to_user((void *)arg,
 			(void *)&state, sizeof(state)))
-		retval = -EFAULT;
-	disable_tta();
-    }
-    break;
+			retval = -EFAULT;
+		disable_tta();
+	}
+	break;
 
-  case CPCAP_IOCTL_TTA_CHARGER_CONTROL:
-    {
-      enum cpcap_tta_control control;      
-		  if (copy_from_user((void *)&control, (void *)arg,
-			  	   sizeof(control)))
-			  return -EFAULT;
+	case CPCAP_IOCTL_TTA_CHARGER_CONTROL:
+	{
+		enum cpcap_tta_control control;
+		if (copy_from_user((void *)&control, (void *)arg,
+			sizeof(control)))
+			return -EFAULT;
 
-      switch(control) {
-        case TTA_REDETECT:
-          	disable_tta();
-        	  enable_tta();
-	          force_to_detect_tta(10);
-        break;
+		switch(control) {
+		case TTA_REDETECT:
+			disable_tta();
+			enable_tta();
+			force_to_detect_tta(10);
+			break;
 
-        case TTA_REDETCT_SLOWLY:
-          	disable_tta();
-        	  enable_tta();
-	          force_to_detect_tta(1000);
-        break;        
-        
-        case TTA_DISABLE:
-	disable_tta();
-        break;
-        
-        case TTA_ENABLE:
-	enable_tta();
-        break;
+		case TTA_REDETCT_SLOWLY:
+			disable_tta();
+			enable_tta();
+			force_to_detect_tta(1000);
+			break;
 
-        default:
-            dev_err(&(misc_cpcap->spi->dev),"Unknown IOCTL for TTA charger\n\n");          
-          break;
-      }
-    }
-    break;
+		case TTA_DISABLE:
+			disable_tta();
+			break;
 
-  default:
-    return -EINVAL;
-    break;
-  }
-  return retval;
+		case TTA_ENABLE:
+			enable_tta();
+			break;
+
+		default:
+			dev_err(&(misc_cpcap->spi->dev),
+					"Unknown IOCTL for TTA charger\n");
+			break;
+		}
+	}
+	break;
+
+	default:
+		return -EINVAL;
+		break;
+	}
+	return retval;
 }
 #endif
 
@@ -604,7 +609,7 @@ static int ioctl(struct inode *inode,
 	}
 #ifdef CONFIG_TTA_CHARGER
 	if ((cmd_num > CPCAP_IOCTL_NUM_TTA__START) &&
-	(cmd_num < CPCAP_IOCTL_NUM_TTA__END)) {
+		(cmd_num < CPCAP_IOCTL_NUM_TTA__END)) {
 		retval = tta_ioctl(cmd, arg);
 	}
 #endif

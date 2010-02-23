@@ -1,7 +1,7 @@
 /******************************************************************************
  * NetMUX mux.c                                                               *
  *                                                                            *
- * Copyright (C) 2006-2008 Motorola, Inc.                                     *
+ * Copyright (C) 2006-2010 Motorola, Inc.                                     *
  *                                                                            *
  * Redistribution and use in source and binary forms, with or without         *
  * modification, are permitted provided that the following conditions are     *
@@ -42,6 +42,7 @@
  *   2008/10/14  Motorola    Panic if receive packet is invalide              *
  *   2008/10/28  Motorola    fix issue in ReceivePartial                      *
  *   2009/07/23  Motorola    Add wake lock functionality                      *
+ *   2009/11/18  Motorola    Switch host/client interface in DC resp          *
  ******************************************************************************/
 
 /* mux.c defines all the functionality of the mux. This functionality allows  */
@@ -233,10 +234,13 @@ int32 ExecuteStateTransition(int32 event, MUX* mux, int32 channel_num)
                     /* ditch the data, and send a response     */
                     empty_commbuff_queue(&channel->send_queue);
 
+                    /* the local channel has already triggered a close   */
+                    /* immediately sending back a response to the remote */
+                    /* switch the interfaces as a result                 */
                     TransmitDisableChannel((int8)host_end(SUCCESS),
                                            (int8)channel_num,
-                                           (int8)channel->host_interface,
                                            (int8)channel->client_interface,
+                                           (int8)channel->host_interface,
                                            mux);
                     /* this channel will be closed by the caller */
                 }break;
@@ -274,10 +278,14 @@ int32 ExecuteStateTransition(int32 event, MUX* mux, int32 channel_num)
                     /* are closing so just send a response and  */
                     /* keep waiting for a response to the close */
                     /* we sent                                  */
+
+                    /* the local channel has already triggered a close   */
+                    /* immediately sending back a response to the remote */
+                    /* switch the interfaces as a result                 */
                     TransmitDisableChannel((int8)host_end(SUCCESS),
                                            (int8)channel_num,
-                                           (int8)channel->host_interface,
                                            (int8)channel->client_interface,
+                                           (int8)channel->host_interface,
                                            mux);
                 }break;
 
@@ -1810,7 +1818,7 @@ int32 DisableChannel (int32 acktype, int32 channel, int32 host_interface, int32 
                         return DEBUGERROR(ERROR_OPERATIONFAILED);
                     }
 
-                    disablechp.acktype          = (int8)client_end(COMMAND);
+                    disablechp.acktype          = (int8)host_end(SUCCESS);
                     disablechp.channel          = (int8)channel;
                     disablechp.client_interface = (int8)client_interface;
                     disablechp.host_interface   = (int8)host_interface;

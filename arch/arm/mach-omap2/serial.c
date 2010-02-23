@@ -247,7 +247,9 @@ static void omap_uart_save_context(struct omap_uart_state *uart)
 	u16 lcr = 0;
 	struct plat_serialomap_port *p = uart->p;
 
-	if (!enable_off_mode)
+	/* Due to TI errata for OFF mode, we don't allow
+	*  CORE and PER to enter OFF mode */
+	if ((!enable_off_mode) || (omap_rev() <= OMAP3430_REV_ES3_1))
 		return;
 
 	lcr = serial_read_reg(p, UART_LCR);
@@ -268,7 +270,9 @@ static void omap_uart_restore_context(struct omap_uart_state *uart)
 	u16 efr = 0;
 	struct plat_serialomap_port *p = uart->p;
 
-	if (!enable_off_mode)
+	/* Due to TI errata for OFF mode, we don't allow
+	*  CORE and PER to enter OFF mode */
+	if ((!enable_off_mode) || (omap_rev() <= OMAP3430_REV_ES3_1))
 		return;
 
 	if (!uart->context_valid)

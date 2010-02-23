@@ -53,12 +53,10 @@
 #include <linux/wait.h>
 #include <linux/spinlock.h>
 #include <linux/spinlock_types.h>
-#ifdef CONFIG_HAS_WAKELOCK
-#include <linux/wakelock.h>
-#endif
 #include <linux/wakeup_timer.h>
-
+#include <linux/wakeup_timer_kernel.h>
 #include "pm.h"
+
 
 
 #ifdef WAKEUP_TIMER_DEBUG
@@ -67,7 +65,7 @@
 #define DPRINTK(fmt, args...) do {} while (0)
 #endif
 
-#define WAKEUP_LATENCY 50
+#define WAKEUP_LATENCY 0
 
 /*
  * Wakeup timer state definition:
@@ -83,51 +81,13 @@ enum timer_state {
 	TIMER_INVALID
 };
 
-/*
- * Wakeup timer type definition:
- * Periodic wakeup timers will ensure the accuracy in period,
- * but the first wakeup time point maybe adjusted
- * oneshot wakeup timers will ensure the accuracy on the desired time point
- */
-enum timer_type {
-	/* Periodic wakeup timers which will be restarted after it fires */
-	TYPE_PERIODIC = 0,
-	/* Oneshot wakeup timers which only start for once */
-	TYPE_ONESHOT
-};
-
-struct timer_cascade_root {
-	/* Timers cascade link list */
-	struct list_head node;
-	struct hrtimer alarm_timer;
-	unsigned long period_time;
-	unsigned long timer_base_time;
-
-	/* wait queue head for this timer cascade */
-	wait_queue_head_t cascade_wq;
-
-	/* Periodic or oneshot for timers in this cascade */
-	int cascade_type;
-
-	/* current timer status */
-	int state;
-
-	/* calling process */
-	struct task_struct *process;
-
-#ifdef CONFIG_HAS_WAKELOCK
-	/* Wake lock to prevent suspend so allow app to finish their work */
-	struct wake_lock wkuptimer_wake_lock;
-#endif
-
-};
-
 #ifdef CONFIG_HAS_WAKELOCK
 static struct wake_lock driver_wake_lock;
 #endif
 
 static LIST_HEAD(parent_node);
 static DEFINE_SPINLOCK(wakeup_timer_lock);
+static bool isSuspended;
 
 inline unsigned long get_expire_time(struct timer_cascade_root *pwkup_cascade)
 {
@@ -157,6 +117,35 @@ inline unsigned long get_expire_time(struct timer_cascade_root *pwkup_cascade)
 		delta = 0;
 
 	return (unsigned long)delta;
+}
+
+static unsigned long get_nearest_wakeup_timer_ktime(void)
+{
+	unsigned long timer_fire;
+	unsigned long timer_temp;
+	struct timer_cascade_root *pwkup_cascade;
+
+	timer_fire = ULONG_MAX;
+	timer_temp = 0;
+
+	list_for_each_entry(pwkup_cascade, &parent_node, node) {
+		if (pwkup_cascade->state == TIMER_ACTIVE ||
+			pwkup_cascade->state == TIMER_INACTIVE) {
+			timer_temp = get_expire_time(pwkup_cascade);
+			if (timer_temp < timer_fire)
+				timer_fire = timer_temp;
+		}
+		DPRINTK("type=%d, timer_base=%lu ms, expired_time=%lu,"
+			" period=%lu ms, expired_interval=%lu ms now=%llu\n",
+			pwkup_cascade->cascade_type,
+			pwkup_cascade->timer_base_time,
+			pwkup_cascade->timer_base_time +
+				pwkup_cascade->period_time,
+			pwkup_cascade->period_time,
+			timer_temp,
+			sched_clock());
+	}
+	return timer_fire;
 }
 
 static void cascade_start_hrtimer(struct timer_cascade_root *pwkup_cascade)
@@ -193,6 +182,16 @@ static enum hrtimer_restart wakeup_timer_callback(struct hrtimer *timer)
 			pwkup_cascade->timer_base_time +
 				pwkup_cascade->period_time,
 			sched_clock());
+
+	if (pwkup_cascade->cascade_type == TYPE_STATUS
+			&& pwkup_cascade->callback) {
+		spin_lock_irqsave(&wakeup_timer_lock, flags);
+		pwkup_cascade->state = TIMER_INVALID;
+		list_del(&(pwkup_cascade->node));
+		spin_unlock_irqrestore(&wakeup_timer_lock, flags);
+		pwkup_cascade->callback();
+		return ret;
+	}
 
 	spin_lock_irqsave(&wakeup_timer_lock, flags);
 
@@ -265,7 +264,7 @@ static int cascade_attach(struct timer_cascade_root *new_pwkup_cascade)
 	do_div(temp, NSEC_PER_MSEC);
 	cur_time = (unsigned long)temp;
 
-	if (type == TYPE_ONESHOT) {
+	if (type == TYPE_ONESHOT || type == TYPE_STATUS) {
 		/* Directly attach the one shot timer, time based is now. */
 		new_pwkup_cascade->timer_base_time = cur_time;
 		list_add(&(new_pwkup_cascade->node), &parent_node);
@@ -309,7 +308,9 @@ static int cascade_attach(struct timer_cascade_root *new_pwkup_cascade)
 	}
 	spin_unlock_irqrestore(&wakeup_timer_lock, flags);
 
-	cascade_start_hrtimer(new_pwkup_cascade);
+	/* don't start hrtimer if we are suspended */
+	if (!isSuspended)
+		cascade_start_hrtimer(new_pwkup_cascade);
 
 	return 0;
 }
@@ -321,7 +322,8 @@ static int cascade_deattach(struct timer_cascade_root *pwkup_cascade)
 		return 0;
 
 	pwkup_cascade->state = TIMER_INVALID;
-	hrtimer_cancel(&(pwkup_cascade->alarm_timer));
+	if (!isSuspended)
+		hrtimer_cancel(&(pwkup_cascade->alarm_timer));
 	list_del(&(pwkup_cascade->node));
 
 #ifdef CONFIG_HAS_WAKELOCK
@@ -329,6 +331,89 @@ static int cascade_deattach(struct timer_cascade_root *pwkup_cascade)
 #endif
 	return 0;
 }
+
+struct timer_cascade_root *wakeup_create_status_timer(int (*callback) (void))
+{
+	struct timer_cascade_root *new;
+
+	if (cascade_create(&new))
+		return NULL;
+
+	new->state = TIMER_INVALID;
+	new->cascade_type = TYPE_STATUS;
+	new->callback = callback;
+	return new;
+}
+EXPORT_SYMBOL_GPL(wakeup_create_status_timer);
+
+void wakeup_start_status_timer(struct timer_cascade_root *timer,
+		unsigned long period)
+{
+	unsigned long flags;
+
+	spin_lock_irqsave(&wakeup_timer_lock, flags);
+	if (timer->state == TIMER_INACTIVE)
+		cascade_deattach(timer);
+
+	timer->state = TIMER_INACTIVE;
+	timer->cascade_type = TYPE_STATUS;
+	timer->period_time = period ;
+	spin_unlock_irqrestore(&wakeup_timer_lock, flags);
+	/* Now, the timer request is ready but not attached into the list */
+	cascade_attach(timer);
+
+	if (isSuspended) {
+		/* We are suspended, set wakeup timer to nearest timer. */
+		unsigned long expire = get_nearest_wakeup_timer_ktime();
+		if (expire == ULONG_MAX) {
+			wakeup_timer_seconds = 0;
+			wakeup_timer_nseconds = 0;
+			return;
+		}
+		wakeup_timer_seconds = (expire-WAKEUP_LATENCY)/MSEC_PER_SEC;
+		wakeup_timer_nseconds = ((expire-WAKEUP_LATENCY)%MSEC_PER_SEC)
+					*NSEC_PER_MSEC;
+		DPRINTK("set wakeup_timer_seconds: %d.%d \n",
+			wakeup_timer_seconds, wakeup_timer_nseconds);
+	}
+}
+EXPORT_SYMBOL_GPL(wakeup_start_status_timer);
+extern int wakeup_stop_status_timer(struct timer_cascade_root *timer)
+{
+	unsigned long flags;
+	spin_lock_irqsave(&wakeup_timer_lock, flags);
+	cascade_deattach(timer);
+	spin_unlock_irqrestore(&wakeup_timer_lock, flags);
+	return 0;
+}
+EXPORT_SYMBOL_GPL(wakeup_stop_status_timer);
+extern int wakeup_del_status_timer(struct timer_cascade_root *timer)
+{
+	if (!timer)
+		return -EINVAL;
+
+	wakeup_stop_status_timer(timer);
+#ifdef CONFIG_HAS_WAKELOCK
+	wake_unlock(&(timer->wkuptimer_wake_lock));
+	wake_lock_destroy(&(timer->wkuptimer_wake_lock));
+#endif
+	/* Free the memory for the timer request */
+	kfree(timer);
+	return 0;
+}
+EXPORT_SYMBOL_GPL(wakeup_del_status_timer);
+
+/*
+ * return -1 if no sim status timer pending, 0 if it has expired
+ * and time left in ms otherwise
+ */
+int wakeup_check_status_timer(struct timer_cascade_root *timer)
+{
+	if (timer->state == TIMER_INACTIVE)
+		return get_expire_time(timer);
+	return -1;
+}
+EXPORT_SYMBOL_GPL(wakeup_check_status_timer);
 
 /*
  * Main function to add new timer.
@@ -577,35 +662,6 @@ static int wakeup_timer_remove(struct platform_device *pdev)
 
 #ifdef CONFIG_SUSPEND
 
-static unsigned long get_nearest_wakeup_timer_ktime(void)
-{
-	unsigned long timer_fire;
-	unsigned long timer_temp;
-	struct timer_cascade_root *pwkup_cascade;
-
-	timer_fire = ULONG_MAX;
-	timer_temp = 0;
-
-	list_for_each_entry(pwkup_cascade, &parent_node, node) {
-		if (pwkup_cascade->state == TIMER_ACTIVE ||
-			pwkup_cascade->state == TIMER_INACTIVE) {
-			timer_temp = get_expire_time(pwkup_cascade);
-			if (timer_temp < timer_fire)
-				timer_fire = timer_temp;
-		}
-		DPRINTK("type=%d, timer_base=%lu ms, expired_time=%lu,"
-			" period=%lu ms, expired_interval=%lu ms now=%llu\n",
-			pwkup_cascade->cascade_type,
-			pwkup_cascade->timer_base_time,
-			pwkup_cascade->timer_base_time +
-				pwkup_cascade->period_time,
-			pwkup_cascade->period_time,
-			timer_temp,
-			sched_clock());
-	}
-
-	return timer_fire;
-}
 
 static int wakeup_timer_suspend(struct platform_device *pdev,
 				pm_message_t state)
@@ -616,6 +672,7 @@ static int wakeup_timer_suspend(struct platform_device *pdev,
 #endif
 
 	unsigned long expire = get_nearest_wakeup_timer_ktime();
+	DPRINTK("suspend expire %d\n", expire);
 	if (expire == ULONG_MAX) {
 		wakeup_timer_seconds = 0;
 		wakeup_timer_nseconds = 0;
@@ -649,20 +706,20 @@ static int wakeup_timer_suspend(struct platform_device *pdev,
 	list_for_each_entry(pwkup_cascade, &parent_node, node) {
 		hrtimer_cancel(&(pwkup_cascade->alarm_timer));
 	}
+	isSuspended = true;
 	return 0;
 }
 
 static int wakeup_timer_resume(struct platform_device *pdev)
 {
 	struct timer_cascade_root *pwkup_cascade;
+	struct timer_cascade_root *tmp;
 #ifdef CONFIG_HAS_WAKELOCK
 	unsigned long expire;
 	long timeout;
 #endif
-
-	list_for_each_entry(pwkup_cascade, &parent_node, node) {
-		cascade_start_hrtimer(pwkup_cascade);
-	}
+	isSuspended = false;
+	DPRINTK("resume\n");
 
 #ifdef CONFIG_HAS_WAKELOCK
 	expire = get_nearest_wakeup_timer_ktime();
@@ -671,18 +728,20 @@ static int wakeup_timer_resume(struct platform_device *pdev)
 	* if expire <50ms, hold a 50ms wakelock to make sure timer is scheduled.
 	* if 50~200ms, disable suspend but allow idle by setting wakelock.
 	*/
-	if (expire > 5000)
-		return 0;
-	else if (expire <= 50)
-		timeout = (HZ*50)/MSEC_PER_SEC + 1;
-	else
-		timeout = (HZ*expire)/MSEC_PER_SEC + 1;
+	if (expire < 5000) {
+		if (expire <= 50)
+			timeout = (HZ*50)/MSEC_PER_SEC + 1;
+		else
+			timeout = (HZ*expire)/MSEC_PER_SEC + 1;
 
-	wake_lock_timeout(&driver_wake_lock, timeout);
-
-	DPRINTK("expire in %lu ms, taking wakelock for %ld tick.\n",
-		expire, timeout);
+		wake_lock_timeout(&driver_wake_lock, timeout);
+		DPRINTK("expire in %lu ms, taking wakelock for %ld tick.\n",
+				expire, timeout);
+	}
 #endif
+	list_for_each_entry_safe(pwkup_cascade, tmp, &parent_node, node) {
+		cascade_start_hrtimer(pwkup_cascade);
+	}
 	return 0;
 }
 

@@ -24,6 +24,7 @@
  *
  * Copyright (c) 2005 David Brownell
  *	Use the driver model and standard identifiers; handle bigger timeouts.
+ *
  */
 
 #include <linux/module.h>
@@ -44,6 +45,11 @@
 #include <linux/uaccess.h>
 #ifdef CONFIG_OMAP_WATCHDOG_AUTOPET
 #include <linux/timer.h>
+#ifdef CONFIG_OMAP_WATCHDOG_FIQ
+#include <mach/dmtimer.h>
+#include <linux/interrupt.h>
+#include <linux/debugfs.h>
+#endif
 #endif
 #ifdef CONFIG_OMAP_WATCHDOG_CONTROL
 #include <linux/debugfs.h>
@@ -80,8 +86,41 @@ struct omap_wdt_dev {
 	struct timer_list autopet_timer;
 	unsigned long  jiffies_start;
 	unsigned long  jiffies_exp;
+#ifdef CONFIG_OMAP_WATCHDOG_FIQ
+	struct omap_dm_timer *wdt_debug_timer;
+#endif
 #endif
 };
+
+#ifdef CONFIG_OMAP_WATCHDOG_FIQ
+#define DEBUG_PERIOD_SECONDS	(55)
+static unsigned wdt_debug_period;
+
+static fiqreturn_t wdt_fiq_handler(struct pt_regs *regs)
+{
+	int irq_num;
+	struct omap_wdt_dev *wdev = platform_get_drvdata(omap_wdt_dev);
+
+	local_irq_disable();
+	irq_num = omap_readl(0x48200044) & 0x7f;
+	if (irq_num == omap_dm_timer_get_irq(wdev->wdt_debug_timer)) {
+		omap_dm_timer_write_status(wdev->wdt_debug_timer,
+				OMAP_TIMER_INT_OVERFLOW);
+		omap_dm_timer_stop(wdev->wdt_debug_timer);
+		/* Clear all interrupt flags for Timer12 */
+		omap_writel(0x0, 0x4830401c);
+	}
+	/* NEWFIQAGR reset FIQ output and enable new FIQ generation */
+	omap_writel(0x3, 0x48200048);
+
+	show_regs(regs);
+	printk(KERN_INFO "\nBacktrace:\n");
+	c_backtrace(regs->ARM_fp, processor_mode(regs));
+	local_irq_enable();
+	panic("FIQ!\n");
+	return IRQ_HANDLED;
+}
+#endif
 
 static void omap_wdt_ping(struct omap_wdt_dev *wdev)
 {
@@ -321,6 +360,10 @@ static void autopet_handler(unsigned long data)
 	wdev->jiffies_start = jiffies;
 	wdev->jiffies_exp = (HZ * TIMER_AUTOPET_FREQ);
 	mod_timer(&wdev->autopet_timer, jiffies + wdev->jiffies_exp);
+#ifdef CONFIG_OMAP_WATCHDOG_FIQ
+	omap_dm_timer_set_load_start(wdev->wdt_debug_timer, 0,
+		(0xffffffff - wdt_debug_period));
+#endif
 }
 #endif
 
@@ -437,6 +480,17 @@ static int __init omap_wdt_probe(struct platform_device *pdev)
 	omap_wdt_enable(wdev);
 	pr_info("Watchdog auto-pet enabled at %d sec intervals\n",
 		TIMER_AUTOPET_FREQ);
+#ifdef CONFIG_OMAP_WATCHDOG_FIQ
+	wdev->wdt_debug_timer = omap_dm_timer_request_specific(12);
+	omap_writel(omap_readl(0x48304010) | 0x2, 0x48304010);
+	omap_dm_timer_set_int_enable(wdev->wdt_debug_timer,
+		OMAP_TIMER_INT_OVERFLOW);
+	wdt_debug_period = DEBUG_PERIOD_SECONDS
+		* clk_get_rate(omap_dm_timer_get_fclk(wdev->wdt_debug_timer));
+	omap_dm_timer_set_load_start(wdev->wdt_debug_timer, 0,
+		(0xffffffff - wdt_debug_period));
+	set_fiq_handler(wdt_fiq_handler);
+#endif
 #endif
 
 #ifdef CONFIG_OMAP_WATCHDOG_CONTROL
@@ -534,6 +588,9 @@ static int omap_wdt_suspend(struct platform_device *pdev, pm_message_t state)
 #ifdef CONFIG_OMAP_WATCHDOG_AUTOPET
 		wdev->jiffies_exp -= jiffies - wdev->jiffies_start;
 		del_timer(&wdev->autopet_timer);
+#ifdef CONFIG_OMAP_WATCHDOG_FIQ
+		omap_dm_timer_stop(wdev->wdt_debug_timer);
+#endif
 #endif
 		omap_wdt_disable(wdev);
 	}
@@ -552,6 +609,9 @@ static int omap_wdt_resume(struct platform_device *pdev)
 	if (wdev->omap_wdt_users) {
 #ifdef CONFIG_OMAP_WATCHDOG_AUTOPET
 		mod_timer(&wdev->autopet_timer, jiffies + wdev->jiffies_exp);
+#ifdef CONFIG_OMAP_WATCHDOG_FIQ
+		omap_dm_timer_start(wdev->wdt_debug_timer);
+#endif
 #endif
 		omap_wdt_enable(wdev);
 	}
@@ -590,6 +650,10 @@ static int wdt_cntrl_set(void *data, u64 val)
 #ifdef CONFIG_OMAP_WATCHDOG_AUTOPET
 		wdev->jiffies_exp -= jiffies - wdev->jiffies_start;
 		del_timer(&wdev->autopet_timer);
+
+#ifdef CONFIG_OMAP_WATCHDOG_FIQ
+		omap_dm_timer_stop(wdev->wdt_debug_timer);
+#endif
 #endif
 		omap_wdt_disable(wdev);
 	}
@@ -609,11 +673,28 @@ static int __init wdt_ctrl_init(char *s)
 __setup("wdt_stat=", wdt_ctrl_init);
 #endif
 
+#ifdef CONFIG_OMAP_WATCHDOG_FIQ
+static int fire_wdt_reset_set(void *data, u64 val)
+{
+	local_irq_disable();
+	while (1);
+
+	return 0;
+}
+DEFINE_SIMPLE_ATTRIBUTE(fire_wdt_reset_fops,
+				NULL, fire_wdt_reset_set, "%llu\n");
+#endif
+
 static int __init omap_wdt_init(void)
 {
 	spin_lock_init(&wdt_lock);
 #ifdef CONFIG_OMAP_WATCHDOG_CONTROL
-	debugfs_create_file("diswdt", 0644, NULL, NULL, &wdt_cntrl_fops);
+	debugfs_create_file("diswdt", 0644, NULL,
+			NULL, &wdt_cntrl_fops);
+#endif
+#ifdef CONFIG_OMAP_WATCHDOG_FIQ
+	debugfs_create_file("fire_wdt_reset", 0222,
+			NULL, NULL, &fire_wdt_reset_fops);
 #endif
 	return platform_driver_register(&omap_wdt_driver);
 }

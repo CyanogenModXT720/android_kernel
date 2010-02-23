@@ -152,6 +152,10 @@ config GENERIC_ISA_DMA
 config FIQ
 	bool
 
+config NON_NESTED_FIQ
+    bool "Support non-nested FIQ on arm"
+	default n
+
 config ARCH_MTD_XIP
 	bool
 

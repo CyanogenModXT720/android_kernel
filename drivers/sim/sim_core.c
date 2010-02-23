@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2005-2009 Motorola, Inc.
+ * Copyright (C) 2005-2010 Motorola, Inc.
  */
 
 /* 
@@ -50,6 +50,8 @@
 #include <linux/version.h>
 #include <linux/wait.h>
 #include <linux/pm.h>
+#include <linux/quickwakeup.h>
+#include <linux/wakeup_timer_kernel.h>
 
 #include <linux/regulator/consumer.h>
 
@@ -84,12 +86,13 @@ static struct clk *omap_120m_fck;
      to use the proper virtual address, as the virtual memory may not be contiguous
      like the physical memory is. 
 */
-#define CM_BASE                 (L4_34XX_BASE + 0x4000)
+#define CM_BASE		 (L4_34XX_BASE + 0x4000)
 #define CM_AUTOIDLE_WK IO_ADDRESS(CM_BASE + 0x0C30)
 #define CM_CLKSEL_WK IO_ADDRESS(CM_BASE + 0x0C40)
 #define PBIAS_CONTROL_LITE IO_ADDRESS(0x48002520)
 #define DMA_SYSCONFIG IO_ADDRESS(0x4805602C)
-
+#define INTCPS_ITR1 IO_ADDRESS(0x482000A0)
+#define	WP_TPIR	(1 << 5)
 /*
   OFFSET TO DMA REGISTER
   This is required to keep DMA from going to sleep on us as the lat APIs don't seem to work
@@ -105,7 +108,7 @@ static struct clk *omap_120m_fck;
   1) using direct register writes for PBIAS settings is not the prefferred method to do this. an API
      function should be provided to handle this, but i cannot find one as of yet. 
 */
-#define PBIASVMODE1        0x0100
+#define PBIASVMODE1	0x0100
 #define PBIASPWRDNZ1       0x0200
 #define PBIASSPEEDCNTL1    0x0400
 #define PBIASVMODEERROR1   0x0800
@@ -156,6 +159,23 @@ static struct clk *omap_120m_fck;
 #define OMAP_96M_FCK "omap_96m_fck"
 #define OMAP_120M_FCK "dpll5_m2_ck"
 
+/*
+  SIM CARD TYPE CONSTANTS
+
+  IMPORTANT NOTE(S) :
+  These variables must match the values from user space.
+*/
+#define UNKNOWN_CARD 0x04
+#define GSM_SIM      0x09
+#define UICC	     0x0A
+
+UINT8 uicc_status[5] = {0x80, 0xF2, 0x00, 0x0C, 0x00};
+UINT8 gsm_status[5]  = {0xA0, 0xF2, 0x00, 0x00, 0x16};
+
+#define SIM_NULL_PROC_BYTE 0x60
+#define SIM_STATUS_INS 0xF2
+#define SIM_ACK_ONE_MASK 0xFF
+
 /******************************************************************************
  * Local Macros
  *****************************************************************************/
@@ -182,10 +202,15 @@ static struct clk *omap_120m_fck;
   1) to be used only for SIM module register access
 */
 
-#define read_reg(reg)                   (*(reg))
-#define write_reg(reg, value)           (*(reg) = (value))
+#define read_reg(reg)		   (*(reg))
+#define write_reg(reg, value)	   (*(reg) = (value))
 #define write_reg_bits(reg, mask, bits) (*(reg) = ( *(reg) & ~(mask)) | (bits));
 
+#define SIM_STATUS_ACK_ALL(byte)       ((SIM_STATUS_INS ^ byte) == 0)
+#define SIM_STATUS_ACK_ONE(byte)       (((SIM_STATUS_INS ^ byte) & SIM_ACK_ONE_MASK) \
+					 == SIM_ACK_ONE_MASK)
+
+#define expected_status_data(sim_card) (sim_card == UICC ? 2 : 24)
 
 /******************************************************************************
 * Local type definitions
@@ -199,6 +224,10 @@ typedef struct {
 	UINT8 *buffer;
 	dma_addr_t dma_buffer;
 } SIM_MODULE_BUFFER_DATA;
+
+/******************************************************************************
+* Global function prototypes
+******************************************************************************/
 
 /******************************************************************************
 * Local function prototypes
@@ -222,11 +251,14 @@ static void sim_module_set_clock_rate(UINT8 reader_id,
 
 static int sim_probe(struct platform_device *pdev);
 static int sim_remove(struct platform_device *pdev);
-
+static int sim_slim_status_handler(void);
+static BOOL sim_mutex_update(UINT8 mutex_request);
 static void sim_module_dma_callback(INT32 lch, UINT16 ch_status,
 				    void *data);
-
+static int sim_qw_callback(void);
+static int sim_qw_check(void);
 static int regulator_enabled_flag;
+
 /******************************************************************************
 * Local Structures
 ******************************************************************************/
@@ -258,6 +290,11 @@ static struct file_operations sim_fops = {
 	.poll = sim_poll,
 };
 
+/* Used for the timer call back */
+static struct quickwakeup_ops sim_qw_ops = {
+	.qw_callback = sim_qw_callback,
+	.qw_check = sim_qw_check
+};
 
 /******************************************************************************
 * Local variables
@@ -266,6 +303,7 @@ static int sim_module_major;
 static int sim_module_dma_channel = 0;
 
 static spinlock_t sim_module_lock = SPIN_LOCK_UNLOCKED;
+static spinlock_t sim_status_lock = SPIN_LOCK_UNLOCKED;
 
 static UINT32 sim_module_clock_frequency = SIM_MODULE_FREQUENCY_4;
 
@@ -300,6 +338,25 @@ static volatile SIM_MODULE_REGISTER_BANK
 struct regulator *vsim_regulator;
 struct regulator *vsimcard_regulator;
 
+static UINT16 card_type = UNKNOWN_CARD;
+static BOOL preforming_status_command = FALSE;
+static BOOL status_slow_card = FALSE;
+static BOOL currently_in_call = FALSE;
+static BOOL proc_bytes_done = FALSE;
+
+static BOOL all_data_received = FALSE;
+static UINT16 bytes_recieved = 0;
+
+static UINT8 sim_mutex_locked_by_id = 0;
+static UINT8 sim_mutex_requested_by_id = 0;
+
+static UINT32 sim_poll_interval = 0;
+static UINT8 last_byte_checked = 0;
+static UINT16 null_byte_counter = 0;
+static UINT8 ack_counter = 0;
+
+static struct timer_cascade_root * sim_timer = NULL;
+
 /******************************************************************************
 * Local Functions
 ******************************************************************************/
@@ -309,9 +366,9 @@ struct regulator *vsimcard_regulator;
  
    INPUTS:
        inode       inode pointer
-       file        file pointer
-       cmd         the ioctl() command
-       arg         the ioctl() argument
+       file	file pointer
+       cmd	 the ioctl() command
+       arg	 the ioctl() argument
 
    OUTPUTS:
        Returns 0 if successful.
@@ -332,7 +389,6 @@ static int sim_ioctl(struct inode *inode, struct file *file,
 
 	UINT8 tx_index;
 	UINT8 length;
-
 	int error;
 
 	tracemsg("SIM KERNEL IOCTL -> %X \n", cmd);
@@ -784,6 +840,14 @@ static int sim_ioctl(struct inode *inode, struct file *file,
 			    args_kernel[3];
 			sim_module_card_data[args_kernel[0]].error_flag =
 			    args_kernel[4];
+			preforming_status_command = FALSE;
+			status_slow_card = FALSE;
+			all_data_received = FALSE;
+			bytes_recieved = 0;
+			last_byte_checked = 0;
+			null_byte_counter = 0;
+			ack_counter = 0;
+                        proc_bytes_done = FALSE;
 
 			tracemsg
 			    ("reset card reader data -> buffer_index: %X rx_last_index: %X tx_length: %X error_flag: %X\n",
@@ -1013,16 +1077,16 @@ static int sim_ioctl(struct inode *inode, struct file *file,
 	case SIM_IOCTL_LOW_POWER_STATE:
 		status =
 		    copy_from_user(args_kernel, (UINT32 *) arg,
-				   (sizeof(UINT32) * 2));
+				   CMD_PARAMETER_SIZE_2);
 
 		if (args_kernel[0] < NUM_SIM_MODULES) {
 			tracemsg("SIM set constraint, state -> %X\n",
 				 args_kernel[1]);
 			/*  if we are active ...  */
 			if ((BOOL) args_kernel[1] == FALSE) {
-                                /* Stop DMA from AKC'ing idle requests */
-			        write_reg_bits((volatile UINT32 *)DMA_SYSCONFIG,DMA_MIDLE, 
-                                    DMA_SYSCONFIG_MIDLEMODE(1));
+				/* Stop DMA from AKC'ing idle requests */
+				write_reg_bits((volatile UINT32 *)DMA_SYSCONFIG,DMA_MIDLE, 
+				    DMA_SYSCONFIG_MIDLEMODE(1));
 
 				/* Request the latency constraint */
 				omap_pm_set_max_mpu_wakeup_lat(&sim_device.
@@ -1037,9 +1101,9 @@ static int sim_ioctl(struct inode *inode, struct file *file,
 
 			/* else, we are inactive ... */
 			else {
-                                /* Allow DMA to ACK idle requests */
-			        write_reg_bits((volatile UINT32 *)DMA_SYSCONFIG,DMA_MIDLE, 
-                                    DMA_SYSCONFIG_MIDLEMODE(2));
+				/* Allow DMA to ACK idle requests */
+				write_reg_bits((volatile UINT32 *)DMA_SYSCONFIG,DMA_MIDLE, 
+				    DMA_SYSCONFIG_MIDLEMODE(2));
 
 				/* Disable DMA mode for low power mode */
 				write_reg_bits(&
@@ -1064,6 +1128,91 @@ static int sim_ioctl(struct inode *inode, struct file *file,
 		msleep(arg);
 		break;
 
+	case SIM_IOCTL_CARD_TYPE:
+		if(copy_from_user(args_kernel, (UINT32 *) arg, CMD_PARAMETER_SIZE_2)){
+			tracemsg("Warning: failed to copy data from user-space for card type\n");
+			status = -EFAULT;
+		}
+		else {
+			if (args_kernel[0] < NUM_SIM_MODULES) {
+				if((args_kernel[1] == UICC) ||(args_kernel[1] == GSM_SIM)){
+					card_type = args_kernel[1];
+				}
+				else {
+					card_type = UNKNOWN_CARD;
+				}
+			}
+			else {
+				tracemsg("Warning: Invalid reader ID in SIM driver request.\n");
+				status = -EFAULT;
+			}
+		}
+		break;
+
+	case SIM_IOCTL_MUTEX_UPDATE:
+		if(copy_from_user(args_kernel, (UINT32 *) arg, CMD_PARAMETER_SIZE_3)){
+			tracemsg("Warning: failed to copy data from user-space for mutex update\n");
+			status = -EFAULT;
+		}
+		else {
+    
+			if (args_kernel[0] < NUM_SIM_MODULES) {
+				args_kernel[2] = sim_mutex_update(args_kernel[1]);
+
+				if (copy_to_user((UINT32 *) arg, args_kernel,CMD_PARAMETER_SIZE_3)) {
+					tracemsg("Warning: failed to copy data to user-space for get mutex update\n");
+					status = -EFAULT;
+				}
+			}
+			else {
+				tracemsg("Warning: Invalid reader ID in SIM driver request.\n");
+				status = -EFAULT;
+			}
+		}
+		break;
+
+	case SIM_IOCTL_POLL_INTERVAL:
+		if(copy_from_user(args_kernel, (UINT32 *) arg, CMD_PARAMETER_SIZE_2)) {
+			tracemsg("Warning: failed to copy data from user-space for poll interval\n");
+			status = -EFAULT;
+		}
+		else {
+
+			if (args_kernel[0] < NUM_SIM_MODULES) {
+				sim_poll_interval = args_kernel[1];
+			} 
+			else {
+				tracemsg("Warning: Invalid reader ID in SIM driver request.\n");
+				status = -EFAULT;
+			} 
+		} 
+		break;
+
+	case SIM_IOCTL_CALL_STATUS:
+		if(copy_from_user(args_kernel, (UINT32 *) arg, CMD_PARAMETER_SIZE_2)) {
+			tracemsg("Warning: failed to copy data from user-space for call status\n");
+			status = -EFAULT;
+		}
+		else {
+
+			if (args_kernel[0] < NUM_SIM_MODULES) {
+				currently_in_call = args_kernel[1];
+			}
+			else {
+				tracemsg("Warning: Invalid reader ID in SIM driver request.\n");
+				status = -EFAULT;
+			}
+		}
+		break;
+
+	case SIM_IOCTL_START_TIMER:
+	        wakeup_start_status_timer(sim_timer, arg);
+	        break;
+
+	case SIM_IOCTL_STOP_TIMER:
+	        wakeup_stop_status_timer(sim_timer);
+	        break;
+
 	default:
 		tracemsg
 		    ("Warning: Invalid request sent to the SIM driver.\n");
@@ -1079,7 +1228,7 @@ static int sim_ioctl(struct inode *inode, struct file *file,
  
    INPUTS:
        inode       inode pointer
-       file        file pointer
+       file	file pointer
 
    OUTPUTS:
        Returns 0 if successful.
@@ -1141,7 +1290,7 @@ static int sim_open(struct inode *inode, struct file *file)
  
    INPUTS:
        inode       inode pointer
-       file        file pointer
+       file	file pointer
 
    OUTPUTS:
        Returns 0 if successful.
@@ -1162,8 +1311,8 @@ static int sim_free(struct inode *inode, struct file *file)
        The poll() handler for the SIM driver
  
    INPUTS:
-       file        file pointer
-       wait        poll table for this poll()
+       file	file pointer
+       wait	poll table for this poll()
 
    OUTPUTS:
        Returns 0 if no data to read or POLLIN if data available.
@@ -1204,11 +1353,64 @@ IMPORTANT NOTES:
 */
 static void sim_module_int_rx(UINT8 reader_id)
 {
-	/* notify user space that data was received */
-	sim_module_rx_event |= SIM_MODULE_EVENT_RX_A;
+	UINT8 new_byte = 0;
+	UINT8 i = 0;
+	BOOL next_is_data_byte = FALSE;
+	if(preforming_status_command == FALSE){
 
+		/* notify user space that data was received */
+		sim_module_rx_event |= SIM_MODULE_EVENT_RX_A;
+
+		if((status_slow_card == TRUE) && (all_data_received == FALSE)) {
+			sim_module_rx_event |= SIM_MODULE_EVENT_INCOMPLETE_SLIM_STATUS;
+		}
+	}
+	else{
+		bytes_recieved = ((UINT16)(omap_get_dma_dst_pos(sim_module_dma_channel) -
+					sim_module_card_data[0].dma_buffer));
+
+		if(proc_bytes_done == FALSE){
+			for(i = last_byte_checked; i < bytes_recieved; i++) {
+				new_byte = sim_module_card_data[0].buffer[i];
+				if(SIM_STATUS_ACK_ALL(new_byte)) {
+					ack_counter++;
+					proc_bytes_done = TRUE;
+					break;
+				}
+				else if(new_byte == SIM_NULL_PROC_BYTE) {
+					null_byte_counter++;
+				}
+				else if(SIM_STATUS_ACK_ONE(new_byte)) {
+					ack_counter++;
+					/* skip over the next (data) byte */
+					i++;
+					/* if we ended on an ACK, the next byte should be data (so skip it) */
+					if(i >= bytes_recieved){
+						next_is_data_byte = TRUE;
+					}
+				}
+				else {
+					proc_bytes_done = TRUE;
+					break;
+				}
+			}
+
+			last_byte_checked = bytes_recieved;
+			/* preemptively skip the next (data) byte if we ended on an ACK (in the ACK ONE case) */
+			if(next_is_data_byte == TRUE){
+				last_byte_checked++;
+			}
+		}
+
+		if(bytes_recieved >= (expected_status_data(card_type) + null_byte_counter + ack_counter)){
+			all_data_received = TRUE;
+		}
+	
+		if(all_data_received == TRUE){
+			preforming_status_command = FALSE;
+		}
+	}
 	write_reg(&(sim_registers[reader_id]->irqstatus), USIM_RX_MASK);
-
 	return;
 }
 
@@ -1231,19 +1433,17 @@ IMPORTANT NOTES:
 */
 static void sim_module_int_tx(UINT8 reader_id)
 {
-	UINT16 bytes_remaining;
-	UINT8 tx_index;
-	BOOL last_block;
+    UINT16 bytes_remaining = 0;
+    UINT8 tx_index = 0;
+    BOOL last_block = FALSE;
 
-	last_block = FALSE;
+    /* disable the transmit complete interrupt */
+    write_reg_bits(&(sim_registers[reader_id]->irqenable), USIM_TX_EN_MASK, 0);
 
-	/* disable the transmit complete interrupt */
-	write_reg_bits(&(sim_registers[reader_id]->irqenable),
-		       USIM_TX_EN_MASK, 0);
+    /* disable the transmitter */
+    write_reg_bits(&(sim_registers[reader_id]->usimconf2), TXNRX_MASK, 0);
 
-	/* disable the transmitter */
-	write_reg_bits(&(sim_registers[reader_id]->usimconf2), TXNRX_MASK,
-		       0);
+    if(preforming_status_command == FALSE){
 
 	/* determine remaining number of bytes to transmit */
 	bytes_remaining = sim_module_card_data[reader_id].tx_length -
@@ -1300,8 +1500,8 @@ static void sim_module_int_tx(UINT8 reader_id)
 		sim_module_init_rx_mode(reader_id);
 
 	}
-
-	return;
+    }
+    return;
 }
 
 /*
@@ -1660,7 +1860,7 @@ DESCRIPTION:
     This routine sets the clock rate
 
 INPUTS:
-    UINT8 reader_id                : the reader ID for which to set the clock rate
+    UINT8 reader_id		: the reader ID for which to set the clock rate
     SIM_MODULE_CLOCK_RATE level : the clock rate to set
 
 OUTPUT:
@@ -1729,6 +1929,312 @@ static void sim_module_set_clock_rate(UINT8 reader_id,
 	return;
 }
 
+
+/*
+DESCRIPTION:
+    This routine runs when the GPT1 expires and the system is in full suspend. The routine will
+issue a STATUS command to the SIM card, and verify the response. If the returned status words 
+indicate something that can't be fully handled in user space, the handler will return and the phone
+will be resumed
+
+INPUTS:
+    None
+
+OUTPUT:
+    int status: -1 if user space needs to be woken to handle an event, 0 for success
+
+IMPORTANT NOTES:
+    None
+*/
+int sim_slim_status_handler()
+{
+	int status = -1;
+	int error = 0;
+	UINT8 length = 5;
+	UINT8 tx_index = 0;
+	unsigned long flags = 0;
+	UINT8 sleep_counter = 0;
+	UINT32 save_irq_state = 0;
+	UINT32 save_irq = 0;
+	UINT8 sw1 = 0;
+	UINT8 sw2 = 0;
+
+	if((currently_in_call == FALSE) && (sim_mutex_update(KERNEL_LOCK_MUTEX)) && 
+                (card_type != UNKNOWN_CARD))
+	{
+		preforming_status_command = TRUE;
+		status_slow_card = TRUE;
+ 
+		/* steps normally done from user space: */
+		/* disable low power */
+		sim_low_power_enabled = FALSE;
+		clk_enable(usim_fck);
+		write_reg_bits((volatile UINT32 *)DMA_SYSCONFIG,DMA_MIDLE,DMA_SYSCONFIG_MIDLEMODE(1));
+
+		/* enable the module clock */
+		write_reg_bits (&(sim_registers[0]->usimcmd), MODULE_CLK_EN_MASK, MODULE_CLK_EN_MASK);
+
+		/* reset card reader data */
+		sim_module_card_data[0].buffer_index = 0;
+		sim_module_card_data[0].rx_last_index = 0;
+		sim_module_card_data[0].tx_length = 5;
+		sim_module_card_data[0].error_flag = ISR_NO_ERROR;
+
+		/* save the current interrupts */
+		save_irq_state = read_reg(&(sim_registers[0]->irqenable));    
+		save_irq = save_irq_state;
+    
+		save_irq_state &= ~(USIM_TX_EN_MASK);
+		save_irq_state |= (USIM_RX_EN_MASK);
+
+		/* clear interrupt sources */
+		write_reg_bits (&(sim_registers[0]->irqenable), USIM_IRQEN_MASK_ALL, 0);
+
+		/* set the interrupt mode */
+		sim_module_interrupt_mode = SIM_MODULE_TX_MODE;    
+
+		/* rx_fifo threashold to 1 */
+		write_reg_bits (&(sim_registers[0]->usim_fifos), FIFO_RX_TRIGGER_MASK, 0);
+
+		/* disable the transmitter */
+		write_reg_bits (&(sim_registers[0]->usimconf2), TXNRX_MASK, 0);
+
+		/* set the interrupt mask */
+		write_reg_bits(&(sim_registers[0]->irqenable), USIM_IRQEN_MASK_ALL, save_irq_state);
+
+		/* enable the module clock */
+		write_reg_bits (&(sim_registers[0]->usimcmd), CMD_CLOCK_STOP_MASK, 0);  
+
+		save_irq_state &= ~(USIM_RX_EN_MASK);
+  
+		/* set the interrupt mask */
+		write_reg_bits(&(sim_registers[0]->irqenable), USIM_IRQEN_MASK_ALL, save_irq_state);
+    
+		bytes_recieved = 0;
+    
+		if(card_type == UICC){
+			memcpy(sim_module_card_data[0].buffer, uicc_status, length);
+		}
+		else{
+			memcpy(sim_module_card_data[0].buffer, gsm_status, length);
+		}
+    
+		/* Enable DMA mode */
+		write_reg_bits(&(sim_registers[0]->usim_fifos), SIM_DMA_MODE_MASK, SIM_DMA_MODE_MASK);
+
+		if (sim_module_dma_channel != 0) {
+			omap_free_dma(sim_module_dma_channel);
+			sim_module_dma_channel = 0;
+		}
+
+		/* request a DMA logical channel */
+		error = omap_request_dma(OMAP34XX_DMA_USIM_RX, SIM_DEV_NAME, sim_module_dma_callback,
+			(void *)sim_module_card_data[0].dma_buffer, &sim_module_dma_channel);
+		/* if we failed to get our logical channel */
+		if (error != 0) {
+			tracemsg("sim_slim_status_hdlr: Fatal error - request_dma API failed\n");
+			sim_module_rx_event |= SIM_MODULE_EVENT_NO_DMA_CN_AVB;
+			return 1;
+		}
+		/* configure the DMA parameters */
+		omap_set_dma_transfer_params(sim_module_dma_channel, OMAP_DMA_DATA_TYPE_S8, 1,
+			SIM_MODULE_MAX_DATA, OMAP_DMA_SYNC_ELEMENT, OMAP34XX_DMA_USIM_RX,
+			OMAP_DMA_SRC_SYNC);
+		omap_set_dma_src_params(sim_module_dma_channel, 0, OMAP_DMA_AMODE_CONSTANT,
+			(unsigned long) (&(sim_phys_registers[0]->usim_drx)), 0, 0);
+		omap_set_dma_dest_params(sim_module_dma_channel, 0, OMAP_DMA_AMODE_POST_INC,
+			(unsigned long) sim_module_card_data[0].dma_buffer, 0, 0);
+
+		omap_start_dma(sim_module_dma_channel);
+
+		local_irq_save(flags);
+	
+		/* for each character to transmit ... */
+		for (tx_index = 0; tx_index < length; tx_index++) {
+			/* copy the byte to the TX FIFO */
+			write_reg(&(sim_registers[0]->usim_dtx), sim_module_card_data[0].
+				buffer[sim_module_card_data[0].buffer_index++]);
+		}
+
+		/* setup the TX threshold value to write more data into the FIFO */
+		write_reg_bits(&(sim_registers[0]->usim_fifos), FIFO_TX_TRIGGER_MASK,
+			(SIM_MODULE_TX_FIFO_SIZE - 1) << 2);
+
+		/* clear the transmit complete interrupt */
+		write_reg_bits(&(sim_registers[0]->irqstatus), USIM_TX_MASK, USIM_TX_MASK);
+
+		/* enable the transmit complete interrupt */
+		write_reg_bits(&(sim_registers[0]->irqenable), USIM_TX_EN_MASK, USIM_TX_EN_MASK);
+
+		/* enable WWT */
+		write_reg_bits (&(sim_registers[0]->irqstatus), USIM_WT_MASK, USIM_WT_MASK);
+		write_reg_bits (&(sim_registers[0]->irqenable), USIM_WT_EN_MASK, USIM_WT_EN_MASK);
+
+		/* enable the transmitter */
+		write_reg_bits(&(sim_registers[0]->usimconf2), TXNRX_MASK, TXNRX_MASK);
+
+		sim_module_card_data[0].buffer_index = 0;
+
+		/* enable the receiver right away */
+		write_reg_bits(&(sim_registers[0]->usimconf2), TXNRX_MASK, 0);
+
+		/* indicate this is the last block */
+		sim_module_all_tx_data_sent = TRUE;
+
+		/* initialize rx mode */
+		sim_module_init_rx_mode(0);
+
+		local_irq_restore(flags);
+     
+		while ((!all_data_received) && (sleep_counter <= 19)) {
+			sleep_counter++;
+			msleep(5);
+		}  
+
+		preforming_status_command = FALSE;
+
+		if(all_data_received == TRUE){
+			/* restore interrupt sources */
+			write_reg(&(sim_registers[0]->irqenable), save_irq);
+
+			status_slow_card = FALSE;
+			all_data_received = FALSE;
+
+			sw1 = sim_module_card_data[0].buffer[bytes_recieved - 2];
+			sw2 = sim_module_card_data[0].buffer[bytes_recieved - 1];
+
+			if(((sw1 == 0x90) || (card_type == GSM_SIM && sw1==0x67)) && (sw2 == 0x00)){
+				sim_low_power_enabled = TRUE;
+      
+				/* Allow DMA to ACK idle requests */
+				write_reg_bits((volatile UINT32 *)DMA_SYSCONFIG,DMA_MIDLE,DMA_SYSCONFIG_MIDLEMODE(2));
+
+				/* Disable DMA mode for low power mode */
+				write_reg_bits(&(sim_registers[0]->usim_fifos), SIM_DMA_MODE_MASK, 0);
+
+				/* disable the module clock */
+				write_reg_bits (&(sim_registers[0]->usimcmd), MODULE_CLK_EN_MASK, 0);
+
+				/* disable the SIM FCLK */
+				clk_disable(usim_fck);
+				if(sim_mutex_update(KERNEL_UNLOCK_MUTEX)) {
+					status = 0;
+				}
+				else {
+					sim_module_rx_event |= SIM_MODULE_EVENT_MUTEX_FREE;
+					status = 1;
+				}
+			}
+			else {
+				sim_module_rx_event |= SIM_MODULE_EVENT_RX_A;
+				sim_module_rx_event |= SIM_MODULE_EVENT_INCOMPLETE_SLIM_STATUS;
+				status = 1;
+			}
+		}
+		else if(null_byte_counter >= 500){
+			sim_module_rx_event |= SIM_MODULE_EVENT_RX_A;
+			sim_module_rx_event |= SIM_MODULE_EVENT_INCOMPLETE_SLIM_STATUS;
+			sim_module_rx_event |= SIM_MODULE_EVENT_NULL_BYTE_OVERFLOW;
+			status = 1;
+		}
+		/* send incomplete slim status with RX_A event */
+		else {
+			sim_module_rx_event |= SIM_MODULE_EVENT_RX_A;
+			sim_module_rx_event |=
+				SIM_MODULE_EVENT_INCOMPLETE_SLIM_STATUS;
+			status = 1;
+		}
+	}
+
+	/* if this interrupt caused a user space event ... */
+	if (sim_module_rx_event != SIM_MODULE_EVENT_NONE) {
+		/* wake up the user space event thread */
+		wake_up_interruptible(&sim_module_wait);
+	}
+
+	return(status);
+}
+
+
+/*
+
+DESCRIPTION:
+    This function manipulates the mutex protecting the SIM HW
+
+INPUTS:
+    UINT8 reader_id: the card reader ID of the HW to protect
+    UINT8 mutex_request: the requester ID and action for the mutex   
+
+OUTPUT:
+    BOOL success: the status of the request
+
+IMPORTANT NOTES:
+    None
+
+*/
+static BOOL sim_mutex_update(UINT8 mutex_request)
+{
+	UINT8 mutex_requester = 0;
+	UINT8 mutex_action = 0;
+	BOOL success = FALSE;
+
+	/* Extract the requester's ID and the action from the request */
+	mutex_requester = mutex_request & MUTEX_REQUESTER_MASK;
+	mutex_action = mutex_request & MUTEX_UNLOCK_MASK;
+
+	spin_lock(&sim_status_lock);
+
+	/* If the request is to unlock the mutex */
+	if(mutex_action == MUTEX_UNLOCK_MASK) {
+		/* If the HW is currently not locked */
+		if(sim_mutex_locked_by_id == 0) {
+       			success = TRUE;
+		}
+		/* If the holder of the mutex is requesting to unlock */
+		else if(mutex_requester == sim_mutex_locked_by_id) {
+			/* If there are no pending requests, simply unlock */
+			if(sim_mutex_requested_by_id == 0){
+				sim_mutex_locked_by_id = 0;
+				success = TRUE;
+			}
+			/* The mutex was requested while we were using it, transfer control to the requester */
+			else {
+				sim_mutex_locked_by_id = sim_mutex_requested_by_id;
+				sim_mutex_requested_by_id = 0;
+			}
+		}
+		/* If we get any requests to unlock from a non-lock holder, we'll ignore them */
+	}
+	/* Else we're trying to lock the SIM HW */
+	else {
+		/* If it's not locked, then go ahead and let the requester have it */
+		if(sim_mutex_locked_by_id == 0){
+			sim_mutex_locked_by_id = mutex_requester;
+			success = TRUE;
+		}
+		/* If it's locked by the kernel, and SCPC wants it, transfer control to SCPC */
+		else if((sim_mutex_locked_by_id == KERNEL_MUTEX_ID) &&
+			(mutex_requester == SCPC_MUTEX_ID)) {
+			sim_mutex_locked_by_id = SCPC_MUTEX_ID;
+			success = TRUE;
+		}
+		/* If its locked and requested by the owner */
+		else if (sim_mutex_locked_by_id == mutex_requester) {
+			success = TRUE;
+		}
+		/* If it's locked, and requested by anyone but the KERNEL, then queue the request */
+		else{
+			if(mutex_requester != KERNEL_MUTEX_ID) {
+				sim_mutex_requested_by_id = mutex_requester;
+			}
+		}
+	}
+	spin_unlock(&sim_status_lock);
+
+	return success;
+}
+
+
 /*
 
 DESCRIPTION:
@@ -1761,58 +2267,58 @@ void sim_module_dma_callback(INT32 lch, UINT16 ch_status, void *data)
 			 sim_module_dma_channel);
 #if(0)
 /* TODO: These don't exist on the new kernel, submit a CR to check out where they went */
-		tracemsg("OMAP_DMA_CCR_REG(%d)           : 0x%08x\n",
+		tracemsg("OMAP_DMA_CCR_REG(%d)	   : 0x%08x\n",
 			 sim_module_dma_channel,
 			 OMAP_DMA_CCR_REG(sim_module_dma_channel));
 		tracemsg("OMAP_DMA_CLNK_CTRL_REG(%d)     : 0x%08x\n",
 			 sim_module_dma_channel,
 			 OMAP_DMA_CLNK_CTRL_REG(sim_module_dma_channel));
-		tracemsg("OMAP_DMA_CICR_REG(%d)          : 0x%08x\n",
+		tracemsg("OMAP_DMA_CICR_REG(%d)	  : 0x%08x\n",
 			 sim_module_dma_channel,
 			 OMAP_DMA_CICR_REG(sim_module_dma_channel));
-		tracemsg("OMAP_DMA_CSR_REG(%d)           : 0x%08x\n",
+		tracemsg("OMAP_DMA_CSR_REG(%d)	   : 0x%08x\n",
 			 sim_module_dma_channel,
 			 OMAP_DMA_CSR_REG(sim_module_dma_channel));
-		tracemsg("OMAP_DMA_CSDP_REG(%d)          : 0x%08x\n",
+		tracemsg("OMAP_DMA_CSDP_REG(%d)	  : 0x%08x\n",
 			 sim_module_dma_channel,
 			 OMAP_DMA_CSDP_REG(sim_module_dma_channel));
-		tracemsg("OMAP_DMA_CEN_REG(%d)           : 0x%08x\n",
+		tracemsg("OMAP_DMA_CEN_REG(%d)	   : 0x%08x\n",
 			 sim_module_dma_channel,
 			 OMAP_DMA_CEN_REG(sim_module_dma_channel));
-		tracemsg("OMAP_DMA_CFN_REG(%d)           : 0x%08x\n",
+		tracemsg("OMAP_DMA_CFN_REG(%d)	   : 0x%08x\n",
 			 sim_module_dma_channel,
 			 OMAP_DMA_CFN_REG(sim_module_dma_channel));
-		tracemsg("OMAP2_DMA_CSSA_REG(%d)         : 0x%08x\n",
+		tracemsg("OMAP2_DMA_CSSA_REG(%d)	 : 0x%08x\n",
 			 sim_module_dma_channel,
 			 OMAP2_DMA_CSSA_REG(sim_module_dma_channel));
-		tracemsg("OMAP2_DMA_CDSA_REG(%d)         : 0x%08x\n",
+		tracemsg("OMAP2_DMA_CDSA_REG(%d)	 : 0x%08x\n",
 			 sim_module_dma_channel,
 			 OMAP2_DMA_CDSA_REG(sim_module_dma_channel));
-		tracemsg("OMAP_DMA_CSEI_REG(%d)          : 0x%08x\n",
+		tracemsg("OMAP_DMA_CSEI_REG(%d)	  : 0x%08x\n",
 			 sim_module_dma_channel,
 			 OMAP_DMA_CSEI_REG(sim_module_dma_channel));
-		tracemsg("OMAP_DMA_CSFI_REG(%d)          : 0x%08x\n",
+		tracemsg("OMAP_DMA_CSFI_REG(%d)	  : 0x%08x\n",
 			 sim_module_dma_channel,
 			 OMAP_DMA_CSFI_REG(sim_module_dma_channel));
-		tracemsg("OMAP_DMA_CDEI_REG(%d)          : 0x%08x\n",
+		tracemsg("OMAP_DMA_CDEI_REG(%d)	  : 0x%08x\n",
 			 sim_module_dma_channel,
 			 OMAP_DMA_CDEI_REG(sim_module_dma_channel));
-		tracemsg("OMAP_DMA_CDFI_REG(%d)          : 0x%08x\n",
+		tracemsg("OMAP_DMA_CDFI_REG(%d)	  : 0x%08x\n",
 			 sim_module_dma_channel,
 			 OMAP_DMA_CDFI_REG(sim_module_dma_channel));
-		tracemsg("OMAP_DMA_CSAC_REG(%d)          : 0x%08x\n",
+		tracemsg("OMAP_DMA_CSAC_REG(%d)	  : 0x%08x\n",
 			 sim_module_dma_channel,
 			 OMAP_DMA_CSAC_REG(sim_module_dma_channel));
-		tracemsg("OMAP_DMA_CDAC_REG(%d)          : 0x%08x\n",
+		tracemsg("OMAP_DMA_CDAC_REG(%d)	  : 0x%08x\n",
 			 sim_module_dma_channel,
 			 OMAP_DMA_CDAC_REG(sim_module_dma_channel));
-		tracemsg("OMAP2_DMA_CCEN_REG(%d)         : 0x%08x\n",
+		tracemsg("OMAP2_DMA_CCEN_REG(%d)	 : 0x%08x\n",
 			 sim_module_dma_channel,
 			 OMAP2_DMA_CCEN_REG(sim_module_dma_channel));
-		tracemsg("OMAP2_DMA_CCFN_REG(%d)         : 0x%08x\n",
+		tracemsg("OMAP2_DMA_CCFN_REG(%d)	 : 0x%08x\n",
 			 sim_module_dma_channel,
 			 OMAP2_DMA_CCFN_REG(sim_module_dma_channel));
-		tracemsg("OMAP2_DMA_COLOR_REG(%d)        : 0x%08x\n",
+		tracemsg("OMAP2_DMA_COLOR_REG(%d)	: 0x%08x\n",
 			 sim_module_dma_channel,
 			 OMAP2_DMA_COLOR_REG(sim_module_dma_channel));
 #endif
@@ -1934,6 +2440,91 @@ static int sim_resume(struct platform_device *pdev)
 	return 0;
 }
 
+
+/* DESCRIPTION:
+       The SIM quick wakeup callback function. This is called by the kernel clock handler when
+   a GPT1 experation happens due to a SCIM set timer. This function also restarts the clock if
+   the last status operation returned successfully.
+ 
+   INPUTS:
+       None. 
+
+   OUTPUTS:
+       int ret - the value return from the sim_slim_status_handler. If the value is success
+                 the kernel puts SIM back to sleep. If it's failure, all drivers are resumed
+
+   IMPORTANT NOTES:
+       None.   
+*/
+static int sim_qw_callback(void)
+{
+    int ret = 0;
+	
+    ret = sim_slim_status_handler();
+
+    if(ret == 0){
+	    wakeup_start_status_timer(sim_timer, sim_poll_interval);
+    }
+    else {
+            wakeup_stop_status_timer(sim_timer);
+    }
+    return ret;
+}
+
+/* DESCRIPTION:
+       The SIM quick wakeup check looks to see if the GPT1 expiration was due to SCIM or some other
+   source.
+ 
+   INPUTS:
+       None. 
+
+   OUTPUTS:
+       int success - 1 if SIM's timer was the cause of the wakeup, otherwise 0
+
+   IMPORTANT NOTES:
+       None.   
+*/
+static int sim_qw_check(void)
+{
+	UINT32 reg;
+	int success = 0;
+
+	/* check GPT1 irq wake up source*/
+	reg = (volatile UINT32)read_reg((volatile UINT32 *)INTCPS_ITR1);
+	reg &= WP_TPIR;
+
+	/* 0 is for GPIO/USB wakeups */
+	if ((reg != 0) && (wakeup_check_status_timer(sim_timer) == 0)){
+		success = 1;
+	}
+	return success;
+}
+
+/* DESCRIPTION:
+       The SIM timer callback function. This is called by the kernel wakeup timer, 
+       when the sim timer expire, and the system is NOT suspended.
+ 
+   INPUTS:
+       None. 
+
+   OUTPUTS:
+       int ret - the return value is currently ignored
+
+   IMPORTANT NOTES:
+       None.   
+*/
+static int sim_timer_callback(void)
+{
+    int ret = 0;
+	
+    sim_module_rx_event |= SIM_MODULE_EVENT_TIMER_EXP;
+
+    /* wake up the user space event thread */
+    wake_up_interruptible(&sim_module_wait);
+
+    return ret;
+}
+
 /* DESCRIPTION:
        The SIM intialization function.
  
@@ -2003,6 +2594,12 @@ int __init sim_init(void)
 		tracemsg("sim_init: Error getting 120M FCLK.\n");
 		ret = PTR_ERR(omap_120m_fck);
 	}
+	quickwakeup_register(&sim_qw_ops);
+	sim_timer = wakeup_create_status_timer(sim_timer_callback);
+	if (sim_timer == NULL) {
+		tracemsg("sim_init: sim_timer creation failed.\n");
+		ret = -ENOMEM;
+	}
 	return ret;
 }
 
@@ -2029,6 +2626,10 @@ static void __exit sim_exit(void)
 	clk_put(usim_ick);
 	clk_put(omap_96m_fck);
 	clk_put(omap_120m_fck);
+
+        /* free the SIM status timer */
+        wakeup_del_status_timer(sim_timer);
+        sim_timer = NULL;
 
 	/* unregister the device */
 	platform_device_unregister(&sim_device);

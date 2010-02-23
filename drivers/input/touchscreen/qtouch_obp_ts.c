@@ -97,8 +97,8 @@ struct qtouch_ts_data {
 	uint32_t			last_keystate;
 	uint16_t			eeprom_checksum;
 	uint8_t			    checksum_cnt;
-	int				x_delta;
-	int				y_delta;
+	int					x_delta;
+	int					y_delta;
 
 	/* Note: The message buffer is reused for reading different messages.
 	 * MUST enforce that there is no concurrent access to msg_buf. */
@@ -1353,7 +1353,19 @@ static int qtouch_ts_resume(struct i2c_client *client)
 		pr_err("%s: Cannot write power config\n", __func__);
 		return -EIO;
 	}
-	qtouch_force_reset(ts, 0);
+	/* Forcing calibration */
+	ret = qtouch_force_calibration(ts);
+	if (ret != 0) {
+		pr_err("%s: Unable to recalibrate after reset\n", __func__);
+		return -EIO;
+	}
+	/* reset the address pointer */
+	ret = qtouch_set_addr(ts, ts->obj_tbl[QTM_OBJ_GEN_MSG_PROC].entry.addr);
+	if (ret != 0) {
+		pr_err("%s: Unable to reset address pointer after reset\n",
+		       __func__);
+		return -EIO;
+	}
 
 	enable_irq(ts->client->irq);
 	return 0;

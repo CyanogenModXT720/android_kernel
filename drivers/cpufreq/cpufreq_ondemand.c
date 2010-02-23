@@ -792,6 +792,10 @@ static int __init cpufreq_gov_dbs_init(void)
     if (err)
 		goto err1;
 
+#ifdef CONFIG_HAS_EARLYSUSPEND
+    register_early_suspend(&dbs_suspend_info);
+#endif
+
     return 0;
 
  err1:
@@ -799,10 +803,6 @@ static int __init cpufreq_gov_dbs_init(void)
 
  err2:
     destroy_workqueue(kondemand_wq);
-
-#ifdef CONFIG_HAS_EARLYSUSPEND
-    register_early_suspend(&dbs_suspend_info);
-#endif
 
 	return err;
 }

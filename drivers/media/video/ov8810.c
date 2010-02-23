@@ -26,7 +26,9 @@
 #define MOD_NAME "OV8810: "
 
 #define I2C_M_WR 0
-#define VDD1_LOCK_VAL 0x5
+
+#define CPU_CLK_LOCK	 1
+#define CPU_CLK_UNLOCK   0
 
 /* OV8810 clock related parameters */
 struct ov8810_clk_freqs {
@@ -140,7 +142,6 @@ static struct ov8810_sensor ov8810 = {
 
 static struct i2c_driver ov8810sensor_i2c_driver;
 static enum v4l2_power current_power_state = V4L2_POWER_OFF;
-static struct device *ov_dev;
 
 /* List of image formats supported by OV8810 sensor */
 const static struct v4l2_fmtdesc ov8810_formats[] = {
@@ -1204,6 +1205,13 @@ int ov8810_start_mech_shutter_capture(
 
 	/* trigger group latch in the coming V-blank */
 	err |= ov8810_write_reg(client, OV8810_GROUP_WR, 0xFF);
+	DPRINTK_OV8810("start_mech_shutter_capture:  " \
+		"expT=%dus, line_time_q8=%dus/256, " \
+		"shutter_dly=%dus Tfrex_lines=%d, " \
+		"shutter_dly_lines=%d, frame_len_lines = %d\n",
+		shutter_params->exp_time, line_time_q8,
+		shutter_params->delay_time, Tfrex_lines,
+		shutter_dly_lines, frame_len_lines_adj);
 
 	DPRINTK_OV8810("start_mech_shutter_capture:  " \
 		"expT=%dus, line_time_q8=%dus/256, " \
@@ -1268,9 +1276,9 @@ static int ov8810_set_lens_correction(u16 enable_lens_correction,
 
 	if ((current_power_state == V4L2_POWER_ON) || sensor->resuming) {
 		if (enable_lens_correction) {
-			/* Lock VDD1 - Temporary workaround for 720p
-			   mode only !!!*/
-			resource_request("vdd1_opp", ov_dev, VDD1_LOCK_VAL);
+			/* Lock VDD1 to OPP5 - Temporary workaround for 720p
+			   mode only !!!*/			
+			sensor->pdata->lock_cpufreq(CPU_CLK_LOCK);
 
 			err = ov8810_write_regs(client, len_correction_tbl);
 			/* enable 0x3300[4] */
@@ -1302,9 +1310,6 @@ static int ov8810_set_lens_correction(u16 enable_lens_correction,
 			data &= 0xef;
 			err |= ov8810_write_reg(client,
 				OV8810_ISP_ENBL_0, data);
-
-			/* release resource lock */
-			resource_release("vdd1_opp", ov_dev);
 		}
 	}
 
@@ -2214,6 +2219,8 @@ static int ioctl_g_priv(struct v4l2_int_device *s, void *p)
 	} else if (on == V4L2_POWER_OFF) {
 		isp_set_xclk(0, OV8810_USE_XCLKA);
 		sensor->streaming = false;
+		/* release resource lock */		
+ 		sensor->pdata->lock_cpufreq(CPU_CLK_UNLOCK);
 	} else {
 		sensor->streaming = false;
 	}

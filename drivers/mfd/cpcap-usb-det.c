@@ -22,7 +22,6 @@
 #include <linux/platform_device.h>
 #include <linux/wakelock.h>
 #include <linux/workqueue.h>
-#include <mach/omap-pm.h>
 
 #include <linux/regulator/consumer.h>
 
@@ -30,6 +29,7 @@
 #include <linux/spi/cpcap-regbits.h>
 #include <linux/spi/spi.h>
 
+#ifdef CONFIG_TTA_CHARGER
 #include <linux/interrupt.h>
 #include <linux/irq.h>
 #include <linux/delay.h>
@@ -40,6 +40,7 @@
 #define SHOLEST_TTA_CHRG_DET_N_GPIO  34
 #define TIME_FOR_GPIO_HIGH           10
 #define TTA_IRQ_NAME "tta_IRQ"
+#endif
 
 #define SENSE_USB           (CPCAP_BIT_ID_FLOAT_S  | \
 			     CPCAP_BIT_CHRGCURR1_S | \
@@ -89,6 +90,9 @@ enum cpcap_accy {
 	CPCAP_ACCY_TTA_CHARGER,
 #endif
 	CPCAP_ACCY_NONE,
+
+	/* Used while debouncing the accessory. */
+	CPCAP_ACCY_UNKNOWN,
 };
 
 #ifdef CONFIG_TTA_CHARGER
@@ -112,8 +116,6 @@ struct cpcap_usb_det_data {
 	struct regulator *regulator;
 	struct wake_lock wake_lock;
 	unsigned char is_vusb_enabled;
-	unsigned char is_constraint_set;
-	struct device dummy_dev;
 #ifdef CONFIG_TTA_CHARGER
 	struct tta_sense_data sense_tta;
 #endif
@@ -123,7 +125,9 @@ static const char *accy_devices[] = {
 	"cpcap_usb_charger",
 	"cpcap_factory",
 	"cpcap_charger",
+#ifdef CONFIG_TTA_CHARGER	
 	"cpcap_tta_charger",
+#endif	
 };
 
 #ifdef CONFIG_TTA_CHARGER
@@ -151,47 +155,69 @@ static void vusb_disable(struct cpcap_usb_det_data *data)
 #ifdef CONFIG_TTA_CHARGER
 void enable_tta(void)
 {
-  mdelay(TIME_FOR_GPIO_HIGH);
-  gpio_direction_input(SHOLEST_TTA_CHRG_DET_N_GPIO);
+	mdelay(TIME_FOR_GPIO_HIGH);
+	gpio_direction_input(SHOLEST_TTA_CHRG_DET_N_GPIO);
 }
 EXPORT_SYMBOL(enable_tta);
 
 void disable_tta(void)
 {
-  gpio_direction_output(SHOLEST_TTA_CHRG_DET_N_GPIO, 1);
+	gpio_direction_output(SHOLEST_TTA_CHRG_DET_N_GPIO, 1);
 }
 EXPORT_SYMBOL(disable_tta);
 
 void force_to_detect_tta(unsigned int time)
 {
-  schedule_delayed_work(&temp_data->work, msecs_to_jiffies(time));
+	schedule_delayed_work(&temp_data->work, msecs_to_jiffies(time));
 }
 EXPORT_SYMBOL(force_to_detect_tta);
 
 unsigned char value_of_gpio34(void)
 {
-  return gpio_get_value(SHOLEST_TTA_CHRG_DET_N_GPIO);
+	return gpio_get_value(SHOLEST_TTA_CHRG_DET_N_GPIO);
 }
 EXPORT_SYMBOL(value_of_gpio34);
 
 void disable_tta_irq(void)
 {
-  disable_irq(gpio_to_irq(SHOLEST_TTA_CHRG_DET_N_GPIO));
+	disable_irq(gpio_to_irq(SHOLEST_TTA_CHRG_DET_N_GPIO));
 }
 EXPORT_SYMBOL(disable_tta_irq);
 
 unsigned char is_emu_accessory(void)
 {
-  if ((temp_data->usb_accy == CPCAP_ACCY_NONE) ||
-      (temp_data->usb_accy == CPCAP_ACCY_TTA_CHARGER))
-  {
-    return 1;
-  } else {
-    return 0;  
-  }
+	if ((temp_data->usb_accy == CPCAP_ACCY_NONE) ||
+	    (temp_data->usb_accy == CPCAP_ACCY_TTA_CHARGER))
+		return 1;
+	else
+		return 0;  
 }
 EXPORT_SYMBOL(is_emu_accessory);
 #endif
+
+void force_to_detect_usb(void)
+{
+	unsigned char sense = 0;
+	unsigned short value;
+	cpcap_regacc_read(temp_data->cpcap, CPCAP_REG_INTS2, &value);
+  
+	/* Clear ASAP after read. */
+	cpcap_regacc_write(temp_data->cpcap, CPCAP_REG_INT2,
+			   (CPCAP_BIT_CHRGCURR1_I |
+			    CPCAP_BIT_VBUSVLD_I |
+			    CPCAP_BIT_SESSVLD_I |
+			    CPCAP_BIT_SE1_I),
+			   (CPCAP_BIT_CHRGCURR1_I |
+			    CPCAP_BIT_VBUSVLD_I |
+			    CPCAP_BIT_SESSVLD_I |
+			    CPCAP_BIT_SE1_I));
+
+	sense = ((value & CPCAP_BIT_VBUSVLD_S) ? 1 : 0);
+
+	if (!sense)
+		schedule_delayed_work(&temp_data->work, msecs_to_jiffies(0));
+}
+EXPORT_SYMBOL(force_to_detect_usb);
 
 static int get_sense(struct cpcap_usb_det_data *data)
 {
@@ -264,36 +290,6 @@ static int get_sense(struct cpcap_usb_det_data *data)
 	return 0;
 }
 
-#ifdef CONFIG_TTA_CHARGER
-static int configure_hardware_for_tta(struct cpcap_usb_det_data *data)
-{
-	int retval = 0;
-
-	retval = cpcap_regacc_write(data->cpcap, CPCAP_REG_USBC3,
-					CPCAP_BIT_PU_SPI |
-					CPCAP_BIT_DMPD_SPI |
-					CPCAP_BIT_DPPD_SPI,
-					CPCAP_BIT_PU_SPI |
-					CPCAP_BIT_DMPD_SPI |
-					CPCAP_BIT_DPPD_SPI);
-
-	retval |= cpcap_regacc_write(data->cpcap, CPCAP_REG_USBC1,
-				CPCAP_BIT_DP150KPU,
-				(CPCAP_BIT_DP150KPU | CPCAP_BIT_DP1K5PU |
-				CPCAP_BIT_DM1K5PU | CPCAP_BIT_DPPD |
-				CPCAP_BIT_DMPD));
-
-	retval |= cpcap_regacc_write(data->cpcap, CPCAP_REG_USBC2,
-					CPCAP_BIT_USBXCVREN,
-					CPCAP_BIT_USBXCVREN);
-
-	if (retval != 0)
-		retval = -EFAULT;
-
-	return retval;
-}
-#endif
-
 static int configure_hardware(struct cpcap_usb_det_data *data,
 			      enum cpcap_accy accy)
 {
@@ -328,16 +324,13 @@ static int configure_hardware(struct cpcap_usb_det_data *data,
 	switch (accy) {
 	case CPCAP_ACCY_USB:
 	case CPCAP_ACCY_FACTORY:
-		/* Set mpu latency constraint to allow the max state C4*/
-		omap_pm_set_max_mpu_wakeup_lat(&data->dummy_dev, 3300);
-		data->is_constraint_set = 1;
 		retval |= cpcap_regacc_write(data->cpcap, CPCAP_REG_USBC1, 0,
 					     CPCAP_BIT_VBUSPD);
 		retval |= cpcap_regacc_write(data->cpcap, CPCAP_REG_USBC2,
 					     CPCAP_BIT_USBXCVREN,
 					     CPCAP_BIT_USBXCVREN);
 		/* Give USB driver control of pull up via ULPI. */
-		retval  = cpcap_regacc_write(data->cpcap, CPCAP_REG_USBC3,
+		retval |= cpcap_regacc_write(data->cpcap, CPCAP_REG_USBC3,
 					     0,
 					     CPCAP_BIT_PU_SPI |
 					     CPCAP_BIT_DMPD_SPI |
@@ -349,6 +342,7 @@ static int configure_hardware(struct cpcap_usb_det_data *data,
 					     CPCAP_BIT_VBUSPD,
 					     CPCAP_BIT_VBUSPD);
 		break;
+
 #ifdef CONFIG_TTA_CHARGER
 	case CPCAP_ACCY_TTA_CHARGER:
 		retval |= cpcap_regacc_write(data->cpcap, CPCAP_REG_USBC3,
@@ -362,22 +356,25 @@ static int configure_hardware(struct cpcap_usb_det_data *data,
 		retval |= cpcap_regacc_write(data->cpcap, CPCAP_REG_USBC2,
 					     CPCAP_BIT_USBXCVREN,
 					     CPCAP_BIT_USBXCVREN);
-
     break;
 #endif
+
+	case CPCAP_ACCY_UNKNOWN:
+		retval |= cpcap_regacc_write(data->cpcap, CPCAP_REG_USBC1, 0,
+					     CPCAP_BIT_VBUSPD);
+		break;
+
 	case CPCAP_ACCY_NONE:
 	default:
-		if (data->is_constraint_set) {
-			/* Clear constraint */
-			omap_pm_set_max_mpu_wakeup_lat(&data->dummy_dev, -1);
-			data->is_constraint_set = 0;
-		}
-		retval |= cpcap_regacc_write(data->cpcap, CPCAP_REG_USBC3,
-						CPCAP_BIT_PU_SPI,
-						CPCAP_BIT_PU_SPI |
-						CPCAP_BIT_DMPD_SPI |
-						CPCAP_BIT_DPPD_SPI);
-		retval |= cpcap_regacc_write(data->cpcap, CPCAP_REG_USBC1, 0,
+#ifdef CONFIG_TTA_CHARGER   
+        retval |= cpcap_regacc_write(data->cpcap, CPCAP_REG_USBC3,
+					     CPCAP_BIT_PU_SPI,
+					     CPCAP_BIT_PU_SPI |
+					     CPCAP_BIT_DMPD_SPI |
+					     CPCAP_BIT_DPPD_SPI);
+#endif
+        retval |= cpcap_regacc_write(data->cpcap, CPCAP_REG_USBC1,
+					     CPCAP_BIT_VBUSPD,
 					     CPCAP_BIT_VBUSPD);
 		retval |= cpcap_regacc_write(data->cpcap, CPCAP_REG_USBC2, 0,
 					     CPCAP_BIT_USBXCVREN);
@@ -439,6 +436,9 @@ static void detection_work(struct work_struct *work)
 {
 	struct cpcap_usb_det_data *data =
 		container_of(work, struct cpcap_usb_det_data, work.work);
+#ifdef CONFIG_TTA_CHARGER  
+	static unsigned char first_time = 0;
+#endif
 
 	switch (data->state) {
 	case CONFIG:
@@ -448,9 +448,10 @@ static void detection_work(struct work_struct *work)
 		cpcap_irq_mask(data->cpcap, CPCAP_IRQ_SE1);
 		cpcap_irq_mask(data->cpcap, CPCAP_IRQ_IDGND);
 		cpcap_irq_mask(data->cpcap, CPCAP_IRQ_VBUSVLD);
+#ifdef CONFIG_TTA_CHARGER
 		cpcap_irq_mask(data->cpcap, CPCAP_IRQ_DMI);
-
-		configure_hardware(data, CPCAP_ACCY_NONE);
+#endif 
+		configure_hardware(data, CPCAP_ACCY_UNKNOWN);
 
 		data->state = SAMPLE_1;
 		schedule_delayed_work(&data->work, msecs_to_jiffies(11));
@@ -459,11 +460,11 @@ static void detection_work(struct work_struct *work)
 	case SAMPLE_1:
 		get_sense(data);
 #ifdef CONFIG_TTA_CHARGER
-    if (!(data->sense_tta.gpio_val) &&
-				(data->sense & CPCAP_BIT_SESSVLD_S)) {
-      disable_tta();
-      enable_tta();
-    }
+		if (!(data->sense_tta.gpio_val) &&
+			(data->sense & CPCAP_BIT_SESSVLD_S)) {
+			disable_tta();
+			enable_tta();
+		}
 #endif    
 		data->state = SAMPLE_2;
 		schedule_delayed_work(&data->work, msecs_to_jiffies(100));
@@ -502,7 +503,7 @@ static void detection_work(struct work_struct *work)
 		break;
 #ifdef CONFIG_TTA_CHARGER
 	case IDENTIFY_TTA:
-		configure_hardware_for_tta(data);
+		configure_hardware(data, CPCAP_ACCY_TTA_CHARGER);
 		data->state = IDENTIFY;
 		schedule_delayed_work(&data->work, 0);
 		break;
@@ -535,7 +536,7 @@ static void detection_work(struct work_struct *work)
 		}
 #else
 		if ((data->sense == SENSE_USB) ||
-		(data->sense == SENSE_USB_FLASH)) {
+		    (data->sense == SENSE_USB_FLASH)) {
 			notify_accy(data, CPCAP_ACCY_USB);
 
 			cpcap_irq_unmask(data->cpcap, CPCAP_IRQ_CHRG_DET);
@@ -586,8 +587,8 @@ static void detection_work(struct work_struct *work)
 			 */
 			cpcap_irq_unmask(data->cpcap, CPCAP_IRQ_VBUSVLD);
 #ifdef CONFIG_TTA_CHARGER      
-      disable_tta();
-      enable_tta();
+			disable_tta();
+			enable_tta();
 #endif      
 		}
 		break;
@@ -686,17 +687,23 @@ static void detection_work(struct work_struct *work)
 		break;
 	}
 #ifdef CONFIG_TTA_CHARGER
-  temp_data = data;
+	temp_data = data;
+	if (!first_time) {
+		enable_musb_int();
+		first_time = 1;
+	}
 #endif
 }
 
+#ifdef CONFIG_TTA_CHARGER
 irqreturn_t isr_handler(int irq, void *dev_id, struct pt_regs *regs)
 {
-  struct cpcap_usb_det_data *data;
-  data = (struct cpcap_usb_det_data *) dev_id;
-  schedule_delayed_work(&data->work, msecs_to_jiffies(0));
-  return IRQ_HANDLED;
+	struct cpcap_usb_det_data *data;
+	data = (struct cpcap_usb_det_data *) dev_id;
+	schedule_delayed_work(&data->work, msecs_to_jiffies(0));
+	return IRQ_HANDLED;
 }
+#endif
 
 static void int_handler(enum cpcap_irqs int_event, void *data)
 {
@@ -725,8 +732,6 @@ static int __init cpcap_usb_det_probe(struct platform_device *pdev)
 	data->usb_accy = CPCAP_ACCY_NONE;
 	wake_lock_init(&data->wake_lock, WAKE_LOCK_SUSPEND, "usb");
 
-	retval = configure_hardware(data, CPCAP_ACCY_NONE);
-
 	data->regulator = regulator_get(&pdev->dev, "vusb");
 	if (IS_ERR(data->regulator)) {
 		dev_err(&pdev->dev, "Could not get regulator for cpcap_usb\n");
@@ -735,8 +740,8 @@ static int __init cpcap_usb_det_probe(struct platform_device *pdev)
 	}
 	regulator_set_voltage(data->regulator, 3300000, 3300000);
 
-	retval |= cpcap_irq_register(data->cpcap, CPCAP_IRQ_CHRG_DET,
-				     int_handler, data);
+	retval = cpcap_irq_register(data->cpcap, CPCAP_IRQ_CHRG_DET,
+				    int_handler, data);
 	retval |= cpcap_irq_register(data->cpcap, CPCAP_IRQ_CHRG_CURR1,
 				     int_handler, data);
 	retval |= cpcap_irq_register(data->cpcap, CPCAP_IRQ_SE1,
@@ -862,7 +867,9 @@ static int __init cpcap_usb_det_init(void)
 {
 	return platform_driver_register(&cpcap_usb_det_driver);
 }
-module_init(cpcap_usb_det_init);
+/* The CPCAP USB detection driver must be started later to give the MUSB
+ * driver time to complete its initialization. */
+late_initcall(cpcap_usb_det_init);
 
 static void __exit cpcap_usb_det_exit(void)
 {

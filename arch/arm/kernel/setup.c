@@ -113,6 +113,9 @@ struct stack {
 	u32 irq[3];
 	u32 abt[3];
 	u32 und[3];
+#ifdef CONFIG_NON_NESTED_FIQ
+	u32 fiq[3];
+#endif
 } ____cacheline_aligned;
 
 static struct stack stacks[NR_CPUS];
@@ -343,7 +346,13 @@ void cpu_init(void)
 	"add	sp, %0, %4\n\t"
 	"msr	cpsr_c, %5\n\t"
 	"add	sp, %0, %6\n\t"
-	"msr	cpsr_c, %7"
+#ifndef CONFIG_NON_NESTED_FIQ
+	"msr    cpsr_c, %7"
+#else
+	"msr	cpsr_c, %7\n\t"
+	"add	sp, %0, %8\n\t"
+	"msr	cpsr_c, %9"
+#endif
 	    :
 	    : "r" (stk),
 	      "I" (PSR_F_BIT | PSR_I_BIT | IRQ_MODE),
@@ -352,6 +361,10 @@ void cpu_init(void)
 	      "I" (offsetof(struct stack, abt[0])),
 	      "I" (PSR_F_BIT | PSR_I_BIT | UND_MODE),
 	      "I" (offsetof(struct stack, und[0])),
+#ifdef CONFIG_NON_NESTED_FIQ
+	      "I" (PSR_F_BIT | PSR_I_BIT | FIQ_MODE),
+	      "I" (offsetof(struct stack, fiq[0])),
+#endif
 	      "I" (PSR_F_BIT | PSR_I_BIT | SVC_MODE)
 	    : "r14");
 }
