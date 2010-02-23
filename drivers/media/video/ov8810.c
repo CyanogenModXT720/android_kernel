@@ -1213,14 +1213,6 @@ int ov8810_start_mech_shutter_capture(
 		shutter_params->delay_time, Tfrex_lines,
 		shutter_dly_lines, frame_len_lines_adj);
 
-	DPRINTK_OV8810("start_mech_shutter_capture:  " \
-		"expT=%dus, line_time_q8=%dus/256, " \
-		"shutter_dly=%dus Tfrex_lines=%d, " \
-		"shutter_dly_lines=%d, frame_len_lines = %d\n",
-		shutter_params->exp_time, line_time_q8,
-		shutter_params->delay_time, Tfrex_lines,
-		shutter_dly_lines, frame_len_lines_adj);
-
 	if (err)
 		printk(KERN_ERR "OV8810: Error setting mech shutter registers\n");
 
@@ -1482,8 +1474,10 @@ int ov8810_configure_frame(struct v4l2_int_device *s,
 		 (lut[ss->frame.h_subsample] &
 		 OV8810_IMAGE_TRANSFORM_HSUB_MASK);
 
-	DPRINTK_OV8810("ov8810_configure_frame: sensor->orientation = %d\n",
-		sensor->orientation);
+/*
+printk("ov8810_configure_frame: sensor->orientation = %d\n",
+	sensor->orientation);
+*/
 
 /*
 	switch (sensor->orientation) {
