@@ -40,6 +40,7 @@
 
 static struct workqueue_struct *workqueue;
 static struct wake_lock mmc_delayed_work_wake_lock;
+static unsigned int mmc_detection_removed = 0;
 
 /*
  * Enabling software CRCs on the data blocks can be a significant (30%)
@@ -741,6 +742,7 @@ static inline void mmc_bus_get(struct mmc_host *host)
 	unsigned long flags;
 
 	spin_lock_irqsave(&host->lock, flags);
+	host->removed = mmc_detection_removed;
 	host->bus_refs++;
 	spin_unlock_irqrestore(&host->lock, flags);
 }
@@ -845,13 +847,10 @@ void mmc_detach_bus(struct mmc_host *host)
  */
 void mmc_detect_change(struct mmc_host *host, unsigned long delay)
 {
-#ifdef CONFIG_MMC_DEBUG
 	unsigned long flags;
 	spin_lock_irqsave(&host->lock, flags);
-	WARN_ON(host->removed);
+	mmc_detection_removed = host->removed;
 	spin_unlock_irqrestore(&host->lock, flags);
-#endif
-
 	mmc_schedule_delayed_work(&host->detect, delay);
 }
 

@@ -138,6 +138,8 @@ struct mmc_omap_host {
 	struct	work_struct	mmc_carddetect_work;
 	void	__iomem		*base;
 	resource_size_t		mapbase;
+	spinlock_t		irq_lock;	/* Prevent races with irq handler */
+	unsigned long		flags;
 	unsigned int		id;
 	unsigned int		dma_len;
 	unsigned int		dma_dir;
@@ -259,6 +261,10 @@ static void send_init_stream(struct mmc_omap_host *host)
 
 	OMAP_HSMMC_WRITE(host->base, CON,
 		OMAP_HSMMC_READ(host->base, CON) & ~INIT_STREAM);
+
+	OMAP_HSMMC_WRITE(host->base, STAT, STAT_CLEAR);
+	OMAP_HSMMC_READ(host->base, STAT);
+
 	enable_irq(host->irq);
 }
 
@@ -346,6 +352,14 @@ mmc_omap_start_command(struct mmc_omap_host *host, struct mmc_command *cmd,
 
 	if (host->use_dma)
 		cmdreg |= DMA_EN;
+	/*
+	 * In an interrupt context (i.e. STOP command), the spinlock is unlocked
+	 * by the interrupt handler, otherwise (i.e. for a new request) it is
+	 * unlocked here.
+	 */
+	
+	if (!in_interrupt())
+		spin_unlock_irqrestore(&host->irq_lock, host->flags);
 
 	OMAP_HSMMC_WRITE(host->base, ARG, cmd->arg);
 	OMAP_HSMMC_WRITE(host->base, CMD, cmdreg);
@@ -498,11 +512,13 @@ static irqreturn_t mmc_omap_irq(int irq, void *dev_id)
 	struct mmc_data *data;
 	int end_cmd = 0, end_trans = 0, status;
 
+	spin_lock(&host->irq_lock);
 	omap_hsmmc_enable_clks(host);
 
 	if (host->cmd == NULL && host->data == NULL) {
 		OMAP_HSMMC_WRITE(host->base, STAT,
 			OMAP_HSMMC_READ(host->base, STAT));
+		spin_unlock(&host->irq_lock);
 		return IRQ_HANDLED;
 	}
 
@@ -556,8 +572,10 @@ static irqreturn_t mmc_omap_irq(int irq, void *dev_id)
 
 	if (end_cmd || (status & CC))
 		mmc_omap_cmd_done(host, host->cmd);
-	if (end_trans || (status & TC))
+	if ((end_trans || (status & TC)) && host->mrq)
 		mmc_omap_xfer_done(host, data);
+
+	spin_unlock(&host->irq_lock);
 
 	return IRQ_HANDLED;
 }
@@ -644,9 +662,11 @@ static void mmc_omap_detect(struct work_struct *work)
 
 	sysfs_notify(&host->mmc->class_dev.kobj, NULL, "cover_switch");
 	if (host->carddetect) {
+		host->mmc->removed = 0;
 		mmc_detect_change(host->mmc, (HZ * 200) / 1000);
 	} else {
 		mmc_omap_reset_controller_fsm(host, SRD);
+		host->mmc->removed = 1;
 		mmc_detect_change(host->mmc, (HZ * 50) / 1000);
 	}
 }
@@ -869,6 +889,8 @@ static void omap_mmc_request(struct mmc_host *mmc, struct mmc_request *req)
 {
 	struct mmc_omap_host *host = mmc_priv(mmc);
 
+	if (!in_interrupt())
+		spin_lock_irqsave(&host->irq_lock, host->flags);
 	WARN_ON(host->mrq != NULL);
 	host->mrq = req;
 
@@ -1108,6 +1130,8 @@ static int __init omap_mmc_probe(struct platform_device *pdev)
 
 	sema_init(&host->sem, 1);
 	spin_lock_init(&host->clk_lock);
+
+	spin_lock_init(&host->irq_lock);
 
 	init_timer(&host->inact_timer);
 	host->inact_timer.function = omap_hsmmc_inact_timer;
