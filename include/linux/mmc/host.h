@@ -138,9 +138,7 @@ struct mmc_host {
 	unsigned int		use_spi_crc:1;
 	unsigned int		claimed:1;	/* host exclusively claimed */
 	unsigned int		bus_dead:1;	/* bus has been released */
-#ifdef CONFIG_MMC_DEBUG
 	unsigned int		removed:1;	/* host is being removed */
-#endif
 
 	struct mmc_card		*card;		/* device attached to this host */
 
