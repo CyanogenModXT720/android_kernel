@@ -52,9 +52,9 @@ static int sholest_panel_enable(struct omap_dss_device *dssdev)
 	gpio_direction_output(SHOLEST_DISPLAY_RESET_GPIO, 1);
 	msleep(5);
 	gpio_set_value(SHOLEST_DISPLAY_RESET_GPIO, 0);
-	msleep(5);
+	msleep(12); // low pulse width 5 -> 12
 	gpio_set_value(SHOLEST_DISPLAY_RESET_GPIO, 1);
-	msleep(10);
+	msleep(12); // power stabilize 10 -> 12
 
 	printk(KERN_INFO "%s OUT\n", __func__);
 	return 0;
