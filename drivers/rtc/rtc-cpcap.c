@@ -231,6 +231,7 @@ static int cpcap_rtc_set_alarm(struct device *dev, struct rtc_wkalrm *alrm)
 	if (!alarm_masked)
 		cpcap_irq_unmask(rtc->cpcap, CPCAP_IRQ_TODA);
 
+	cpcap_irq_unmask(rtc->cpcap, CPCAP_IRQ_TODA);
 	return ret;
 }
 
