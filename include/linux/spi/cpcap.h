@@ -665,7 +665,7 @@ struct cpcap_regacc {
 #define CPCAP_IOCTL_TTA_CHARGER_CONTROL \
        _IOWR(0, CPCAP_IOCTL_NUM_TTA_CHARGER_CONTROL, enum cpcap_tta_control*)
 
-#define CPCAP_AUDIO_REG_DEBUG
+/*#define CPCAP_AUDIO_REG_DEBUG*/
 
 #ifdef __KERNEL__
 struct cpcap_device {
