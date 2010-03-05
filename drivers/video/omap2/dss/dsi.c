@@ -32,6 +32,7 @@
 #include <linux/regulator/consumer.h>
 #include <linux/kthread.h>
 #include <linux/wait.h>
+#include <linux/delay.h>
 
 #include <mach/board.h>
 #include <mach/display.h>
@@ -1464,7 +1465,7 @@ static void dsi_complexio_timings(void)
 	/* min 40ns + 4*UI	max 85ns + 6*UI */
 	ths_prepare = ns2ddr(70) + 2;
 
-	/* min 145ns + 10*UI */
+	/* min 145ns + 10*UI for TMD, min 480ns for AUO */
 	ths_prepare_ths_zero = ns2ddr(175 + 425) + 2;
 
 	/* min max(8*UI, 60ns+4*UI) */
@@ -2109,7 +2110,12 @@ int dsi_vc_write(int channel, u8 data_type, u8 *data, int len)
 	r = dsi_vc_write_nosync(channel, data_type, data, len);
 	if (r)
 		return r;
+
+	ndelay(1000); /* S/W workaround for AUO */
+
 	r = dsi_vc_send_bta_sync(channel);
+
+	ndelay(1000); /* S/W workaround for AUO */
 
 	return r;
 
@@ -2141,10 +2147,14 @@ int dsi_vc_dcs_write(int channel, u8 *data, int len)
 	if (r)
 		return r;
 
+	ndelay(1000); /* S/W workaround for AUO */
+
 	/* Some devices need time to process the msg in low power mode.
 	   This also makes the write synchronous, and checks that
 	   the peripheral is still alive */
 	r = dsi_vc_send_bta_sync(channel);
+
+	ndelay(1000); /* S/W workaround for AUO */
 
 	return r;
 }
@@ -2163,9 +2173,14 @@ int dsi_vc_dcs_read(int channel, u8 dcs_cmd, u8 *buf, int buflen)
 	if (r)
 		return r;
 
+
+	ndelay(1000); /* S/W workaround for AUO */
+
 	r = dsi_vc_send_bta_sync(channel);
 	if (r)
 		return r;
+
+	ndelay(1000); /* S/W workaround for AUO */
 
 	/* RX_FIFO_NOT_EMPTY */
 	if (REG_GET(DSI_VC_CTRL(channel), 20, 20) == 0) {

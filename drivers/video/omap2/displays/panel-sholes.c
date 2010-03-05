@@ -118,12 +118,16 @@ static u16 sholes_panel_read_supplier_id(struct omap_dss_device *dssdev)
 	if (dsi_vc_set_max_rx_packet_size(EDISCO_CMD_VC, 2))
 		goto end;
 
+	ndelay(1000); /* S/W workaround for AUO */
+
 	if (dsi_vc_dcs_read(EDISCO_CMD_VC, EDISCO_CMD_READ_DDB_START,
 	    data, 2) != 2)
 		goto end;
 
 	if (dsi_vc_set_max_rx_packet_size(EDISCO_CMD_VC, 1))
 		goto end;
+
+	ndelay(1000); /* S/W workaround for AUO */
 
 	id = (data[0] << 8) | data[1];
 
