@@ -231,7 +231,6 @@ static int cpcap_rtc_set_alarm(struct device *dev, struct rtc_wkalrm *alrm)
 	if (!alarm_masked)
 		cpcap_irq_unmask(rtc->cpcap, CPCAP_IRQ_TODA);
 
-	cpcap_irq_unmask(rtc->cpcap, CPCAP_IRQ_TODA);
 	return ret;
 }
 
@@ -323,10 +322,31 @@ static int __devexit cpcap_rtc_remove(struct platform_device *pdev)
 	return 0;
 }
 
+int cpcap_rtc_suspend(struct platform_device *pdev, pm_message_t state)
+{
+	struct cpcap_rtc *rtc;
+
+	rtc = platform_get_drvdata(pdev);
+	cpcap_irq_unmask(rtc->cpcap, CPCAP_IRQ_TODA);
+
+	return 0;
+}
+int cpcap_rtc_resume(struct platform_device *pdev)
+{
+	struct cpcap_rtc *rtc;
+
+	rtc = platform_get_drvdata(pdev);
+	cpcap_irq_mask(rtc->cpcap, CPCAP_IRQ_TODA);
+
+       return 0;
+}
+
 static struct platform_driver cpcap_rtc_driver = {
 	.driver = {
 		.name = "cpcap_rtc",
 	},
+	.suspend = cpcap_rtc_suspend,
+	.resume = cpcap_rtc_resume,
 	.probe = cpcap_rtc_probe,
 	.remove = __devexit_p(cpcap_rtc_remove),
 };
