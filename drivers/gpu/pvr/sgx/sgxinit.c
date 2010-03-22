@@ -2059,11 +2059,15 @@ PVRSRV_ERROR SGXGetMiscInfoKM(PVRSRV_SGXDEV_INFO	*psDevInfo,
 		{
 			PVR_LOG(("User requested SGX debug info"));
 			
-			
+/* Market Air control app issue fix : remove debug info dump */
+#if 0
 			SGXDumpDebugInfo(psDeviceNode, IMG_FALSE);
 			BUG();
 
 			return PVRSRV_OK;
+#else
+      return PVRSRV_ERROR_INVALID_PARAMS;
+#endif
 		}
 
 		default:
