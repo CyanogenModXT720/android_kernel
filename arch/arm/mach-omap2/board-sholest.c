@@ -34,6 +34,7 @@
 #include <linux/wl127x-rfkill.h>
 #include <linux/wl127x-test.h>
 #include <linux/omap_mdm_ctrl.h>
+#include <linux/kxtf9.h>
 
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
@@ -856,6 +857,10 @@ static struct i2c_board_info __initdata sholest_i2c_bus2_board_info[] = {
 		.platform_data = &sholest_lis331dlh_data,
 	},
 #endif
+	{
+		I2C_BOARD_INFO("kxtf9", 0x0F),
+		.platform_data = &sholest_kxtf9_data,
+	},
 #ifdef CONFIG_MOT_FEAT_LP3907
 	{
 		I2C_BOARD_INFO("lp3907", 0x61),

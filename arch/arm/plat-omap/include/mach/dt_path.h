@@ -20,7 +20,8 @@
 /* Date	 Author	  Comment
  * ===========  ==============  ==============================================
  * Jun-08-2009  Motorola	Add MUX node
- * Jun-10-2009  Motorola    Add GPIO node
+ * Jun-10-2009  Motorola        Add GPIO node
+ * Sep-29-2009  Motorola        Add Accelerometer node
  */
 
 
@@ -92,6 +93,14 @@
 
 /* Accelerometer Node */
 #define DT_PATH_LIS331DLH	"/System@0/I2C@0/Accelerometer@0"
+
+#define DT_PATH_ACCELEROMETER   "/System@0/I2C@0/Accelerometer@0"
+#define DT_PROP_ACCELEROMETER_AXIS_MAP_X	"axis_map_x"
+#define DT_PROP_ACCELEROMETER_AXIS_MAP_Y	"axis_map_y"
+#define DT_PROP_ACCELEROMETER_AXIS_MAP_Z	"axis_map_z"
+#define DT_PROP_ACCELEROMETER_NEGATE_X	"negate_x"
+#define DT_PROP_ACCELEROMETER_NEGATE_Y	"negate_y"
+#define DT_PROP_ACCELEROMETER_NEGATE_Z	"negate_z"
 
 /* GPIO Node */
 #define DT_PATH_GPIO        "/System@0/GPIO@0"

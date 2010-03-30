@@ -291,6 +291,14 @@ config SENSORS_LIS331DLH
 	 Say yes here if you wish to include the STI Micro
 	 LIS331DLH accelerometer driver.
 
+config SENSORS_KXTF9
+	tristate "KXTF9 Accelerometer"
+	default n
+	depends on I2C
+	help
+	 Say yes here if you wish to include the Kionix
+	 KXTF9 accelerometer driver.
+
 config UMTS_SYSPANIC
         tristate "Motorola UMTS phone syspanic driver"
 	default n
