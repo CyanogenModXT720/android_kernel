@@ -2155,23 +2155,23 @@ CONFIG_HAS_DMA=y
 CONFIG_UMTS_SYSPANIC=y
 
 # support MDTV system
-#CONFIG_MOT_FEAT_MDTV=y #a19035 not needed for TMO H/W
+#CONFIG_MOT_FEAT_MDTV is not set #a19035 not needed for TMO H/W
 # support LP3907 regulator for TDMB block
-#CONFIG_MOT_FEAT_LP3907=y #a19035 not needed for TMO H/W
+#CONFIG_MOT_FEAT_LP3907 is not set #a19035 not needed for TMO H/W
 
 # SMS1130 SPI interface
-#CONFIG_MOT_FEAT_SPI_SMS1130=ya #a19035 not needed for TMO H/W
+#CONFIG_MOT_FEAT_SPI_SMS1130 is not set #a19035 not needed for TMO H/W
 #
 # Supported SMS1130(TDMB tuner)
 #
-#CONFIG_DVB_CORE=y #a19035 not needed for TMO H/W
-#CONFIG_SMS_SIANO_MDTV_TDMB=y #a19035 not needed for TMO H/W
-#CONFIG_SMS_HOSTLIB_SUBSYS=y #a19035 not needed for TMO H/W
+#CONFIG_DVB_CORE is not set #a19035 not needed for TMO H/W
+#CONFIG_SMS_SIANO_MDTV_TDMB is not set #a19035 not needed for TMO H/W
+#CONFIG_SMS_HOSTLIB_SUBSYS is not set #a19035 not needed for TMO H/W
 
 #
 # TTA charger
 #
-CONFIG_TTA_CHARGER=y
+#CONFIG_TTA_CHARGER is not set #a19035 not needed for TMO H/W
 
 #
 # End of Motorola Features
