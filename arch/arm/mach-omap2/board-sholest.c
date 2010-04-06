@@ -211,7 +211,7 @@ static struct android_usb_platform_data andusb_plat = {
 	.vendor_id      = 0x22b8,
 	.product_id     = 0x41DA,
 	.adb_product_id = 0x41DA,
-	.product_name   = "XT720",
+	.product_name   = "ST_Retail",
 	.manufacturer_name	= "Motorola",
 	.serial_number		= device_serial,
 };
@@ -226,7 +226,7 @@ static struct platform_device androidusb_device = {
 
 static struct usb_mass_storage_platform_data usbms_plat = {
 	.vendor			= "Motorola",
-	.product		= "XT720",
+	.product		= "ST_Retail",
 	.release		= 1,
 };
 
