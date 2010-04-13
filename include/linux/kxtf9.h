@@ -26,7 +26,6 @@
 
 #define KXTF9_IOCTL_BASE 77
 /** The following define the IOCTL command values via the ioctl macros */
-
 #define KXTF9_IOCTL_SET_DELAY		_IOW(KXTF9_IOCTL_BASE, 0, int)
 #define KXTF9_IOCTL_GET_DELAY		_IOR(KXTF9_IOCTL_BASE, 1, int)
 #define KXTF9_IOCTL_SET_ENABLE		_IOW(KXTF9_IOCTL_BASE, 2, int)
@@ -38,6 +37,9 @@
 #define KXTF9_IOCTL_SET_WAKE_ENABLE	_IOW(KXTF9_IOCTL_BASE, 7, int)
 #define KXTF9_IOCTL_SET_PM_MODE		_IOW(KXTF9_IOCTL_BASE, 8, int)
 #define KXTF9_IOCTL_SELF_TEST		_IOW(KXTF9_IOCTL_BASE, 9, int)
+#define KXTF9_IOCTL_SET_SENSITIVITY	_IOW(KXTF9_IOCTL_BASE, 10, int)
+#define KXTF9_IOCTL_SET_FUZZ		_IOW(KXTF9_IOCTL_BASE, 11, int)
+#define KXTF9_IOCTL_SET_XYZ_HISTORY	_IOW(KXTF9_IOCTL_BASE, 12, int)
 
 /* CONTROL REGISTER 1 BITS */
 #define RES_12BIT		0x40
@@ -73,6 +75,9 @@
 #define ODR50			0x02
 #define ODR25			0x01
 #define ODR12_5			0x00
+
+#define SENSITIVITY_REGS 0x07
+
 #ifdef __KERNEL__
 struct kxtf9_platform_data {
 	int poll_interval;
@@ -103,7 +108,6 @@ struct kxtf9_platform_data {
 	u8 tdt_latency_timer_init;
 	u8 tdt_window_timer_init;
 
-
 	int (*init)(void);
 	void (*exit)(void);
 	int (*power_on)(void);
@@ -112,10 +116,11 @@ struct kxtf9_platform_data {
 	int gpio;
 
 	u8 gesture;
-
+	u8 sensitivity_low[SENSITIVITY_REGS];
+	u8 sensitivity_medium[SENSITIVITY_REGS];
+	u8 sensitivity_high[SENSITIVITY_REGS];
 };
 
-extern struct  kxtf9_platform_data sholest_kxtf9_data;
 #endif /* __KERNEL__ */
 
 #endif  /* __KXTF9_H__ */

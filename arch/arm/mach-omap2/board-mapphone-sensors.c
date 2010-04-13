@@ -251,6 +251,16 @@ struct kxtf9_platform_data mapphone_kxtf9_data = {
 
 	.gpio = MAPPHONE_KXTF9_INT_GPIO,
 	.gesture = 0,
+	.sensitivity_low = {
+		0x50, 0xFF, 0xB8, 0x32, 0x09, 0x0A, 0xA0,
+	},
+	.sensitivity_medium = {
+		0x50, 0xFF, 0x68, 0x32, 0x09, 0x0A, 0xA0,
+	},
+	.sensitivity_high = {
+		0x78, 0xB6, 0x1A, 0xA2, 0x24, 0x28, 0xA0,
+	},
+
 };
 
 static void __init mapphone_kxtf9_init(void)
@@ -286,6 +296,27 @@ static void __init mapphone_kxtf9_init(void)
 				DT_PROP_ACCELEROMETER_NEGATE_Z, &len);
 		if (prop && len)
 			mapphone_kxtf9_data.negate_z = *(u8 *)prop;
+
+		prop = of_get_property(node,
+		DT_PROP_ACCELEROMETER_SENS_LOW, &len);
+
+		if (prop && len)
+			memcpy(mapphone_kxtf9_data.sensitivity_low,
+				(u8 *)prop, len);
+
+		prop = of_get_property(node,
+		DT_PROP_ACCELEROMETER_SENS_MEDIUM, &len);
+
+		if (prop && len)
+			memcpy(mapphone_kxtf9_data.sensitivity_medium,
+			(u8 *)prop, len);
+
+		prop = of_get_property(node,
+		DT_PROP_ACCELEROMETER_SENS_HIGH, &len);
+
+		if (prop && len)
+			memcpy(mapphone_kxtf9_data.sensitivity_high,
+				(u8 *)prop, len);
 		of_node_put(node);
 	}
 #endif

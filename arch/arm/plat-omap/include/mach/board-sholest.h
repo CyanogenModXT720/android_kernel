@@ -56,6 +56,9 @@ extern struct ov8810_platform_data sholest_ov8810_platform_data;
 #ifdef CONFIG_VIDEO_OMAP3_HPLENS
 extern struct hplens_platform_data sholest_hplens_platform_data;
 #endif
+#ifdef CONFIG_SENSORS_KXTF9
+extern struct kxtf9_platform_data sholest_kxtf9_data;
+#endif
 
 #define GPIO_CAMERA_RESET   98
 #define GPIO_SILENCE_KEY    110

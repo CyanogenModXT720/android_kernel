@@ -53,6 +53,7 @@
 #define WUF_TIMER		0x29
 #define WUF_THRESH		0x5A
 #define TDT_TIMER		0x2B
+#define SELF_TEST_REG		0x3A
 /* CONTROL REGISTER 1 BITS */
 #define PC1_OFF			0x00
 #define PC1_ON			0x80
@@ -82,7 +83,13 @@
 #define RES_WIN_TIMER		13
 #define RESUME_ENTRIES		14
 
+#define SENSITIVITY_LEVELS        3
+#define SENSITIVITY_LOW_OFFSET    0
+#define SENSITIVITY_MEDIUM_OFFSET 1
+#define SENSITIVITY_HIGH_OFFSET   2
+
 struct {
+	/* cutoff serves dual purpose as valid output delay */
 	unsigned int cutoff;
 	u8 mask;
 } kxtf9_odr_table[] = {
@@ -93,12 +100,21 @@ struct {
 	20,	ODR100}, {
 	40,	ODR50}, {
 	80,	ODR25}, {
-	0,	ODR12_5},};
+	160,	ODR12_5},};
+
+struct tap_sensitivity {
+	u8 reg_timer_init;
+	u8 reg_h_thresh_init;
+	u8 reg_l_thresh_init;
+	u8 reg_tap_timer_init;
+	u8 reg_total_timer_init;
+	u8 reg_latency_timer_init;
+	u8 reg_window_timer_init;
+};
 
 struct kxtf9_data {
 	struct i2c_client *client;
 	struct kxtf9_platform_data *pdata;
-	/* mutex protection */
 	struct mutex lock;
 	struct delayed_work input_work;
 	struct input_dev *input_dev;
@@ -110,6 +126,7 @@ struct kxtf9_data {
 	u8 shift_adj;
 	u8 resume_state[RESUME_ENTRIES];
 	int irq;
+	struct tap_sensitivity ts_regs[SENSITIVITY_LEVELS];
 };
 
 struct kxtf9_data *kxtf9_misc_data;
@@ -249,14 +266,21 @@ static void kxtf9_device_power_off(struct kxtf9_data *tf9)
 {
 	int err;
 	u8 buf[2] = { CTRL_REG1, PC1_OFF };
+	u8 ctrl_reg1 = CTRL_REG1;
 
+	err = kxtf9_i2c_read(tf9, &ctrl_reg1, 1);
+	if (err < 0) {
+		dev_err(&tf9->client->dev, "kxtf9_i2c_read failed: %d\n", err);
+		return;
+	}
+	/* Resetting Power Control bit to 0 to put IC into Standby Mode */
+	buf[1] = ctrl_reg1 & ~PC1_ON;
 	err = kxtf9_i2c_write(tf9, buf, 1);
 	if (err < 0)
 		dev_err(&tf9->client->dev, "soft power off failed: %d\n", err);
 	if (tf9->pdata->power_off) {
 		disable_irq_nosync(tf9->irq);
 		tf9->pdata->power_off();
-		tf9->hw_initialized = 0;
 	}
 }
 
@@ -272,9 +296,9 @@ static int kxtf9_device_power_on(struct kxtf9_data *tf9)
 			return err;
 		}
 		enable_irq(tf9->irq);
+		mdelay(25);
 	}
 	if (!tf9->hw_initialized) {
-		mdelay(100);
 		err = kxtf9_hw_init(tf9);
 		if (err < 0) {
 			kxtf9_device_power_off(tf9);
@@ -362,7 +386,6 @@ static void kxtf9_irq_work_func(struct work_struct *work)
 	unsigned int int_status = 0;
 	u8 status;
 	u8 buf[2];
-
 
 	struct kxtf9_data *tf9 = container_of(work,
 						struct kxtf9_data, irq_work);
@@ -477,6 +500,7 @@ int kxtf9_update_odr(struct kxtf9_data *tf9, int poll_interval)
 {
 	int err = -1;
 	int i;
+	int valid_t;
 	u8 config[2] = { DATA_CTRL, 0 };
 	u8 buf[2] = { CTRL_REG1, PC1_OFF };
 
@@ -487,11 +511,14 @@ int kxtf9_update_odr(struct kxtf9_data *tf9, int poll_interval)
 	 *  ODR cannot support the current poll interval, we stop searching */
 	for (i = 0; i < ARRAY_SIZE(kxtf9_odr_table); i++) {
 		config[1] = kxtf9_odr_table[i].mask;
+		valid_t = kxtf9_odr_table[i].cutoff;
 		if (poll_interval < kxtf9_odr_table[i].cutoff)
 			break;
 	}
 
 	if (atomic_read(&tf9->enabled)) {
+		if (tf9->input_dev)
+			cancel_delayed_work_sync(&tf9->input_work);
 		err = kxtf9_i2c_write(tf9, buf, 1);
 		if (err < 0)
 			goto error;
@@ -505,11 +532,10 @@ int kxtf9_update_odr(struct kxtf9_data *tf9, int poll_interval)
 		err = kxtf9_i2c_write(tf9, buf, 1);
 		if (err < 0)
 			goto error;
-		/* Latch on input_dev - indicates that kxtf9_input_init passed
-		 *  and this workqueue is available */
-		if (tf9->input_dev) {
-			cancel_delayed_work_sync(&tf9->input_work);
-			schedule_delayed_work(&tf9->input_work,
+		if (buf[1] & PC1_ON) {
+			mdelay(valid_t);
+			if (tf9->input_dev)
+				schedule_delayed_work(&tf9->input_work,
 				      msecs_to_jiffies(poll_interval));
 		}
 	}
@@ -522,6 +548,54 @@ error:
 
 	return err;
 }
+int kxtf9_update_gesture_sensitivity(struct kxtf9_data *tf9, int index)
+{
+	int err = -1;
+	u8 buf[8], tmp;
+	tmp = CTRL_REG1;
+
+	if (index >= SENSITIVITY_LEVELS || index < 0)
+		return err;
+
+	err = kxtf9_i2c_read(tf9, &tmp, 1);
+	if (err < 0) {
+		dev_err(&tf9->client->dev, "CNTRL_REG1 reg read failed: %d\n",
+				err);
+		return err;
+	}
+
+	buf[0] = CTRL_REG1;
+	buf[1] = PC1_OFF;
+	err = kxtf9_i2c_write(tf9, buf, 1);
+	if (err < 0)
+		goto error;
+
+	buf[0] = TDT_TIMER;
+	buf[1] = tf9->ts_regs[index].reg_timer_init;
+	buf[2] = tf9->ts_regs[index].reg_h_thresh_init;
+	buf[3] = tf9->ts_regs[index].reg_l_thresh_init;
+	buf[4] = tf9->ts_regs[index].reg_tap_timer_init;
+	buf[5] = tf9->ts_regs[index].reg_total_timer_init;
+	buf[6] = tf9->ts_regs[index].reg_latency_timer_init;
+	buf[7] = tf9->ts_regs[index].reg_window_timer_init;
+	err = kxtf9_i2c_write(tf9, buf, 7);
+	if (err < 0)
+		goto error;
+
+	buf[0] = CTRL_REG1;
+	buf[1] = tmp;
+	err = kxtf9_i2c_write(tf9, buf, 1);
+	if (err < 0)
+		goto error;
+
+	return 0;
+error:
+	dev_err(&tf9->client->dev, "update_gesture_sensitivity 0x%x,0x%x: %d\n",
+			buf[0], buf[1], err);
+
+	return err;
+}
+
 
 static int kxtf9_get_acceleration_data(struct kxtf9_data *tf9, int *xyz)
 {
@@ -573,8 +647,10 @@ static int kxtf9_enable(struct kxtf9_data *tf9)
 	u8 buf;
 
 	if (!atomic_cmpxchg(&tf9->enabled, 0, 1)) {
+		mutex_lock(&tf9->lock);
 		err = kxtf9_device_power_on(tf9);
 		if (err < 0) {
+			mutex_unlock(&tf9->lock);
 			atomic_set(&tf9->enabled, 0);
 			return err;
 		}
@@ -592,8 +668,7 @@ static int kxtf9_enable(struct kxtf9_data *tf9)
 				input_sync(tf9->input_dev);
 			}
 		}
-		schedule_delayed_work(&tf9->input_work,
-				msecs_to_jiffies(tf9->pdata->poll_interval));
+		mutex_unlock(&tf9->lock);
 	}
 
 	return 0;
@@ -602,8 +677,10 @@ static int kxtf9_enable(struct kxtf9_data *tf9)
 static int kxtf9_disable(struct kxtf9_data *tf9)
 {
 	if (atomic_cmpxchg(&tf9->enabled, 1, 0)) {
+		mutex_lock(&tf9->lock);
 		cancel_delayed_work_sync(&tf9->input_work);
 		kxtf9_device_power_off(tf9);
+		mutex_unlock(&tf9->lock);
 	}
 
 	return 0;
@@ -629,8 +706,12 @@ static int kxtf9_misc_ioctl(struct inode *inode, struct file *file,
 	u8 ctrl[2] = { CTRL_REG1, PC1_OFF };
 	int err;
 	int interval;
-    int int_state;
+	int int_state;
 	struct kxtf9_data *tf9 = file->private_data;
+	int sensitivity;
+	u8 ctrl_reg1 = CTRL_REG1;
+	u8 pc1;
+	unsigned long flags;
 
 	switch (cmd) {
 	case KXTF9_IOCTL_GET_DELAY:
@@ -641,13 +722,17 @@ static int kxtf9_misc_ioctl(struct inode *inode, struct file *file,
 	case KXTF9_IOCTL_SET_DELAY:
 		if (copy_from_user(&interval, argp, sizeof(interval)))
 			return -EFAULT;
-		if (interval < 0)
-			return -EINVAL;
+		if (interval < 0) {
+			cancel_delayed_work_sync(&tf9->input_work);
+			return 0;
+		}
 		if (interval > tf9->pdata->min_interval)
 			tf9->pdata->poll_interval = interval;
 		else
 			tf9->pdata->poll_interval = tf9->pdata->min_interval;
+		mutex_lock(&tf9->lock);
 		err = kxtf9_update_odr(tf9, tf9->pdata->poll_interval);
+		mutex_unlock(&tf9->lock);
 		if (err < 0)
 			return err;
 		break;
@@ -669,103 +754,202 @@ static int kxtf9_misc_ioctl(struct inode *inode, struct file *file,
 	case KXTF9_IOCTL_SET_G_RANGE:
 		if (copy_from_user(&buf, argp, 1))
 			return -EFAULT;
+		mutex_lock(&tf9->lock);
 		err = kxtf9_update_g_range(tf9, buf[0]);
+		mutex_unlock(&tf9->lock);
 		if (err < 0)
 			return err;
 		break;
 	case KXTF9_IOCTL_SET_TILT_ENABLE:
 		if (copy_from_user(&interval, argp, sizeof(interval)))
 			return -EFAULT;
-		if (interval < 0 || interval > 1)
-			return -EINVAL;
-		if (interval)
-			tf9->resume_state[RES_CTRL_REG1] |= TPE;
-		else
-			tf9->resume_state[RES_CTRL_REG1] &= (~TPE);
-		ctrl[1] = tf9->resume_state[RES_CTRL_REG1];
-		err = kxtf9_i2c_write(tf9, ctrl, 1);
+		mutex_lock(&tf9->lock);
+		err = kxtf9_i2c_read(tf9, &ctrl_reg1, 1);
 		if (err < 0) {
+			mutex_unlock(&tf9->lock);
 			dev_err(&tf9->client->dev,
-				"set tilt enable error: %d\n", err);
+				"kxtf9_i2c_read failed: %d\n", err);
 			return err;
 		}
+		pc1 = ctrl_reg1 & PC1_ON;
+		if (interval < 0 || interval > 1) {
+			mutex_unlock(&tf9->lock);
+			return -EINVAL;
+		}
+		ctrl[1] = ctrl_reg1 & (~PC1_ON);
+		err = kxtf9_i2c_write(tf9, ctrl, 1);
+		if (err < 0) {
+			mutex_unlock(&tf9->lock);
+			dev_err(&tf9->client->dev,
+				"set tilt enable error 1: %d\n", err);
+			return err;
+		}
+		if (interval) {
+			ctrl[1] |= TPE;
+			pc1 = PC1_ON;
+		} else {
+			ctrl[1] &= ~TPE;
+		}
+		err = kxtf9_i2c_write(tf9, ctrl, 1);
+		if (err < 0) {
+			mutex_unlock(&tf9->lock);
+			dev_err(&tf9->client->dev,
+				"set tilt enable error 2: %d\n", err);
+			return err;
+		}
+		ctrl[1] |= pc1;
+		err = kxtf9_i2c_write(tf9, ctrl, 1);
+		if (err < 0) {
+			mutex_unlock(&tf9->lock);
+			dev_err(&tf9->client->dev,
+				"set tilt enable error 3: %d\n", err);
+			return err;
+		}
+		mutex_unlock(&tf9->lock);
 		break;
 	case KXTF9_IOCTL_SET_TAP_ENABLE:
 		if (copy_from_user(&interval, argp, sizeof(interval)))
 			return -EFAULT;
-		if (interval < 0 || interval > 1)
-			return -EINVAL;
-		if (interval)
-			tf9->resume_state[RES_CTRL_REG1] |= TDTE;
-		else
-			tf9->resume_state[RES_CTRL_REG1] &= (~TDTE);
-		ctrl[1] = tf9->resume_state[RES_CTRL_REG1];
-		err = kxtf9_i2c_write(tf9, ctrl, 1);
+		mutex_lock(&tf9->lock);
+		err = kxtf9_i2c_read(tf9, &ctrl_reg1, 1);
 		if (err < 0) {
+			mutex_unlock(&tf9->lock);
 			dev_err(&tf9->client->dev,
-				"set tap enable error: %d\n", err);
+				"kxtf9_i2c_read failed: %d\n", err);
 			return err;
 		}
+		pc1 = ctrl_reg1 & PC1_ON;
+		if (interval < 0 || interval > 1) {
+			mutex_unlock(&tf9->lock);
+			return -EINVAL;
+		}
+		ctrl[1] = ctrl_reg1 & (~PC1_ON);
+		err = kxtf9_i2c_write(tf9, ctrl, 1);
+		if (err < 0) {
+			mutex_unlock(&tf9->lock);
+			dev_err(&tf9->client->dev,
+				"set tap enable error 1: %d\n", err);
+			return err;
+		}
+		if (interval) {
+			ctrl[1] |= TDTE;
+			pc1 = PC1_ON;
+		} else {
+			ctrl[1] &= ~TDTE;
+		}
+		err = kxtf9_i2c_write(tf9, ctrl, 1);
+		if (err < 0) {
+			mutex_unlock(&tf9->lock);
+			dev_err(&tf9->client->dev,
+				"set tap enable error 2: %d\n", err);
+			return err;
+		}
+		ctrl[1] |= pc1;
+		err = kxtf9_i2c_write(tf9, ctrl, 1);
+		if (err < 0) {
+			mutex_unlock(&tf9->lock);
+			dev_err(&tf9->client->dev,
+				"set tap enable error 3: %d\n", err);
+			return err;
+		}
+		mutex_unlock(&tf9->lock);
 		break;
 	case KXTF9_IOCTL_SET_WAKE_ENABLE:
 		if (copy_from_user(&interval, argp, sizeof(interval)))
 			return -EFAULT;
-		if (interval < 0 || interval > 1)
-			return -EINVAL;
-		if (interval)
-			tf9->resume_state[RES_CTRL_REG1] |= WUFE;
-		else
-			tf9->resume_state[RES_CTRL_REG1] &= (~WUFE);
-		ctrl[1] = tf9->resume_state[RES_CTRL_REG1];
-		err = kxtf9_i2c_write(tf9, ctrl, 1);
+		mutex_lock(&tf9->lock);
+		err = kxtf9_i2c_read(tf9, &ctrl_reg1, 1);
 		if (err < 0) {
+			mutex_unlock(&tf9->lock);
 			dev_err(&tf9->client->dev,
-				"set wake enable error: %d\n", err);
+				"kxtf9_i2c_read failed: %d\n", err);
 			return err;
 		}
+		pc1 = ctrl_reg1 & PC1_ON;
+		if (interval < 0 || interval > 1) {
+			mutex_unlock(&tf9->lock);
+			return -EINVAL;
+		}
+		ctrl[1] = ctrl_reg1 & (~PC1_ON);
+		err = kxtf9_i2c_write(tf9, ctrl, 1);
+		if (err < 0) {
+			mutex_unlock(&tf9->lock);
+			dev_err(&tf9->client->dev,
+				"set wake enable error 1: %d\n", err);
+			return err;
+		}
+		if (interval) {
+			ctrl[1] |= WUFE;
+			pc1 = PC1_ON;
+		} else {
+			ctrl[1] &= ~WUFE;
+		}
+		err = kxtf9_i2c_write(tf9, ctrl, 1);
+		if (err < 0) {
+			mutex_unlock(&tf9->lock);
+			dev_err(&tf9->client->dev,
+				"set wake enable error 2: %d\n", err);
+			return err;
+		}
+		ctrl[1] |= pc1;
+		err = kxtf9_i2c_write(tf9, ctrl, 1);
+		if (err < 0) {
+			mutex_unlock(&tf9->lock);
+			dev_err(&tf9->client->dev,
+				"set wake enable error 3: %d\n", err);
+			return err;
+		}
+		mutex_unlock(&tf9->lock);
+		break;
 	case KXTF9_IOCTL_SELF_TEST:
 		if (copy_from_user(&interval, argp, sizeof(interval)))
 			return -EFAULT;
 		if (interval < 0 || interval > 1)
 			return -EINVAL;
+		mutex_lock(&tf9->lock);
 		if (interval) {
-			/*disable interrupts in self_test*/
+			/* disable interrupts in self_test */
 			disable_irq_nosync(tf9->irq);
-			/* disable engines and set part to +/-8g
-			with 12-bit outputs */
+			/* disable engines and set to 8g with 12-bit outputs */
 			ctrl[0] = CTRL_REG1;
 			ctrl[1] = 0xD0;
 			kxtf9_i2c_write(tf9, ctrl, 1);
 			/* activate self-test function */
-			ctrl[0] = 0x3A;
+			ctrl[0] = SELF_TEST_REG;
 			ctrl[1] = 0xCA;
 			kxtf9_i2c_write(tf9, ctrl, 1);
 			/* toggle physical interrupt pin polarity */
 			ctrl[0] = INT_CTRL1;
 			if ((tf9->resume_state[RES_INT_CTRL1] & 0x10) > 0)
-				ctrl[1] = tf9->resume_state[RES_INT_CTRL1]&0xEF;
+				ctrl[1] = tf9->resume_state[RES_INT_CTRL1] &
+						0xEF;
 			else
-				ctrl[1] = tf9->resume_state[RES_INT_CTRL1]|0x10;
+				ctrl[1] = tf9->resume_state[RES_INT_CTRL1] |
+						0x10;
 			kxtf9_i2c_write(tf9, ctrl, 1);
 			/* read state of gpio pin */
 			int_state = gpio_get_value(tf9->pdata->gpio);
-			if (int_state != 1)
-				return -2;
+			if (int_state != 1) {
+				mutex_unlock(&tf9->lock);
+				return -ENOENT;
+			}
 			/* set physical interrupt polarity back to normal */
 			ctrl[0] = INT_CTRL1;
 			ctrl[1] = tf9->resume_state[RES_INT_CTRL1];
 			kxtf9_i2c_write(tf9, ctrl, 1);
 			/* read state of gpio pin */
 			int_state = gpio_get_value(tf9->pdata->gpio);
-			if (int_state != 0)
-				return -3;
+			if (int_state != 0) {
+				mutex_unlock(&tf9->lock);
+				return -ESRCH;
+			}
 		} else {
 			/* set physical interrupt polarity back to normal */
 			ctrl[0] = INT_CTRL1;
 			ctrl[1] = tf9->resume_state[RES_INT_CTRL1];
 			kxtf9_i2c_write(tf9, ctrl, 1);
 			/* deactivate self-test function */
-			ctrl[0] = 0x3A;
+			ctrl[0] = SELF_TEST_REG;
 			ctrl[1] = 0x00;
 			kxtf9_i2c_write(tf9, ctrl, 1);
 			/* set part configuration based on last-known state */
@@ -773,6 +957,40 @@ static int kxtf9_misc_ioctl(struct inode *inode, struct file *file,
 			ctrl[1] = tf9->resume_state[RES_CTRL_REG1];
 			kxtf9_i2c_write(tf9, ctrl, 1);
 		}
+		mutex_unlock(&tf9->lock);
+		break;
+	case KXTF9_IOCTL_SET_SENSITIVITY:
+		if (copy_from_user(&sensitivity, argp, sizeof(sensitivity)))
+			return -EFAULT;
+		if (sensitivity < 0)
+			return -EINVAL;
+		mutex_lock(&tf9->lock);
+		if (kxtf9_update_gesture_sensitivity(tf9,
+						sensitivity - 1) < 0) {
+			mutex_unlock(&tf9->lock);
+			return -EINVAL;
+		}
+		mutex_unlock(&tf9->lock);
+		break;
+	case KXTF9_IOCTL_SET_FUZZ:
+		if (copy_from_user(&interval, argp, sizeof(interval)))
+			return -EFAULT;
+		if (interval < 0)
+			return -EINVAL;
+		spin_lock_irqsave(tf9->input_dev->event_lock, flags);
+		tf9->input_dev->absfuzz[ABS_X] = interval;
+		tf9->input_dev->absfuzz[ABS_Y] = interval;
+		tf9->input_dev->absfuzz[ABS_Z] = interval;
+		spin_unlock_irqrestore(tf9->input_dev->event_lock, flags);
+		break;
+	case KXTF9_IOCTL_SET_XYZ_HISTORY:
+		if (copy_from_user(&interval, argp, sizeof(interval)))
+			return -EFAULT;
+		spin_lock_irqsave(tf9->input_dev->event_lock, flags);
+		tf9->input_dev->abs[ABS_X] = interval;
+		tf9->input_dev->abs[ABS_Y] = interval;
+		tf9->input_dev->abs[ABS_Z] = interval;
+		spin_unlock_irqrestore(tf9->input_dev->event_lock, flags);
 		break;
 	default:
 		return -EINVAL;
@@ -905,8 +1123,23 @@ static int kxtf9_input_init(struct kxtf9_data *tf9)
 err1:
 	input_free_device(tf9->input_dev);
 err0:
-
 	return err;
+}
+
+static void kxtf9_sensitivity_init(struct kxtf9_data *tf9)
+{
+	int buf_size = 0;
+
+	buf_size = sizeof(tf9->pdata->sensitivity_low);
+	memcpy(tf9->ts_regs + SENSITIVITY_LOW_OFFSET,
+			tf9->pdata->sensitivity_low, buf_size);
+	buf_size = sizeof(tf9->pdata->sensitivity_medium);
+	memcpy(tf9->ts_regs + SENSITIVITY_MEDIUM_OFFSET,
+			tf9->pdata->sensitivity_medium, buf_size);
+	buf_size = sizeof(tf9->pdata->sensitivity_high);
+	memcpy(tf9->ts_regs + SENSITIVITY_HIGH_OFFSET,
+			tf9->pdata->sensitivity_high, buf_size);
+
 }
 
 static void kxtf9_input_cleanup(struct kxtf9_data *tf9)
@@ -972,7 +1205,7 @@ static int kxtf9_probe(struct i2c_client *client,
 			goto err3;
 		}
 	}
-
+	kxtf9_sensitivity_init(tf9);
 	tf9->irq = gpio_to_irq(tf9->pdata->gpio);
 	tf9->resume_state[RES_DATA_CTRL]    = tf9->pdata->data_odr_init;
 	tf9->resume_state[RES_CTRL_REG1]    = tf9->pdata->ctrl_reg1_init;

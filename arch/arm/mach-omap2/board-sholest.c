@@ -845,7 +845,6 @@ extern struct lis331dlh_platform_data sholest_lis331dlh_data;
 #ifdef CONFIG_MOT_FEAT_LP3907
 extern struct lp3907_platform_data sholest_lp3907_data;
 #endif
-
 static struct i2c_board_info __initdata sholest_i2c_bus2_board_info[] = {
 	{
 		I2C_BOARD_INFO("akm8973", 0x1C),

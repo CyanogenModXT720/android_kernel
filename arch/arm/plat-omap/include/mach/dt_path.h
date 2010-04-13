@@ -101,6 +101,11 @@
 #define DT_PROP_ACCELEROMETER_NEGATE_X	"negate_x"
 #define DT_PROP_ACCELEROMETER_NEGATE_Y	"negate_y"
 #define DT_PROP_ACCELEROMETER_NEGATE_Z	"negate_z"
+#define DT_PROP_ACCELEROMETER_SENS_LOW "sensitivity_low"
+#define DT_PROP_ACCELEROMETER_SENS_MEDIUM "sensitivity_medium"
+#define DT_PROP_ACCELEROMETER_SENS_HIGH "sensitivity_high"
+
+
 
 /* GPIO Node */
 #define DT_PATH_GPIO        "/System@0/GPIO@0"
