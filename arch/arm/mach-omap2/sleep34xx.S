@@ -291,13 +291,13 @@ restore:
 l2_inv_api_params:
 	.word   0x1, 0x00
 write_aux_control_params:
-	.word   0x1, 0x72
+        .word   0x1, 0xe2
 l2_inv_gp:
 	/* Execute smi to invalidate L2 cache */
 	mov r12, #0x1                         @ set up to invalide L2
 smi:    .word 0xE1600070		@ Call SMI monitor (smieq)
 	/* Write to Aux control register to set some bits */
-	mov	r0, #0x72
+	mov	r0, #0xe2
 	mov	r12, #0x3
 	.word 0xE1600070	@ Call SMI monitor (smieq)
 logic_l1_restore:
