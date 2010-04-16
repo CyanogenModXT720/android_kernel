@@ -337,7 +337,6 @@ void cpcap_batt_irq_hdlr(enum cpcap_irqs irq, void *data)
 	struct cpcap_batt_ps *sply = data;
 
 	mutex_lock(&sply->lock);
-	printk(KERN_ERR "cpcap_batt_irq_hdlr: irq = %d\n", irq);
 	sply->data_pending = 1;
 
 	switch (irq) {
@@ -864,7 +863,6 @@ static int cpcap_batt_resume(struct platform_device *pdev)
 
 	if ((cur_time - sply->last_run_time) > 50) {
 		mutex_lock(&sply->lock);
-		printk(KERN_ERR "cpcap_batt_resume: Wakeup! \n");
 		sply->data_pending = 1;
 		sply->irq_status |= CPCAP_BATT_IRQ_MACRO;
 
