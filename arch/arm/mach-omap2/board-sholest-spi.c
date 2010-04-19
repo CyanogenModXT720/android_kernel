@@ -749,7 +749,7 @@ void __init sholest_spi_init(void)
 	}
 
 	sholest_tvint.tvint_irq = gpio_to_irq(OMAP_TVINT_GPIO);
-	sholest_cpcap_data.barrel_capability = BARREL_CAP_DETECT_TV_OUT ;
+	sholest_cpcap_data.barrel_capability = BARREL_CAP_DETECT_HEADSET ;
 
 	sholest_spi_board_info[0].irq = irq;
 	spi_register_board_info(sholest_spi_board_info,
