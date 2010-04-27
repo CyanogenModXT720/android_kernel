@@ -166,7 +166,7 @@ static void sholest_panel_disable_tv(struct omap_dss_device *dssdev)
 static struct omap_dss_device sholest_tvout_device = {
 	.type = OMAP_DISPLAY_TYPE_VENC,
 	.name = "tv",
-	.driver_name = "venc",	
+	.driver_name = "venc",
 	.phy.venc.type   = OMAP_DSS_VENC_TYPE_COMPOSITE,
 	.platform_enable  = sholest_panel_enable_tv,
 	.platform_disable = sholest_panel_disable_tv,
@@ -198,19 +198,19 @@ struct platform_device sholest_dss_device = {
 };
 
 #ifdef CONFIG_PANEL_HDTV
-static struct dispsw_mr_support sholest_dispsw_hdtv_2 = {
+static struct dispsw_mr_support sholest_dispsw_hdtv_2_3 = {
 	.dev_name = "hdtv",
 	.res_name = "480p",
 	.dev_timing = {
-		.x_res	= 720,
-		.y_res	= 480,
+		.x_res = 720,
+		.y_res = 480,
 		.pixel_clock = 27027,
-	 	.hsw			= 62,
-	 	.hfp			= 16,
-	 	.hbp			= 60,
-	 	.vsw			= 6,
-	 	.vfp			= 9,
-	 	.vbp			= 30,
+		.hsw = 62,
+		.hfp = 16,
+		.hbp = 60,
+		.vsw = 6,
+		.vfp = 9,
+		.vbp = 30,
 	},
 	.panel_config = (OMAP_DSS_LCD_TFT|OMAP_DSS_LCD_IVS|OMAP_DSS_LCD_IHS|
 					OMAP_DSS_LCD_ONOFF|OMAP_DSS_LCD_IPC),
@@ -220,17 +220,115 @@ static struct dispsw_mr_support sholest_dispsw_hdtv_4 = {
 	.dev_name = "hdtv",
 	.res_name = "720p",
 	.dev_timing = {
-		.x_res	= 1280,
-		.y_res	= 720,
+		.x_res = 1280,
+		.y_res = 720,
 		.pixel_clock = 74250,
-		.hsw	= 40,
-		.hfp	= 110,
-		.hbp	= 220,
-		.vsw	= 5,
-		.vfp	= 5,
-		.vbp	= 20,
+		.hsw = 40,
+		.hfp = 110,
+		.hbp = 220,
+		.vsw = 5,
+		.vfp = 5,
+		.vbp = 20,
 	},
 	.panel_config = (OMAP_DSS_LCD_TFT|OMAP_DSS_LCD_ONOFF|OMAP_DSS_LCD_IPC),
+};
+static struct dispsw_mr_support mapphone_dispsw_hdtv_1_60Hz = {
+	.dev_name = "hdtv",
+	.res_name = "hdtv_1_60hz",
+	.dev_timing = {
+		.x_res = 640,
+		.y_res = 480,
+		.pixel_clock = 25200,
+		.hsw = 96,
+		.hfp = 16,
+		.hbp = 48,
+		.vsw = 2,
+		.vfp = 10,
+		.vbp = 33,
+	},
+	.panel_config = (OMAP_DSS_LCD_TFT|OMAP_DSS_LCD_IVS|OMAP_DSS_LCD_IHS),
+};
+static struct dispsw_mr_support mapphone_dispsw_hdtv_2_3_60Hz = {
+	.dev_name = "hdtv",
+	.res_name = "hdtv_2_3_60hz",
+	.dev_timing = {
+		.x_res = 720,
+		.y_res = 480,
+		.pixel_clock = 27027,
+		.hsw = 62,
+		.hfp = 16,
+		.hbp = 60,
+		.vsw = 6,
+		.vfp = 9,
+		.vbp = 30,
+	},
+	.panel_config = (OMAP_DSS_LCD_TFT|OMAP_DSS_LCD_IVS|OMAP_DSS_LCD_IHS),
+};
+static struct dispsw_mr_support mapphone_dispsw_hdtv_4_60Hz = {
+	.dev_name = "hdtv",
+	.res_name = "hdtv_4_60hz",
+	.dev_timing = {
+		.x_res = 1280,
+		.y_res = 720,
+		.pixel_clock = 74250,
+		.hsw = 40,
+		.hfp = 110,
+		.hbp = 220,
+		.vsw = 5,
+		.vfp = 5,
+		.vbp = 20,
+	},
+	.panel_config = OMAP_DSS_LCD_TFT,
+};
+
+static struct dispsw_mr_support mapphone_dispsw_hdtv_17_18_50Hz = {
+	.dev_name = "hdtv",
+	.res_name = "hdtv_17_18_50hz",
+	.dev_timing = {
+		.x_res = 720,
+		.y_res = 576,
+		.pixel_clock = 27000,
+		.hsw = 64,
+		.hfp = 12,
+		.hbp = 68,
+		.vsw = 5,
+		.vfp = 5,
+		.vbp = 39,
+	},
+	.panel_config = (OMAP_DSS_LCD_TFT|OMAP_DSS_LCD_IVS|OMAP_DSS_LCD_IHS),
+};
+static struct dispsw_mr_support mapphone_dispsw_hdtv_19_50Hz = {
+	.dev_name = "hdtv",
+	.res_name = "hdtv_19_50hz",
+	.dev_timing = {
+		.x_res = 1280,
+		.y_res = 720,
+		.pixel_clock = 74250,
+		.hsw = 40,
+		.hfp = 440,
+		.hbp = 220,
+		.vsw = 5,
+		.vfp = 5,
+		.vbp = 20,
+	},
+	.panel_config = OMAP_DSS_LCD_TFT,
+};
+
+static struct dispsw_mr_support mapphone_dispsw_hdtv_21_22_50Hz = {
+	.dev_name = "hdtv",
+	.res_name = "hdtv_21_22_50hz",
+	.dev_timing = {
+		.x_res = 720,
+		.y_res = 576,
+		.pixel_clock = 13500,
+		.hsw = 63,
+		.hfp = 12,
+		.hbp = 69,
+		.vsw = 2,
+		.vfp = 3,
+		.vbp = 19,
+	},
+	.panel_config = (OMAP_DSS_LCD_TFT|OMAP_DSS_LCD_IVS|OMAP_DSS_LCD_IHS),
 };
 
 #ifdef CONFIG_TVOUT_SHOLEST
@@ -270,8 +368,12 @@ static struct dispsw_mr_support sholest_dispsw_tv_pal = {
 #endif
 
 static struct dispsw_mr_support *sholest_dispsw_resolutions[] = {
-	&sholest_dispsw_hdtv_2,
-	&sholest_dispsw_hdtv_4,
+		&mapphone_dispsw_hdtv_1_60Hz,
+		&mapphone_dispsw_hdtv_2_3_60Hz,
+		&mapphone_dispsw_hdtv_4_60Hz,
+		&mapphone_dispsw_hdtv_17_18_50Hz,
+		&mapphone_dispsw_hdtv_19_50Hz,
+		&mapphone_dispsw_hdtv_21_22_50Hz,
 #ifdef CONFIG_TVOUT_SHOLEST
 	&sholest_dispsw_tv_ntsc,
 	&sholest_dispsw_tv_pal,
@@ -316,7 +418,7 @@ void __init sholest_panel_init(void)
 	gpio_request(SHOLEST_HDMI_MUX_ENABLE_N_GPIO, "HDMI-mux-enable");
 	gpio_direction_output(SHOLEST_HDMI_MUX_ENABLE_N_GPIO, 0);
 	gpio_set_value(SHOLEST_HDMI_MUX_ENABLE_N_GPIO, 0);
-	
+
 	gpio_request(SHOLEST_HDMI_MUX_SELECT_GPIO, "HDMI-mux-select");
 	gpio_direction_output(SHOLEST_HDMI_MUX_SELECT_GPIO, 0);
 	gpio_set_value(SHOLEST_HDMI_MUX_SELECT_GPIO, 0);
