@@ -24,12 +24,6 @@
 
 #define QTM_OBP_ID_INFO_ADDR		0
 
-#define QTM_OBP_BOOT_WAIT_FOR_DATA		0x80
-#define QTM_OBP_BOOT_WAIT_ON_BOOT_CMD		0xC0
-#define QTM_OBP_BOOT_CRC_CHECK			0x02
-#define QTM_OBP_BOOT_CRC_FAIL			0x03
-#define QTM_OBP_BOOT_CRC_PASSED			0x04
-
 enum {
 	QTM_OBJ_RESERVED0		= 0,
 	QTM_OBJ_RESERVED1		= 1,
@@ -211,7 +205,6 @@ struct qtm_touch_multi_cfg {
 	uint8_t			x_edge_cdist;
 	uint8_t			y_edge_ori;;
 	uint8_t			y_edge_cdist;
-	uint8_t			max_pos_jump;
 } __attribute__ ((packed));
 
 /* TOUCH_KEYARRAY_T15 */
@@ -431,11 +424,6 @@ struct qtouch_ts_platform_data {
 	uint32_t		fuzz_y;
 	uint32_t		fuzz_p;
 	uint32_t		fuzz_w;
-
-	uint8_t			boot_i2c_addr;
-	uint8_t			fw_version;
-	uint8_t			build_version;
-	uint8_t			base_fw_version;
 
 	int			(*hw_reset)(void);
 
