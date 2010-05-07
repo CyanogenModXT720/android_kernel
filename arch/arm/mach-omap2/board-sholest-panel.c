@@ -246,7 +246,8 @@ static struct dispsw_mr_support mapphone_dispsw_hdtv_1_60Hz = {
 		.vfp = 10,
 		.vbp = 33,
 	},
-	.panel_config = (OMAP_DSS_LCD_TFT|OMAP_DSS_LCD_IVS|OMAP_DSS_LCD_IHS),
+	.panel_config = (OMAP_DSS_LCD_TFT|OMAP_DSS_LCD_IVS|OMAP_DSS_LCD_IHS|
+					 OMAP_DSS_LCD_ONOFF|OMAP_DSS_LCD_IPC),
 };
 static struct dispsw_mr_support mapphone_dispsw_hdtv_2_3_60Hz = {
 	.dev_name = "hdtv",
@@ -262,7 +263,8 @@ static struct dispsw_mr_support mapphone_dispsw_hdtv_2_3_60Hz = {
 		.vfp = 9,
 		.vbp = 30,
 	},
-	.panel_config = (OMAP_DSS_LCD_TFT|OMAP_DSS_LCD_IVS|OMAP_DSS_LCD_IHS),
+	.panel_config = (OMAP_DSS_LCD_TFT|OMAP_DSS_LCD_IVS|OMAP_DSS_LCD_IHS|
+					 OMAP_DSS_LCD_ONOFF|OMAP_DSS_LCD_IPC),
 };
 static struct dispsw_mr_support mapphone_dispsw_hdtv_4_60Hz = {
 	.dev_name = "hdtv",
@@ -278,7 +280,7 @@ static struct dispsw_mr_support mapphone_dispsw_hdtv_4_60Hz = {
 		.vfp = 5,
 		.vbp = 20,
 	},
-	.panel_config = OMAP_DSS_LCD_TFT,
+	.panel_config = (OMAP_DSS_LCD_TFT|OMAP_DSS_LCD_ONOFF|OMAP_DSS_LCD_IPC),
 };
 
 static struct dispsw_mr_support mapphone_dispsw_hdtv_17_18_50Hz = {
@@ -295,7 +297,8 @@ static struct dispsw_mr_support mapphone_dispsw_hdtv_17_18_50Hz = {
 		.vfp = 5,
 		.vbp = 39,
 	},
-	.panel_config = (OMAP_DSS_LCD_TFT|OMAP_DSS_LCD_IVS|OMAP_DSS_LCD_IHS),
+	.panel_config = (OMAP_DSS_LCD_TFT|OMAP_DSS_LCD_IVS|OMAP_DSS_LCD_IHS|
+					OMAP_DSS_LCD_ONOFF|OMAP_DSS_LCD_IPC),
 };
 static struct dispsw_mr_support mapphone_dispsw_hdtv_19_50Hz = {
 	.dev_name = "hdtv",
@@ -311,7 +314,7 @@ static struct dispsw_mr_support mapphone_dispsw_hdtv_19_50Hz = {
 		.vfp = 5,
 		.vbp = 20,
 	},
-	.panel_config = OMAP_DSS_LCD_TFT,
+	.panel_config = (OMAP_DSS_LCD_TFT|OMAP_DSS_LCD_ONOFF|OMAP_DSS_LCD_IPC),
 };
 
 static struct dispsw_mr_support mapphone_dispsw_hdtv_21_22_50Hz = {
@@ -328,7 +331,8 @@ static struct dispsw_mr_support mapphone_dispsw_hdtv_21_22_50Hz = {
 		.vfp = 3,
 		.vbp = 19,
 	},
-	.panel_config = (OMAP_DSS_LCD_TFT|OMAP_DSS_LCD_IVS|OMAP_DSS_LCD_IHS),
+	.panel_config = (OMAP_DSS_LCD_TFT|OMAP_DSS_LCD_IVS|OMAP_DSS_LCD_IHS|
+					OMAP_DSS_LCD_ONOFF|OMAP_DSS_LCD_IPC),
 };
 
 #ifdef CONFIG_TVOUT_SHOLEST
