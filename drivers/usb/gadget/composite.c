@@ -271,7 +271,7 @@ static int config_buf(struct usb_configuration *config,
 			descriptors = f->hs_descriptors;
 		else
 			descriptors = f->descriptors;
-		if (f->hidden || !descriptors || descriptors[0] == NULL) {
+		if (!descriptors) {
 #ifndef CONFIG_USB_MOT_ANDROID
 			for (; f != config->interface[interfaceCount];) {
 				interfaceCount++;
@@ -860,7 +860,7 @@ unknown:
 		 * setconfiguration such as MTP, USBNET.
 		 */
 
-		if (value < 0) {
+		{
 			struct usb_configuration        *cfg;
 
 			list_for_each_entry(cfg, &cdev->configs, list) {
