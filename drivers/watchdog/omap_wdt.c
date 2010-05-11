@@ -469,6 +469,7 @@ static int __init omap_wdt_probe(struct platform_device *pdev)
 	omap_wdt_dev = pdev;
 
 #ifdef CONFIG_OMAP_WATCHDOG_AUTOPET
+	omap_wdt_ping(wdev);
 	setup_timer(&wdev->autopet_timer, autopet_handler,
 		    (unsigned long) wdev);
 	test_and_set_bit(1, (unsigned long *)&(wdev->omap_wdt_users));
