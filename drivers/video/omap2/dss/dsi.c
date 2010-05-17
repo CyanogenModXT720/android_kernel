@@ -1460,7 +1460,7 @@ static void dsi_complexio_timings(void)
 
 	/* calculate timings */
 
-	/* 1 * DDR_CLK = 2 * UI */
+	/* DDR_CLK = 1 / (2 * UI) */
 
 	/* min 40ns + 4*UI	max 85ns + 6*UI */
 	ths_prepare = ns2ddr(70) + 2;
@@ -1475,7 +1475,10 @@ static void dsi_complexio_timings(void)
 	ths_exit = ns2ddr(145);
 
 	/* tlpx min 50n */
+	/* AUO experiment it's less than 50ns
 	tlpx_half = ns2ddr(25);
+	*/
+	tlpx_half = ns2ddr(30);
 
 	/* min 60ns */
 	tclk_trail = ns2ddr(60) + 2;
@@ -1875,6 +1878,8 @@ static int dsi_vc_send_bta(int channel)
 		dsi_vc_flush_receive_data(channel);
 	}
 
+	udelay(1); /* Make sure the packet to packet interval for AUO 3.7 */
+
 	REG_FLD_MOD(DSI_VC_CTRL(channel), 1, 6, 6); /* BTA_EN */
 
 	tmo = jiffies + msecs_to_jiffies(10);
@@ -1941,6 +1946,8 @@ static inline void dsi_vc_write_long_header(int channel, u8 data_type,
 
 	val = FLD_VAL(data_id, 7, 0) | FLD_VAL(len, 23, 8) |
 		FLD_VAL(ecc, 31, 24);
+
+	udelay(1); /* Make sure the packet to packet interval for AUO 3.7 */
 
 	dsi_write_reg(DSI_VC_LONG_PACKET_HEADER(channel), val);
 }
@@ -2062,6 +2069,8 @@ static int dsi_vc_send_short(int channel, u8 data_type, u16 data, u8 ecc)
 
 	r = (data_id << 0) | (data << 8) | (ecc << 24);
 
+	udelay(1); /* Make sure the packet to packet interval for AUO 3.7 */
+
 	INIT_COMPLETION(dsi.packet_sent_completion);
 	dsi_vc_enable_packet_sent_irq(channel);
 
@@ -2111,11 +2120,7 @@ int dsi_vc_write(int channel, u8 data_type, u8 *data, int len)
 	if (r)
 		return r;
 
-	ndelay(1000); /* S/W workaround for AUO */
-
 	r = dsi_vc_send_bta_sync(channel);
-
-	ndelay(1000); /* S/W workaround for AUO */
 
 	return r;
 
@@ -2147,14 +2152,10 @@ int dsi_vc_dcs_write(int channel, u8 *data, int len)
 	if (r)
 		return r;
 
-	ndelay(1000); /* S/W workaround for AUO */
-
 	/* Some devices need time to process the msg in low power mode.
 	   This also makes the write synchronous, and checks that
 	   the peripheral is still alive */
 	r = dsi_vc_send_bta_sync(channel);
-
-	ndelay(1000); /* S/W workaround for AUO */
 
 	return r;
 }
@@ -2173,14 +2174,9 @@ int dsi_vc_dcs_read(int channel, u8 dcs_cmd, u8 *buf, int buflen)
 	if (r)
 		return r;
 
-
-	ndelay(1000); /* S/W workaround for AUO */
-
 	r = dsi_vc_send_bta_sync(channel);
 	if (r)
 		return r;
-
-	ndelay(1000); /* S/W workaround for AUO */
 
 	/* RX_FIFO_NOT_EMPTY */
 	if (REG_GET(DSI_VC_CTRL(channel), 20, 20) == 0) {
@@ -3046,6 +3042,11 @@ static int dsi_display_init_dsi(struct omap_dss_device *dssdev)
 
 	_dsi_print_reset_status();
 
+	/* disable interface first */
+	dsi_vc_enable(0, 0);
+	dsi_vc_enable(1, 0);
+	dsi_if_enable(0);
+
 #if CONFIG_OMAP2_DSS_USE_DSI_PLL
 	r = dsi_pll_init(1, 1);
 #else
@@ -3073,7 +3074,7 @@ static int dsi_display_init_dsi(struct omap_dss_device *dssdev)
 	dsi_proto_timings(dssdev);
 	dsi_set_lp_clk_divisor(dssdev);
 
-	if (1)
+/*	if (1) */
 		_dsi_print_reset_status();
 
 	r = dsi_proto_config(dssdev);
@@ -3155,9 +3156,11 @@ static int dsi_display_enable(struct omap_dss_device *dssdev)
 	enable_clocks(1);
 	dsi_enable_pll_clock(1);
 
+/* Skip to keep the DSI configuration of bootloader ==
 	r = _dsi_reset();
 	if (r)
 		goto err2;
+====================================================*/
 
 	dsi_core_init();
 

@@ -118,16 +118,12 @@ static u16 sholes_panel_read_supplier_id(struct omap_dss_device *dssdev)
 	if (dsi_vc_set_max_rx_packet_size(EDISCO_CMD_VC, 2))
 		goto end;
 
-	ndelay(1000); /* S/W workaround for AUO */
-
 	if (dsi_vc_dcs_read(EDISCO_CMD_VC, EDISCO_CMD_READ_DDB_START,
 	    data, 2) != 2)
 		goto end;
 
 	if (dsi_vc_set_max_rx_packet_size(EDISCO_CMD_VC, 1))
 		goto end;
-
-	ndelay(1000); /* S/W workaround for AUO */
 
 	id = (data[0] << 8) | data[1];
 
@@ -209,7 +205,6 @@ static int sholes_panel_dss_enable(struct omap_dss_device *dssdev)
 
 	/* turn it on */
 	data[0] = EDISCO_CMD_EXIT_SLEEP_MODE;
-	//ret = dsi_vc_write(EDISCO_CMD_VC, EDISCO_SHORT_WRITE_0, data, 1);
 	ret = dsi_vc_dcs_write(EDISCO_CMD_VC, data, 1);
 
 	mdelay(200);
