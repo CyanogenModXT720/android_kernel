@@ -230,6 +230,7 @@ static struct
 
 	struct completion bta_completion;
 	struct completion packet_sent_completion;
+	struct completion te_trigger_completion;
 
 	struct task_struct *thread;
 	wait_queue_head_t waitqueue;
@@ -554,6 +555,9 @@ void dsi_irq_handler(void)
 		print_irq_status(irqstatus);
 	}
 
+	if (irqstatus & DSI_IRQ_TE_TRIGGER)
+		complete(&dsi.te_trigger_completion);
+
 	for (i = 0; i < 4; ++i) {
 		if ((irqstatus & (1<<i)) == 0)
 			continue;
@@ -640,6 +644,24 @@ static u32 dsi_get_errors(void)
 	dsi.errors = 0;
 	spin_unlock_irqrestore(&dsi.errors_lock, flags);
 	return e;
+}
+
+static void dsi_enable_te_irq(void)
+{
+	u32 l;
+
+	l = dsi_read_reg(DSI_IRQENABLE);
+	l |= DSI_IRQ_TE_TRIGGER;
+	dsi_write_reg(DSI_IRQENABLE, l);
+}
+
+static void dsi_disable_te_irq(int channel)
+{
+	u32 l;
+
+	l = dsi_read_reg(DSI_IRQENABLE);
+	l &= ~DSI_IRQ_TE_TRIGGER;
+	dsi_write_reg(DSI_IRQENABLE, l);
 }
 
 static void dsi_vc_enable_bta_irq(int channel)
@@ -789,6 +811,8 @@ static int dsi_set_lp_clk_divisor(struct omap_dss_device *dssdev)
 	REG_FLD_MOD(DSI_CLK_CTRL, n, 12, 0);	/* LP_CLK_DIVISOR */
 	if (dsi_fclk > 30*1000*1000)
 		REG_FLD_MOD(DSI_CLK_CTRL, 1, 21, 21); /* LP_RX_SYNCHRO_ENABLE */
+
+	REG_FLD_MOD(DSI_CLK_CTRL, 0, 13, 13);	/* NON CONTINUOUS CLK MODE */
 
 	return 0;
 }
@@ -2034,7 +2058,7 @@ static int dsi_vc_send_long(int channel, u8 data_type, u8 *data, u16 len,
 	}
 
 	if (wait_for_completion_timeout(&dsi.packet_sent_completion,
-	  msecs_to_jiffies(10)) == 0)
+	    msecs_to_jiffies(10)) == 0)
 		DSSERR("Failed to send long packet\n");
 
 	dsi_vc_disable_packet_sent_irq(channel);
@@ -2077,7 +2101,7 @@ static int dsi_vc_send_short(int channel, u8 data_type, u16 data, u8 ecc)
 	dsi_write_reg(DSI_VC_SHORT_PACKET_HEADER(channel), r);
 
 	if (wait_for_completion_timeout(&dsi.packet_sent_completion,
-	   msecs_to_jiffies(10)) == 0)
+	    msecs_to_jiffies(10)) == 0)
 		DSSERR("Failed to send short packet\n");
 
 	dsi_vc_disable_packet_sent_irq(channel);
@@ -2544,6 +2568,22 @@ static void dsi_proto_timings(struct omap_dss_device *dssdev)
 			DSI_FLUSH(ch); \
 	} while (0)
 
+static int dsi_core_init(void)
+{
+	/* Autoidle */
+	REG_FLD_MOD(DSI_SYSCONFIG, 1, 0, 0);
+
+	/* ENWAKEUP */
+	REG_FLD_MOD(DSI_SYSCONFIG, 1, 2, 2);
+
+	/* SIDLEMODE smart-idle */
+	REG_FLD_MOD(DSI_SYSCONFIG, 2, 4, 3);
+
+	_dsi_initialize_irq();
+
+	return 0;
+}
+
 static int dsi_update_screen_l4(struct omap_dss_device *dssdev,
 			int x, int y, int w, int h)
 {
@@ -2727,7 +2767,18 @@ static void dsi_update_screen_dispc(struct omap_dss_device *dssdev,
 
 	if (use_te_trigger) {
 		dssdev->driver->enable_te(dssdev, 1);
+
+		INIT_COMPLETION(dsi.te_trigger_completion);
+		dsi_enable_te_irq();
+
 		dsi_vc_send_bta(1);
+
+		if (wait_for_completion_timeout(&dsi.te_trigger_completion,
+			msecs_to_jiffies(25)) == 0) {
+			dssdev->driver->enable_te(dssdev, 1);
+			dsi_vc_send_bta(1);
+			/* DSSERR("Retry sending TE trigger request\n"); */
+		}
 	}
 }
 
@@ -3039,6 +3090,7 @@ static int dsi_display_init_dsi(struct omap_dss_device *dssdev)
 {
 	struct dsi_clock_info cinfo;
 	int r;
+	int cnt = 0;
 
 	_dsi_print_reset_status();
 
@@ -3074,8 +3126,7 @@ static int dsi_display_init_dsi(struct omap_dss_device *dssdev)
 	dsi_proto_timings(dssdev);
 	dsi_set_lp_clk_divisor(dssdev);
 
-/*	if (1) */
-		_dsi_print_reset_status();
+	_dsi_print_reset_status();
 
 	r = dsi_proto_config(dssdev);
 	if (r)
@@ -3088,9 +3139,60 @@ static int dsi_display_init_dsi(struct omap_dss_device *dssdev)
 	dsi_force_tx_stop_mode_io();
 
 	if (dssdev->driver->enable) {
-		r = dssdev->driver->enable(dssdev);
-		if (r)
+		while (1) {
+			r = dssdev->driver->enable(dssdev);
+			if ((r == 0) || (cnt++ >= 2))
+				break;
+
+			DSSERR("Failed Init, 1. SW Rst DSI-block\n");
+
+			_dsi_reset();
+
+			dsi_core_init();
+
+#if CONFIG_OMAP2_DSS_USE_DSI_PLL
+			r = dsi_pll_init(1, 1);
+#else
+			r = dsi_pll_init(1, 0);
+#endif
+			if (r)
+				goto err0;
+
+			r = dsi_pll_calc_ddrfreq(dssdev,
+				dssdev->phy.dsi.ddr_clk_hz, &cinfo);
+			if (r)
+				goto err1;
+
+			r = dsi_pll_program(&cinfo);
+			if (r)
+				goto err1;
+
+			r = dsi_complexio_init(dssdev);
+			if (r)
+				goto err1;
+
+			dsi_proto_timings(dssdev);
+			dsi_set_lp_clk_divisor(dssdev);
+
+			r = dsi_proto_config(dssdev);
+			if (r)
+				goto err2;
+
+			/* enable interface */
+			dsi_vc_enable(0, 1);
+			dsi_vc_enable(1, 1);
+			dsi_if_enable(1);
+			dsi_force_tx_stop_mode_io();
+
+			DSSERR("Failed Init, 2. Hard Rst Panel\n");
+
+		}
+
+		if (cnt > 2) {
+			DSSERR("Disable DSI interface.\n");
 			goto err3;
+		}
+
 	}
 
 	/* enable high-speed after initial config */
@@ -3114,22 +3216,6 @@ static void dsi_display_uninit_dsi(struct omap_dss_device *dssdev)
 
 	dsi_complexio_uninit();
 	dsi_pll_uninit();
-}
-
-static int dsi_core_init(void)
-{
-	/* Autoidle */
-	REG_FLD_MOD(DSI_SYSCONFIG, 1, 0, 0);
-
-	/* ENWAKEUP */
-	REG_FLD_MOD(DSI_SYSCONFIG, 1, 2, 2);
-
-	/* SIDLEMODE smart-idle */
-	REG_FLD_MOD(DSI_SYSCONFIG, 2, 4, 3);
-
-	_dsi_initialize_irq();
-
-	return 0;
 }
 
 static int dsi_display_enable(struct omap_dss_device *dssdev)
@@ -3175,7 +3261,19 @@ static int dsi_display_enable(struct omap_dss_device *dssdev)
 	dssdev->state = OMAP_DSS_DISPLAY_ACTIVE;
 
 	dsi.use_ext_te = dssdev->phy.dsi.ext_te;
+
+	/* Don't send TE DCS but modify LP_RX_TO for AUO 3.7
 	dsi_set_te(dssdev, dsi.te_enabled);
+	*/
+	if (!dsi.use_ext_te) {
+		if (dsi.te_enabled) {
+			/* disable LP_RX_TO, so that we can receive TE.  Time
+			 * to wait for TE is longer than the timer allows */
+			REG_FLD_MOD(DSI_TIMING2, 0, 15, 15); /* LP_RX_TO */
+		} else {
+			REG_FLD_MOD(DSI_TIMING2, 1, 15, 15); /* LP_RX_TO */
+		}
+	}
 
 	dsi.update_mode = dsi.user_update_mode;
 	if (dsi.update_mode == OMAP_DSS_UPDATE_AUTO)
@@ -3314,7 +3412,18 @@ static int dsi_display_resume(struct omap_dss_device *dssdev)
 
 	dssdev->state = OMAP_DSS_DISPLAY_ACTIVE;
 
+	/* Don't send TE DCS but modify LP_RX_TO for AUO 3.7
 	dsi_set_te(dssdev, dsi.te_enabled);
+	*/
+	if (!dsi.use_ext_te) {
+		if (dsi.te_enabled) {
+			/* disable LP_RX_TO, so that we can receive TE.  Time
+			 * to wait for TE is longer than the timer allows */
+			REG_FLD_MOD(DSI_TIMING2, 0, 15, 15); /* LP_RX_TO */
+		} else {
+			REG_FLD_MOD(DSI_TIMING2, 1, 15, 15); /* LP_RX_TO */
+		}
+	}
 
 	dsi.update_mode = dsi.user_update_mode;
 	if (dsi.update_mode == OMAP_DSS_UPDATE_AUTO)
@@ -3479,7 +3588,19 @@ static int dsi_display_enable_te(struct omap_dss_device *dssdev, bool enable)
 	if (dssdev->state != OMAP_DSS_DISPLAY_ACTIVE)
 		goto end;
 
+	/* Don't send TE DCS but modify LP_RX_TO for AUO 3.7
 	dsi_set_te(dssdev, enable);
+	*/
+	if (!dsi.use_ext_te) {
+		if (enable) {
+			/* disable LP_RX_TO, so that we can receive TE.  Time
+			 * to wait for TE is longer than the timer allows */
+			REG_FLD_MOD(DSI_TIMING2, 0, 15, 15); /* LP_RX_TO */
+		} else {
+			REG_FLD_MOD(DSI_TIMING2, 1, 15, 15); /* LP_RX_TO */
+		}
+	}
+
 end:
 #ifndef CONFIG_TVOUT_SHOLEST
 	enable_clocks(0);
@@ -3714,6 +3835,7 @@ int dsi_init(struct platform_device *pdev)
 	init_completion(&dsi.bta_completion);
 	init_completion(&dsi.packet_sent_completion);
 	init_completion(&dsi.update_completion);
+	init_completion(&dsi.te_trigger_completion);
 
 	dsi.thread = kthread_create(dsi_update_thread, NULL, "dsi");
 	if (IS_ERR(dsi.thread)) {

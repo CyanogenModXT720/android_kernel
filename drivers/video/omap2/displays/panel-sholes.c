@@ -136,7 +136,8 @@ end:
 static int sholes_panel_dss_enable(struct omap_dss_device *dssdev)
 {
 	u8 data[7];
-	int ret;
+	u16 id = SUPPLIER_ID_INVALID;
+	int ret = 0;
 
 	DBG("sholes_panel_dss_enable\n");
 
@@ -152,67 +153,129 @@ static int sholes_panel_dss_enable(struct omap_dss_device *dssdev)
 	gDev->panel_en = 1;
 	mutex_unlock(&gDev->mtx);
 
-	/* turn of mcs register acces protection */
-	data[0] = 0xb2;
-	data[1] = 0x00;
-	ret = dsi_vc_write(EDISCO_CMD_VC, EDISCO_SHORT_WRITE_1, data, 2);
+	id = sholes_panel_read_supplier_id(dssdev);
 
-	/* enable lane setting and test registers*/
-	data[0] = 0xef;
-	data[1] = 0x01;
-	data[2] = 0x01;
-	ret = dsi_vc_write(EDISCO_CMD_VC, EDISCO_LONG_WRITE, data, 3);
+	if (id == SUPPLIER_ID_AUO) {
 
-	/* 2nd param 61 = 1 line; 63 = 2 lanes */
-	data[0] = 0xef;
-	data[1] = 0x60;
-	data[2] = 0x63;
-	ret = dsi_vc_dcs_write(EDISCO_CMD_VC, data, 3);
+		/* turn of mcs register acces protection */
+		data[0] = 0xb2;
+		data[1] = 0x00;
+		data[2] = 0x00;
+		data[3] = 0x00;
+		ret |= dsi_vc_write(EDISCO_CMD_VC, EDISCO_LONG_WRITE, data, 4);
 
-	/* 2nd param 0 = WVGA; 1 = WQVGA */
-	data[0] = 0xb3;
-	data[1] = 0x00;
-	ret = dsi_vc_dcs_write(EDISCO_CMD_VC, data, 2);
+		/* enable lane setting and test registers*/
+		data[0] = 0xef;
+		data[1] = 0x01;
+		data[2] = 0x01;
+		data[3] = 0x00;
+		ret |= dsi_vc_write(EDISCO_CMD_VC, EDISCO_LONG_WRITE, data, 4);
 
-	/* Set dynamic backlight control and PWM; D[7:4] = PWM_DIV[3:0];*/
-	/* D[3]=0 (PWM OFF);
-	 * D[2]=0 (auto BL control OFF);
-	 * D[1]=0 (Grama correction On);
-	 * D[0]=0 (Enhanced Image Correction OFF) */
-	data[0] = 0xb4;
-	data[1] = sholes_panel_read_supplier_id(dssdev)
-			== SUPPLIER_ID_AUO ? 0xf : 0x1f;
-	ret = dsi_vc_dcs_write(EDISCO_CMD_VC, data, 2);
+		/* 2nd param 61 = 1 line; 63 = 2 lanes */
+		data[0] = 0xef;
+		data[1] = 0x60;
+		data[2] = 0x63;
+		data[3] = 0x00;
+		ret |= dsi_vc_write(EDISCO_CMD_VC, EDISCO_LONG_WRITE, data, 4);
 
-	/* set page, column address */
-	data[0] = EDISCO_CMD_SET_PAGE_ADDRESS;
-	data[1] = 0x00;
-	data[2] = 0x00;
-	data[3] = (dssdev->panel.timings.y_res - 1) >> 8;
-	data[4] = (dssdev->panel.timings.y_res - 1) & 0xff;
-	ret = dsi_vc_dcs_write(EDISCO_CMD_VC, data, 5);
-	if (ret)
+		/* Set dynamic backlight control PWM; D[7:4] = PWM_DIV[3:0];*/
+		/* D[3]=0 (PWM OFF);
+		 * D[2]=0 (auto BL control OFF);
+		 * D[1]=0 (Grama correction On);
+		 * D[0]=0 (Enhanced Image Correction OFF) */
+		data[0] = 0xb4;
+		data[1] = (id == SUPPLIER_ID_AUO ? 0x0F : 0x1F);
+		data[2] = 0x03;
+		data[3] = 0x00;
+		ret |= dsi_vc_write(EDISCO_CMD_VC, EDISCO_LONG_WRITE, data, 4);
+
+		/* set page, column address */
+		data[0] = EDISCO_CMD_SET_PAGE_ADDRESS;
+		data[1] = 0x00;
+		data[2] = 0x00;
+		data[3] = (dssdev->panel.timings.y_res - 1) >> 8;
+		data[4] = (dssdev->panel.timings.y_res - 1) & 0xff;
+		data[5] = 0x00;
+		ret |= dsi_vc_dcs_write(EDISCO_CMD_VC, data, 6);
+
+		data[0] = EDISCO_CMD_SET_COLUMN_ADDRESS;
+		data[1] = 0x00;
+		data[2] = 0x00;
+		data[3] = (dssdev->panel.timings.x_res - 1) >> 8;
+		data[4] = (dssdev->panel.timings.x_res - 1) & 0xff;
+		data[5] = 0x00;
+		ret |= dsi_vc_dcs_write(EDISCO_CMD_VC, data, 6);
+
+		/* turn it on */
+		data[0] = EDISCO_CMD_EXIT_SLEEP_MODE;
+		data[1] = 0x00;
+		data[2] = 0x00;
+		data[3] = 0x00;
+		ret |= dsi_vc_dcs_write(EDISCO_CMD_VC, data, 4);
+
+	} else if (id == SUPPLIER_ID_TMD) {
+		/* turn of mcs register acces protection */
+		data[0] = 0xb2;
+		data[1] = 0x00;
+		ret |=
+		  dsi_vc_write(EDISCO_CMD_VC, EDISCO_SHORT_WRITE_1, data, 2);
+		/* enable lane setting and test registers*/
+		data[0] = 0xef;
+		data[1] = 0x01;
+		data[2] = 0x01;
+		ret |= dsi_vc_write(EDISCO_CMD_VC, EDISCO_LONG_WRITE, data, 3);
+
+		/* 2nd param 61 = 1 line; 63 = 2 lanes */
+		data[0] = 0xef;
+		data[1] = 0x60;
+		data[2] = 0x63;
+		ret |= dsi_vc_write(EDISCO_CMD_VC, EDISCO_LONG_WRITE, data, 3);
+
+		/* Set dynamic backlight control PWM; D[7:4] = PWM_DIV[3:0];*/
+		/* D[3]=0 (PWM OFF);
+		 * D[2]=0 (auto BL control OFF);
+		 * D[1]=0 (Grama correction On);
+		 * D[0]=0 (Enhanced Image Correction OFF) */
+		data[0] = 0xb4;
+		data[1] = (id == SUPPLIER_ID_AUO ? 0x0F : 0x1F);
+		ret |=
+		  dsi_vc_write(EDISCO_CMD_VC, EDISCO_SHORT_WRITE_1, data, 2);
+
+		/* set page, column address */
+		data[0] = EDISCO_CMD_SET_PAGE_ADDRESS;
+		data[1] = 0x00;
+		data[2] = 0x00;
+		data[3] = (dssdev->panel.timings.y_res - 1) >> 8;
+		data[4] = (dssdev->panel.timings.y_res - 1) & 0xff;
+		ret |= dsi_vc_dcs_write(EDISCO_CMD_VC, data, 5);
+
+		data[0] = EDISCO_CMD_SET_COLUMN_ADDRESS;
+		data[1] = 0x00;
+		data[2] = 0x00;
+		data[3] = (dssdev->panel.timings.x_res - 1) >> 8;
+		data[4] = (dssdev->panel.timings.x_res - 1) & 0xff;
+		ret |= dsi_vc_dcs_write(EDISCO_CMD_VC, data, 5);
+
+		/* turn it on */
+		data[0] = EDISCO_CMD_EXIT_SLEEP_MODE;
+		ret |= dsi_vc_dcs_write(EDISCO_CMD_VC, data, 1);
+
+	} else {
+		DBG("Panel not installed\n");
 		goto error;
 
-	data[0] = EDISCO_CMD_SET_COLUMN_ADDRESS;
-	data[1] = 0x00;
-	data[2] = 0x00;
-	data[3] = (dssdev->panel.timings.x_res - 1) >> 8;
-	data[4] = (dssdev->panel.timings.x_res - 1) & 0xff;
-	ret = dsi_vc_dcs_write(EDISCO_CMD_VC, data, 5);
-	if (ret)
-		goto error;
-
-	/* turn it on */
-	data[0] = EDISCO_CMD_EXIT_SLEEP_MODE;
-	ret = dsi_vc_dcs_write(EDISCO_CMD_VC, data, 1);
+	}
 
 	mdelay(200);
 
-	DBG("supplier id: 0x%04x\n",
-		(unsigned int)sholes_panel_read_supplier_id(dssdev));
+	DBG("supplier id: 0x%04x\n", (unsigned int)id);
+
+	if (ret)
+		goto error;
+
 	return 0;
 error:
+	atomic_set(&state, PANEL_OFF);
 	return -EINVAL;
 }
 
