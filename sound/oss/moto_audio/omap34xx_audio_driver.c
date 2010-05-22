@@ -1799,20 +1799,15 @@ static int audio_ioctl(struct inode *inode, struct file *file,
 	}
 	/* FM radio Begin */
 	case SOUND_MIXER_FMPATH:
-		{
-			int spkr;
-			TRY(copy_from_user(&spkr, (int *)arg, sizeof(int)))
-			AUDIO_LEVEL2_LOG("SOUND_MIXER_FMPATH with spkr = %#x\n",
-				 spkr);
-			cpcap_audio_state.ext_primary_speaker = spkr;
-/* 	FM radio output gain is controlled by cpcap_audio_driver.c
-	So, this value should not be changed here.
-	This value should be synced other output gain value.
-*/
-			cpcap_audio_state.output_gain = 0xFF;
-			cpcap_audio_set_audio_state(&cpcap_audio_state);
-			break;
-		}
+	{
+		int spkr;
+		TRY(copy_from_user(&spkr, (int *)arg, sizeof(int)))
+		AUDIO_LEVEL2_LOG("SOUND_MIXER_FMPATH with spkr = %#x\n", spkr);
+		cpcap_audio_state.ext_primary_speaker = spkr;
+		cpcap_audio_state.output_gain = 15;
+		cpcap_audio_set_audio_state(&cpcap_audio_state);
+		break;
+	}
 
 	case SOUND_MIXER_FMON:
 		{
@@ -1826,12 +1821,10 @@ static int audio_ioctl(struct inode *inode, struct file *file,
 	case SOUND_MIXER_FMOFF:
 		{
 			AUDIO_LEVEL2_LOG("SOUND_MIXER_FMOFF\n");
-			/* w21558, add to turn off audio block */
 			cpcap_audio_state.ext_primary_speaker =
 				CPCAP_AUDIO_OUT_NONE;
 			cpcap_audio_state.ext_secondary_speaker =
 				CPCAP_AUDIO_OUT_NONE;
-			/* new added */
 			cpcap_audio_state.analog_source =
 				CPCAP_AUDIO_ANALOG_SOURCE_OFF;
 			cpcap_audio_set_audio_state(&cpcap_audio_state);
