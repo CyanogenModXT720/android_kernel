@@ -361,7 +361,11 @@ static void hs_work(struct work_struct *work)
 
 		if (adc9_count > TVOUT_ADC_THRESHOLD) {
 #ifdef CONFIG_TVOUT_SHOLEST
-			present = venc_tv_connect();
+			/* Comment out the below code so that
+			present = 0 always and TV out path is never enabled.
+			We dont need TVout for this product.
+			This is a workaround to solve headset issues.
+			present = venc_tv_connect(); */
 #endif
 
 			if (present) {
