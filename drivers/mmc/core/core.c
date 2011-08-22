@@ -56,6 +56,12 @@ module_param(use_spi_crc, bool, 0);
 static int mmc_schedule_delayed_work(struct delayed_work *work,
 				     unsigned long delay)
 {
+	return queue_delayed_work(workqueue, work, delay);
+}
+
+static int mmc_schedule_delayed_work_lock(struct delayed_work *work,
+				     unsigned long delay)
+{
 	wake_lock(&mmc_delayed_work_wake_lock);
 	return queue_delayed_work(workqueue, work, delay);
 }
@@ -776,7 +782,8 @@ int mmc_resume_bus(struct mmc_host *host)
 		host->bus_ops->resume(host);
 	}
 
-	mmc_detect_change(host, 0);
+	if (host->bus_ops->detect && !host->bus_dead)
+		host->bus_ops->detect(host);
 
 	mmc_bus_put(host);
 	printk("%s: Deferred resume completed\n", mmc_hostname(host));
@@ -850,7 +857,7 @@ void mmc_detect_change(struct mmc_host *host, unsigned long delay)
 	spin_lock_irqsave(&host->lock, flags);
 	mmc_detection_removed = host->removed;
 	spin_unlock_irqrestore(&host->lock, flags);
-	mmc_schedule_delayed_work(&host->detect, delay);
+	mmc_schedule_delayed_work_lock(&host->detect, delay);
 }
 
 EXPORT_SYMBOL(mmc_detect_change);
@@ -863,6 +870,7 @@ void mmc_rescan(struct work_struct *work)
 	u32 ocr;
 	int err;
 	int extend_wakelock = 0;
+	static unsigned tried_rescan = 1;
 
 	mmc_bus_get(host);
 
@@ -920,8 +928,19 @@ void mmc_rescan(struct work_struct *work)
 	 */
 	err = mmc_send_app_op_cond(host, 0, &ocr);
 	if (!err) {
-		if (mmc_attach_sd(host, ocr))
+		if (mmc_attach_sd(host, ocr)) {
+			/*Workaound for SD Card attach issue*/
+			if (tried_rescan) {
+				printk(KERN_INFO "%s: rescanning attempts left %d\n",
+					mmc_hostname(host), tried_rescan);
+				mmc_schedule_delayed_work(&host->detect, HZ/2);
+				tried_rescan-- ;
+			}
 			mmc_power_off(host);
+		} else {
+			tried_rescan = 1;
+		}
+
 		extend_wakelock = 1;
 		goto out;
 	}
@@ -947,7 +966,7 @@ out:
 		wake_unlock(&mmc_delayed_work_wake_lock);
 
 	if (host->caps & MMC_CAP_NEEDS_POLL)
-		mmc_schedule_delayed_work(&host->detect, HZ);
+		mmc_schedule_delayed_work_lock(&host->detect, HZ);
 }
 
 void mmc_start_host(struct mmc_host *host)

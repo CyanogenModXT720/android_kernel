@@ -1499,9 +1499,8 @@ static void dsi_complexio_timings(void)
 	ths_exit = ns2ddr(145);
 
 	/* tlpx min 50n */
-	/* AUO experiment it's less than 50ns
-	tlpx_half = ns2ddr(25);
-	*/
+	/* as experiment, it's less than 50ns */
+	/* tlpx_half = ns2ddr(25); */
 	tlpx_half = ns2ddr(30);
 
 	/* min 60ns */
@@ -3141,7 +3140,9 @@ static int dsi_display_init_dsi(struct omap_dss_device *dssdev)
 	if (dssdev->driver->enable) {
 		while (1) {
 			r = dssdev->driver->enable(dssdev);
-			if ((r == 0) || (cnt++ >= 2))
+			if (r == 0)
+				break;
+			else if (cnt++ >= 4)
 				break;
 
 			DSSERR("Failed Init, 1. SW Rst DSI-block\n");
@@ -3158,8 +3159,7 @@ static int dsi_display_init_dsi(struct omap_dss_device *dssdev)
 			if (r)
 				goto err0;
 
-			r = dsi_pll_calc_ddrfreq(dssdev,
-				dssdev->phy.dsi.ddr_clk_hz, &cinfo);
+			r = dsi_pll_calc_ddrfreq(dssdev, dssdev->phy.dsi.ddr_clk_hz, &cinfo);
 			if (r)
 				goto err1;
 
@@ -3188,7 +3188,7 @@ static int dsi_display_init_dsi(struct omap_dss_device *dssdev)
 
 		}
 
-		if (cnt > 2) {
+		if (cnt > 4) {
 			DSSERR("Disable DSI interface.\n");
 			goto err3;
 		}
@@ -3221,8 +3221,9 @@ static void dsi_display_uninit_dsi(struct omap_dss_device *dssdev)
 static int dsi_display_enable(struct omap_dss_device *dssdev)
 {
 	int r = 0;
+	static int reset_dsi;
 
-	DSSDBG("dsi_display_enable\n");
+	DSSINFO("dsi_display_enable\n");
 
 	mutex_lock(&dsi.lock);
 	dsi_bus_lock();
@@ -3242,11 +3243,15 @@ static int dsi_display_enable(struct omap_dss_device *dssdev)
 	enable_clocks(1);
 	dsi_enable_pll_clock(1);
 
-/* Skip to keep the DSI configuration of bootloader ==
-	r = _dsi_reset();
-	if (r)
-		goto err2;
-====================================================*/
+	/* Skip to keep the DSI configuration of bootloader */
+	if (reset_dsi) {
+		r = _dsi_reset();
+		if (r)
+			goto err2;
+	} else {
+		DSSINFO("Skip dsi SW reset\n");
+		reset_dsi = 1;
+	}
 
 	dsi_core_init();
 
@@ -3306,7 +3311,7 @@ err0:
 
 static void dsi_display_disable(struct omap_dss_device *dssdev)
 {
-	DSSDBG("dsi_display_disable\n");
+	DSSINFO("dsi_display_disable\n");
 
 	mutex_lock(&dsi.lock);
 	dsi_bus_lock();
@@ -3343,7 +3348,7 @@ end:
 
 static int dsi_display_suspend(struct omap_dss_device *dssdev)
 {
-	DSSDBG("dsi_display_suspend\n");
+	DSSINFO("dsi_display_suspend\n");
 
 	mutex_lock(&dsi.lock);
 	dsi_bus_lock();
@@ -3382,7 +3387,7 @@ static int dsi_display_resume(struct omap_dss_device *dssdev)
 {
 	int r;
 
-	DSSDBG("dsi_display_resume\n");
+	DSSINFO("dsi_display_resume\n");
 
 	mutex_lock(&dsi.lock);
 	dsi_bus_lock();

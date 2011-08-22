@@ -361,14 +361,28 @@ static void hs_work(struct work_struct *work)
 
 		if (adc9_count > TVOUT_ADC_THRESHOLD) {
 #ifdef CONFIG_TVOUT_SHOLEST
-			/* Comment out the below code so that
-			present = 0 always and TV out path is never enabled.
-			We dont need TVout for this product.
-			This is a workaround to solve headset issues.
-			present = venc_tv_connect(); */
-#endif
+			present = venc_tv_connect();
 
-			if (present) {
+			if(present < 0) {
+				/*Detection Info has to be ignored because priority of HDMI is higher than TVOUT*/
+				control_val = control_analog_switch(
+							CPCAP_GPIO_SWITCH_OFF,
+							data_3mm5);
+
+				if (control_val < 0) {
+					cpcap_regacc_write(data_3mm5->cpcap,
+						CPCAP_REG_TXI, 0,
+						(CPCAP_BIT_MB_ON2 |
+						CPCAP_BIT_PTT_CMP_EN));
+					return;
+				}
+				configure_cpcap_irq(NO_DEVICE, data_3mm5);
+			}
+			else if(present == 1)
+#else
+			if (present)
+#endif
+			{
 				/*Enable TV NO2 path*/
 				control_val = control_analog_switch(
 						CPCAP_GPIO_SWITCH_TVOUT,

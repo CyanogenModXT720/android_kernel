@@ -75,6 +75,10 @@ struct tda19989_data {
 
 static struct tda19989_data *gDev;
 
+#ifdef CONFIG_TVOUT_SHOLEST
+extern void venc_tvout_not_allowed(bool val);
+#endif
+
 /*===========================================================================*/
 
 static irqreturn_t hdmi_int_irq(int irq, void *dev_inst)
@@ -139,12 +143,6 @@ static int i2cTda19989_write(struct i2cMsgArg *pArg)
 			pData++;
 		}
 	}
-#ifdef TDA19989_CEC_AVAILABLE
-	if (pArg->slaveAddr == 0x34)
-	{
-		mdelay(2);
-	}
-#endif
 	return ((rc == 0) ? 0 : -EFAULT);
 }
 
@@ -184,45 +182,51 @@ static int i2cTda19989_read(struct i2cMsgArg *pArg)
 }
 
 #ifdef TDA19989_CEC_AVAILABLE
-static int cec_calibration(void)
+static int cec_calibration(int *usec)
 {
-	int i;
-	int rc = 0;
+	int i, msec;
 	int prevInt_en = 0;
-	struct timeval prevTime, curTime, resultTime;
+	unsigned long lock_flags;
+	struct timeval pT, cT, rT;
 
 	if (gDev->int_enabled) {
 		prevInt_en = 1;
 		disable_irq(OMAP_GPIO_IRQ(HDMI_INT_PIN_GPIO_NUM));
-		if (gDev->waiter)
-			wake_up_interruptible(&gDev->int_wait);
 		gDev->int_enabled = false;
 	}
+
+	spin_lock_irqsave(&gDev->int_lock, lock_flags);
+	do_gettimeofday(&pT);
 	gpio_direction_output(HDMI_INT_PIN_GPIO_NUM, 0);
 	gpio_set_value(HDMI_INT_PIN_GPIO_NUM, 0);
+	spin_unlock_irqrestore(&gDev->int_lock, lock_flags);
 
-	do_gettimeofday(&prevTime);
-	mdelay(9);
-	for (i = 0; i < 500; i++) {
-		do_gettimeofday(&curTime);
-		resultTime.tv_usec = curTime.tv_usec-prevTime.tv_usec;
-		if (resultTime.tv_usec > 9990)
+	msec = *usec/1000;
+	if (msec > 1)
+		mdelay(msec-1);
+
+	spin_lock_irqsave(&gDev->int_lock, lock_flags);
+	for (i = 0; i < 100; i++) {
+		do_gettimeofday(&cT);
+		if (cT.tv_usec < pT.tv_usec)
+			rT.tv_usec = 1000000-pT.tv_usec+cT.tv_usec;
+		else
+			rT.tv_usec = cT.tv_usec-pT.tv_usec;
+		if (rT.tv_usec > (*usec - 10)) {
+			*usec = (int)rT.tv_usec;
 			break;
-		udelay(2);
+		}
+		udelay(10);
 	}
 	gpio_set_value(HDMI_INT_PIN_GPIO_NUM, 1);
-	do_gettimeofday(&curTime);
-
 	gpio_direction_input(HDMI_INT_PIN_GPIO_NUM);
-	resultTime.tv_usec = curTime.tv_usec - prevTime.tv_usec;
-	printk(KERN_DEBUG "Time interval: %d\n", (int)resultTime.tv_usec);
+	spin_unlock_irqrestore(&gDev->int_lock, lock_flags);
 
 	if (prevInt_en) {
 		enable_irq(OMAP_GPIO_IRQ(HDMI_INT_PIN_GPIO_NUM));
 		gDev->int_enabled = true;
 	}
-
-	return rc;
+	return 0;
 }
 
 static int cec_regulator_enable(bool en)
@@ -259,6 +263,7 @@ int hdmiCec_useReg(void)
     return (int)gDev->cec_use_reg;
 }
 EXPORT_SYMBOL(hdmiCec_useReg);
+
 
 /*===========================================================================*/
 
@@ -424,7 +429,7 @@ static int tda19989_ioctl(struct inode *inode, struct file *filp,
 {
 	int rc = 0;
 	struct i2cMsgArg mArg;
-	int en;
+	int en, calTime;
 
 	if (unlikely(_IOC_TYPE(cmd) != TDA19989_IOCTL_MAGIC)) {
 		printk(KERN_ERR "Bad command value (%d)\n", cmd);
@@ -483,12 +488,20 @@ static int tda19989_ioctl(struct inode *inode, struct file *filp,
 			if (gDev->waiter)
 				wake_up_interruptible(&gDev->int_wait);
 		}
+#ifdef CONFIG_TVOUT_SHOLEST
+		venc_tvout_not_allowed(gDev->int_enabled);
+#endif
 		break;
 #ifdef TDA19989_CEC_AVAILABLE
 	case TDA19989_CEC_CAL_TIME:
-		rc = cec_calibration();
-		if (rc != 0) {
-			printk(KERN_ERR	"cec calibration error (%d)\n", rc);
+		if (copy_from_user(&calTime, (int *)arg, sizeof(calTime))) {
+			printk(KERN_ERR	"tda19989: CEC Cal copy from error\n");
+			rc = -EFAULT;
+			break;
+		}
+		rc = cec_calibration(&calTime);
+		if (copy_to_user((int *)arg, &calTime, sizeof(calTime))) {
+			printk(KERN_ERR	"tda19989: CEC Cal copy to error\n");
 			rc = -EFAULT;
 		}
 		break;

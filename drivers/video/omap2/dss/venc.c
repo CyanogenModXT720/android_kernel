@@ -43,6 +43,8 @@
 #include <mach/prcm.h>
 #include <mach/gpio.h>
 #define OMAP_TVINT_GPIO 33
+
+static bool tvoutNotAllowed = false;
 #endif
 
 #define VENC_BASE	0x48050C00
@@ -806,6 +808,12 @@ int venc_init_display(struct omap_dss_device *dssdev)
 }
 
 #ifdef CONFIG_TVOUT_SHOLEST
+void venc_tvout_not_allowed(bool val)
+{	
+	tvoutNotAllowed = val;
+}
+EXPORT_SYMBOL(venc_tvout_not_allowed);
+
 int venc_tv_connect(void)
 {
 	int tv_int = 1;
@@ -840,7 +848,13 @@ int venc_tv_connect(void)
 
 		mutex_unlock(&venc.venc_lock);
 	}
-
+	
+#ifdef CONFIG_HDMI_TDA19989
+	if (tv_int && tvoutNotAllowed)
+	{
+		return -1;
+	}
+#endif
 	return tv_int;
 }
 EXPORT_SYMBOL(venc_tv_connect);

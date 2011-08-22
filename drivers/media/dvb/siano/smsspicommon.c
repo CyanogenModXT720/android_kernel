@@ -77,19 +77,37 @@ static struct _rx_buffer_st *smsspi_common_find_msg(struct _spi_dev *dev,
 			    (unsigned long)ptr - (unsigned long)buf->ptr + 4;
 			break;
 		case RxsWait_5a:
-			dev->rxState =
-			    ((*ptr & 0xff) == 0x5a) ? RxsWait_e7 : RxsWait_a5;
-			/*PRN_DBG((TXT("state %d.\n"), dev->rxState));*/
+			if ((*ptr & 0xff) == 0x5a) {
+				dev->rxState = RxsWait_e7;
+			}
+			else {
+				dev->rxState = RxsWait_a5;
+				i--;
+				ptr--;	// re-scan current byte
+			}
+			PRN_DBG((TXT("state %d.\n"), dev->rxState));
 			break;
 		case RxsWait_e7:
-			dev->rxState =
-			    ((*ptr & 0xff) == 0xe7) ? RxsWait_7e : RxsWait_a5;
-			/*PRN_DBG((TXT("state %d.\n"), dev->rxState));*/
+			if ((*ptr & 0xff) == 0xe7) {
+				dev->rxState = RxsWait_7e;
+			}
+			else {
+				dev->rxState = RxsWait_a5;
+				i--;
+				ptr--;	// re-scan current byte
+			}
+			PRN_DBG((TXT("state %d.\n"), dev->rxState));
 			break;
 		case RxsWait_7e:
-			dev->rxState =
-			    ((*ptr & 0xff) == 0x7e) ? RxsTypeH : RxsWait_a5;
-			/*PRN_DBG((TXT("state %d.\n"), dev->rxState));*/
+			if ((*ptr & 0xff) == 0x7e) {
+				dev->rxState = RxsTypeH;
+			}
+			else {
+				dev->rxState = RxsWait_a5;
+				i--;
+				ptr--;	// re-scan current byte
+			}
+			PRN_DBG((TXT("state %d.\n"), dev->rxState));
 			break;
 		case RxsTypeH:
 			dev->rxPacket.msg_buf = buf;

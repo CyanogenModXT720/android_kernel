@@ -20,7 +20,9 @@
 #include <linux/leds.h>
 #include <linux/leds-ld-cpcap.h>
 #include <linux/platform_device.h>
+#ifndef CONFIG_LEDS_SHOLEST
 #include <linux/regulator/consumer.h>
+#endif
 #include <linux/spi/cpcap.h>
 #include <linux/spi/cpcap-regbits.h>
 
@@ -29,8 +31,10 @@ struct msg_ind_led_data {
 	struct led_classdev msg_ind_green_class_dev;
 	struct led_classdev msg_ind_blue_class_dev;
 	struct cpcap_device *cpcap;
+#ifndef CONFIG_LEDS_SHOLEST
 	struct regulator *regulator;
 	int regulator_state;
+#endif
 };
 
 void msg_ind_set_rgb_brightness(struct msg_ind_led_data *msg_ind_data,
@@ -82,7 +86,7 @@ void msg_ind_set_rgb_brightness(struct msg_ind_led_data *msg_ind_data,
 		brightness |= (LD_MSG_IND_HIGH << \
 				((cpcap_register == CPCAP_REG_ADLC) << 1));
 #else
-    else if (value <= 51)
+	else if (value <= 51)
 		brightness |= LD_MSG_IND_LOW;
 	else if (value <= 104)
 		brightness |= LD_MSG_IND_LOW_MED;
@@ -102,6 +106,7 @@ void msg_ind_set_rgb_brightness(struct msg_ind_led_data *msg_ind_data,
 		pr_err("%s: Writing to the register failed for %i\n",
 		       __func__, cpcap_status);
 
+#ifndef CONFIG_LEDS_SHOLEST
 	if (value > LED_OFF) {
 		if (!(msg_ind_data->regulator_state & color)) {
 			if (msg_ind_data->regulator) {
@@ -117,7 +122,7 @@ void msg_ind_set_rgb_brightness(struct msg_ind_led_data *msg_ind_data,
 			}
 		}
 	}
-
+#endif
 	return;
 }
 
@@ -191,6 +196,7 @@ static int msg_ind_rgb_probe(struct platform_device *pdev)
 	info->cpcap = pdev->dev.platform_data;
 	platform_set_drvdata(pdev, info);
 
+#ifndef CONFIG_LEDS_SHOLEST
 	info->regulator = regulator_get(&pdev->dev, LD_SUPPLY);
 	if (IS_ERR(info->regulator)) {
 		pr_err("%s: Cannot get %s regulator\n", __func__, LD_SUPPLY);
@@ -199,6 +205,7 @@ static int msg_ind_rgb_probe(struct platform_device *pdev)
 	}
 
 	info->regulator_state = 0;
+#endif
 	info->msg_ind_red_class_dev.name = "red";
 	info->msg_ind_red_class_dev.brightness_set = msg_ind_red_set;
 	ret = led_classdev_register(&pdev->dev, &info->msg_ind_red_class_dev);
@@ -239,9 +246,11 @@ err_reg_green_class_failed:
 err_create_blink_failed:
 	led_classdev_unregister(&info->msg_ind_red_class_dev);
 err_reg_red_class_failed:
+#ifndef CONFIG_LEDS_SHOLEST
 	if (info->regulator)
 		regulator_put(info->regulator);
 exit_request_reg_failed:
+#endif
 	kfree(info);
 	return ret;
 }
@@ -250,8 +259,10 @@ static int msg_ind_rgb_remove(struct platform_device *pdev)
 {
 	struct msg_ind_led_data *info = platform_get_drvdata(pdev);
 
+#ifndef CONFIG_LEDS_SHOLEST
 	if (info->regulator)
 		regulator_put(info->regulator);
+#endif
 
 	device_remove_file(info->msg_ind_red_class_dev.dev, &dev_attr_blink);
 

@@ -28,6 +28,9 @@
 #include <linux/led-lm3530.h>
 #include <linux/types.h>
 #include <linux/gpio_mapping.h>
+#ifdef CONFIG_LEDS_SHOLEST
+#include <linux/panel-suppliers.h>
+#endif
 #include <mach/gpio.h>
 
 int als_resistor_val[16] = {1, 9260, 4630, 3090, 2310,
@@ -54,6 +57,7 @@ struct lm3530_data {
 	uint8_t led_on;
 #ifdef CONFIG_LEDS_SHOLEST
 	uint8_t als_circ;
+	uint16_t panel_supplier;
 #endif
 };
 
@@ -63,6 +67,25 @@ struct lm3530_data {
 /* Two-way ALS transition */
 #define ALS_INDOOR	0
 #define ALS_OUTDOOR	1
+
+/* Brightness converting table for AUO panel @ full current 22.5mA */
+uint8_t lm3530_auo_brt_cvt_tbl[128] = {
+	0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+	0x09, 0x0A, 0x0C, 0x0E, 0x0F, 0x10, 0x11, 0x13,
+	0x14, 0x15, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1A,
+	0x1B, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F, 0x20, 0x20,
+	0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x26, 0x27,
+	0x28, 0x29, 0x2A, 0x2B, 0x2B, 0x2C, 0x2D, 0x2E,
+	0x2F, 0x30, 0x31, 0x31, 0x32, 0x33, 0x34, 0x35,
+	0x36, 0x36, 0x37, 0x38, 0x39, 0x3A, 0x3B, 0x3C,
+	0x3C, 0x3D, 0x3E, 0x3F, 0x40, 0x41, 0x41, 0x42,
+	0x43, 0x44, 0x45, 0x46, 0x46, 0x47, 0x48, 0x49,
+	0x4A, 0x4B, 0x4C, 0x4C, 0x4D, 0x4E, 0x4F, 0x50,
+	0x51, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57,
+	0x57, 0x58, 0x59, 0x5A, 0x5B, 0x5C, 0x5C, 0x5D,
+	0x5E, 0x5F, 0x60, 0x61, 0x61, 0x62, 0x63, 0x64,
+	0x65, 0x66, 0x67, 0x67, 0x68, 0x69, 0x6A, 0x6B,
+	0x6C, 0x6C, 0x6D, 0x6E, 0x6F, 0x70, 0x71, 0x72};
 #endif
 
 struct lm3530_reg {
@@ -90,6 +113,10 @@ struct lm3530_reg {
 #ifdef CONFIG_HAS_EARLYSUSPEND
 static void lm3530_early_suspend(struct early_suspend *handler);
 static void lm3530_late_resume(struct early_suspend *handler);
+#endif
+
+#ifdef CONFIG_LEDS_SHOLEST
+static void ld_lm3530_lux_conv(struct lm3530_data *als_data);
 #endif
 
 static uint32_t lm3530_debug;
@@ -190,41 +217,34 @@ static int ld_lm3530_init_registers(struct lm3530_data *als_data)
 static int ld_lm3530_switch_als_circumstance(struct lm3530_data *als_data,
 					     uint8_t set_als)
 {
-	uint8_t gen_conf = 0;
-
-	if (lm3530_read_reg(als_data, LM3530_GEN_CONFIG, &gen_conf) != 0) {
-		pr_err("%s:Failed to read general config\n", __func__);
-		return -EINVAL;
-	}
-
 	switch (set_als) {
 	case ALS_INDOOR:
 		/* Set ALS configuration for Indoor mode */
-		als_data->als_pdata->als_resistor_sel = 0x31;
-		als_data->als_pdata->zone_boundary_0  = 0x04;
-		als_data->als_pdata->zone_boundary_1  = 0x18;
-		als_data->als_pdata->zone_boundary_2  = 0x2B;
-		als_data->als_pdata->zone_boundary_3  = 0x58;
-		als_data->als_pdata->zone_target_0    = 0x19;
-		als_data->als_pdata->zone_target_1    = 0x31;
-		als_data->als_pdata->zone_target_2    = 0x31;
+		als_data->als_pdata->als_resistor_sel = 0x22;
+		als_data->als_pdata->zone_boundary_0  = 0x07;
+		als_data->als_pdata->zone_boundary_1  = 0x29;
+		als_data->als_pdata->zone_boundary_2  = 0x48;
+		als_data->als_pdata->zone_boundary_3  = 0x94;
+		als_data->als_pdata->zone_target_0    = 0x12;
+		als_data->als_pdata->zone_target_1    = 0x1F;
+		als_data->als_pdata->zone_target_2    = 0x28;
 		als_data->als_pdata->zone_target_3    = 0x31;
-		als_data->als_pdata->zone_target_4    = 0x53;
+		als_data->als_pdata->zone_target_4    = 0x3A;
 		/* Circumstance parameter */
 		als_data->als_circ = ALS_INDOOR;
 		break;
 	case ALS_OUTDOOR:
 		/* Set ALS configuration for Outdoor mode */
-		als_data->als_pdata->als_resistor_sel = 0xC2;
-		als_data->als_pdata->zone_boundary_0  = 0x08;
+		als_data->als_pdata->als_resistor_sel = 0xBC;
+		als_data->als_pdata->zone_boundary_0  = 0x09;
 		als_data->als_pdata->zone_boundary_1  = 0x39;
 		als_data->als_pdata->zone_boundary_2  = 0x86;
 		als_data->als_pdata->zone_boundary_3  = 0xC9;
-		als_data->als_pdata->zone_target_0    = 0x53;
-		als_data->als_pdata->zone_target_1    = 0x53;
-		als_data->als_pdata->zone_target_2    = 0x53;
-		als_data->als_pdata->zone_target_3    = 0x53;
-		als_data->als_pdata->zone_target_4    = 0x7A;
+		als_data->als_pdata->zone_target_0    = 0x3A;
+		als_data->als_pdata->zone_target_1    = 0x42;
+		als_data->als_pdata->zone_target_2    = 0x4B;
+		als_data->als_pdata->zone_target_3    = 0x54;
+		als_data->als_pdata->zone_target_4    = 0x65;
 		/* Circumstance parameter */
 		als_data->als_circ = ALS_OUTDOOR;
 		break;
@@ -258,6 +278,9 @@ static int ld_lm3530_switch_als_circumstance(struct lm3530_data *als_data,
 		return -EINVAL;
 	}
 
+	/* Update converting table */
+	ld_lm3530_lux_conv(als_data);
+
 	return 0;
 }
 #endif
@@ -268,23 +291,18 @@ static void ld_lm3530_brightness_set(struct led_classdev *led_cdev,
 	int brightness = 0;
 	int error = 0;
 	int old_led_on;
-    int config;
+	int config;
 	struct lm3530_data *als_data =
 	    container_of(led_cdev, struct lm3530_data, led_dev);
 
-	if (als_data->mode == AUTOMATIC) {
 #ifdef CONFIG_LEDS_SHOLEST
-		/* Set current 26mA */
-		als_data->als_pdata->gen_config =
-			(als_data->als_pdata->gen_config & 0xE3) | 0x18;
+	if (als_data->panel_supplier == SUPPLIER_ID_INVALID)
+		als_data->panel_supplier = SUPPLIER_ID_AUO;
 #endif
+
+	if (als_data->mode == AUTOMATIC) {
 		brightness = als_data->als_pdata->gen_config;
 	} else {
-#ifdef CONFIG_LEDS_SHOLEST
-		/* Set current 19mA */
-		als_data->als_pdata->gen_config =
-			(als_data->als_pdata->gen_config & 0xE3) | 0x10;
-#endif
 		brightness = als_data->als_pdata->manual_current;
 	}
 
@@ -305,7 +323,7 @@ static void ld_lm3530_brightness_set(struct led_classdev *led_cdev,
 		if (als_data->led_on == 0) {
 			/* Set LEDDRV_EN on */
 			gpio_set_value(LM3530_LEDDRV_EN, 1);
-			msleep(1);
+			msleep(5);
 
 			/* Reinitialize lm3530 */
 			ld_lm3530_init_registers(als_data);
@@ -321,13 +339,18 @@ static void ld_lm3530_brightness_set(struct led_classdev *led_cdev,
 					config |= LM3530_SENSOR_ENABLE;
 				lm3530_write_reg(als_data, LM3530_ALS_CONFIG,
 						 config);
+				/* ALS resistance */
+				config = (als_data->mode == MANUAL ? 0 :
+					als_data->als_pdata->als_resistor_sel);
 				lm3530_write_reg(als_data,
 						 LM3530_ALS_RESISTOR_SELECT,
-						 0x00);
+						 config);
 				/* Set ramp rate for manual mode */
 				lm3530_write_reg(als_data,
 						 LM3530_BRIGHTNESS_RAMP_RATE,
 						 LM3530_MANUAL_RAMP_RATE_VALUE);
+				/* Update converting table */
+				ld_lm3530_lux_conv(als_data);
 			}
 		}
 #endif
@@ -339,12 +362,22 @@ static void ld_lm3530_brightness_set(struct led_classdev *led_cdev,
 				__func__, error);
 			return;
 		}
+#ifdef CONFIG_LEDS_SHOLEST
 		if (lm3530_write_reg(als_data, LM3530_BRIGHTNESS_CTRL_REG,
-			value / 2)) {
+			((als_data->panel_supplier == SUPPLIER_ID_AUO) ?
+			lm3530_auo_brt_cvt_tbl[value >> 1] : value >> 1))) {
 				pr_err("%s:Failed to set brightness:%d\n",
 				__func__, error);
 			return;
 		}
+#else
+		if (lm3530_write_reg(als_data, LM3530_BRIGHTNESS_CTRL_REG,
+			value >> 1)) {
+			pr_err("%s:Failed to set brightness:%d\n",
+				__func__, error);
+			return;
+		}
+#endif
 		als_data->last_requested_brightness = value;
 		old_led_on = als_data->led_on;
 		als_data->led_on = 1;
@@ -387,18 +420,8 @@ static ssize_t ld_lm3530_als_store(struct device *dev, struct device_attribute
 		return -1;
 
 	if (mode_value == AUTOMATIC) {
-#ifdef CONFIG_LEDS_SHOLEST
-		/* Set current 26mA */
-		als_data->als_pdata->gen_config =
-			(als_data->als_pdata->gen_config & 0xE3) | 0x18;
-#endif
 		brightness = als_data->als_pdata->gen_config;
 	} else {
-#ifdef CONFIG_LEDS_SHOLEST
-		/* Set current 19mA */
-		als_data->als_pdata->gen_config =
-			(als_data->als_pdata->gen_config & 0xE3) | 0x10;
-#endif
 		brightness = als_data->als_pdata->manual_current;
 	}
 
@@ -422,6 +445,8 @@ static ssize_t ld_lm3530_als_store(struct device *dev, struct device_attribute
 			       __func__, error);
 			return -1;
 		}
+		/* Update converting table */
+		ld_lm3530_lux_conv(als_data);
 #endif
 		als_data->mode = AUTOMATIC;
 	} else {
@@ -586,6 +611,61 @@ static ssize_t ld_lm3530_registers_store(struct device *dev,
 static DEVICE_ATTR(registers, 0644, ld_lm3530_registers_show,
 		ld_lm3530_registers_store);
 
+/*
+ * To handle panel dependent physical characteristic variances.
+ */
+#ifdef CONFIG_LEDS_SHOLEST
+static ssize_t
+ ld_lm3530_backlight_panel_show(struct device *dev, struct device_attribute
+			*attr, char *buf)
+{
+	struct i2c_client *client = container_of(dev->parent, struct i2c_client,
+						 dev);
+	struct lm3530_data *als_data = i2c_get_clientdata(client);
+
+	return sprintf(buf, "%u", als_data->panel_supplier);
+}
+
+static ssize_t
+ ld_lm3530_panel_specific_tune(struct device *dev, struct device_attribute
+			*attr, const char *buf, size_t size)
+{
+	int error = 0;
+	unsigned long backlight_panel;
+	struct i2c_client *client = container_of(dev->parent, struct i2c_client,
+						 dev);
+	struct lm3530_data *als_data = i2c_get_clientdata(client);
+
+	error = strict_strtoul(buf, 10, &backlight_panel);
+	if (error < 0) {
+		pr_err("%s:Unable to read input, error=%d\n", __func__, error);
+		return -1;
+	}
+
+	pr_info("%s:Tuning full current according to given panel ID:%lu\n",
+		__func__, backlight_panel);
+
+	/* Store panel supplier ID */
+	als_data->panel_supplier = backlight_panel;
+
+	if (als_data->panel_supplier != SUPPLIER_ID_INVALID) {
+		/* Set current 26mA for TMD or 29.5mA for AUO */
+		als_data->als_pdata->gen_config =
+			(als_data->als_pdata->gen_config & 0xE3) |
+			((als_data->panel_supplier == SUPPLIER_ID_TMD) ?
+			 0x18 : 0x1C);
+		/* Set current 19mA for TMD or 22.5mA for AUO */
+		als_data->als_pdata->manual_current =
+			(als_data->als_pdata->manual_current & 0xE3) |
+			((als_data->panel_supplier == SUPPLIER_ID_TMD) ?
+			 0x10 : 0x14);
+	}
+	return backlight_panel;
+}
+static DEVICE_ATTR(backlight_panel, 0666, ld_lm3530_backlight_panel_show,
+			ld_lm3530_panel_specific_tune);
+#endif
+
 void ld_lm3530_work_queue(struct work_struct *work)
 {
 	int ret;
@@ -600,7 +680,6 @@ void ld_lm3530_work_queue(struct work_struct *work)
 		       __func__, ret);
 
 		enable_irq(als_data->client->irq);
-
 		return;
 	}
 	/* Don't allow the data to be sent if the LED is supposed to
@@ -608,6 +687,7 @@ void ld_lm3530_work_queue(struct work_struct *work)
 	if (als_data->led_on == 0) {
 		if (lm3530_debug)
 			pr_info("%s:Skipping this interrupt\n", __func__);
+
 		enable_irq(als_data->client->irq);
 		return;
 	}
@@ -624,7 +704,7 @@ void ld_lm3530_work_queue(struct work_struct *work)
 			__func__);
 		ld_lm3530_switch_als_circumstance(als_data, ALS_INDOOR);
 
-		enable_irq(als_data->client->irq);
+		queue_work(als_data->working_queue, &als_data->wq);
 		return;
 	} else if ((als_data->als_circ == ALS_INDOOR) &&
 		   (als_data->zone == LM3530_ALS_ZONE_MAX)) {
@@ -632,7 +712,7 @@ void ld_lm3530_work_queue(struct work_struct *work)
 			__func__);
 		ld_lm3530_switch_als_circumstance(als_data, ALS_OUTDOOR);
 
-		enable_irq(als_data->client->irq);
+		queue_work(als_data->working_queue, &als_data->wq);
 		return;
 	}
 #endif
@@ -773,6 +853,7 @@ static int ld_lm3530_probe(struct i2c_client *client,
 	als_data->led_on = 1;
 #ifdef CONFIG_LEDS_SHOLEST
 	als_data->als_circ = ALS_INDOOR;
+	als_data->panel_supplier = SUPPLIER_ID_TMD;
 #endif
 
 	als_data->working_queue = create_singlethread_workqueue("als_wq");
@@ -847,6 +928,15 @@ static int ld_lm3530_probe(struct i2c_client *client,
 		goto err_create_registers_file_failed;
 	}
 
+#ifdef CONFIG_LEDS_SHOLEST
+	error = device_create_file(als_data->led_dev.dev, &dev_attr_backlight_panel);
+	if (error < 0) {
+		pr_err("%s:File device creation failed: %d\n", __func__, error);
+		error = -ENODEV;
+		goto err_create_backlight_panel_file_failed;
+	}
+#endif
+
 #ifdef CONFIG_HAS_EARLYSUSPEND
 	als_data->early_suspend.level = EARLY_SUSPEND_LEVEL_BLANK_SCREEN + 1;
 	als_data->early_suspend.suspend = lm3530_early_suspend;
@@ -858,6 +948,10 @@ static int ld_lm3530_probe(struct i2c_client *client,
 
 	return 0;
 
+#ifdef CONFIG_LEDS_SHOLEST
+err_create_backlight_panel_file_failed:
+	device_remove_file(als_data->led_dev.dev, &dev_attr_backlight_panel);
+#endif
 err_create_registers_file_failed:
 	device_remove_file(als_data->led_dev.dev, &dev_attr_pwm_mode);
 err_create_pwm_file_failed:
@@ -886,6 +980,9 @@ static int ld_lm3530_remove(struct i2c_client *client)
 	device_remove_file(als_data->led_dev.dev, &dev_attr_als);
 	device_remove_file(als_data->led_dev.dev, &dev_attr_pwm_mode);
 	device_remove_file(als_data->led_dev.dev, &dev_attr_registers);
+#ifdef CONFIG_LEDS_SHOLEST
+	device_remove_file(als_data->led_dev.dev, &dev_attr_backlight_panel);
+#endif
 	led_classdev_unregister(&als_data->led_dev);
 	free_irq(als_data->client->irq, als_data);
 	if (als_data->working_queue)

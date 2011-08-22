@@ -569,8 +569,7 @@ static struct i2c_board_info __initdata mapphone_i2c_bus1_board_info[] = {
 };
 
 extern struct lis331dlh_platform_data mapphone_lis331dlh_data;
-
-gstatic struct i2c_board_info __initdata mapphone_i2c_bus2_board_info[] = {
+static struct i2c_board_info __initdata mapphone_i2c_bus2_board_info[] = {
 	{
 		I2C_BOARD_INFO("akm8973", 0x1C),
 		.irq = OMAP_GPIO_IRQ(MAPPHONE_AKM8973_INT_GPIO),
@@ -578,10 +577,6 @@ gstatic struct i2c_board_info __initdata mapphone_i2c_bus2_board_info[] = {
 	{
 		I2C_BOARD_INFO("lis331dlh", 0x19),
 		.platform_data = &mapphone_lis331dlh_data,
-	},
-	{
-		I2C_BOARD_INFO("kxtf9", 0x0F),
-		.platform_data = &mapphone_kxtf9_data,
 	},
 };
 

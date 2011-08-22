@@ -2,7 +2,7 @@
 
 Siano Mobile Silicon, Inc.
 MDTV receiver kernel modules.
-Copyright (C) 2006-2008, Uri Shkolnik
+ Copyright (C) 2006-2010, Erez Cohen
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -33,21 +33,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <linux/device.h>
 #include <linux/dma-mapping.h>
 #include <linux/platform_device.h>
-#include <linux/delay.h>
-
-#include <linux/spi/spi.h>
-#include <linux/time.h>
 
 #include "smscoreapi.h"
 #include "smsdbg_prn.h"
 #include "smsspicommon.h"
 #include "smsspiphy.h"
-
-#define ANDROID_2_6_25
-#ifdef ANDROID_2_6_25
-#include <linux/workqueue.h>
-#endif
-
 
 #define SMS_INTR_PIN			16  /* 0 for nova sip, 26 for vega */
 #define TX_BUFFER_SIZE			0x200
@@ -63,17 +53,11 @@ struct _spi_device_st {
 	int allocatedPackets;
 	int padding_allowed;
 	char *rxbuf;
-	dma_addr_t rxbuf_phy_addr;
 
 	struct smscore_device_t *coredev;
 	struct list_head txqueue;
 	char *txbuf;
 	dma_addr_t txbuf_phy_addr;
-
-#if defined(MOT_FEAT_OMAP_DMA_USE)
-  int dma_tx_channel;
-  int dma_rx_channel;
-#endif
 };
 
 struct _smsspi_txmsg {
@@ -98,7 +82,7 @@ static void spi_worker_thread(void *arg);
 static DECLARE_WORK(spi_work_queue, (void *)spi_worker_thread);
 static u8 smsspi_preamble[] = { 0xa5, 0x5a, 0xe7, 0x7e };
 static u8 smsspi_startup[] = { 0, 0, 0xde, 0xc1, 0xa5, 0x51, 0xf1, 0xed };
-static u32 default_type = SMS_NOVA_B0; /*SMS_NOVA_A0;*/
+static u32 default_type = SMS_NOVA_B0;
 static u32 intr_pin = SMS_INTR_PIN;
 
 module_param(default_type, int, 0644);
@@ -114,7 +98,7 @@ static void spi_worker_thread(void *arg)
 	struct _smsspi_txmsg *msg = NULL;
 	struct _spi_msg txmsg;
 
-	/*PDEBUG("worker start\n");*/
+	PDEBUG("worker start\n");
 	do {
 		/* do we have a msg to write ? */
 		if (!msg && !list_empty(&spi_device->txqueue))
@@ -123,7 +107,8 @@ static void spi_worker_thread(void *arg)
 					next, struct _smsspi_txmsg, node);
 
 		if (msg) {
-			if (msg->add_preamble) {
+			if (msg->add_preamble)
+			{
 				txmsg.len =
 				    min(msg->size + sizeof(smsspi_preamble),
 					(size_t) TX_BUFFER_SIZE);
@@ -178,7 +163,7 @@ static void spi_worker_thread(void *arg)
 
 	} while (!list_empty(&spi_device->txqueue) || msg);
 
-	/*PDEBUG("worker end\n");*/
+	PDEBUG("worker end\n");
 
 }
 
@@ -189,23 +174,22 @@ static void msg_found(void *context, void *buf, int offset, int len)
 	    (struct smscore_buffer_t
 	     *)(container_of(buf, struct smscore_buffer_t, p));
 
-	/*PDEBUG("entering\n");*/
+	PDEBUG("entering\n");
 	cb->offset = offset;
 	cb->size = len;
 	/* PERROR ("buffer %p is sent back to core databuf=%p,
 		offset=%d.\n", cb, cb->p, cb->offset); */
 	smscore_onresponse(spi_device->coredev, cb);
 
-	/*PDEBUG("exiting\n");*/
+	PDEBUG("exiting\n");
 
 }
 
 static void smsspi_int_handler(void *context)
 {
 	struct _spi_device_st *spi_device = (struct _spi_device_st *) context;
-
+	PDEBUG("interrupt\n");
 	PREPARE_WORK(&spi_work_queue, (void *)spi_worker_thread);
-	spi_device->padding_allowed = 1;
 	schedule_work(&spi_work_queue);
 }
 
@@ -227,7 +211,7 @@ static int smsspi_preload(void *context)
 	struct _Msg Msg = {
 		{
 		MSG_SMS_SPI_INT_LINE_SET_REQ, 0, HIF_TASK,
-			    sizeof(struct _Msg), 0}, {
+			sizeof(struct _Msg), 0}, {
 		0, intr_pin, 0}
 	};
 	int rc;
@@ -245,10 +229,9 @@ static int smsspi_preload(void *context)
 	if (rc < 0) {
 		sms_err("smsspi_queue_message_and_wait error, rc=%d\n", rc);
 		return rc;
-}
+	}
 
-	sms_debug("sending MSG_SMS_SPI_INT_LINE_SET_REQ, time is now %d", \
-		jiffies_to_msecs(jiffies));
+	sms_debug("sending MSG_SMS_SPI_INT_LINE_SET_REQ, time is now %d", jiffies_to_msecs(jiffies));
 	PDEBUG("Sending SPI Set Interrupt command sequence\n");
 	msg.buffer = &Msg;
 	msg.size = sizeof(Msg);
@@ -268,23 +251,22 @@ static int smsspi_postload(void *context)
 {
 	struct _spi_device_st *spi_device = (struct _spi_device_st *) context;
 	int mode = smscore_registry_getmode(spi_device->coredev->devpath);
-	if ((mode != DEVICE_MODE_ISDBT) &&
-	     (mode != DEVICE_MODE_ISDBT_BDA)) {
+	if ( (mode != DEVICE_MODE_ISDBT) &&
+	     (mode != DEVICE_MODE_ISDBT_BDA) ) {
 		fwDnlComplete(spi_device->phy_dev, 0);
-     }
-
+		
+	}
+	
 	return 0;
 }
 
 static int smsspi_write(void *context, void *txbuf, size_t len)
 {
 	struct _smsspi_txmsg msg;
-
 	msg.buffer = txbuf;
 	msg.size = len;
 	msg.prewrite = NULL;
 	msg.postwrite = NULL;
-
 	if (len > 0x1000) {
 		/* The FW is the only long message. Do not add preamble,
 		and do not padd it */
@@ -295,16 +277,11 @@ static int smsspi_write(void *context, void *txbuf, size_t len)
 		msg.alignment = SPI_PACKET_SIZE;
 		msg.add_preamble = 1;
 	}
-
-/*
 	PDEBUG("Writing message to  SPI.\n");
 	PDEBUG("msg hdr: 0x%x, 0x%x, 0x%x, 0x%x, 0x%x, 0x%x, 0x%x, 0x%x.\n",
 	       ((u8 *) txbuf)[0], ((u8 *) txbuf)[1], ((u8 *) txbuf)[2],
 	       ((u8 *) txbuf)[3], ((u8 *) txbuf)[4], ((u8 *) txbuf)[5],
 	       ((u8 *) txbuf)[6], ((u8 *) txbuf)[7]);
-	PDEBUG("0x%x, 0x%x,\n",    ((u8 *) txbuf)[0], ((u8 *) txbuf)[1]);
-*/
-
 	return smsspi_queue_message_and_wait(context, &msg);
 }
 
@@ -317,8 +294,8 @@ struct _rx_buffer_st *allocate_rx_buf(void *context, int size)
 		return NULL;
 	}
 	buf = smscore_getbuffer(spi_device->coredev);
-/*	PDEBUG("Recieved Rx buf %p physical 0x%x (contained in %p)\n", buf->p,
-		buf->phys, buf);*/
+	PDEBUG("Recieved Rx buf %p physical 0x%x (contained in %p)\n", buf->p,
+	       buf->phys, buf);
 
 	/* note: this is not mistake! the rx_buffer_st is identical to part of
 	   smscore_buffer_t and we return the address of the start of the
@@ -332,7 +309,7 @@ static void free_rx_buf(void *context, struct _rx_buffer_st *buf)
 	struct smscore_buffer_t *cb =
 	    (struct smscore_buffer_t
 	     *)(container_of(((void *)buf), struct smscore_buffer_t, p));
-/*	PDEBUG("buffer %p is released.\n", cb);*/
+	PDEBUG("buffer %p is released.\n", cb);
 	smscore_putbuffer(spi_device->coredev, cb);
 }
 
@@ -376,8 +353,6 @@ int smsspi_register(void)
 		return ret;
 	}
 
-/* w21558 */
-#if defined(MOT_FEAT_OMAP_DMA_USE)
 	spi_device->txbuf =
 	    dma_alloc_coherent(NULL, TX_BUFFER_SIZE,
 			       &spi_device->txbuf_phy_addr,
@@ -388,10 +363,9 @@ int smsspi_register(void)
 		ret = -ENOMEM;
 		goto txbuf_error;
 	}
-#endif
 
 	spi_device->phy_dev =
-	    smsspiphy_init(NULL, smsspi_int_handler, &spi_device);
+	    smsspiphy_init(NULL, smsspi_int_handler, spi_device);
 	if (spi_device->phy_dev == 0) {
 		printk(KERN_INFO "%s smsspiphy_init(...) failed\n", __func__);
 		goto phy_error;
@@ -478,7 +452,7 @@ void smsspi_unregister(void)
 	smscore_unregister_device(spi_device->coredev);
 
 	dma_free_coherent(NULL, TX_BUFFER_SIZE, spi_device->txbuf,
-			spi_device->txbuf_phy_addr);
+			  spi_device->txbuf_phy_addr);
 
 	platform_device_unregister(&smsspi_device);
 	PDEBUG("exiting\n");

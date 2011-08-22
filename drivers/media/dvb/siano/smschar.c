@@ -2,7 +2,7 @@
 
 Siano Mobile Silicon, Inc.
 MDTV receiver kernel modules.
-Copyright (C) 2006-2008, Uri Shkolnik
+Copyright (C) 2006-2010, Erez Cohen
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -68,6 +68,9 @@ static int g_smschar_inuse;
 
 static int g_pnp_status_changed = 1;
 wait_queue_head_t g_pnp_event;
+
+static struct mutex g_smschar_pollwait_lock;
+
 static struct class *smschar_class;
 
 /**
@@ -80,7 +83,6 @@ static void smschar_unregister_client(struct smschar_device_t *dev)
 {
 	unsigned long flags;
 
-	sms_info("entering... smschar_unregister_client....\n");
 	if (dev->coredev && dev->smsclient) {
 		dev->cancel_waitq = 1;
 		wake_up_interruptible(&dev->waitq);
@@ -123,7 +125,7 @@ static int smschar_onresponse(void *context, struct smscore_buffer_t *cb)
 	unsigned long flags;
 
 	if (!dev) {
-		sms_err("recieved bad dev pointer\n");
+		sms_err("recieved bad dev pointer");
 		return -EFAULT;
 	}
 	spin_lock_irqsave(&dev->lock, flags);
@@ -143,9 +145,8 @@ static int smschar_onresponse(void *context, struct smscore_buffer_t *cb)
 	list_add_tail(&cb->entry, &dev->pending_data);
 	spin_unlock_irqrestore(&dev->lock, flags);
 
-	if (waitqueue_active(&dev->waitq)) {
+	if (waitqueue_active(&dev->waitq))
 		wake_up_interruptible(&dev->waitq);
-  }
 
 	return 0;
 }
@@ -198,10 +199,9 @@ static int smschar_open(struct inode *inode, struct file *file)
 		g_pnp_status_changed = 1;
 	}
 
-	if (rc) {
-		/*sms_err(" exiting, rc %d\n", rc);*/
-		printk(KERN_INFO "%s: [FATAL] smscore_register_client() is failed. rc=%d\n", __func__, rc);
-  }
+	if (rc)
+		sms_err(" exiting, rc %d", rc);
+
 	return rc;
 }
 
@@ -215,7 +215,9 @@ static int smschar_open(struct inode *inode, struct file *file)
 static int smschar_release(struct inode *inode, struct file *file)
 {
 	smschar_unregister_client(file->private_data);
-	sms_info("exiting\n");
+
+	sms_info("exiting");
+
 	return 0;
 }
 
@@ -251,7 +253,7 @@ static ssize_t smschar_read(struct file *file, char __user *buf,
 				      !list_empty(&dev->pending_data)
 				      || (dev->cancel_waitq));
 	if (rc < 0) {
-		sms_info("wait_event_interruptible error %d\n", rc);
+		sms_err("wait_event_interruptible error %d\n", rc);
 		return rc;
 	}
 	if (dev->cancel_waitq)
@@ -378,10 +380,9 @@ static int smschar_wait_get_buffer(struct smschar_device_t *dev,
 				      !list_empty(&dev->pending_data)
 				      || (dev->cancel_waitq));
 	if (rc < 0) {
-		sms_info("wait_event_interruptible error, rc=%d\n", rc);
+		sms_err("wait_event_interruptible error, rc=%d\n", rc);
 		return rc;
 	}
-
 	if (dev->cancel_waitq) {
 		touser->offset = 0;
 		touser->size = 0;
@@ -419,34 +420,57 @@ static int smschar_wait_get_buffer(struct smschar_device_t *dev,
  * @param file File structure.
  * @param wait kernel polling table.
  *
- * @return POLLIN flag if read data is available.
+ * @return (POLLIN | POLLRDNORM) flags if read data is available.
+ *          POLLNVAL flag if wait_queue was cancelled.
+ *	    <0 on error.
  */
 static unsigned int smschar_poll(struct file *file,
 				 struct poll_table_struct *wait)
 {
 	struct smschar_device_t *dev;
-	int mask = 0;
+	int events = 0;
 
 	if (file == NULL) {
-		sms_err("file is NULL\n");
+		sms_err("file is NULL");
 		return EINVAL;
 	}
 
-	if (file->private_data == NULL) {
-		sms_err("file->private_data is NULL\n");
+	dev = file->private_data;
+	if (dev == NULL) {
+		sms_err("dev is NULL");
 		return -EINVAL;
 	}
 
-	dev = file->private_data;
-
-	if (list_empty(&dev->pending_data)) {
-		sms_info("No data is ready, waiting for data recieve.\n");
-		poll_wait(file, &dev->waitq, wait);
+	if (dev->cancel_waitq) {
+		/*sms_debug("returning POLLNVAL");*/
+		events |= POLLNVAL;
+		return events;
 	}
 
-	if (!list_empty(&dev->pending_data))
-		mask |= POLLIN | POLLRDNORM;
-	return mask;
+	/*
+	 * critical section, protect access to kernel poll
+	 * table structure
+	 */
+	kmutex_lock(&g_smschar_pollwait_lock);
+
+	/*
+	* make the system call to wait to wait_queue wakeup if there is
+	* no data
+	* cancel_waitq is checked again to prevenet reace condition (wait
+	* to cancalled wait_queue)
+	*/
+	if (list_empty(&dev->pending_data) && (!dev->cancel_waitq))
+		poll_wait(file, &dev->waitq, wait);
+
+	/*
+	 * pending data, raise relevant flags
+	 */
+	if (!list_empty(&dev->pending_data)) {
+		events |= (POLLIN | POLLRDNORM);
+	}
+	kmutex_unlock(&g_smschar_pollwait_lock);
+
+	return events;
 }
 
 static int smschar_ioctl(struct inode *inode, struct file *file,
@@ -465,10 +489,13 @@ static int smschar_ioctl(struct inode *inode, struct file *file,
 		return smscore_set_device_mode(dev->coredev, (int)arg);
 
 	case SMSCHAR_GET_DEVICE_MODE:
+		{
 		if (put_user(smscore_get_device_mode(dev->coredev),
 				(int *)up))
 				return -EFAULT;
 		break;
+}
+
 /*##w21558, Added*/
 	case SMSCHAR_RESET_DEVICE_MODE:
 		return smscore_reset_device_mode(dev->coredev);
@@ -515,6 +542,11 @@ static int smschar_ioctl(struct inode *inode, struct file *file,
 			dev->cancel_waitq = 1;
 			wake_up_interruptible(&dev->waitq);
 			break;
+		}
+	case SMSCHAR_CANCEL_POLL:
+		{
+			/*obsollete*/
+			break;		
 		}
 	case SMSCHAR_GET_FW_FILE_NAME:
 		{
@@ -603,7 +635,7 @@ static int smschar_hotplug(struct smscore_device_t *coredev,
 {
 	int rc = 0, i;
 
-	/*sms_info("entering %d\n", arrival);*/
+	sms_info("entering %d", arrival);
 
 	g_pnp_status_changed = 1;
 	if (arrival) {
@@ -615,7 +647,7 @@ static int smschar_hotplug(struct smscore_device_t *coredev,
 
 			/* Initialize each device. */
 			for (i = 0; i < SMSCHAR_NR_DEVS; i++) {
-				/*sms_info("create device %d", i);*/
+				sms_info("create device %d", i);
 				smschar_setup_cdev(&smschar_devices[i], i);
 				INIT_LIST_HEAD(&smschar_devices[i].
 					       pending_data);
@@ -634,7 +666,7 @@ static int smschar_hotplug(struct smscore_device_t *coredev,
 			/* Get rid of our char dev entries */
 			for (i = 0; i < SMSCHAR_NR_DEVS; i++) {
 				cdev_del(&smschar_devices[i].cdev);
-				/*sms_info("remove device %d\n", i);*/
+				sms_info("remove device %d\n", i);
 			}
 
 			g_smschar_inuse = 0;
@@ -642,7 +674,7 @@ static int smschar_hotplug(struct smscore_device_t *coredev,
 		}
 	}
 
-	/*sms_info("exiting, rc %d\n", rc);*/
+	sms_info("exiting, rc %d", rc);
 
 	return rc;/* succeed */
 }
@@ -650,9 +682,9 @@ static int smschar_hotplug(struct smscore_device_t *coredev,
 int smschar_register(void)
 {
 	dev_t devno = MKDEV(smschar_major, smschar_minor);
-	int rc = -1;
+	int rc;
 
-	sms_info("registering device major=%d minor=%d\n", smschar_major,
+	sms_info("registering device major=%d minor=%d", smschar_major,
 		smschar_minor);
 	if (smschar_major) {
 		rc = register_chrdev_region(devno, SMSCHAR_NR_DEVS, "smschar");
@@ -663,10 +695,11 @@ int smschar_register(void)
 	}
 
 	if (rc < 0) {
-		sms_warn("smschar: can't get major %d\n", smschar_major);
+		sms_warn("smschar: can't get major %d", smschar_major);
 		return rc;
 	}
 	init_waitqueue_head(&g_pnp_event);
+	kmutex_init(&g_smschar_pollwait_lock);
 
 	smschar_class = class_create(THIS_MODULE, "SMSMdtv");
 	if (IS_ERR(smschar_class)) {
@@ -688,5 +721,5 @@ void smschar_unregister(void)
 	class_destroy(smschar_class);
 	unregister_chrdev_region(devno, SMSCHAR_NR_DEVS);
 	smscore_unregister_hotplug(smschar_hotplug);
-	sms_info("unregistered\n");
+	sms_info("unregistered");
 }

@@ -653,6 +653,14 @@ static void mmc_sd_resume(struct mmc_host *host)
 #endif
 	mmc_release_host(host);
 
+	if (err) {
+		mmc_sd_remove(host);
+
+		mmc_claim_host(host);
+		mmc_detach_bus(host);
+		mmc_release_host(host);
+	}
+
 }
 
 #else

@@ -28,6 +28,7 @@
 #include <linux/sysfs.h>
 #include <linux/kobject.h>
 #include <linux/platform_device.h>
+#include <linux/delay.h>
 
 #include <mach/display.h>
 
@@ -442,7 +443,6 @@ static int dss_ovl_wait_for_go(struct omap_overlay *ovl)
 static int omap_dss_set_manager(struct omap_overlay *ovl,
 		struct omap_overlay_manager *mgr)
 {
-	int r;
 
 	if (!mgr)
 		return -EINVAL;
@@ -453,10 +453,6 @@ static int omap_dss_set_manager(struct omap_overlay *ovl,
 		return -EINVAL;
 	}
 
-	r = ovl->wait_for_go(ovl);
-	if (r)
-		return r;
-
 	if (ovl->info.enabled) {
 		DSSERR("overlay has to be disabled to change the manager\n");
 		return -EINVAL;
@@ -465,6 +461,13 @@ static int omap_dss_set_manager(struct omap_overlay *ovl,
 	ovl->manager = mgr;
 
 	dss_clk_enable(DSS_CLK_ICK | DSS_CLK_FCK1);
+	/* XXX: on manual update display, in auto update mode, a bug happens
+	 * here. When an overlay is first enabled on LCD, then it's disabled,
+	 * and the manager is changed to TV, we sometimes get SYNC_LOST_DIGIT
+	 * errors. Waiting before changing the channel_out fixes it. I'm
+	 * guessing that the overlay is still somehow being used for the LCD,
+	 * but I don't understand how or why. */
+	msleep(40);
 	dispc_set_channel_out(ovl->id, mgr->id);
 	dss_clk_disable(DSS_CLK_ICK | DSS_CLK_FCK1);
 
@@ -473,10 +476,21 @@ static int omap_dss_set_manager(struct omap_overlay *ovl,
 
 static int omap_dss_unset_manager(struct omap_overlay *ovl)
 {
+	int r;
+
 	if (!ovl->manager) {
 		DSSERR("failed to detach overlay: manager not set\n");
 		return -EINVAL;
 	}
+
+	if (ovl->info.enabled) {
+		DSSERR("overlay has to be disabled to unset the manager\n");
+		return -EINVAL;
+	}
+
+	r = ovl->wait_for_go(ovl);
+	if (r)
+		return r;
 
 	ovl->manager = NULL;
 	/* XXX disable overlay? */

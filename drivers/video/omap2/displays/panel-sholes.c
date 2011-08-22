@@ -11,6 +11,7 @@
 #include <linux/platform_device.h>
 #include <linux/workqueue.h>
 #include <linux/sched.h>
+#include <linux/panel-suppliers.h>
 
 #include <mach/display.h>
 #include <mach/dma.h>
@@ -45,10 +46,6 @@
 
 #define PANEL_OFF	0x0
 #define PANEL_ON	0x1
-
-#define SUPPLIER_ID_AUO 0x0186
-#define SUPPLIER_ID_TMD 0x0126
-#define SUPPLIER_ID_INVALID 0xFFFF
 
 static struct omap_video_timings sholes_panel_timings = {
 	.x_res		= 480,
@@ -107,7 +104,7 @@ static void sholes_panel_dss_remove(struct omap_dss_device *dssdev)
 	return;
 }
 
-static u16 sholes_panel_read_supplier_id(struct omap_dss_device *dssdev)
+static u16 sholes_panel_read_supplier_id(void)
 {
 	static u16 id = SUPPLIER_ID_INVALID;
 	u8 data[2];
@@ -137,6 +134,7 @@ static int sholes_panel_dss_enable(struct omap_dss_device *dssdev)
 {
 	u8 data[7];
 	u16 id = SUPPLIER_ID_INVALID;
+
 	int ret = 0;
 
 	DBG("sholes_panel_dss_enable\n");
@@ -153,7 +151,7 @@ static int sholes_panel_dss_enable(struct omap_dss_device *dssdev)
 	gDev->panel_en = 1;
 	mutex_unlock(&gDev->mtx);
 
-	id = sholes_panel_read_supplier_id(dssdev);
+	id = sholes_panel_read_supplier_id();
 
 	if (id == SUPPLIER_ID_AUO) {
 
@@ -184,7 +182,7 @@ static int sholes_panel_dss_enable(struct omap_dss_device *dssdev)
 		 * D[1]=0 (Grama correction On);
 		 * D[0]=0 (Enhanced Image Correction OFF) */
 		data[0] = 0xb4;
-		data[1] = (id == SUPPLIER_ID_AUO ? 0x0F : 0x1F);
+		data[1] = 0x0F;
 		data[2] = 0x03;
 		data[3] = 0x00;
 		ret |= dsi_vc_write(EDISCO_CMD_VC, EDISCO_LONG_WRITE, data, 4);
@@ -214,11 +212,12 @@ static int sholes_panel_dss_enable(struct omap_dss_device *dssdev)
 		ret |= dsi_vc_dcs_write(EDISCO_CMD_VC, data, 4);
 
 	} else if (id == SUPPLIER_ID_TMD) {
+
 		/* turn of mcs register acces protection */
 		data[0] = 0xb2;
 		data[1] = 0x00;
-		ret |=
-		  dsi_vc_write(EDISCO_CMD_VC, EDISCO_SHORT_WRITE_1, data, 2);
+		ret |= dsi_vc_write(EDISCO_CMD_VC, EDISCO_SHORT_WRITE_1, data, 2);
+
 		/* enable lane setting and test registers*/
 		data[0] = 0xef;
 		data[1] = 0x01;
@@ -237,9 +236,8 @@ static int sholes_panel_dss_enable(struct omap_dss_device *dssdev)
 		 * D[1]=0 (Grama correction On);
 		 * D[0]=0 (Enhanced Image Correction OFF) */
 		data[0] = 0xb4;
-		data[1] = (id == SUPPLIER_ID_AUO ? 0x0F : 0x1F);
-		ret |=
-		  dsi_vc_write(EDISCO_CMD_VC, EDISCO_SHORT_WRITE_1, data, 2);
+		data[1] = 0x1F;
+		ret |= dsi_vc_write(EDISCO_CMD_VC, EDISCO_SHORT_WRITE_1, data, 2);
 
 		/* set page, column address */
 		data[0] = EDISCO_CMD_SET_PAGE_ADDRESS;
@@ -261,17 +259,18 @@ static int sholes_panel_dss_enable(struct omap_dss_device *dssdev)
 		ret |= dsi_vc_dcs_write(EDISCO_CMD_VC, data, 1);
 
 	} else {
+
 		DBG("Panel not installed\n");
 		goto error;
 
 	}
 
+	if (ret)
+		goto error;
+
 	mdelay(200);
 
 	DBG("supplier id: 0x%04x\n", (unsigned int)id);
-
-	if (ret)
-		goto error;
 
 	return 0;
 error:
@@ -440,6 +439,15 @@ static struct omap_dss_driver sholes_panel_dss_driver = {
 	},
 };
 
+static ssize_t show_panel_supplier(struct device *dev,
+				   struct device_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%u",
+			(unsigned int)sholes_panel_read_supplier_id());
+}
+
+static DEVICE_ATTR(panel_supplier, 0644, show_panel_supplier, NULL);
+
 /*=== Driver Interface Functions =======================================*/
 
 static int sholes_panel_set_fod(int *fod_en)
@@ -586,8 +594,16 @@ static int __init sholes_panel_probe(struct platform_device *pdev)
 	gDev->dev = device_create(gDev->cls, gDev->dev, MKDEV(gDev->major, 0),
 							NULL, DEVICE_NAME);
 
+	rc = device_create_file(gDev->dev, &dev_attr_panel_supplier);
+	if (rc < 0) {
+		pr_err("%s:File device creation failed: %d\n", __func__, rc);
+		rc = -ENODEV;
+		goto failed_attribute;
+	}
 	return 0;
 
+failed_attribute:
+	device_remove_file(gDev->dev, &dev_attr_panel_supplier);
 failed_class:
 	unregister_chrdev(gDev->major, DEVICE_NAME);
 failed_chrdev:
@@ -603,6 +619,7 @@ static int sholes_panel_remove(struct platform_device *pdev)
 	DBG("sholes_panel_remove\n");
 
 	if (dsw) {
+		device_remove_file(dsw->dev, &dev_attr_panel_supplier);
 		class_destroy(dsw->cls);
 		unregister_chrdev(dsw->major, DEVICE_NAME);
 		kfree(dsw);

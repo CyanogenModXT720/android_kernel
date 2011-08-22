@@ -1,4 +1,4 @@
-/*
+	/*
  * linux/arch/arm/mach-omap2/board-sholest.c
  *
  * Copyright (C) 2009 Motorola, Inc.
@@ -34,7 +34,6 @@
 #include <linux/wl127x-rfkill.h>
 #include <linux/wl127x-test.h>
 #include <linux/omap_mdm_ctrl.h>
-#include <linux/kxtf9.h>
 
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
@@ -150,7 +149,7 @@ static struct omap_opp sholest_mpu_rate_table[] = {
 	/*OPP4*/
 	{S550M, VDD1_OPP4, 0x38},
 	/*OPP5*/
-	{S720M, VDD1_OPP5, 0x3E},
+	{S600M, VDD1_OPP5, 0x3E},
 };
 
 #define S80M 80000000
@@ -177,7 +176,7 @@ static struct omap_opp sholest_dsp_rate_table[] = {
 	/*OPP4*/
 	{S400M, VDD1_OPP4, 0x38},
 	/*OPP5*/
-	{S520M, VDD1_OPP5, 0x3E},
+	{S430M, VDD1_OPP5, 0x3E},
 };
 
 static void __init sholest_init_irq(void)
@@ -211,7 +210,7 @@ static struct android_usb_platform_data andusb_plat = {
 	.vendor_id      = 0x22b8,
 	.product_id     = 0x41DA,
 	.adb_product_id = 0x41DA,
-	.product_name   = "Milestone XT720",
+	.product_name   = "XT720",
 	.manufacturer_name	= "Motorola",
 	.serial_number		= device_serial,
 };
@@ -226,7 +225,7 @@ static struct platform_device androidusb_device = {
 
 static struct usb_mass_storage_platform_data usbms_plat = {
 	.vendor			= "Motorola",
-	.product		= "Milestone XT720",
+	.product		= "XT720",
 	.release		= 1,
 };
 
@@ -607,7 +606,7 @@ static struct qtouch_ts_platform_data sholest_ts_platform_data = {
 	.abs_max_w	= 15,
 	.x_delta	= 400,
 	.y_delta	= 250,
-	.nv_checksum	= 0xf429,
+	.nv_checksum	= 0x33ef,
 	.boot_i2c_addr	= 0x24,
 	.fw_version	= 0x16, /* for Calibration */
 	.build_version	= 0xab, /* for Calibration */
@@ -804,17 +803,17 @@ static struct lm3530_platform_data omap3430_als_light_data = {
 	.als_config = 0x7B,
 	.brightness_ramp = 0x36,
 	.als_zone_info = 0x00,
-	.als_resistor_sel = 0x31,
+	.als_resistor_sel = 0x22,
 	.brightness_control = 0x00,
-	.zone_boundary_0 = 0x04,
-	.zone_boundary_1 = 0x18,
-	.zone_boundary_2 = 0x2B,
-	.zone_boundary_3 = 0x58,
-	.zone_target_0 = 0x19,
-	.zone_target_1 = 0x31,
-	.zone_target_2 = 0x31,
+	.zone_boundary_0 = 0x07,
+	.zone_boundary_1 = 0x29,
+	.zone_boundary_2 = 0x48,
+	.zone_boundary_3 = 0x94,
+	.zone_target_0 = 0x12,
+	.zone_target_1 = 0x1F,
+	.zone_target_2 = 0x28,
 	.zone_target_3 = 0x31,
-	.zone_target_4 = 0x53,
+	.zone_target_4 = 0x3A,
 	.manual_current = 0x33,
 	.upper_curr_sel = 5,
 	.lower_curr_sel = 2,
@@ -850,6 +849,7 @@ extern struct lis331dlh_platform_data sholest_lis331dlh_data;
 #ifdef CONFIG_MOT_FEAT_LP3907
 extern struct lp3907_platform_data sholest_lp3907_data;
 #endif
+
 static struct i2c_board_info __initdata sholest_i2c_bus2_board_info[] = {
 	{
 		I2C_BOARD_INFO("akm8973", 0x1C),
@@ -861,10 +861,6 @@ static struct i2c_board_info __initdata sholest_i2c_bus2_board_info[] = {
 		.platform_data = &sholest_lis331dlh_data,
 	},
 #endif
-	{
-		I2C_BOARD_INFO("kxtf9", 0x0F),
-		.platform_data = &sholest_kxtf9_data,
-	},
 #ifdef CONFIG_MOT_FEAT_LP3907
 	{
 		I2C_BOARD_INFO("lp3907", 0x61),
@@ -929,7 +925,7 @@ arch_initcall(sholest_i2c_init);
 extern void __init sholest_spi_init(void);
 extern void __init sholest_flash_init(void);
 extern void __init sholest_gpio_iomux_init(void);
-#ifdef CONFIG_MOT_FEAT_MDTV
+#ifdef CONFIG_MOT_FEAT_TDMB
 extern void __init sholest_mdtv_init(void);
 #endif
 
@@ -1801,7 +1797,7 @@ static void __init sholest_init(void)
 	sholest_sgx_init();
 	sholest_power_off_init();
 	sholest_gadget_init();
-#ifdef CONFIG_MOT_FEAT_MDTV
+#ifdef CONFIG_MOT_FEAT_TDMB
 	sholest_mdtv_init();
 #endif
 #if defined(CONFIG_VIDEO_MIPI_DLI_TEST)

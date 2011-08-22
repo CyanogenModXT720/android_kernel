@@ -472,11 +472,9 @@ static int test_ioctl(unsigned int cmd, unsigned long arg)
 					    write_data.value, write_data.mask);
 	break;
 
-#ifdef CONFIG_TTA_CHARGER
 	case CPCAP_IOCTL_TEST_FORCE_TO_DETECT:
 		force_to_detect_usb();
 	break;
-#endif
 
 	default:
 		retval = -ENOTTY;

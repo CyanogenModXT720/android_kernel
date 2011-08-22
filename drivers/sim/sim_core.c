@@ -2103,7 +2103,7 @@ int sim_slim_status_handler()
 			sw1 = sim_module_card_data[0].buffer[bytes_recieved - 2];
 			sw2 = sim_module_card_data[0].buffer[bytes_recieved - 1];
 
-			if(((sw1 == 0x90) || (card_type == GSM_SIM && sw1==0x67)) && (sw2 == 0x00)){
+			if ((((sw1 == 0x90) || (card_type == GSM_SIM && sw1 == 0x67)) && (sw2 == 0x00)) || (sw1 == 0x91)) {
 				sim_low_power_enabled = TRUE;
       
 				/* Allow DMA to ACK idle requests */

@@ -1282,7 +1282,7 @@ static int do_inquiry(struct fsg_dev *fsg, struct fsg_buffhd *bh)
 
 #ifdef CONFIG_USB_MOT_ANDROID
 	u8 *vend_str = "Motorola";
-	u8 *prod_str = "Milestone XT720";
+	u8 *prod_str = "XT720";
 
 	fsg->vendor = vend_str;
 	fsg->product = prod_str;

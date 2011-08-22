@@ -518,7 +518,7 @@ static struct spi_board_info sholest_spi_board_info[] __initdata = {
 		.controller_data = &sholest_cpcap_data,
 		.mode = SPI_CS_HIGH,
 	},
-#ifdef CONFIG_MOT_FEAT_SPI_SMS1130
+#ifdef CONFIG_MOT_FEAT_TDMB_SPI
 	{
 		.modalias = "smsmdtv", /* should match device driver name */
 		.bus_num  = 3,
@@ -749,7 +749,7 @@ void __init sholest_spi_init(void)
 	}
 
 	sholest_tvint.tvint_irq = gpio_to_irq(OMAP_TVINT_GPIO);
-	sholest_cpcap_data.barrel_capability = BARREL_CAP_DETECT_TV_OUT ;
+	sholest_cpcap_data.barrel_capability = BARREL_CAP_DETECT_TV_OUT;
 
 	sholest_spi_board_info[0].irq = irq;
 	spi_register_board_info(sholest_spi_board_info,

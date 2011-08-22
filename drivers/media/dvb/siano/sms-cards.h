@@ -37,6 +37,9 @@
 #define SMS1XXX_BOARD_HAUPPAUGE_TIGER_MINICARD_R2 10
 #define SMS1XXX_BOARD_SIANO_NICE	11
 #define SMS1XXX_BOARD_SIANO_VENICE	12
+#define SMS1XXX_BOARD_SIANO_STELLAR_ROM 13
+#define SMS1XXX_BOARD_ZTE_DVB_DATA_CARD	14
+#define SMS1XXX_BOARD_ONDA_MDTV_DATA_CARD 15
 
 struct sms_board_gpio_cfg {
 	int lna_vhf_exist;
@@ -76,6 +79,10 @@ struct sms_board {
 	char *name, *fw[DEVICE_MODE_MAX];
 	struct sms_board_gpio_cfg board_cfg;
 	enum ir_kb_type ir_kb_type;
+	char intf_num;
+	unsigned int mtu;
+	unsigned int crystal;
+	struct sms_antenna_config_ST* antenna_config;
 };
 
 struct sms_board *sms_get_board(int id);

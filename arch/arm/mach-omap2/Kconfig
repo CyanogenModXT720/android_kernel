@@ -180,10 +180,6 @@ config MACH_OMAP3_PANDORA
 	bool "OMAP3 Pandora"
 	depends on ARCH_OMAP3 && ARCH_OMAP34XX
 
-config MOT_FEAT_MDTV
-	bool "support MDTV system for motorola"
-	default n
-
 config EMU_UART_DEBUG
 	bool "Provide the option of setting MiniUSB port as UART3 to debug kernel"
 	default n

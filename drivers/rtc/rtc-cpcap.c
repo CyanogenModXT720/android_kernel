@@ -338,7 +338,7 @@ int cpcap_rtc_resume(struct platform_device *pdev)
 	rtc = platform_get_drvdata(pdev);
 	cpcap_irq_mask(rtc->cpcap, CPCAP_IRQ_TODA);
 
-       return 0;
+	return 0;
 }
 
 static struct platform_driver cpcap_rtc_driver = {

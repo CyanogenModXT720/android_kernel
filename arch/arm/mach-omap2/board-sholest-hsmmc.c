@@ -135,13 +135,17 @@ static int hsmmc_set_power(struct device *dev, int slot, int power_on,
 	int ret = 0;
 
 	if (power_on) {
+
+		reg = omap_ctrl_readl(OMAP343X_CONTROL_PBIAS_LITE);
+		reg &= ~OMAP2_PBIASLITEPWRDNZ0;
+		omap_ctrl_writel(reg, OMAP343X_CONTROL_PBIAS_LITE);
+		
 		reg = omap_ctrl_readl(OMAP2_CONTROL_DEVCONF0);
 		reg |= OMAP2_MMCSDIO1ADPCLKISEL;
 		omap_ctrl_writel(reg, OMAP2_CONTROL_DEVCONF0);
 
 		reg = omap_ctrl_readl(OMAP343X_CONTROL_PBIAS_LITE);
 		reg &= ~OMAP2_PBIASSPEEDCTRL0;
-		reg &= ~OMAP2_PBIASLITEPWRDNZ0;
 		omap_ctrl_writel(reg, OMAP343X_CONTROL_PBIAS_LITE);
 
 		mutex_lock(&regulator_lock);
@@ -152,17 +156,22 @@ static int hsmmc_set_power(struct device *dev, int slot, int power_on,
 			 * Restore the delay according to MOL original under
 			 * considering relocation of the code within mutex
 			 * context. */
-			msleep(4);
+			msleep(20);
 		}
 		mutex_unlock(&regulator_lock);
 
 		reg = omap_ctrl_readl(OMAP343X_CONTROL_PBIAS_LITE);
-		reg |= OMAP2_PBIASLITEPWRDNZ0;
 		if ((1 << vdd) <= MMC_VDD_165_195)
 			reg &= ~OMAP2_PBIASLITEVMODE0;
 		else
 			reg |= OMAP2_PBIASLITEVMODE0;
 		omap_ctrl_writel(reg, OMAP343X_CONTROL_PBIAS_LITE);
+
+		reg = omap_ctrl_readl(OMAP343X_CONTROL_PBIAS_LITE);
+		reg |= OMAP2_PBIASLITEPWRDNZ0;
+		omap_ctrl_writel(reg, OMAP343X_CONTROL_PBIAS_LITE);
+		
+		dev_err(dev, "PBIAS_LITE(POWER_ON) : 0x%04x \n", reg);
 
 		return ret;
 	} else {
@@ -183,10 +192,18 @@ static int hsmmc_set_power(struct device *dev, int slot, int power_on,
 		mutex_unlock(&regulator_lock);
 
 		reg = omap_ctrl_readl(OMAP343X_CONTROL_PBIAS_LITE);
-		reg |= (OMAP2_PBIASLITEPWRDNZ0 | OMAP2_PBIASLITEVMODE0);
+		
+		/* Set VMODE0 3.3V */
+		reg |= OMAP2_PBIASLITEVMODE0;
 		omap_ctrl_writel(reg, OMAP343X_CONTROL_PBIAS_LITE);
-	}
 
+		/* Always PWRDNZ0 should be zero while power-off - TI suggestion*/
+		reg = omap_ctrl_readl(OMAP343X_CONTROL_PBIAS_LITE);
+		reg &= ~OMAP2_PBIASLITEPWRDNZ0;
+		omap_ctrl_writel(reg, OMAP343X_CONTROL_PBIAS_LITE);
+			
+		dev_err(dev, "PBIAS_LITE(POWER_OFF) : 0x%04x \n", reg);
+	}
 	return 0;
 }
 

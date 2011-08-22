@@ -530,6 +530,10 @@ void omap_sram_idle(void)
 		/* Enable IO-PAD and IO-CHAIN wakeups */
 		prm_set_mod_reg_bits(OMAP3430_EN_IO, WKUP_MOD, PM_WKEN);
 		omap3_enable_io_chain();
+		/* FIXME: This needs to be removed once find proper way
+		 * to put OTG module into standby */
+		cm_rmw_mod_reg_bits(OMAP3430_EN_HSOTGUSB, 0, CORE_MOD,
+				CM_ICLKEN1);
 	}
 
 	/*
@@ -584,6 +588,10 @@ void omap_sram_idle(void)
 		/* Enable smartreflex after WFI */
 		enable_smartreflex(SR1);
 		enable_smartreflex(SR2);
+		/* FIXME: This needs to be removed once find proper way
+		 * to put OTG module into standby */
+		cm_rmw_mod_reg_bits(OMAP3430_EN_HSOTGUSB, OMAP3430_EN_HSOTGUSB,
+				CORE_MOD, CM_ICLKEN1);
 	}
 
 	/* PER */

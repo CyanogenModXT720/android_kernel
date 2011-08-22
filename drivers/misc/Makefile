@@ -26,7 +26,6 @@ obj-$(CONFIG_C2PORT)		+= c2port/
 obj-$(CONFIG_SENSORS_AKM8973)	+= akm8973.o
 obj-$(CONFIG_SENSORS_AKM8973_AKMD)	+= akm8973_akmd.o
 obj-$(CONFIG_SENSORS_LIS331DLH)	+= lis331dlh.o
-obj-$(CONFIG_SENSORS_KXTF9)	+= kxtf9.o
 
 obj-y				+= eeprom/
 obj-y				+= ts27010mux/

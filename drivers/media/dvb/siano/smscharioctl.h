@@ -54,5 +54,6 @@ struct smschar_send_fw_file_ioctl_t {
 #define SMSCHAR_SET_POWER_DOWN _IOW('K', 9, int)
 /*##w21558, to reset device mode*/
 #define SMSCHAR_RESET_DEVICE_MODE _IOW('K', 10, int)
+#define SMSCHAR_CANCEL_POLL		_IO('K', 11)
 
 #endif /* __SMS_CHAR_IOCTL_H__ */

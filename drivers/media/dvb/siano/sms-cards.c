@@ -22,7 +22,7 @@
 
 struct usb_device_id smsusb_id_table[] = {
 	{ USB_DEVICE(0x187f, 0x0010),
-		.driver_info = SMS1XXX_BOARD_SIANO_STELLAR },
+		.driver_info = SMS1XXX_BOARD_SIANO_STELLAR_ROM },
 	{ USB_DEVICE(0x187f, 0x0100),
 		.driver_info = SMS1XXX_BOARD_SIANO_STELLAR },
 	{ USB_DEVICE(0x187f, 0x0200),
@@ -63,6 +63,12 @@ struct usb_device_id smsusb_id_table[] = {
 		.driver_info = SMS1XXX_BOARD_SIANO_NICE },
 	{ USB_DEVICE(0x187f, 0x0301),
 		.driver_info = SMS1XXX_BOARD_SIANO_VENICE },
+	{ USB_DEVICE(0x187f, 0x0302),
+		.driver_info = SMS1XXX_BOARD_SIANO_VENICE },
+	{ USB_DEVICE(0x19D2, 0x0086),
+		.driver_info = SMS1XXX_BOARD_ZTE_DVB_DATA_CARD },
+	{ USB_DEVICE(0x19D2, 0x0078),
+		.driver_info = SMS1XXX_BOARD_ONDA_MDTV_DATA_CARD },
 	{ } /* Terminating entry */
 	};
 
@@ -146,7 +152,28 @@ static struct sms_board sms_boards[] = {
 	[SMS1XXX_BOARD_SIANO_VENICE] = {
 	/* 12 */
 		.name = "Siano Venice Digital Receiver",
-		.type = SMS_VEGA,
+		.type = SMS_VENICE,
+	},
+	[SMS1XXX_BOARD_SIANO_STELLAR_ROM] = {
+	/* 13 */
+		.name =
+		"Siano Stellar Digital Receiver ROM",
+		.type = SMS_STELLAR,
+		.intf_num = 1,
+	},
+	[SMS1XXX_BOARD_ZTE_DVB_DATA_CARD] = {
+	/* 14 */
+		.name = "ZTE Data Card Digital Receiver",
+		.type = SMS_NOVA_B0,
+		.intf_num = 5,
+		.mtu = 15792,
+	},
+	[SMS1XXX_BOARD_ONDA_MDTV_DATA_CARD] = {
+	/* 15 */
+		.name = "ONDA Data Card Digital Receiver",
+		.type = SMS_NOVA_B0,
+		.intf_num = 6,
+		.mtu = 15792,
 	},
 };
 

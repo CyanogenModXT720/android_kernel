@@ -14,7 +14,6 @@
 #ifndef __DISPSW_H__
 #define __DISPSW_H__
 
-#define DEBUG
 #ifdef DEBUG
 #define DBG(format, ...) \
 	printk(KERN_DEBUG "DISPSW: " format, ## __VA_ARGS__)

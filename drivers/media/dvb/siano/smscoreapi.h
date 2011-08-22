@@ -2,7 +2,7 @@
 
 Siano Mobile Silicon, Inc.
 MDTV receiver kernel modules.
-Copyright (C) 2006-2008, Uri Shkolnik
+ Copyright (C) 2006-2010, Erez Cohen
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -57,10 +57,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define SMS_DEVICE_NOT_READY					0x8000000
 
 enum sms_device_type_st {
+	SMS_UNKNOWN_TYPE = -1,
 	SMS_STELLAR = 0,
 	SMS_NOVA_A0,
 	SMS_NOVA_B0,
 	SMS_VEGA,
+	SMS_VENICE,
 	SMS_NUM_OF_DEVICE_TYPES
 };
 
@@ -151,7 +153,7 @@ struct smscore_device_t {
 
 	/* host <--> device messages */
 	struct completion version_ex_done, data_download_done, trigger_done;
-	struct completion init_device_done, reload_start_done, resume_done;
+	struct completion init_device_done, reload_start_done, resume_done, device_ready_done;
 	struct completion gpio_configuration_done, gpio_set_level_done;
 	struct completion gpio_get_level_done, ir_init_done;
 
@@ -203,6 +205,8 @@ struct smscore_device_t {
 #define MSG_SMS_GPIO_SET_LEVEL_RES			510
 #define MSG_SMS_GPIO_GET_LEVEL_REQ			511
 #define MSG_SMS_GPIO_GET_LEVEL_RES			512
+#define MSG_SMS_SET_MAX_TX_MSG_LEN_REQ			516
+#define MSG_SMS_SET_MAX_TX_MSG_LEN_RES			517
 #define MSG_SMS_RF_TUNE_REQ				561
 #define MSG_SMS_RF_TUNE_RES				562
 #define MSG_SMS_INIT_DEVICE_REQ				578
@@ -217,6 +221,8 @@ struct smscore_device_t {
 #define MSG_SMS_HO_PER_SLICES_IND			630
 #define MSG_SMS_SET_ANTENNA_CONFIG_REQ			651
 #define MSG_SMS_SET_ANTENNA_CONFIG_RES			652
+#define MSG_SMS_GET_STATISTICS_EX_REQ			653
+#define MSG_SMS_GET_STATISTICS_EX_RES			654
 #define MSG_SMS_SLEEP_RESUME_COMP_IND			655
 #define MSG_SMS_DATA_DOWNLOAD_REQ			660
 #define MSG_SMS_DATA_DOWNLOAD_RES			661
@@ -244,12 +250,16 @@ struct smscore_device_t {
 #define MSG_SMS_ISDBT_TUNE_REQ				776
 #define MSG_SMS_ISDBT_TUNE_RES				777
 #define MSG_SMS_TRANSMISSION_IND			782
+#define	MSG_SMS_NEW_CRYSTAL_REQ				794
+#define	MSG_SMS_NEW_CRYSTAL_RES				795
 #define MSG_SMS_START_IR_REQ				800
 #define MSG_SMS_START_IR_RES				801
 #define MSG_SMS_IR_SAMPLES_IND				802
+#define MSG_SMS_INTERFACE_LOCK_IND			805
+#define MSG_SMS_INTERFACE_UNLOCK_IND		806
 #define MSG_SMS_SIGNAL_DETECTED_IND			827
 #define MSG_SMS_NO_SIGNAL_IND				828
-
+#define MSG_SMS_DEVICE_READY_IND			872
 
 #define SMS_INIT_MSG_EX(ptr, type, src, dst, len) do { \
 	(ptr)->msgType = type; (ptr)->msgSrcId = src; (ptr)->msgDstId = dst; \
@@ -282,6 +292,17 @@ enum SMS_DEVICE_MODE {
 	DEVICE_MODE_MAX,
 };
 
+//shouldn't these two structs be inside the gpio_config (sms-cards.h)?
+struct sms_antenna_freq_domains_ST {
+	int bottom_freq;
+	int top_freq;
+};
+
+struct sms_antenna_config_ST {
+	int pinNum[2];
+	struct sms_antenna_freq_domains_ST freq_domains[4];
+};
+
 struct SmsMsgHdr_ST {
 	u16 msgType;
 	u8 msgSrcId;
@@ -304,6 +325,11 @@ struct SmsDataDownload_ST {
 	struct SmsMsgHdr_ST xMsgHeader;
 	u32 MemAddr;
 	u8 Payload[SMS_MAX_PAYLOAD_SIZE];
+};
+
+struct SmsMsgAntennaConfig_ST {
+	struct SmsMsgHdr_ST xMsgHeader;
+	struct sms_antenna_config_ST msgData;	
 };
 
 struct SmsVersionRes_ST {
@@ -341,7 +367,8 @@ struct SmsFirmware_ST {
 };
 
 /* Statistics information returned as response for SmsHostApiGetStatistics_Req*/
-struct SMSHOSTLIB_STATISTICS_S {
+struct SMSHOSTLIB_STATISTICS_S 
+{
 	u32 Reserved;		/*!< Reserved*/
 
 	/* Common parameters*/
@@ -403,8 +430,10 @@ struct SMSHOSTLIB_STATISTICS_S {
 	u32 ReservedFields[10];	/*!< Reserved*/
 };
 
-struct PID_STATISTICS_DATA_S {
-	struct PID_BURST_S {
+struct PID_STATISTICS_DATA_S 
+{
+	struct PID_BURST_S 
+        {
 		u32	size;
 		u32	padding_cols;
 		u32	punct_cols;
@@ -418,7 +447,8 @@ struct PID_STATISTICS_DATA_S {
 	u32  tot_cor_tbl;
 };
 
-struct PID_DATA_S {
+struct PID_DATA_S 
+{
 	u32 pid;
 	u32 num_rows;
 	struct PID_STATISTICS_DATA_S pid_statistics;
@@ -427,16 +457,12 @@ struct PID_DATA_S {
 #define CORRECT_STAT_RSSI(_stat) ((_stat).RSSI *= (-1))
 #define CORRECT_STAT_BANDWIDTH(_stat) _stat.Bandwidth = (8 - (_stat.Bandwidth))
 #define CORRECT_STAT_TRANSMISSON_MODE(_stat) \
-	do { \
-	if (_stat.TransmissionMode == 0) \
-		_stat.TransmissionMode = 2; \
-	else if (_stat.TransmissionMode == 1) \
-		_stat.TransmissionMode = 8; \
-	else \
-		_stat.TransmissionMode = 4; \
-	} while (0);
+	if(_stat.TransmissionMode == 0) _stat.TransmissionMode = 2; \
+	else if(_stat.TransmissionMode == 1) _stat.TransmissionMode = 8; \
+		else _stat.TransmissionMode = 4;
 
-struct TRANSMISSION_STATISTICS_S {
+struct TRANSMISSION_STATISTICS_S 
+{
 	u32 Frequency;		/*!< Frequency in Hz*/
 	u32 Bandwidth;		/*!< Bandwidth in MHz*/
 	u32 TransmissionMode;	/*!< FFT mode carriers in Kilos*/
@@ -453,7 +479,8 @@ struct TRANSMISSION_STATISTICS_S {
 	u32 IsDemodLocked;	/*!< 0 - not locked, 1 - locked*/
 };
 
-struct RECEPTION_STATISTICS_S {
+struct RECEPTION_STATISTICS_S 
+{
 	u32 IsRfLocked;		/*!< 0 - not locked, 1 - locked*/
 	u32 IsDemodLocked;	/*!< 0 - not locked, 1 - locked*/
 	u32 IsExternalLNAOn;	/*!< 0 - external LNA off, 1 - external LNA on*/
@@ -489,6 +516,67 @@ struct SMSHOSTLIB_STATISTICS_DVB_S {
 #define	SRVM_MAX_PID_FILTERS		8
 	struct PID_DATA_S PidData[SRVM_MAX_PID_FILTERS];
 };
+
+struct SMSHOSTLIB_ISDBT_LAYER_STAT_S
+{
+	// Per-layer information
+	u32 CodeRate;			//!< Code Rate from SMSHOSTLIB_CODE_RATE_ET, 255 means layer does not exist
+	u32 Constellation;		//!< Constellation from SMSHOSTLIB_CONSTELLATION_ET, 255 means layer does not exist
+	u32 BER;			//!< Post Viterbi BER [1E-5], 0xFFFFFFFF indicate N/A
+	u32 BERErrorCount;		//!< Post Viterbi Error Bits Count
+	u32 BERBitCount;		//!< Post Viterbi Total Bits Count
+	u32 PreBER; 			//!< Pre Viterbi BER [1E-5], 0xFFFFFFFF indicate N/A
+	u32 TS_PER;			//!< Transport stream PER [%], 0xFFFFFFFF indicate N/A
+	u32 ErrorTSPackets;		//!< Number of erroneous transport-stream packets
+	u32 TotalTSPackets;		//!< Total number of transport-stream packets
+	u32 TILdepthI;			//!< Time interleaver depth I parameter, 255 means layer does not exist
+	u32 NumberOfSegments;		//!< Number of segments in layer A, 255 means layer does not exist
+	u32 TMCCErrors;			//!< TMCC errors
+};
+
+struct SMSHOSTLIB_STATISTICS_ISDBT_S
+{
+	u32 StatisticsType;			//!< Enumerator identifying the type of the structure.  Values are the same as SMSHOSTLIB_DEVICE_MODES_E
+	//!< This field MUST always first in any statistics structure
+
+	u32 FullSize;				//!< Total size of the structure returned by the modem.  If the size requested by
+	//!< the host is smaller than FullSize, the struct will be truncated
+
+	// Common parameters
+	u32 IsRfLocked;				//!< 0 - not locked, 1 - locked
+	u32 IsDemodLocked;			//!< 0 - not locked, 1 - locked
+	u32 IsExternalLNAOn;			//!< 0 - external LNA off, 1 - external LNA on
+
+	// Reception quality
+	s32  SNR;				//!< dB
+	s32  RSSI;				//!< dBm
+	s32  InBandPwr;				//!< In band power in dBM
+	s32  CarrierOffset;			//!< Carrier Offset in Hz
+
+	// Transmission parameters
+	u32 Frequency;				//!< Frequency in Hz
+	u32 Bandwidth;				//!< Bandwidth in MHz
+	u32 TransmissionMode;			//!< ISDB-T transmission mode
+	u32 ModemState;				//!< 0 - Acquisition, 1 - Locked
+	u32 GuardInterval;			//!< Guard Interval, 1 divided by value
+	u32 SystemType;				//!< ISDB-T system type (ISDB-T / ISDB-Tsb)
+	u32 PartialReception;			//!< TRUE - partial reception, FALSE otherwise
+	u32 NumOfLayers;			//!< Number of ISDB-T layers in the network
+	u32 SegmentNumber;			//!< Segment number for ISDB-Tsb
+	u32 TuneBW;				//!< Tuned bandwidth - BW_ISDBT_1SEG / BW_ISDBT_3SEG
+
+	// Per-layer information
+	// Layers A, B and C
+	struct SMSHOSTLIB_ISDBT_LAYER_STAT_S	LayerInfo[3];	//!< Per-layer statistics, see struct SMSHOSTLIB_ISDBT_LAYER_STAT_S
+
+	// Interface information
+	u32 SmsToHostTxErrors;		//!< Total number of transmission errors.
+
+	// Proprietary information	
+	u32 ExtAntenna;
+
+};
+
 
 struct SRVM_SIGNAL_STATUS_S {
 	u32 result;
@@ -562,6 +650,8 @@ extern int smscore_load_firmware(struct smscore_device_t *coredev,
 
 extern int smscore_set_device_mode(struct smscore_device_t *coredev, int mode);
 extern int smscore_get_device_mode(struct smscore_device_t *coredev);
+
+extern int smscore_configure_board(struct smscore_device_t *coredev);
 /*##w21558, Added*/
 extern int smscore_reset_device_mode(struct smscore_device_t *coredev);
 

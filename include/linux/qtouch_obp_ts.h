@@ -62,10 +62,10 @@ enum {
 	QTM_OBJ_SPT_CTE_CONFIG		= 28,
 	QTM_OBJ_NOISESUPPRESSION_1  = 36,
 	QTM_OBJ_DEBUG_DIAGNOSTIC        = 37,
-	QTM_OBJ_CPT_USERDATA            = 38,
+	QTM_OBJ_SPT_USERDATA            = 38,
 
 	/* Max number of objects currently defined */
-	QTM_OBP_MAX_OBJECT_NUM = QTM_OBJ_CPT_USERDATA + 1,
+	QTM_OBP_MAX_OBJECT_NUM = QTM_OBJ_SPT_USERDATA + 1,
 };
 
 /* OBP structures as defined by the wire protocol. */
@@ -159,6 +159,7 @@ struct qtm_gen_cmd_proc {
 	uint8_t			backupnv;
 	uint8_t			calibrate;
 	uint8_t			reportall;
+	uint8_t			rsvd;
 	uint8_t			debugctrl;
 } __attribute__ ((packed));
 
@@ -360,7 +361,7 @@ struct qtm_proci_noise1_suppression_cfg {
 	uint8_t			duty_cycle;
 } __attribute__ ((packed));
 
-/* QTM_OBJ_CPT_USERDATA_T38 */
+/* QTM_OBJ_SPT_USERDATA_T38 */
 struct qtm_spt_userdata {
 	uint8_t			data_0;
 	uint8_t			data_1;

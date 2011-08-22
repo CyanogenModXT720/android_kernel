@@ -291,7 +291,7 @@ restore:
 l2_inv_api_params:
 	.word   0x1, 0x00
 write_aux_control_params:
-        .word   0x1, 0xe2
+	.word   0x1, 0xe2
 l2_inv_gp:
 	/* Execute smi to invalidate L2 cache */
 	mov r12, #0x1                         @ set up to invalide L2

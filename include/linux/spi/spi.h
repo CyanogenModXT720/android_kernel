@@ -803,7 +803,7 @@ spi_unregister_device(struct spi_device *spi)
 		device_unregister(&spi->dev);
 }
 
-#ifdef CONFIG_MOT_FEAT_SPI_SMS1130
+#ifdef CONFIG_MOT_FEAT_TDMB_SPI
 struct spi_device *spi_get_spi_device(char *modalias);
 #endif
 

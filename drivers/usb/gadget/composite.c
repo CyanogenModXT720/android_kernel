@@ -271,7 +271,7 @@ static int config_buf(struct usb_configuration *config,
 			descriptors = f->hs_descriptors;
 		else
 			descriptors = f->descriptors;
-		if (!descriptors) {
+		if (f->hidden || !descriptors || descriptors[0] == NULL) {
 #ifndef CONFIG_USB_MOT_ANDROID
 			for (; f != config->interface[interfaceCount];) {
 				interfaceCount++;
@@ -777,11 +777,11 @@ composite_setup(struct usb_gadget *gadget, const struct usb_ctrlrequest *ctrl)
 	case USB_REQ_GET_CONFIGURATION:
 		if (ctrl->bRequestType != USB_DIR_IN)
 			goto unknown;
-		if (cdev->config)
+		if (cdev->config) {
 			*(u8 *)req->buf = cdev->config->bConfigurationValue;
-		else
+			value = min(w_length, (u16) 1);
+		} else
 			*(u8 *)req->buf = 0;
-		value = min(w_length, (u16) 1);
 		break;
 
 	/* function drivers must handle get/set altsetting; if there's
@@ -860,7 +860,7 @@ unknown:
 		 * setconfiguration such as MTP, USBNET.
 		 */
 
-		{
+		if (value < 0) {
 			struct usb_configuration        *cfg;
 
 			list_for_each_entry(cfg, &cdev->configs, list) {
@@ -1004,8 +1004,7 @@ static int __init composite_bind(struct usb_gadget *gadget)
 	cdev->bufsiz = USB_BUFSIZ;
 	cdev->driver = composite;
 
-	/* Do not Set Self Powered as WHQL tests are failing on Win7 */
-	/* usb_gadget_set_selfpowered(gadget); */
+	usb_gadget_set_selfpowered(gadget);
 
 	/* interface and string IDs start at zero via kzalloc.
 	 * we force endpoints to start unassigned; few controller

@@ -528,7 +528,7 @@ u32 MGRWRAP_RegisterObject(union Trapped_Args *args)
 	if (DSP_FAILED(status))
 		goto func_end;
 	pathSize = strlen_user((char *)
-				args->ARGS_MGR_REGISTEROBJECT.pszPathName);
+				args->ARGS_MGR_REGISTEROBJECT.pszPathName) + 1;
 	pszPathName = MEM_Alloc(pathSize, MEM_NONPAGED);
 	if (!pszPathName)
 		goto func_end;
@@ -539,7 +539,6 @@ u32 MGRWRAP_RegisterObject(union Trapped_Args *args)
 		status = DSP_EPOINTER;
 		goto func_end;
 	}
-	pszPathName[pathSize] = '\0';
 
 	GT_1trace(WCD_debugMask, GT_ENTER,
 		 "MGRWRAP_RegisterObject: entered pg2hMsg "

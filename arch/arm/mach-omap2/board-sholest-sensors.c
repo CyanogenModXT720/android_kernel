@@ -19,7 +19,6 @@
 #ifdef CONFIG_SENSORS_LIS331DLH
 #include <linux/lis331dlh.h>
 #endif
-#include <linux/kxtf9.h>
 #include <linux/delay.h>
 #include <linux/regulator/consumer.h>
 #include <linux/vib-gpio.h>
@@ -45,7 +44,6 @@
 #define SHOLEST_AKM8973_INT_GPIO	175
 #define SHOLEST_AKM8973_RESET_GPIO	28
 #define SHOLEST_VIBRATOR_GPIO		181
-#define SHOLEST_KXTF9_INT_GPIO          22
 #ifdef CONFIG_VIB_PWM
 #define SHOLEST_VIBRATOR_EN_GPIO	9
 #define SHOLEST_LVIBRATOR_PERIOD	5714
@@ -312,113 +310,6 @@ struct lis331dlh_platform_data sholest_lis331dlh_data = {
 };
 #endif
 
-static struct regulator *sholest_kxtf9_regulator;
-static int sholest_kxtf9_initialization(void)
-{
-       struct regulator *reg;
-       reg = regulator_get(NULL, "vhvio");
-       if (IS_ERR(reg))
-		return PTR_ERR(reg);
-       sholest_kxtf9_regulator = reg;
-       return 0;
-}
-
-static void sholest_kxtf9_exit(void)
-{
-       regulator_put(sholest_kxtf9_regulator);
-}
-
-static int sholest_kxtf9_power_on(void)
-{
-       return regulator_enable(sholest_kxtf9_regulator);
-}
-
-static int sholest_kxtf9_power_off(void)
-{
-       if (sholest_kxtf9_regulator)
-		return regulator_disable(sholest_kxtf9_regulator);
-       return 0;
-}
-
-struct kxtf9_platform_data sholest_kxtf9_data = {
-       .init = sholest_kxtf9_initialization,
-       .exit = sholest_kxtf9_exit,
-       .power_on = sholest_kxtf9_power_on,
-       .power_off = sholest_kxtf9_power_off,
-
-       .min_interval  = 2,
-       .poll_interval = 200,
-
-       .g_range = KXTF9_G_8G,
-
-       .axis_map_x = 0,
-       .axis_map_y = 1,
-       .axis_map_z = 2,
-
-       .negate_x = 1,
-       .negate_y = 0,
-       .negate_z = 1,
-
-       .data_odr_init	       = ODR12_5,
-       .ctrl_reg1_init         = RES_12BIT | KXTF9_G_2G | TPE | WUFE | TDTE,
-       .int_ctrl_init	       = IEA | IEN,
-       .tilt_timer_init        = 0x03,
-       .engine_odr_init        = OTP12_5 | OWUF50 | OTDT400,
-       .wuf_timer_init         = 0x0A,
-       .wuf_thresh_init        = 0x20,
-       .tdt_timer_init         = 0x78,
-       .tdt_h_thresh_init      = 0xB6,
-       .tdt_l_thresh_init      = 0x1A,
-       .tdt_tap_timer_init     = 0xA2,
-       .tdt_total_timer_init   = 0x24,
-       .tdt_latency_timer_init = 0x28,
-       .tdt_window_timer_init  = 0xA0,
-
-       .gpio = SHOLEST_KXTF9_INT_GPIO,
-       .gesture = 0,
-};
-
-static void __init sholest_kxtf9_init(void)
-{
-#ifdef CONFIG_ARM_OF
-       struct device_node *node;
-       const void *prop;
-       int len = 0;
-
-       node = of_find_node_by_path(DT_PATH_ACCELEROMETER);
-       if (node) {
-		prop = of_get_property(node,
-		       DT_PROP_ACCELEROMETER_AXIS_MAP_X, &len);
-		if (prop && len)
-			sholest_kxtf9_data.axis_map_x = *(u8 *)prop;
-	       prop = of_get_property(node,
-			DT_PROP_ACCELEROMETER_AXIS_MAP_Y, &len);
-		if (prop && len)
-			sholest_kxtf9_data.axis_map_y = *(u8 *)prop;
-	       prop = of_get_property(node,
-			DT_PROP_ACCELEROMETER_AXIS_MAP_Z, &len);
-	       if (prop && len)
-			sholest_kxtf9_data.axis_map_z = *(u8 *)prop;
-	       prop = of_get_property(node,
-			DT_PROP_ACCELEROMETER_NEGATE_X, &len);
-	       if (prop && len)
-			sholest_kxtf9_data.negate_x = *(u8 *)prop;
-	       prop = of_get_property(node,
-			DT_PROP_ACCELEROMETER_NEGATE_Y, &len);
-	       if (prop && len)
-			sholest_kxtf9_data.negate_y = *(u8 *)prop;
-	       prop = of_get_property(node,
-			DT_PROP_ACCELEROMETER_NEGATE_Z, &len);
-	       if (prop && len)
-			sholest_kxtf9_data.negate_z = *(u8 *)prop;
-	       of_node_put(node);
-       }
-#endif
-       gpio_request(SHOLEST_KXTF9_INT_GPIO, "kxtf9 accelerometer int");
-       gpio_direction_input(SHOLEST_KXTF9_INT_GPIO);
-       omap_cfg_reg(AF9_34XX_GPIO22_DOWN);
-}
-
 static void __init sholest_akm8973_init(void)
 {
 	gpio_request(SHOLEST_AKM8973_RESET_GPIO, "akm8973 reset");
@@ -429,15 +320,6 @@ static void __init sholest_akm8973_init(void)
 	gpio_direction_input(SHOLEST_AKM8973_INT_GPIO);
 	omap_cfg_reg(AC3_34XX_GPIO175);
 }
-
-struct platform_device kxtf9_platform_device = {
-	.name = "kxtf9",
-	.id = -1,
-	.dev = {
-		.platform_data = &sholest_kxtf9_data,
-	},
-};
-
 
 struct platform_device sfh7743_platform_device = {
 	.name = "sfh7743",
@@ -469,7 +351,6 @@ static void sholest_vibrator_init(void)
 }
 
 static struct platform_device *sholest_sensors[] __initdata = {
-	&kxtf9_platform_device,
 	&sfh7743_platform_device,
 	&omap3430_hall_effect_dock,
 	&sholest_vib_gpio,
@@ -491,7 +372,6 @@ static void sholest_hall_effect_init(void)
 
 void __init sholest_sensors_init(void)
 {
-	sholest_kxtf9_init();
 	sholest_sfh7743_init();
 	sholest_hall_effect_init();
 	sholest_vibrator_init();

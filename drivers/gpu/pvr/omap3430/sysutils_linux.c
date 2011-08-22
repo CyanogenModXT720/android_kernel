@@ -238,6 +238,9 @@ IMG_VOID DisableSGXClocks(SYS_DATA *psSysData)
 		return;
 	}
 
+	/* unpin the memory bus */
+	omap_pm_set_min_bus_tput(&gpsPVRLDMDev->dev, OCP_INITIATOR_AGENT, 0);
+
 	PVR_DPF((PVR_DBG_MESSAGE, "DisableSGXClocks: Disabling SGX Clocks"));
 
 	if (psSysSpecData->psSGX_ICK)

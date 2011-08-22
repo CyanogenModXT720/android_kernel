@@ -193,6 +193,7 @@ unsigned char is_emu_accessory(void)
 		return 0;  
 }
 EXPORT_SYMBOL(is_emu_accessory);
+#endif
 
 void force_to_detect_usb(void)
 {
@@ -218,7 +219,6 @@ void force_to_detect_usb(void)
 }
 EXPORT_SYMBOL(force_to_detect_usb);
 
-#endif
 static int get_sense(struct cpcap_usb_det_data *data)
 {
 	int retval = -EFAULT;
@@ -304,7 +304,6 @@ static int configure_hardware(struct cpcap_usb_det_data *data,
 				    (CPCAP_BIT_DP150KPU | CPCAP_BIT_DP1K5PU |
 				     CPCAP_BIT_DM1K5PU | CPCAP_BIT_DPPD |
 				     CPCAP_BIT_DMPD));
-#ifdef CONFIG_TTA_CHARGER
 	get_sense(data);
 	if (!(data->sense_tta.dplus)) {
 		retval |= cpcap_regacc_write(data->cpcap, CPCAP_REG_USBC3,
@@ -321,7 +320,6 @@ static int configure_hardware(struct cpcap_usb_det_data *data,
 				CPCAP_BIT_DM1K5PU | CPCAP_BIT_DPPD |
 				CPCAP_BIT_DMPD));
 	}
-#endif
 
 	switch (accy) {
 	case CPCAP_ACCY_USB:
