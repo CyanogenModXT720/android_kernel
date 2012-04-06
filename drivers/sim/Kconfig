@@ -1,0 +1,4 @@
+menuconfig SIM
+	tristate "SIM support"
+	help
+	  Say Y here to enable SIM support.
