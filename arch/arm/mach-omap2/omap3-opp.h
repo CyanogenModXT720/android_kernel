@@ -4,6 +4,7 @@
 #include <mach/omap-pm.h>
 
 /* MPU speeds */
+#define S800M   800000000
 #define S720M   720000000
 #define S600M   600000000
 #define S550M   550000000
@@ -32,9 +33,9 @@ static struct omap_opp omap3_mpu_rate_table[] = {
 	/*OPP3*/
 	{S500M, VDD1_OPP3, 0x30},
 	/*OPP4*/
-	{S550M, VDD1_OPP4, 0x36},
+	{S600M, VDD1_OPP4, 0x36},
 	/*OPP5*/
-	{S720M, VDD1_OPP5, 0x3C},
+	{S800M, VDD1_OPP5, 0x3C},
 };
 
 static struct omap_opp omap3_l3_rate_table[] = {

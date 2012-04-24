@@ -220,9 +220,9 @@ const struct omap_opp  vdd1_rate_table_bridge[] = {
 	/*OPP3*/
 	{S500M, VDD1_OPP3, 0},
 	/*OPP4*/
-	{S550M, VDD1_OPP4, 0},
+	{S600M, VDD1_OPP4, 0},
 	/*OPP5*/
-	{S720M, VDD1_OPP5, 0},
+	{S800M, VDD1_OPP5, 0},
 };
 #endif
 #endif
