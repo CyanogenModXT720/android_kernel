@@ -38,6 +38,7 @@
 
 /* OMAP HSMMC Host Controller Registers */
 #define OMAP_HSMMC_SYSCONFIG	0x0010
+#define OMAP_HSMMC_SYSSTATUS	0x0014
 #define OMAP_HSMMC_CON		0x002C
 #define OMAP_HSMMC_BLK		0x0104
 #define OMAP_HSMMC_ARG		0x0108
@@ -93,6 +94,10 @@
 #define DUAL_VOLT_OCR_BIT	7
 #define SRC			(1 << 25)
 #define SRD			(1 << 26)
+#define RESETDONE		(1 << 0)
+
+#define VDD1_OPP3_FREQ		500000000
+#define VDD1_OPP1_FREQ		125000000
 
 /*
  * FIXME: Most likely all the data using these _DEVID defines should come
@@ -136,6 +141,7 @@ struct mmc_omap_host {
 	struct	clk		*dbclk;
 	struct	semaphore	sem;
 	struct	work_struct	mmc_carddetect_work;
+	struct  work_struct	mmc_opp_set_work;
 	void	__iomem		*base;
 	resource_size_t		mapbase;
 	spinlock_t		irq_lock;	/* Prevent races with irq handler */
@@ -155,15 +161,50 @@ struct mmc_omap_host {
 	int			slot_id;
 	int			dbclk_enabled;
 	int 			clks_enabled;
+	unsigned		off_counter;
 	/* Clocks lock to prevent race condition */
 	spinlock_t		clk_lock;
 	struct timer_list	inact_timer;
 	struct	omap_mmc_platform_data	*pdata;
 };
 
+struct omap_hsmmc_regs {
+	u32 hctl;
+	u32 capa;
+	u32 sysconfig;
+	u32 ise;
+	u32 ie;
+	u32 con;
+	u32 sysctl;
+};
+static struct omap_hsmmc_regs hsmmc_ctx[3];
+
+static void omap2_hsmmc_save_ctx(struct mmc_omap_host *host)
+{
+	/* MMC : context save */
+	hsmmc_ctx[host->id].hctl = OMAP_HSMMC_READ(host->base, HCTL);
+	hsmmc_ctx[host->id].capa = OMAP_HSMMC_READ(host->base, CAPA);
+	hsmmc_ctx[host->id].ise = OMAP_HSMMC_READ(host->base, ISE);
+	hsmmc_ctx[host->id].ie = OMAP_HSMMC_READ(host->base, IE);
+	hsmmc_ctx[host->id].con = OMAP_HSMMC_READ(host->base, CON);
+	hsmmc_ctx[host->id].sysctl = OMAP_HSMMC_READ(host->base, SYSCTL);
+}
+
+static void omap2_hsmmc_restore_ctx(struct mmc_omap_host *host)
+{
+	/* MMC : context restore */
+	OMAP_HSMMC_WRITE(host->base, HCTL, hsmmc_ctx[host->id].hctl);
+	OMAP_HSMMC_WRITE(host->base, CAPA, hsmmc_ctx[host->id].capa);
+	OMAP_HSMMC_WRITE(host->base, CON, hsmmc_ctx[host->id].con);
+	OMAP_HSMMC_WRITE(host->base, ISE, hsmmc_ctx[host->id].ise);
+	OMAP_HSMMC_WRITE(host->base, IE, hsmmc_ctx[host->id].ie);
+	OMAP_HSMMC_WRITE(host->base, SYSCTL, hsmmc_ctx[host->id].sysctl);
+	OMAP_HSMMC_WRITE(host->base, HCTL, OMAP_HSMMC_READ(host->base,
+		HCTL) | SDBP);
+}
 static int omap_hsmmc_enable_clks(struct mmc_omap_host *host)
 {
-	unsigned long flags;
+	unsigned long flags, timeout;
 	int ret = 0;
 
 	spin_lock_irqsave(&host->clk_lock, flags);
@@ -196,6 +237,24 @@ static int omap_hsmmc_enable_clks(struct mmc_omap_host *host)
 				host->dbclk_enabled = 1;
 	}
 
+	if (!(host->pdata->context_loss) ||
+		(host->pdata->context_loss(host->dev) != host->off_counter)) {
+			/* Coming out of OFF:
+			 * The SRA bit of SYSCTL reg has a wrong reset
+			 * value.
+			 * The bit resets automatically in subsequent
+			 * reads. Idealy it should have been 0 as per
+			 * the reset value of the register.
+			 * Wait for the reset to complete */
+			timeout = jiffies +
+				msecs_to_jiffies(MMC_TIMEOUT_MS);
+			while ((OMAP_HSMMC_READ(host->base, SYSSTATUS)
+				& RESETDONE) != RESETDONE
+				&& time_before(jiffies, timeout))
+				;
+			omap2_hsmmc_restore_ctx(host);
+	}
+
 done:
 	spin_unlock_irqrestore(&host->clk_lock, flags);
 	return ret;
@@ -217,6 +276,9 @@ static void omap_hsmmc_disable_clks(struct mmc_omap_host *host)
 	if (!host->clks_enabled)
 		goto done;
 
+	omap2_hsmmc_save_ctx(host);
+	if (host->pdata->context_loss)
+		host->off_counter = host->pdata->context_loss(host->dev);
 	clk_disable(host->fclk);
 	clk_disable(host->iclk);
 	host->clks_enabled = 0;
@@ -426,6 +488,7 @@ omap_hsmmc_inact_timer(unsigned long data)
 	struct mmc_omap_host *host = (struct mmc_omap_host *) data;
 
 	omap_hsmmc_disable_clks(host);
+	schedule_work(&host->mmc_opp_set_work);
 }
 
 /*
@@ -671,6 +734,14 @@ static void mmc_omap_detect(struct work_struct *work)
 	}
 }
 
+static void mmc_omap_opp_setup(struct work_struct *work)
+{
+	struct mmc_omap_host *host = container_of(work, struct mmc_omap_host,
+		mmc_opp_set_work);
+
+	if (host->pdata->set_vdd1_opp)
+		host->pdata->set_vdd1_opp(host->dev, VDD1_OPP1_FREQ);
+}
 /*
  * ISR for handling card insertion and removal
  */
@@ -894,10 +965,14 @@ static void omap_mmc_request(struct mmc_host *mmc, struct mmc_request *req)
 	WARN_ON(host->mrq != NULL);
 	host->mrq = req;
 
+	if (!host->clks_enabled)
+		if (host->pdata->set_vdd1_opp)
+			host->pdata->set_vdd1_opp(host->dev, VDD1_OPP3_FREQ);
 	del_timer_sync(&host->inact_timer);
 	omap_hsmmc_enable_clks(host);
 
 	mmc_omap_prepare_data(host, req);
+	del_timer_sync(&host->inact_timer);
 	mmc_omap_start_command(host, req->cmd, req->data);
 }
 
@@ -1123,6 +1198,7 @@ static int __init omap_mmc_probe(struct platform_device *pdev)
 #endif
 	platform_set_drvdata(pdev, host);
 	INIT_WORK(&host->mmc_carddetect_work, mmc_omap_detect);
+	INIT_WORK(&host->mmc_opp_set_work, mmc_omap_opp_setup);
 
 	mmc->ops	= &mmc_omap_ops;
 	mmc->f_min	= 400000;
@@ -1136,6 +1212,9 @@ static int __init omap_mmc_probe(struct platform_device *pdev)
 	init_timer(&host->inact_timer);
 	host->inact_timer.function = omap_hsmmc_inact_timer;
 	host->inact_timer.data = (unsigned long) host;
+
+	host->clks_enabled = 0;
+	host->off_counter = 0;
 
 	host->clks_enabled = 0;
 	host->iclk = clk_get(&pdev->dev, "mmchs_ick");
