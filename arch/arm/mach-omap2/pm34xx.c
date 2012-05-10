@@ -1092,6 +1092,9 @@ void omap3_pm_off_mode_enable(int enable)
 #endif
 	list_for_each_entry(pwrst, &pwrst_list, node) {
 		pwrst->next_state = state;
+		/* Do not change mpu power state */
+		if (!strcmp(pwrst->pwrdm->name, "mpu_pwrdm"))
+			continue;
 		/* Temporarily disable PER OFF mode*/
 		if (!strcmp(pwrst->pwrdm->name, "per_pwrdm"))
 			pwrst->next_state = PWRDM_POWER_RET;
@@ -1155,6 +1158,7 @@ void omap3_set_prm_setup_vc(struct prm_setup_vc *setup_vc)
 static int __init pwrdms_setup(struct powerdomain *pwrdm, void *unused)
 {
 	struct power_state *pwrst;
+	u32 pwr_state;
 
 	if (!pwrdm->pwrsts)
 		return 0;
@@ -1164,6 +1168,13 @@ static int __init pwrdms_setup(struct powerdomain *pwrdm, void *unused)
 		return -ENOMEM;
 	pwrst->pwrdm = pwrdm;
 	pwrst->next_state = PWRDM_POWER_RET;
+	pwr_state = pwrst->next_state;
+
+	/* set mpu power state for SMC */
+	if (!strcmp(pwrst->pwrdm->name, "mpu_pwrdm") &&
+		omap_type() != OMAP2_DEVICE_TYPE_GP)
+			pwr_state = PWRDM_POWER_ON;
+
 	list_add(&pwrst->node, &pwrst_list);
 
 	if (pwrdm_has_hdwr_sar(pwrdm))

@@ -113,6 +113,7 @@ static int omap3_enter_idle(struct cpuidle_device *dev,
 	struct omap3_processor_cx *cx = cpuidle_get_statedata(state);
 	struct timespec ts_preidle, ts_postidle, ts_idle;
 	u32 mpu_state = cx->mpu_state, core_state = cx->core_state;
+	u32 saved_mpu_state;
 
 	current_cx_state = *cx;
 
@@ -132,11 +133,13 @@ static int omap3_enter_idle(struct cpuidle_device *dev,
 	if (core_state < PWRDM_POWER_RET)
 		core_state = PWRDM_POWER_RET;
 
-	pwrdm_set_next_pwrst(mpu_pd, mpu_state);
-	pwrdm_set_next_pwrst(core_pd, core_state);
 
 	if (omap_irq_pending() || need_resched())
 		goto return_sleep_time;
+
+	saved_mpu_state = pwrdm_read_next_pwrst(mpu_pd);
+	pwrdm_set_next_pwrst(mpu_pd, mpu_state);
+	pwrdm_set_next_pwrst(core_pd, core_state);
 
 	if (cx->type == OMAP3_STATE_C1) {
 		pwrdm_for_each_clkdm(mpu_pd, _cpuidle_deny_idle);
