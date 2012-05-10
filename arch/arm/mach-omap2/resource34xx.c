@@ -294,18 +294,18 @@ static int program_opp(int res, struct omap_opp *opp, int target_level,
 	else
 		raise = 0;
 
-	disable_smartreflex(res);
 	for (i = 0; i < 2; i++) {
 		if (i == raise)
 			ret = program_opp_freq(res, target_level,
 					current_level);
+#ifdef CONFIG_OMAP_SMARTREFLEX
 		else
-			omap_scale_voltage(t_opp, c_opp,
+			sr_voltagescale_vcbypass(t_opp, c_opp,
 				opp[target_level].vsel,
 				opp[current_level].vsel);
+#endif
 	}
 
-	enable_smartreflex(res);
 	return ret;
 }
 
