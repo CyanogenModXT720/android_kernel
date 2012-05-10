@@ -527,9 +527,11 @@ static int omapvout_dss_perform_vrfb_dma(struct omapvout_device *vout,
 	omap_set_dma_src_params(vrfb->dma_ch, 0, vrfb->src_mode,
 				src_paddr, vrfb->src_ei, vrfb->src_fi);
 	omap_set_dma_src_burst_mode(vrfb->dma_ch, OMAP_DMA_DATA_BURST_16);
+	omap_set_dma_src_data_pack(vrfb->dma_ch, 1);
 	omap_set_dma_dest_params(vrfb->dma_ch, 0, OMAP_DMA_AMODE_DOUBLE_IDX,
 				dst_paddr, vrfb->dst_ei, vrfb->dst_fi);
 	omap_set_dma_dest_burst_mode(vrfb->dma_ch, OMAP_DMA_DATA_BURST_16);
+	omap_set_dma_dest_data_pack(vrfb->dma_ch, 1);
 	omap_dma_set_global_params(DMA_DEFAULT_ARB_RATE, 0x20, 0);
 
 	vrfb->dma_complete = false;
