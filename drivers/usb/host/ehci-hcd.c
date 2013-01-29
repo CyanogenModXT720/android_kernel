@@ -66,8 +66,8 @@
 static const char	hcd_name [] = "ehci_hcd";
 
 
-#undef VERBOSE_DEBUG
-#undef EHCI_URB_TRACE
+//#undef VERBOSE_DEBUG //Commented line
+//#undef EHCI_URB_TRACE //Commented line
 
 #ifdef DEBUG
 #define EHCI_STATS
@@ -200,16 +200,21 @@ static void tdi_reset (struct ehci_hcd *ehci)
 /* reset a non-running (STS_HALT == 1) controller */
 static int ehci_reset (struct ehci_hcd *ehci)
 {
-	int	retval;
+	//int	retval; //Commented line
+	int	retval=0; //Added line
 	u32	command = ehci_readl(ehci, &ehci->regs->command);
+	
+	printk("czecho: ehci_reset begin\n"); //Added line
 
-	command |= CMD_RESET;
+	// command |= CMD_RESET; //Commented line
+	printk("czecho: ehci_reset skipping\n"); //Added line
+	command |= CMD_LRESET; //Added line
 	dbg_cmd (ehci, "reset", command);
-	ehci_writel(ehci, command, &ehci->regs->command);
+	//ehci_writel(ehci, command, &ehci->regs->command); //Commented line
 	ehci_to_hcd(ehci)->state = HC_STATE_HALT;
 	ehci->next_statechange = jiffies;
-	retval = handshake (ehci, &ehci->regs->command,
-			    CMD_RESET, 0, 250 * 1000);
+	/*retval = handshake (ehci, &ehci->regs->command, //Commented line
+			    CMD_RESET, 0, 250 * 1000);*/ //Commented line
 
 	if (retval)
 		return retval;
@@ -218,6 +223,7 @@ static int ehci_reset (struct ehci_hcd *ehci)
 		tdi_reset (ehci);
 
 	return retval;
+	printk("czecho: ehci_reset end : retval = " +retval); //Added line
 }
 
 /* idle the controller (from running) */

@@ -233,6 +233,7 @@ static int omap_start_ehc(struct platform_device *dev, struct usb_hcd *hcd)
 	struct ehci_omap_clock_defs *ehci_clocks;
 
 	dev_dbg(hcd->self.controller, "starting TI EHCI USB Controller\n");
+	printk("czecho: omap_start_ehc begining \n");
 
 	ehci_clocks = (struct ehci_omap_clock_defs *)(
 				((char *)hcd_to_ehci(hcd)) +
@@ -334,14 +335,10 @@ static int omap_start_ehc(struct platform_device *dev, struct usb_hcd *hcd)
 		cpu_relax();
 
 	/* perform TLL soft reset, and wait until reset is complete */
-	omap_writel(1 << OMAP_USBTLL_SYSCONFIG_SOFTRESET_SHIFT,
-			OMAP_USBTLL_SYSCONFIG);
+	/*omap_writel(1 << OMAP_USBTLL_SYSCONFIG_SOFTRESET_SHIFT, 
+			OMAP_USBTLL_SYSCONFIG);*/ //Commented line
+			
 	/* Wait for TLL reset to complete */
-	while (!(omap_readl(OMAP_USBTLL_SYSSTATUS)
-			& (1 << OMAP_USBTLL_SYSSTATUS_RESETDONE_SHIFT)))
-		cpu_relax();
-
-	dev_dbg(hcd->self.controller, "TLL RESET DONE\n");
 
 	/* Smart Idle mode */
 	omap_writel((1 << OMAP_USBTLL_SYSCONFIG_ENAWAKEUP_SHIFT)     |

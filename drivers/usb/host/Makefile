@@ -5,6 +5,7 @@
 ifeq ($(CONFIG_USB_DEBUG),y)
 	EXTRA_CFLAGS		+= -DDEBUG
 endif
+#EXTRA_CFLAGS		+= -DDEBUG -DVERBOSE_DEBUG -DEHCI_URB_TRACE
 
 isp1760-objs := isp1760-hcd.o isp1760-if.o
 fhci-objs := fhci-hcd.o fhci-hub.o fhci-q.o fhci-mem.o \
